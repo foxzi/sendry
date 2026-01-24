@@ -198,7 +198,7 @@ curl -X DELETE http://localhost:8080/api/v1/queue/{message_id} \
 | `metrics.flush_interval` | `10s` | Counter persistence interval |
 | `metrics.allowed_ips` | `[]` | IPs/CIDRs allowed to access metrics |
 
-See [TLS and DKIM documentation](docs/tls-dkim.md) and [Prometheus metrics](docs/metrics.md) for detailed setup instructions.
+See [HTTP API reference](docs/api.md), [TLS and DKIM documentation](docs/tls-dkim.md), and [Prometheus metrics](docs/metrics.md) for detailed instructions.
 
 ## Project Structure
 
