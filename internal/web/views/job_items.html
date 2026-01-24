@@ -1,0 +1,72 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1>Job Items</h1>
+        <p class="text-muted">Job: {{slice .Job.ID 0 8}}... | Campaign: {{.Job.CampaignName}}</p>
+    </div>
+    <a href="/jobs/{{.Job.ID}}" class="btn btn-secondary">Back to Job</a>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <form class="filter-form" method="get" action="/jobs/{{.Job.ID}}/items">
+            <select name="status" class="input">
+                <option value="">All Status</option>
+                <option value="pending" {{if eq .Status "pending"}}selected{{end}}>Pending</option>
+                <option value="queued" {{if eq .Status "queued"}}selected{{end}}>Queued</option>
+                <option value="sent" {{if eq .Status "sent"}}selected{{end}}>Sent</option>
+                <option value="failed" {{if eq .Status "failed"}}selected{{end}}>Failed</option>
+            </select>
+            <button type="submit" class="btn">Filter</button>
+            {{if .Status}}
+            <a href="/jobs/{{.Job.ID}}/items" class="btn btn-secondary">Clear</a>
+            {{end}}
+        </form>
+        <span class="text-muted">{{.Total}} items</span>
+    </div>
+    <div class="card-body">
+        {{if .Items}}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Email</th>
+                    <th>Variant</th>
+                    <th>Server</th>
+                    <th>Status</th>
+                    <th>Sendry ID</th>
+                    <th>Error</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Items}}
+                <tr>
+                    <td>{{.Email}}</td>
+                    <td>{{if .VariantName}}{{.VariantName}}{{else}}<span class="text-muted">-</span>{{end}}</td>
+                    <td>{{.ServerName}}</td>
+                    <td><span class="badge badge-{{.Status}}">{{.Status}}</span></td>
+                    <td>{{if .SendryMsgID}}<code>{{.SendryMsgID}}</code>{{else}}<span class="text-muted">-</span>{{end}}</td>
+                    <td>{{if .Error}}<span class="text-error">{{.Error}}</span>{{else}}<span class="text-muted">-</span>{{end}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+
+        {{if gt .TotalPages 1}}
+        <div class="pagination">
+            {{if gt .Page 1}}
+            <a href="/jobs/{{.Job.ID}}/items?page={{sub .Page 1}}{{if .Status}}&status={{.Status}}{{end}}" class="btn btn-sm">&laquo; Prev</a>
+            {{end}}
+            <span class="pagination-info">Page {{.Page}} of {{.TotalPages}}</span>
+            {{if lt .Page .TotalPages}}
+            <a href="/jobs/{{.Job.ID}}/items?page={{add .Page 1}}{{if .Status}}&status={{.Status}}{{end}}" class="btn btn-sm">Next &raquo;</a>
+            {{end}}
+        </div>
+        {{end}}
+        {{else}}
+        <div class="empty-state">
+            <p>No items found</p>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}

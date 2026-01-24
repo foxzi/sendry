@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/foxzi/sendry/internal/web/models"
 )
@@ -329,10 +331,114 @@ func (h *Handlers) CampaignSendPage(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) CampaignSend(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	// TODO: Implement actual sending logic
-	// This will create a send job and queue messages
+	if err := r.ParseForm(); err != nil {
+		h.error(w, http.StatusBadRequest, "Invalid form data")
+		return
+	}
 
-	http.Redirect(w, r, "/campaigns/"+id, http.StatusSeeOther)
+	c, err := h.campaigns.GetByID(id)
+	if err != nil || c == nil {
+		h.error(w, http.StatusNotFound, "Campaign not found")
+		return
+	}
+
+	recipientListID := r.FormValue("recipient_list_id")
+	if recipientListID == "" {
+		h.error(w, http.StatusBadRequest, "Recipient list is required")
+		return
+	}
+
+	servers := r.Form["servers"]
+	if len(servers) == 0 {
+		h.error(w, http.StatusBadRequest, "At least one server is required")
+		return
+	}
+
+	strategy := r.FormValue("strategy")
+	if strategy == "" {
+		strategy = "round-robin"
+	}
+
+	// Get variants
+	variants, err := h.campaigns.GetVariants(id)
+	if err != nil || len(variants) == 0 {
+		h.error(w, http.StatusBadRequest, "Campaign has no variants configured")
+		return
+	}
+
+	// Create servers JSON
+	serversJSON, _ := json.Marshal(servers)
+
+	// Create job
+	job := &models.SendJob{
+		CampaignID:      id,
+		RecipientListID: recipientListID,
+		Servers:         string(serversJSON),
+		Strategy:        strategy,
+	}
+
+	// Handle scheduled_at
+	if scheduledAt := r.FormValue("scheduled_at"); scheduledAt != "" {
+		t, err := time.Parse("2006-01-02T15:04", scheduledAt)
+		if err == nil {
+			job.ScheduledAt = &t
+			job.Status = "scheduled"
+		}
+	}
+
+	if err := h.jobs.Create(job); err != nil {
+		h.logger.Error("failed to create job", "error", err)
+		h.error(w, http.StatusInternalServerError, "Failed to create job")
+		return
+	}
+
+	// Get recipients
+	recipients, _, err := h.recipients.ListRecipients(models.RecipientFilter{
+		ListID: recipientListID,
+		Status: "active",
+		Limit:  100000, // Get all active recipients
+	})
+	if err != nil {
+		h.logger.Error("failed to get recipients", "error", err)
+		h.error(w, http.StatusInternalServerError, "Failed to get recipients")
+		return
+	}
+
+	// Create job items
+	items := make([]models.SendJobItem, len(recipients))
+	serverIdx := 0
+	variantIdx := 0
+
+	for i, recipient := range recipients {
+		items[i] = models.SendJobItem{
+			JobID:       job.ID,
+			RecipientID: recipient.ID,
+			VariantID:   variants[variantIdx].ID,
+			ServerName:  servers[serverIdx],
+		}
+
+		// Round-robin server distribution
+		serverIdx = (serverIdx + 1) % len(servers)
+
+		// Simple variant rotation (TODO: implement weighted distribution)
+		if len(variants) > 1 {
+			variantIdx = (variantIdx + 1) % len(variants)
+		}
+	}
+
+	if err := h.jobs.CreateItems(items); err != nil {
+		h.logger.Error("failed to create job items", "error", err)
+		h.error(w, http.StatusInternalServerError, "Failed to create job items")
+		return
+	}
+
+	// Start job if not scheduled
+	if job.ScheduledAt == nil {
+		h.jobs.UpdateStatus(job.ID, "running")
+		// TODO: Start background worker to process items
+	}
+
+	http.Redirect(w, r, "/jobs/"+job.ID, http.StatusSeeOther)
 }
 
 func (h *Handlers) CampaignJobs(w http.ResponseWriter, r *http.Request) {
@@ -344,14 +450,33 @@ func (h *Handlers) CampaignJobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Get jobs for this campaign
+	// Get jobs for this campaign
+	jobs, _, _ := h.jobs.List(models.JobListFilter{
+		CampaignID: id,
+		Limit:      50,
+	})
+
+	// Get stats for each job
+	jobsWithStats := make([]map[string]any, len(jobs))
+	for i, job := range jobs {
+		stats, _ := h.jobs.GetStats(job.ID)
+		progress := 0
+		if stats.Total > 0 {
+			progress = (stats.Sent + stats.Failed) * 100 / stats.Total
+		}
+		jobsWithStats[i] = map[string]any{
+			"Job":      job,
+			"Stats":    stats,
+			"Progress": progress,
+		}
+	}
 
 	data := map[string]any{
 		"Title":    c.Name + " - Jobs",
 		"Active":   "campaigns",
 		"User":     h.getUserFromContext(r),
 		"Campaign": c,
-		"Jobs":     []any{},
+		"Jobs":     jobsWithStats,
 	}
 
 	h.render(w, "campaign_jobs", data)

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sendry Web: template management (CRUD, versioning, deployment tracking)
 - Sendry Web: recipient list management (CRUD, CSV import, filtering)
 - Sendry Web: campaign management (CRUD, variants for A/B testing, variables)
+- Sendry Web: job management (send jobs, status tracking, pause/resume/cancel)
 
 ## [0.3.4] - 2025-01-25
 

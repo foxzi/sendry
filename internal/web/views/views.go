@@ -20,6 +20,15 @@ var standaloneTemplates = map[string]bool{
 var funcs = template.FuncMap{
 	"add": func(a, b int) int { return a + b },
 	"sub": func(a, b int) int { return a - b },
+	"slice": func(s string, start, end int) string {
+		if start >= len(s) {
+			return ""
+		}
+		if end > len(s) {
+			end = len(s)
+		}
+		return s[start:end]
+	},
 }
 
 type Engine struct {

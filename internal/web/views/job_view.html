@@ -1,0 +1,136 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1>Job: {{slice .Job.ID 0 8}}...</h1>
+        <p class="text-muted">Campaign: <a href="/campaigns/{{.Job.CampaignID}}">{{.Job.CampaignName}}</a></p>
+    </div>
+    <div class="header-actions">
+        {{if eq .Job.Status "running"}}
+        <form method="post" action="/jobs/{{.Job.ID}}/pause" style="display:inline">
+            <button type="submit" class="btn btn-warning">Pause</button>
+        </form>
+        {{else if eq .Job.Status "paused"}}
+        <form method="post" action="/jobs/{{.Job.ID}}/resume" style="display:inline">
+            <button type="submit" class="btn btn-primary">Resume</button>
+        </form>
+        {{end}}
+        {{if or (eq .Job.Status "running") (eq .Job.Status "paused") (eq .Job.Status "scheduled")}}
+        <form method="post" action="/jobs/{{.Job.ID}}/cancel" style="display:inline" onsubmit="return confirm('Cancel this job?')">
+            <button type="submit" class="btn btn-danger">Cancel</button>
+        </form>
+        {{end}}
+    </div>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{.Stats.Total}}</div>
+        <div class="stat-label">Total</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: var(--warning)">{{.Stats.Pending}}</div>
+        <div class="stat-label">Pending</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: var(--primary)">{{.Stats.Queued}}</div>
+        <div class="stat-label">Queued</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: var(--success)">{{.Stats.Sent}}</div>
+        <div class="stat-label">Sent</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: var(--error)">{{.Stats.Failed}}</div>
+        <div class="stat-label">Failed</div>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 1.5rem">
+    <div class="card-header">
+        <h2>Progress</h2>
+        <span class="badge badge-{{.Job.Status}}">{{.Job.Status}}</span>
+    </div>
+    <div class="card-body">
+        <div class="progress" style="height: 24px">
+            <div class="progress-bar" style="width: {{.Progress}}%"></div>
+        </div>
+        <p style="text-align: center; margin-top: 0.5rem">{{.Progress}}% complete</p>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">
+            <h2>Job Details</h2>
+        </div>
+        <div class="card-body">
+            <dl class="details-list">
+                <dt>Job ID</dt>
+                <dd><code>{{.Job.ID}}</code></dd>
+
+                <dt>Recipient List</dt>
+                <dd><a href="/recipients/{{.Job.RecipientListID}}">{{.Job.ListName}}</a></dd>
+
+                <dt>Strategy</dt>
+                <dd>{{.Job.Strategy}}</dd>
+
+                <dt>Servers</dt>
+                <dd>
+                    {{range .Servers}}
+                    <span class="badge">{{.}}</span>
+                    {{end}}
+                </dd>
+
+                <dt>Created</dt>
+                <dd>{{.Job.CreatedAt.Format "2006-01-02 15:04:05"}}</dd>
+
+                {{if .Job.ScheduledAt}}
+                <dt>Scheduled</dt>
+                <dd>{{.Job.ScheduledAt.Format "2006-01-02 15:04:05"}}</dd>
+                {{end}}
+
+                {{if .Job.StartedAt}}
+                <dt>Started</dt>
+                <dd>{{.Job.StartedAt.Format "2006-01-02 15:04:05"}}</dd>
+                {{end}}
+
+                {{if .Job.CompletedAt}}
+                <dt>Completed</dt>
+                <dd>{{.Job.CompletedAt.Format "2006-01-02 15:04:05"}}</dd>
+                {{end}}
+            </dl>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h2>Recent Items</h2>
+            <a href="/jobs/{{.Job.ID}}/items" class="btn btn-sm">View All</a>
+        </div>
+        <div class="card-body">
+            {{if .Items}}
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Email</th>
+                        <th>Status</th>
+                        <th>Server</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Items}}
+                    <tr>
+                        <td>{{.Email}}</td>
+                        <td><span class="badge badge-{{.Status}}">{{.Status}}</span></td>
+                        <td>{{.ServerName}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+            {{else}}
+            <p class="empty-state">No items yet</p>
+            {{end}}
+        </div>
+    </div>
+</div>
+{{end}}
