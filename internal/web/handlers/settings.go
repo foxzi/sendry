@@ -127,19 +127,31 @@ func (h *Handlers) AuditLog(w http.ResponseWriter, r *http.Request) {
 
 // Monitoring shows system monitoring overview
 func (h *Handlers) Monitoring(w http.ResponseWriter, r *http.Request) {
-	// Gather stats from all servers
-	servers := make([]map[string]any, 0, len(h.cfg.Sendry.Servers))
-	for _, s := range h.cfg.Sendry.Servers {
-		// TODO: fetch actual metrics from Sendry API
-		servers = append(servers, map[string]any{
+	// Gather live stats from all servers
+	statuses := h.sendry.GetAllStatus(r.Context())
+	servers := make([]map[string]any, 0, len(statuses))
+
+	for _, s := range statuses {
+		serverData := map[string]any{
 			"Name":      s.Name,
 			"Env":       s.Env,
-			"Online":    true,
-			"QueueSize": 0,
+			"Online":    s.Online,
+			"Version":   s.Version,
+			"QueueSize": s.QueueSize,
 			"DLQSize":   0,
-			"Delivered": 0,
-			"Failed":    0,
-		})
+			"Error":     s.Error,
+		}
+
+		// Get DLQ size if server is online
+		if s.Online {
+			if client, err := h.sendry.GetClient(s.Name); err == nil {
+				if dlq, err := client.GetDLQ(r.Context()); err == nil && dlq.Stats != nil {
+					serverData["DLQSize"] = dlq.Stats.Total
+				}
+			}
+		}
+
+		servers = append(servers, serverData)
 	}
 
 	// Get active jobs count

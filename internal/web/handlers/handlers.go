@@ -8,6 +8,7 @@ import (
 	"github.com/foxzi/sendry/internal/web/config"
 	"github.com/foxzi/sendry/internal/web/db"
 	"github.com/foxzi/sendry/internal/web/repository"
+	"github.com/foxzi/sendry/internal/web/sendry"
 	"github.com/foxzi/sendry/internal/web/views"
 )
 
@@ -16,6 +17,7 @@ type Handlers struct {
 	db         *db.DB
 	logger     *slog.Logger
 	views      *views.Engine
+	sendry     *sendry.Manager
 	templates  *repository.TemplateRepository
 	recipients *repository.RecipientRepository
 	campaigns  *repository.CampaignRepository
@@ -29,6 +31,7 @@ func New(cfg *config.Config, db *db.DB, logger *slog.Logger, v *views.Engine) *H
 		db:         db,
 		logger:     logger,
 		views:      v,
+		sendry:     sendry.NewManager(cfg.Sendry.Servers),
 		templates:  repository.NewTemplateRepository(db.DB),
 		recipients: repository.NewRecipientRepository(db.DB),
 		campaigns:  repository.NewCampaignRepository(db.DB),
@@ -101,15 +104,33 @@ func (h *Handlers) getUserFromContext(r *http.Request) map[string]string {
 	}
 }
 
-// Get servers status from config
+// Get servers status from config (quick, no API calls)
 func (h *Handlers) getServersStatus() []map[string]any {
 	servers := make([]map[string]any, 0, len(h.cfg.Sendry.Servers))
 	for _, s := range h.cfg.Sendry.Servers {
 		servers = append(servers, map[string]any{
 			"Name":      s.Name,
 			"Env":       s.Env,
-			"Online":    true, // TODO: check actual status
+			"Online":    true,
 			"QueueSize": 0,
+		})
+	}
+	return servers
+}
+
+// Get servers status with actual health checks (slow, makes API calls)
+func (h *Handlers) getServersStatusLive(r *http.Request) []map[string]any {
+	statuses := h.sendry.GetAllStatus(r.Context())
+	servers := make([]map[string]any, 0, len(statuses))
+	for _, s := range statuses {
+		servers = append(servers, map[string]any{
+			"Name":      s.Name,
+			"Env":       s.Env,
+			"Online":    s.Online,
+			"Version":   s.Version,
+			"Uptime":    s.Uptime,
+			"QueueSize": s.QueueSize,
+			"Error":     s.Error,
 		})
 	}
 	return servers

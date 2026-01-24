@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sendry Web: server monitoring (server list, queue, DLQ, domains, sandbox)
 - Sendry Web: settings (global variables, users list, audit log)
 - Sendry Web: monitoring dashboard with server status overview
+- Sendry Web: Sendry API client for server communication
 
 ## [0.3.4] - 2025-01-25
 
