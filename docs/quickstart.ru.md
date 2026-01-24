@@ -259,5 +259,6 @@ sendry ip check <ip-вашего-сервера>
 
 - [Настройка TLS и DKIM](tls-dkim.ru.md)
 - [Руководство по шаблонам](templates.ru.md)
+- [Правила заголовков](header-rules.ru.md)
 - [Справочник API](api.ru.md)
 - [Справочник конфигурации](configuration.ru.md)

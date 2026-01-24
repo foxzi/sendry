@@ -259,5 +259,6 @@ sendry ip check <your-server-ip>
 
 - [TLS and DKIM Setup](tls-dkim.md)
 - [Templates Guide](templates.md)
+- [Header Rules Guide](header-rules.md)
 - [API Reference](api.md)
 - [Configuration Reference](configuration.md)
