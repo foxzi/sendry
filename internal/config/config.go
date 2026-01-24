@@ -144,6 +144,7 @@ type ACMEConfig struct {
 	Email    string   `yaml:"email"`
 	Domains  []string `yaml:"domains"`
 	CacheDir string   `yaml:"cache_dir"`
+	OnDemand bool     `yaml:"on_demand"` // If true, port 80 is not opened; use 'sendry tls renew' instead
 }
 
 // DKIMConfig contains DKIM signing settings

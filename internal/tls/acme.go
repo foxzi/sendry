@@ -113,6 +113,72 @@ func (a *ACMEManager) HTTPHandler(fallback http.Handler) http.Handler {
 	return a.manager.HTTPHandler(fallback)
 }
 
+// GetCachedCertificates reads certificates from cache without contacting Let's Encrypt
+func (a *ACMEManager) GetCachedCertificates() ([]CertificateInfo, error) {
+	var results []CertificateInfo
+
+	cache, ok := a.manager.Cache.(autocert.DirCache)
+	if !ok {
+		return nil, fmt.Errorf("cache is not a directory cache")
+	}
+
+	for _, domain := range a.domains {
+		// Try to get certificate from cache
+		data, err := cache.Get(context.Background(), domain)
+		if err != nil {
+			// Certificate not in cache
+			continue
+		}
+
+		// Parse the cached certificate
+		cert, err := tls.X509KeyPair(data, data)
+		if err != nil {
+			continue
+		}
+
+		if len(cert.Certificate) > 0 {
+			leaf, err := parseCertificate(cert.Certificate[0])
+			if err != nil {
+				continue
+			}
+
+			daysLeft := int(time.Until(leaf.NotAfter).Hours() / 24)
+			info := CertificateInfo{
+				Domain:    domain,
+				NotBefore: leaf.NotBefore,
+				NotAfter:  leaf.NotAfter,
+				DaysLeft:  daysLeft,
+				IsNew:     false,
+			}
+			results = append(results, info)
+		}
+	}
+
+	return results, nil
+}
+
+// HasValidCachedCertificates checks if all domains have valid cached certificates
+func (a *ACMEManager) HasValidCachedCertificates() (bool, []CertificateInfo) {
+	certs, err := a.GetCachedCertificates()
+	if err != nil || len(certs) == 0 {
+		return false, nil
+	}
+
+	// Check if we have certificates for all domains
+	if len(certs) != len(a.domains) {
+		return false, certs
+	}
+
+	// Check if any certificate is expired or expiring soon
+	for _, cert := range certs {
+		if cert.DaysLeft < 7 {
+			return false, certs
+		}
+	}
+
+	return true, certs
+}
+
 // parseCertificate parses a DER-encoded certificate
 func parseCertificate(der []byte) (*x509.Certificate, error) {
 	return x509.ParseCertificate(der)

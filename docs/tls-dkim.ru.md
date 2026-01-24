@@ -29,13 +29,68 @@ smtp:
       domains:
         - "mail.example.com"
       cache_dir: "/var/lib/sendry/certs"
+      on_demand: true  # Рекомендуется: порт 80 не открыт постоянно
 ```
 
 Требования для ACME:
-- Порт 80 должен быть доступен для HTTP-01 проверки
+- Порт 80 должен быть доступен для HTTP-01 проверки (во время обновления)
 - DNS должен указывать на сервер
 
-**Как это работает:**
+### Режимы ACME
+
+#### On-Demand режим (рекомендуется)
+
+С `on_demand: true` порт 80 **не** открывается автоматически. Используйте `sendry tls renew` для получения/обновления сертификатов:
+
+```bash
+# Получить или обновить сертификаты
+sendry tls renew -c /etc/sendry/config.yaml
+
+# Принудительное обновление
+sendry tls renew -c /etc/sendry/config.yaml --force
+
+# Проверить статус сертификатов
+sendry tls status -c /etc/sendry/config.yaml
+```
+
+Настройка автоматического обновления через cron или systemd timer:
+
+```bash
+# Cron (еженедельная проверка)
+0 3 * * 0 /usr/bin/sendry tls renew -c /etc/sendry/config.yaml
+```
+
+Или создайте systemd timer `/etc/systemd/system/sendry-tls-renew.timer`:
+```ini
+[Unit]
+Description=Sendry TLS certificate renewal
+
+[Timer]
+OnCalendar=weekly
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+И `/etc/systemd/system/sendry-tls-renew.service`:
+```ini
+[Unit]
+Description=Sendry TLS certificate renewal
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/sendry tls renew -c /etc/sendry/config.yaml
+```
+
+Включите:
+```bash
+systemctl enable --now sendry-tls-renew.timer
+```
+
+#### Always-On режим
+
+С `on_demand: false` (по умолчанию) порт 80 открыт постоянно для автоматического обновления:
 
 1. При запуске Sendry запускает HTTP-сервер на порту 80 для ACME-проверок
 2. Сертификаты получаются/проверяются для всех настроенных доменов

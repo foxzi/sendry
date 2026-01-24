@@ -31,6 +31,10 @@ smtp:
       domains:
         - "mail.example.com"
       cache_dir: "/var/lib/sendry/certs"
+      # On-demand mode: port 80 is not opened automatically
+      # Use 'sendry tls renew' to obtain/renew certificates manually or via cron
+      # If false (default), port 80 is always open for automatic renewal
+      on_demand: true
 
 # Legacy single-domain DKIM (use 'domains' section for multi-domain)
 dkim:

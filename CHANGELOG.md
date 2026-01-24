@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Ansible role for automated deployment
+- ACME on-demand mode: port 80 not opened permanently
+- CLI commands: `sendry tls renew`, `sendry tls status`
 
 ## [0.3.3] - 2025-01-24
 

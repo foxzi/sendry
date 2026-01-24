@@ -377,52 +377,81 @@ func (a *App) Run(ctx context.Context) error {
 		}
 	}()
 
-	// Start ACME HTTP challenge server on port 80 if ACME is enabled
+	// Handle ACME certificates if enabled
 	if a.acmeManager != nil {
-		a.acmeServer = &http.Server{
-			Addr:    ":80",
-			Handler: a.acmeManager.HTTPHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				// Redirect all non-ACME requests to HTTPS
-				target := "https://" + r.Host + r.URL.Path
-				if r.URL.RawQuery != "" {
-					target += "?" + r.URL.RawQuery
+		if a.config.SMTP.TLS.ACME.OnDemand {
+			// On-demand mode: check cached certificates, don't start HTTP server
+			a.logger.Info("ACME on-demand mode enabled, checking cached certificates")
+			valid, certs := a.acmeManager.HasValidCachedCertificates()
+			if !valid {
+				if len(certs) == 0 {
+					return fmt.Errorf("no ACME certificates found in cache; run 'sendry tls renew' to obtain certificates")
 				}
-				http.Redirect(w, r, target, http.StatusMovedPermanently)
-			})),
-		}
-		go func() {
-			a.logger.Info("starting ACME HTTP challenge server", "addr", ":80")
-			if err := a.acmeServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				a.logger.Warn("ACME HTTP server error", "error", err)
+				// Check if any certificate is expired
+				for _, cert := range certs {
+					if cert.DaysLeft < 0 {
+						return fmt.Errorf("certificate for %s has expired; run 'sendry tls renew' to renew", cert.Domain)
+					}
+					if cert.DaysLeft < 7 {
+						a.logger.Warn("certificate expiring soon, run 'sendry tls renew'",
+							"domain", cert.Domain,
+							"days_left", cert.DaysLeft)
+					}
+				}
 			}
-		}()
-
-		// Wait for HTTP server to start
-		time.Sleep(100 * time.Millisecond)
-
-		// Ensure certificates are obtained/validated at startup
-		certCtx, certCancel := context.WithTimeout(ctx, 2*time.Minute)
-		certs, err := a.acmeManager.EnsureCertificates(certCtx)
-		certCancel()
-		if err != nil {
-			a.logger.Error("failed to ensure certificates", "error", err)
-			// Check if we have any valid certificates to continue with
-			if len(certs) == 0 {
-				return fmt.Errorf("ACME certificate acquisition failed and no valid certificates available: %w", err)
-			}
-			a.logger.Warn("continuing with existing certificates despite renewal failure")
-		}
-		for _, cert := range certs {
-			if cert.IsNew {
-				a.logger.Info("obtained new certificate",
+			for _, cert := range certs {
+				a.logger.Info("using cached certificate",
 					"domain", cert.Domain,
 					"expires", cert.NotAfter.Format("2006-01-02"),
 					"days_left", cert.DaysLeft)
-			} else {
-				a.logger.Info("certificate valid",
-					"domain", cert.Domain,
-					"expires", cert.NotAfter.Format("2006-01-02"),
-					"days_left", cert.DaysLeft)
+			}
+		} else {
+			// Always-on mode: start HTTP server on port 80 for ACME challenges
+			a.acmeServer = &http.Server{
+				Addr: ":80",
+				Handler: a.acmeManager.HTTPHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					// Redirect all non-ACME requests to HTTPS
+					target := "https://" + r.Host + r.URL.Path
+					if r.URL.RawQuery != "" {
+						target += "?" + r.URL.RawQuery
+					}
+					http.Redirect(w, r, target, http.StatusMovedPermanently)
+				})),
+			}
+			go func() {
+				a.logger.Info("starting ACME HTTP challenge server", "addr", ":80")
+				if err := a.acmeServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+					a.logger.Warn("ACME HTTP server error", "error", err)
+				}
+			}()
+
+			// Wait for HTTP server to start
+			time.Sleep(100 * time.Millisecond)
+
+			// Ensure certificates are obtained/validated at startup
+			certCtx, certCancel := context.WithTimeout(ctx, 2*time.Minute)
+			certs, err := a.acmeManager.EnsureCertificates(certCtx)
+			certCancel()
+			if err != nil {
+				a.logger.Error("failed to ensure certificates", "error", err)
+				// Check if we have any valid certificates to continue with
+				if len(certs) == 0 {
+					return fmt.Errorf("ACME certificate acquisition failed and no valid certificates available: %w", err)
+				}
+				a.logger.Warn("continuing with existing certificates despite renewal failure")
+			}
+			for _, cert := range certs {
+				if cert.IsNew {
+					a.logger.Info("obtained new certificate",
+						"domain", cert.Domain,
+						"expires", cert.NotAfter.Format("2006-01-02"),
+						"days_left", cert.DaysLeft)
+				} else {
+					a.logger.Info("certificate valid",
+						"domain", cert.Domain,
+						"expires", cert.NotAfter.Format("2006-01-02"),
+						"days_left", cert.DaysLeft)
+				}
 			}
 		}
 	}
