@@ -364,6 +364,55 @@ func (r *JobRepository) GetStats(jobID string) (models.JobStats, error) {
 	return stats, err
 }
 
+// GetRunningJobs returns all jobs with status 'running'
+func (r *JobRepository) GetRunningJobs() ([]models.SendJob, error) {
+	rows, err := r.db.Query(`
+		SELECT j.id, j.campaign_id, c.name, j.recipient_list_id, COALESCE(rl.name, ''), j.status,
+			j.scheduled_at, j.started_at, j.completed_at, j.servers, j.strategy, COALESCE(j.stats, '{}'), j.created_at, j.updated_at
+		FROM send_jobs j
+		LEFT JOIN campaigns c ON j.campaign_id = c.id
+		LEFT JOIN recipient_lists rl ON j.recipient_list_id = rl.id
+		WHERE j.status = 'running'
+		ORDER BY j.created_at`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	jobs := []models.SendJob{}
+	for rows.Next() {
+		var job models.SendJob
+		var scheduledAt, startedAt, completedAt sql.NullTime
+		var campaignName, listName sql.NullString
+
+		err := rows.Scan(&job.ID, &job.CampaignID, &campaignName, &job.RecipientListID, &listName, &job.Status,
+			&scheduledAt, &startedAt, &completedAt, &job.Servers, &job.Strategy, &job.Stats, &job.CreatedAt, &job.UpdatedAt)
+		if err != nil {
+			return nil, err
+		}
+
+		if campaignName.Valid {
+			job.CampaignName = campaignName.String
+		}
+		if listName.Valid {
+			job.ListName = listName.String
+		}
+		if scheduledAt.Valid {
+			job.ScheduledAt = &scheduledAt.Time
+		}
+		if startedAt.Valid {
+			job.StartedAt = &startedAt.Time
+		}
+		if completedAt.Valid {
+			job.CompletedAt = &completedAt.Time
+		}
+
+		jobs = append(jobs, job)
+	}
+
+	return jobs, nil
+}
+
 // GetPendingItems returns pending items for processing
 func (r *JobRepository) GetPendingItems(jobID string, limit int) ([]models.SendJobItem, error) {
 	rows, err := r.db.Query(`

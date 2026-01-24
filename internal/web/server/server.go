@@ -13,6 +13,7 @@ import (
 	"github.com/foxzi/sendry/internal/web/middleware"
 	"github.com/foxzi/sendry/internal/web/static"
 	"github.com/foxzi/sendry/internal/web/views"
+	"github.com/foxzi/sendry/internal/web/worker"
 )
 
 type Server struct {
@@ -21,6 +22,7 @@ type Server struct {
 	db     *db.DB
 	views  *views.Engine
 	http   *http.Server
+	worker *worker.Worker
 }
 
 func New(cfg *config.Config, logger *slog.Logger) (*Server, error) {
@@ -57,6 +59,9 @@ func New(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
+
+	// Initialize worker
+	s.worker = worker.New(cfg, database.DB, logger, worker.DefaultConfig())
 
 	return s, nil
 }
@@ -168,6 +173,9 @@ func (s *Server) setupRoutes() http.Handler {
 }
 
 func (s *Server) Run(ctx context.Context) error {
+	// Start background worker
+	s.worker.Start()
+
 	errCh := make(chan error, 1)
 
 	go func() {
@@ -181,8 +189,12 @@ func (s *Server) Run(ctx context.Context) error {
 
 	select {
 	case err := <-errCh:
+		s.worker.Stop()
 		return err
 	case <-ctx.Done():
+		// Stop worker first
+		s.worker.Stop()
+
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := s.http.Shutdown(shutdownCtx); err != nil {
