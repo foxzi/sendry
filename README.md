@@ -20,6 +20,7 @@ MTA (Mail Transfer Agent) server for sending emails.
   - `redirect` - redirect all emails to specified addresses
   - `bcc` - normal delivery + copy to archive
 - Rate limiting (per domain, sender, IP, API key)
+- Prometheus metrics with persistence
 - Bounce handling
 - Graceful shutdown
 - Structured JSON logging
@@ -90,7 +91,7 @@ Response:
 ```json
 {
   "status": "ok",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "uptime": "1h30m",
   "queue": {
     "pending": 5,
@@ -191,8 +192,13 @@ curl -X DELETE http://localhost:8080/api/v1/queue/{message_id} \
 | `storage.path` | `/var/lib/sendry/queue.db` | BoltDB file path |
 | `logging.level` | `info` | Log level (debug/info/warn/error) |
 | `logging.format` | `json` | Log format (json/text) |
+| `metrics.enabled` | `false` | Enable Prometheus metrics |
+| `metrics.listen_addr` | `:9090` | Metrics server port |
+| `metrics.path` | `/metrics` | Metrics endpoint path |
+| `metrics.flush_interval` | `10s` | Counter persistence interval |
+| `metrics.allowed_ips` | `[]` | IPs/CIDRs allowed to access metrics |
 
-See [TLS and DKIM documentation](docs/tls-dkim.md) for detailed setup instructions.
+See [TLS and DKIM documentation](docs/tls-dkim.md) and [Prometheus metrics](docs/metrics.md) for detailed setup instructions.
 
 ## Project Structure
 
@@ -205,6 +211,7 @@ sendry/
 │   ├── config/          # Configuration
 │   ├── dkim/            # DKIM signing
 │   ├── dns/             # MX resolver
+│   ├── metrics/         # Prometheus metrics
 │   ├── queue/           # Message queue & storage
 │   ├── smtp/            # SMTP server & client
 │   └── tls/             # TLS/ACME support
