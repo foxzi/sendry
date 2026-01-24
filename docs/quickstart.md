@@ -130,6 +130,55 @@ curl -X POST http://localhost:8080/api/v1/send \
   }'
 ```
 
+## Email Templates
+
+### Create a Template
+
+```bash
+# Via CLI
+sendry template create -c config.yaml --name welcome --subject "Hello {{.Name}}" --text welcome.txt
+
+# Via API
+curl -X POST http://localhost:8080/api/v1/templates \
+  -H "X-API-Key: test-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "welcome",
+    "subject": "Hello {{.Name}}",
+    "text": "Welcome {{.Name}}!\nYour order #{{.OrderID}} is confirmed.",
+    "html": "<p>Welcome <b>{{.Name}}</b>!</p>"
+  }'
+```
+
+### Preview Template
+
+```bash
+# Via CLI
+sendry template preview -c config.yaml welcome --data '{"Name":"John","OrderID":"12345"}'
+
+# Via API
+curl -X POST http://localhost:8080/api/v1/templates/{id}/preview \
+  -H "X-API-Key: test-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"data":{"Name":"John","OrderID":"12345"}}'
+```
+
+### Send Email by Template
+
+```bash
+curl -X POST http://localhost:8080/api/v1/send/template \
+  -H "X-API-Key: test-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "template_id": "{id}",
+    "from": "noreply@example.com",
+    "to": ["user@example.com"],
+    "data": {"Name": "John", "OrderID": "12345"}
+  }'
+```
+
+See [Templates Guide](templates.md) for more details.
+
 ## Viewing Captured Emails (Sandbox Mode)
 
 ```bash
@@ -209,5 +258,6 @@ sendry ip check <your-server-ip>
 ## Next Steps
 
 - [TLS and DKIM Setup](tls-dkim.md)
+- [Templates Guide](templates.md)
 - [API Reference](api.md)
 - [Configuration Reference](configuration.md)

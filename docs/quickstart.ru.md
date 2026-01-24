@@ -130,6 +130,55 @@ curl -X POST http://localhost:8080/api/v1/send \
   }'
 ```
 
+## Шаблоны писем
+
+### Создание шаблона
+
+```bash
+# Через CLI
+sendry template create -c config.yaml --name welcome --subject "Привет {{.Name}}" --text welcome.txt
+
+# Через API
+curl -X POST http://localhost:8080/api/v1/templates \
+  -H "X-API-Key: test-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "welcome",
+    "subject": "Привет {{.Name}}",
+    "text": "Добро пожаловать {{.Name}}!\nВаш заказ #{{.OrderID}} подтверждён.",
+    "html": "<p>Добро пожаловать <b>{{.Name}}</b>!</p>"
+  }'
+```
+
+### Предпросмотр шаблона
+
+```bash
+# Через CLI
+sendry template preview -c config.yaml welcome --data '{"Name":"Иван","OrderID":"12345"}'
+
+# Через API
+curl -X POST http://localhost:8080/api/v1/templates/{id}/preview \
+  -H "X-API-Key: test-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"data":{"Name":"Иван","OrderID":"12345"}}'
+```
+
+### Отправка письма по шаблону
+
+```bash
+curl -X POST http://localhost:8080/api/v1/send/template \
+  -H "X-API-Key: test-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "template_id": "{id}",
+    "from": "noreply@example.com",
+    "to": ["user@example.com"],
+    "data": {"Name": "Иван", "OrderID": "12345"}
+  }'
+```
+
+Подробнее см. [Руководство по шаблонам](templates.ru.md).
+
 ## Просмотр перехваченных писем (Sandbox)
 
 ```bash
@@ -209,5 +258,6 @@ sendry ip check <ip-вашего-сервера>
 ## Дальнейшие шаги
 
 - [Настройка TLS и DKIM](tls-dkim.ru.md)
+- [Руководство по шаблонам](templates.ru.md)
 - [Справочник API](api.ru.md)
 - [Справочник конфигурации](configuration.ru.md)
