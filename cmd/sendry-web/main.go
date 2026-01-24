@@ -32,6 +32,7 @@ func init() {
 	rootCmd.AddCommand(migrateCmd)
 	rootCmd.AddCommand(userCmd)
 	rootCmd.AddCommand(configCmd)
+	rootCmd.AddCommand(cleanupCmd)
 }
 
 func main() {
