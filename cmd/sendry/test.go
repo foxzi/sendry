@@ -18,6 +18,8 @@ var (
 	testSendFrom    string
 	testSendSubject string
 	testSendBody    string
+	testSendNoTLS   bool
+	testSendPort    string
 	testSMTPHost    string
 	testSMTPPort    int
 	testSMTPTimeout int
@@ -45,6 +47,8 @@ func init() {
 	testSendCmd.Flags().StringVar(&testSendFrom, "from", "", "Sender email address")
 	testSendCmd.Flags().StringVar(&testSendSubject, "subject", "Test message from Sendry", "Email subject")
 	testSendCmd.Flags().StringVar(&testSendBody, "body", "This is a test message sent from Sendry MTA.", "Email body")
+	testSendCmd.Flags().BoolVar(&testSendNoTLS, "no-tls", false, "Skip STARTTLS (for local testing without certificates)")
+	testSendCmd.Flags().StringVar(&testSendPort, "port", "", "SMTP port (default: submission port from config)")
 	testSendCmd.MarkFlagRequired("to")
 
 	testSMTPCmd.Flags().StringVar(&testSMTPHost, "host", "", "SMTP server hostname (required)")
@@ -82,11 +86,16 @@ func runTestSend(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 
 	// Connect to local SMTP server
-	addr := cfg.SMTP.SubmissionAddr
-	if !strings.HasPrefix(addr, ":") {
-		addr = "localhost" + addr
+	var addr string
+	if testSendPort != "" {
+		addr = "localhost:" + testSendPort
 	} else {
-		addr = "localhost" + addr
+		addr = cfg.SMTP.SubmissionAddr
+		if !strings.HasPrefix(addr, ":") {
+			addr = "localhost" + addr
+		} else {
+			addr = "localhost" + addr
+		}
 	}
 
 	fmt.Printf("Connecting to %s...\n", addr)
@@ -104,21 +113,37 @@ func runTestSend(cmd *cobra.Command, args []string) error {
 	}
 	defer client.Close()
 
-	// Try STARTTLS if available
-	if ok, _ := client.Extension("STARTTLS"); ok {
-		tlsConfig := &tls.Config{
-			InsecureSkipVerify: true,
-			ServerName:         cfg.Server.Hostname,
-		}
-		if err := client.StartTLS(tlsConfig); err != nil {
-			fmt.Printf("Warning: STARTTLS failed: %v\n", err)
-		} else {
+	// Try STARTTLS if available and not disabled
+	tlsOK := false
+	if !testSendNoTLS {
+		if ok, _ := client.Extension("STARTTLS"); ok {
+			tlsConfig := &tls.Config{
+				InsecureSkipVerify: true,
+				ServerName:         cfg.Server.Hostname,
+			}
+			if err := client.StartTLS(tlsConfig); err != nil {
+				fmt.Printf("Error: STARTTLS failed: %v\n", err)
+				fmt.Println()
+				fmt.Println("TLS is not configured on the server. Options:")
+				fmt.Println("  1. Configure TLS certificates in config")
+				fmt.Println("  2. Use --no-tls flag for local testing without TLS")
+				fmt.Println("  3. Use --port 25 to connect to relay port (may not require TLS)")
+				return fmt.Errorf("TLS required but not available")
+			}
 			fmt.Println("STARTTLS: OK")
+			tlsOK = true
 		}
+	} else {
+		fmt.Println("TLS: Skipped (--no-tls)")
 	}
 
 	// Auth if required
 	if cfg.SMTP.Auth.Required {
+		// Note: PLAIN auth should only be used over TLS in production
+		if !tlsOK && !testSendNoTLS {
+			fmt.Println("Warning: Auth without TLS is insecure")
+		}
+
 		// Get first user from config
 		var username, password string
 		for u, p := range cfg.SMTP.Auth.Users {
