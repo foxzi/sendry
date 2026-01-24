@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/tls"
 	"log/slog"
 	"net/http"
 	"time"
@@ -30,6 +31,7 @@ type Server struct {
 	managementServer *ManagementServer
 	sandboxServer    *SandboxServer
 	sandboxStorage   *sandbox.Storage
+	tlsConfig        *tls.Config
 }
 
 // ServerOptions contains options for creating an API server
@@ -43,6 +45,7 @@ type ServerOptions struct {
 	SandboxStorage *sandbox.Storage
 	DKIMKeysDir    string
 	TLSCertsDir    string
+	TLSConfig      *tls.Config
 }
 
 // NewServer creates a new API server
@@ -66,6 +69,7 @@ func NewServerWithOptions(opts ServerOptions) *Server {
 		domainManager:  opts.DomainManager,
 		rateLimiter:    opts.RateLimiter,
 		sandboxStorage: opts.SandboxStorage,
+		tlsConfig:      opts.TLSConfig,
 	}
 
 	// Create management server if we have full config
@@ -142,6 +146,12 @@ func (s *Server) ListenAndServe() error {
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
+	}
+
+	if s.tlsConfig != nil {
+		s.httpServer.TLSConfig = s.tlsConfig
+		s.logger.Info("starting HTTPS API server", "addr", s.config.ListenAddr)
+		return s.httpServer.ListenAndServeTLS("", "")
 	}
 
 	s.logger.Info("starting HTTP API server", "addr", s.config.ListenAddr)

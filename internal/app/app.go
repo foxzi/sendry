@@ -213,6 +213,7 @@ func New(cfg *config.Config) (*App, error) {
 		DomainManager:  domainMgr,
 		RateLimiter:    rateLimiter,
 		SandboxStorage: sandboxStorage,
+		TLSConfig:      tlsConfig,
 	})
 
 	return &App{
