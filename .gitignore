@@ -1,0 +1,24 @@
+# Binaries
+sendry
+*.exe
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Data
+*.db
+/data/
+
+# Logs
+*.log
+
+# Test coverage
+coverage.out
+coverage.html
+
+# OS
+.DS_Store
+Thumbs.db
