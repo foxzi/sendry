@@ -16,7 +16,6 @@ var (
 	dnsCheckDKIM   bool
 	dnsCheckDMARC  bool
 	dnsCheckMTASTS bool
-	dnsCheckPTR    bool
 	dnsCheckAll    bool
 	dnsSelector    string
 	dnsFormat      string
@@ -41,7 +40,6 @@ func init() {
 	dnsCheckCmd.Flags().BoolVar(&dnsCheckDKIM, "dkim", false, "Check DKIM records")
 	dnsCheckCmd.Flags().BoolVar(&dnsCheckDMARC, "dmarc", false, "Check DMARC record")
 	dnsCheckCmd.Flags().BoolVar(&dnsCheckMTASTS, "mta-sts", false, "Check MTA-STS record")
-	dnsCheckCmd.Flags().BoolVar(&dnsCheckPTR, "ptr", false, "Check PTR record")
 	dnsCheckCmd.Flags().BoolVar(&dnsCheckAll, "all", false, "Check all records")
 	dnsCheckCmd.Flags().StringVar(&dnsSelector, "selector", "sendry", "DKIM selector to check")
 	dnsCheckCmd.Flags().StringVar(&dnsFormat, "format", "table", "Output format (table, json, yaml)")
@@ -63,7 +61,7 @@ func runDNSCheck(cmd *cobra.Command, args []string) error {
 	defer cancel()
 
 	// If no specific checks requested, check all
-	checkAll := dnsCheckAll || (!dnsCheckMX && !dnsCheckSPF && !dnsCheckDKIM && !dnsCheckDMARC && !dnsCheckMTASTS && !dnsCheckPTR)
+	checkAll := dnsCheckAll || (!dnsCheckMX && !dnsCheckSPF && !dnsCheckDKIM && !dnsCheckDMARC && !dnsCheckMTASTS)
 
 	fmt.Printf("Checking DNS records for: %s\n\n", domain)
 
@@ -99,28 +97,36 @@ func runDNSCheck(cmd *cobra.Command, args []string) error {
 		printResult(result)
 	}
 
-	if checkAll || dnsCheckPTR {
-		result := checkPTRRecord(ctx, domain)
-		results = append(results, result)
-		printResult(result)
-	}
-
 	// Summary
 	fmt.Println()
 	okCount := 0
 	warnCount := 0
 	errCount := 0
+	naCount := 0
 	for _, r := range results {
 		switch r.Status {
 		case "ok":
 			okCount++
 		case "warning":
 			warnCount++
-		case "error", "not_found":
+		case "error":
 			errCount++
+		case "not_found":
+			naCount++
 		}
 	}
-	fmt.Printf("Summary: %d OK, %d warnings, %d errors\n", okCount, warnCount, errCount)
+
+	summary := fmt.Sprintf("Summary: %d OK", okCount)
+	if warnCount > 0 {
+		summary += fmt.Sprintf(", %d warnings", warnCount)
+	}
+	if errCount > 0 {
+		summary += fmt.Sprintf(", %d errors", errCount)
+	}
+	if naCount > 0 {
+		summary += fmt.Sprintf(", %d not configured", naCount)
+	}
+	fmt.Println(summary)
 
 	return nil
 }
@@ -336,67 +342,6 @@ func checkMTASTSRecord(ctx context.Context, domain string) dnsCheckResult {
 	result.Status = "warning"
 	result.Value = fullRecord
 	result.Message = "TXT record found but doesn't appear to be a valid MTA-STS record"
-	return result
-}
-
-func checkPTRRecord(ctx context.Context, domain string) dnsCheckResult {
-	result := dnsCheckResult{Type: "PTR Record (reverse DNS)"}
-
-	// First resolve the domain to IP
-	ips, err := net.DefaultResolver.LookupIP(ctx, "ip4", domain)
-	if err != nil {
-		result.Status = "error"
-		result.Message = fmt.Sprintf("Could not resolve domain to IP: %v", err)
-		return result
-	}
-
-	if len(ips) == 0 {
-		result.Status = "error"
-		result.Message = "No A record found for domain"
-		return result
-	}
-
-	ip := ips[0]
-
-	// Lookup PTR record
-	names, err := net.DefaultResolver.LookupAddr(ctx, ip.String())
-	if err != nil {
-		if dnsErr, ok := err.(*net.DNSError); ok && dnsErr.IsNotFound {
-			result.Status = "warning"
-			result.Message = fmt.Sprintf("No PTR record for %s (recommended for mail servers)", ip.String())
-			return result
-		}
-		result.Status = "error"
-		result.Message = fmt.Sprintf("PTR lookup failed: %v", err)
-		return result
-	}
-
-	if len(names) == 0 {
-		result.Status = "warning"
-		result.Message = fmt.Sprintf("No PTR record for %s", ip.String())
-		return result
-	}
-
-	result.Status = "ok"
-	result.Value = fmt.Sprintf("%s -> %s", ip.String(), strings.Join(names, ", "))
-
-	// Check if PTR matches domain
-	ptrMatches := false
-	for _, name := range names {
-		name = strings.TrimSuffix(name, ".")
-		if strings.EqualFold(name, domain) || strings.HasSuffix(strings.ToLower(name), "."+strings.ToLower(domain)) {
-			ptrMatches = true
-			break
-		}
-	}
-
-	if ptrMatches {
-		result.Message = "PTR record matches domain"
-	} else {
-		result.Status = "warning"
-		result.Message = "PTR record does not match domain (may affect deliverability)"
-	}
-
 	return result
 }
 
