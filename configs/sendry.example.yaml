@@ -124,3 +124,29 @@ storage:
 logging:
   level: "info"
   format: "json"
+
+# Header manipulation rules
+# Apply rules to modify email headers before sending
+header_rules:
+  # Global rules (applied to all domains)
+  global:
+    # Remove headers that expose internal infrastructure
+    - action: remove
+      headers:
+        - "X-Originating-IP"
+        - "X-Mailer"
+        - "User-Agent"
+    # Add custom header
+    - action: add
+      header: "X-Processed-By"
+      value: "Sendry"
+
+  # Per-domain rules (applied after global rules)
+  # domains:
+  #   example.com:
+  #     - action: replace
+  #       header: "X-Mailer"
+  #       value: "Example Mail Server"
+  #     - action: add
+  #       header: "X-Company-ID"
+  #       value: "example-corp"

@@ -16,6 +16,7 @@ import (
 	"github.com/foxzi/sendry/internal/config"
 	"github.com/foxzi/sendry/internal/dns"
 	"github.com/foxzi/sendry/internal/domain"
+	"github.com/foxzi/sendry/internal/headers"
 	"github.com/foxzi/sendry/internal/queue"
 	"github.com/foxzi/sendry/internal/ratelimit"
 	"github.com/foxzi/sendry/internal/sandbox"
@@ -135,6 +136,13 @@ func New(cfg *config.Config) (*App, error) {
 		sandboxStorage,
 		logger.With("component", "sandbox_sender"),
 	)
+
+	// Setup header rules processor if configured
+	if cfg.HeaderRules != nil && cfg.HeaderRules.HasRules() {
+		headerProcessor := headers.NewProcessor(cfg.HeaderRules)
+		sandboxSender.SetHeaderProcessor(headerProcessor)
+		logger.Info("header rules enabled")
+	}
 
 	// Create queue processor with sandbox sender
 	processor := queue.NewProcessor(

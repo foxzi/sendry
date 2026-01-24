@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/foxzi/sendry/internal/headers"
 	"github.com/foxzi/sendry/internal/queue"
 )
 
@@ -33,6 +34,7 @@ type Sender struct {
 	logger           *slog.Logger
 	simulateErrors   bool
 	errorProbability float64 // 0.0 to 1.0
+	headerProcessor  *headers.Processor
 }
 
 // NewSender creates a new sandbox sender
@@ -63,6 +65,11 @@ func (s *Sender) SetErrorSimulation(enabled bool, probability float64) {
 	}
 }
 
+// SetHeaderProcessor sets the header rules processor
+func (s *Sender) SetHeaderProcessor(p *headers.Processor) {
+	s.headerProcessor = p
+}
+
 // Send routes the message based on domain mode
 func (s *Sender) Send(ctx context.Context, msg *queue.Message) error {
 	// Extract sender domain
@@ -70,6 +77,11 @@ func (s *Sender) Send(ctx context.Context, msg *queue.Message) error {
 	if domain == "" {
 		// Can't determine domain, use real sender
 		return s.realSender.Send(ctx, msg)
+	}
+
+	// Apply header rules if configured
+	if s.headerProcessor != nil {
+		msg.Data = s.headerProcessor.Process(msg.Data, domain)
 	}
 
 	mode := "production"

@@ -5,20 +5,22 @@ import (
 	"os"
 	"time"
 
+	"github.com/foxzi/sendry/internal/headers"
 	"gopkg.in/yaml.v3"
 )
 
 // Config is the main configuration structure
 type Config struct {
-	Server    ServerConfig            `yaml:"server"`
-	SMTP      SMTPConfig              `yaml:"smtp"`
-	API       APIConfig               `yaml:"api"`
-	Queue     QueueConfig             `yaml:"queue"`
-	Storage   StorageConfig           `yaml:"storage"`
-	Logging   LoggingConfig           `yaml:"logging"`
-	DKIM      DKIMConfig              `yaml:"dkim"`       // Legacy single-domain DKIM config
-	Domains   map[string]DomainConfig `yaml:"domains"`    // Multi-domain configuration
-	RateLimit RateLimitConfig         `yaml:"rate_limit"` // Rate limiting configuration
+	Server      ServerConfig            `yaml:"server"`
+	SMTP        SMTPConfig              `yaml:"smtp"`
+	API         APIConfig               `yaml:"api"`
+	Queue       QueueConfig             `yaml:"queue"`
+	Storage     StorageConfig           `yaml:"storage"`
+	Logging     LoggingConfig           `yaml:"logging"`
+	DKIM        DKIMConfig              `yaml:"dkim"`         // Legacy single-domain DKIM config
+	Domains     map[string]DomainConfig `yaml:"domains"`      // Multi-domain configuration
+	RateLimit   RateLimitConfig         `yaml:"rate_limit"`   // Rate limiting configuration
+	HeaderRules *headers.Config         `yaml:"header_rules"` // Header manipulation rules
 }
 
 // RateLimitConfig contains global rate limiting settings
