@@ -305,6 +305,31 @@ func (a *App) Run(ctx context.Context) error {
 				a.logger.Warn("ACME HTTP server error", "error", err)
 			}
 		}()
+
+		// Wait for HTTP server to start
+		time.Sleep(100 * time.Millisecond)
+
+		// Ensure certificates are obtained/validated at startup
+		certCtx, certCancel := context.WithTimeout(ctx, 2*time.Minute)
+		certs, err := a.acmeManager.EnsureCertificates(certCtx)
+		certCancel()
+		if err != nil {
+			a.logger.Error("failed to ensure certificates", "error", err)
+		} else {
+			for _, cert := range certs {
+				if cert.IsNew {
+					a.logger.Info("obtained new certificate",
+						"domain", cert.Domain,
+						"expires", cert.NotAfter.Format("2006-01-02"),
+						"days_left", cert.DaysLeft)
+				} else {
+					a.logger.Info("certificate valid",
+						"domain", cert.Domain,
+						"expires", cert.NotAfter.Format("2006-01-02"),
+						"days_left", cert.DaysLeft)
+				}
+			}
+		}
 	}
 
 	// Wait for shutdown signal or error
