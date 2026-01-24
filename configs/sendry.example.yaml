@@ -1,0 +1,33 @@
+server:
+  hostname: "mail.example.com"
+
+smtp:
+  listen_addr: ":25"
+  submission_addr: ":587"
+  domain: "example.com"
+  max_message_bytes: 10485760  # 10MB
+  max_recipients: 100
+  read_timeout: 60s
+  write_timeout: 60s
+  auth:
+    required: true
+    users:
+      admin: "change_this_password"
+      api: "change_this_api_password"
+
+api:
+  listen_addr: ":8080"
+  api_key: "change_this_api_key"
+
+queue:
+  workers: 4
+  retry_interval: 5m
+  max_retries: 5
+  process_interval: 10s
+
+storage:
+  path: "/var/lib/sendry/queue.db"
+
+logging:
+  level: "info"
+  format: "json"
