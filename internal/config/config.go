@@ -22,6 +22,7 @@ type Config struct {
 	RateLimit   RateLimitConfig         `yaml:"rate_limit"`   // Rate limiting configuration
 	HeaderRules *headers.Config         `yaml:"header_rules"` // Header manipulation rules
 	Metrics     MetricsConfig           `yaml:"metrics"`      // Prometheus metrics configuration
+	DLQ         DLQConfig               `yaml:"dlq"`          // Dead Letter Queue configuration
 }
 
 // MetricsConfig contains Prometheus metrics settings
@@ -31,6 +32,14 @@ type MetricsConfig struct {
 	Path          string        `yaml:"path"`           // Default: /metrics
 	FlushInterval time.Duration `yaml:"flush_interval"` // Default: 10s
 	AllowedIPs    []string      `yaml:"allowed_ips"`    // IP addresses/CIDRs allowed to access metrics
+}
+
+// DLQConfig contains Dead Letter Queue settings
+type DLQConfig struct {
+	Enabled         bool          `yaml:"enabled"`          // Enable DLQ (false = delete failed messages)
+	MaxAge          time.Duration `yaml:"max_age"`          // Delete DLQ messages older than this (0 = keep forever)
+	MaxCount        int           `yaml:"max_count"`        // Max messages in DLQ (0 = unlimited)
+	CleanupInterval time.Duration `yaml:"cleanup_interval"` // How often to run DLQ cleanup
 }
 
 // RateLimitConfig contains global rate limiting settings
@@ -167,7 +176,14 @@ type QueueConfig struct {
 
 // StorageConfig contains storage settings
 type StorageConfig struct {
-	Path string `yaml:"path"`
+	Path      string           `yaml:"path"`
+	Retention *RetentionConfig `yaml:"retention"` // Message retention settings
+}
+
+// RetentionConfig contains message retention settings
+type RetentionConfig struct {
+	DeliveredMaxAge time.Duration `yaml:"delivered_max_age"` // Delete delivered messages older than this (0 = keep forever)
+	CleanupInterval time.Duration `yaml:"cleanup_interval"`  // How often to run cleanup
 }
 
 // LoggingConfig contains logging settings
@@ -266,6 +282,23 @@ func (c *Config) setDefaults() {
 	}
 	if c.Metrics.FlushInterval == 0 {
 		c.Metrics.FlushInterval = 10 * time.Second
+	}
+
+	// DLQ defaults
+	if !c.DLQ.Enabled && c.DLQ.MaxAge == 0 && c.DLQ.MaxCount == 0 && c.DLQ.CleanupInterval == 0 {
+		// If nothing is set, enable DLQ by default
+		c.DLQ.Enabled = true
+	}
+	if c.DLQ.CleanupInterval == 0 {
+		c.DLQ.CleanupInterval = time.Hour
+	}
+
+	// Retention defaults
+	if c.Storage.Retention == nil {
+		c.Storage.Retention = &RetentionConfig{}
+	}
+	if c.Storage.Retention.CleanupInterval == 0 {
+		c.Storage.Retention.CleanupInterval = time.Hour
 	}
 }
 

@@ -120,6 +120,24 @@ queue:
 
 storage:
   path: "/var/lib/sendry/queue.db"
+  # Message retention settings
+  retention:
+    # Delete delivered messages older than this (0 = keep forever)
+    delivered_max_age: 7d
+    # How often to run cleanup
+    cleanup_interval: 1h
+
+# Dead Letter Queue (DLQ) configuration
+# Failed messages are moved to DLQ for manual review/retry
+dlq:
+  # Enable DLQ (if false, failed messages are deleted immediately)
+  enabled: true
+  # Delete DLQ messages older than this (0 = keep forever)
+  max_age: 30d
+  # Maximum messages in DLQ (0 = unlimited, oldest deleted first)
+  max_count: 10000
+  # How often to run DLQ cleanup
+  cleanup_interval: 1h
 
 logging:
   level: "info"

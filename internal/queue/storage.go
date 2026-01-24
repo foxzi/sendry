@@ -574,3 +574,140 @@ type DLQStats struct {
 	TotalSize int64     `json:"total_size"`
 	OldestAt  time.Time `json:"oldest_at,omitempty"`
 }
+
+// Cleanup methods
+
+// CleanupDelivered removes delivered messages older than maxAge
+func (s *BoltStorage) CleanupDelivered(ctx context.Context, maxAge time.Duration) (int, error) {
+	if maxAge <= 0 {
+		return 0, nil
+	}
+
+	cutoff := time.Now().Add(-maxAge)
+	deleted := 0
+
+	err := s.db.Update(func(tx *bolt.Tx) error {
+		msgBucket := tx.Bucket(bucketMessages)
+		c := msgBucket.Cursor()
+
+		var toDelete [][]byte
+
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			var msg Message
+			if err := json.Unmarshal(v, &msg); err != nil {
+				continue
+			}
+
+			// Only delete delivered messages older than cutoff
+			if msg.Status == StatusDelivered && msg.UpdatedAt.Before(cutoff) {
+				toDelete = append(toDelete, append([]byte{}, k...))
+			}
+		}
+
+		// Delete collected messages
+		for _, k := range toDelete {
+			if err := msgBucket.Delete(k); err != nil {
+				return err
+			}
+			deleted++
+		}
+
+		return nil
+	})
+
+	return deleted, err
+}
+
+// CleanupDLQ removes DLQ messages by age and enforces max count (FIFO)
+func (s *BoltStorage) CleanupDLQ(ctx context.Context, maxAge time.Duration, maxCount int) (int, error) {
+	deleted := 0
+
+	err := s.db.Update(func(tx *bolt.Tx) error {
+		dlqBucket := tx.Bucket(bucketDeadLetter)
+		msgBucket := tx.Bucket(bucketMessages)
+
+		// Count current DLQ size and collect items to delete
+		var toDeleteByAge []struct {
+			indexKey []byte
+			msgID    []byte
+		}
+		var allItems []struct {
+			indexKey []byte
+			msgID    []byte
+		}
+
+		now := time.Now()
+		cutoff := now.Add(-maxAge)
+
+		c := dlqBucket.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			item := struct {
+				indexKey []byte
+				msgID    []byte
+			}{
+				indexKey: append([]byte{}, k...),
+				msgID:    append([]byte{}, v...),
+			}
+			allItems = append(allItems, item)
+
+			// Check age-based deletion
+			if maxAge > 0 {
+				ts := parseTimestampFromKey(k)
+				if ts.Before(cutoff) {
+					toDeleteByAge = append(toDeleteByAge, item)
+				}
+			}
+		}
+
+		// Delete by age first
+		for _, item := range toDeleteByAge {
+			if err := dlqBucket.Delete(item.indexKey); err != nil {
+				return err
+			}
+			if err := msgBucket.Delete(item.msgID); err != nil {
+				return err
+			}
+			deleted++
+		}
+
+		// Calculate remaining count after age deletion
+		remainingCount := len(allItems) - len(toDeleteByAge)
+
+		// Enforce max count (delete oldest first - FIFO)
+		if maxCount > 0 && remainingCount > maxCount {
+			toDeleteCount := remainingCount - maxCount
+			deleteCount := 0
+
+			for _, item := range allItems {
+				// Skip items already deleted by age
+				alreadyDeleted := false
+				for _, aged := range toDeleteByAge {
+					if string(item.indexKey) == string(aged.indexKey) {
+						alreadyDeleted = true
+						break
+					}
+				}
+				if alreadyDeleted {
+					continue
+				}
+
+				if deleteCount >= toDeleteCount {
+					break
+				}
+
+				if err := dlqBucket.Delete(item.indexKey); err != nil {
+					return err
+				}
+				if err := msgBucket.Delete(item.msgID); err != nil {
+					return err
+				}
+				deleted++
+				deleteCount++
+			}
+		}
+
+		return nil
+	})
+
+	return deleted, err
+}

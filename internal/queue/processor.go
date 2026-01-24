@@ -40,6 +40,7 @@ type Processor struct {
 	logger          *slog.Logger
 	bounceGenerator BounceGenerator
 	bounceEnabled   bool
+	dlqEnabled      bool
 
 	stopCh chan struct{}
 	wg     sync.WaitGroup
@@ -51,6 +52,7 @@ type ProcessorConfig struct {
 	RetryInterval   time.Duration
 	MaxRetries      int
 	ProcessInterval time.Duration
+	DLQEnabled      bool // Enable dead letter queue (if false, failed messages are deleted)
 }
 
 // NewProcessor creates a new queue processor
@@ -80,6 +82,7 @@ func NewProcessor(q Queue, sender Sender, cfg ProcessorConfig, isTemp ErrorCheck
 		processInterval: cfg.ProcessInterval,
 		isTemporary:     isTemp,
 		logger:          logger,
+		dlqEnabled:      cfg.DLQEnabled,
 		stopCh:          make(chan struct{}),
 	}
 }
@@ -204,13 +207,23 @@ func (p *Processor) processOne(ctx context.Context, logger *slog.Logger) {
 		// Generate and send bounce message
 		p.sendBounce(ctx, msg, err.Error(), logger)
 
-		// Move to dead letter queue if supported
-		if dlq, ok := p.queue.(DLQStorage); ok {
-			if err := dlq.MoveToDLQ(ctx, msg); err != nil {
-				logger.Error("failed to move message to DLQ", "error", err)
+		// Move to dead letter queue or delete
+		if p.dlqEnabled {
+			if dlq, ok := p.queue.(DLQStorage); ok {
+				if err := dlq.MoveToDLQ(ctx, msg); err != nil {
+					logger.Error("failed to move message to DLQ", "error", err)
+				} else {
+					logger.Info("message moved to DLQ", "id", msg.ID)
+					return // Already saved to DLQ, no need to Update
+				}
+			}
+		} else {
+			// DLQ disabled - delete the message
+			if err := p.queue.Delete(ctx, msg.ID); err != nil {
+				logger.Error("failed to delete failed message", "error", err)
 			} else {
-				logger.Info("message moved to DLQ", "id", msg.ID)
-				return // Already saved to DLQ, no need to Update
+				logger.Info("failed message deleted (DLQ disabled)", "id", msg.ID)
+				return
 			}
 		}
 	}

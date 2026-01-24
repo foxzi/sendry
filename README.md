@@ -190,6 +190,12 @@ curl -X DELETE http://localhost:8080/api/v1/queue/{message_id} \
 | `queue.retry_interval` | `5m` | Base retry interval |
 | `queue.max_retries` | `5` | Max delivery attempts |
 | `storage.path` | `/var/lib/sendry/queue.db` | BoltDB file path |
+| `storage.retention.delivered_max_age` | `0` | Delete delivered messages older than this |
+| `storage.retention.cleanup_interval` | `1h` | Cleanup interval |
+| `dlq.enabled` | `true` | Enable dead letter queue |
+| `dlq.max_age` | `0` | Delete DLQ messages older than this |
+| `dlq.max_count` | `0` | Max DLQ messages (0 = unlimited) |
+| `dlq.cleanup_interval` | `1h` | DLQ cleanup interval |
 | `logging.level` | `info` | Log level (debug/info/warn/error) |
 | `logging.format` | `json` | Log format (json/text) |
 | `metrics.enabled` | `false` | Enable Prometheus metrics |

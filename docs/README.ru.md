@@ -190,6 +190,12 @@ curl -X DELETE http://localhost:8080/api/v1/queue/{message_id} \
 | `queue.retry_interval` | `5m` | Базовый интервал retry |
 | `queue.max_retries` | `5` | Макс. попыток доставки |
 | `storage.path` | `/var/lib/sendry/queue.db` | Путь к файлу BoltDB |
+| `storage.retention.delivered_max_age` | `0` | Удалять доставленные сообщения старше |
+| `storage.retention.cleanup_interval` | `1h` | Интервал очистки |
+| `dlq.enabled` | `true` | Включить очередь недоставленных |
+| `dlq.max_age` | `0` | Удалять DLQ сообщения старше |
+| `dlq.max_count` | `0` | Макс. сообщений в DLQ (0 = без лимита) |
+| `dlq.cleanup_interval` | `1h` | Интервал очистки DLQ |
 | `logging.level` | `info` | Уровень логов (debug/info/warn/error) |
 | `logging.format` | `json` | Формат логов (json/text) |
 | `metrics.enabled` | `false` | Включить Prometheus метрики |

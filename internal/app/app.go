@@ -35,6 +35,7 @@ type App struct {
 	smtpsServer      *smtp.Server
 	apiServer        *api.Server
 	processor        *queue.Processor
+	cleaner          *queue.Cleaner
 	logger           *slog.Logger
 	tlsConfig        *tls.Config
 	acmeManager      *sendryTLS.ACMEManager
@@ -190,9 +191,23 @@ func New(cfg *config.Config) (*App, error) {
 			RetryInterval:   cfg.Queue.RetryInterval,
 			MaxRetries:      cfg.Queue.MaxRetries,
 			ProcessInterval: cfg.Queue.ProcessInterval,
+			DLQEnabled:      cfg.DLQ.Enabled,
 		},
 		smtp.IsTemporaryError,
 		logger.With("component", "processor"),
+	)
+
+	// Create cleaner for automatic cleanup
+	cleaner := queue.NewCleaner(
+		storage,
+		queue.CleanerConfig{
+			DeliveredMaxAge:   cfg.Storage.Retention.DeliveredMaxAge,
+			DeliveredInterval: cfg.Storage.Retention.CleanupInterval,
+			DLQMaxAge:         cfg.DLQ.MaxAge,
+			DLQMaxCount:       cfg.DLQ.MaxCount,
+			DLQInterval:       cfg.DLQ.CleanupInterval,
+		},
+		logger.With("component", "cleaner"),
 	)
 
 	// Setup bounce generator for NDR messages
@@ -281,6 +296,7 @@ func New(cfg *config.Config) (*App, error) {
 		smtpsServer:      smtpsServer,
 		apiServer:        apiServer,
 		processor:        processor,
+		cleaner:          cleaner,
 		logger:           logger,
 		tlsConfig:        tlsConfig,
 		sandboxStorage:   sandboxStorage,
@@ -312,6 +328,9 @@ func (a *App) Run(ctx context.Context) error {
 
 	// Start queue processor
 	a.processor.Start(ctx)
+
+	// Start cleaner for automatic cleanup
+	a.cleaner.Start(ctx)
 
 	// Start metrics collector and server if enabled
 	if a.metricsCollector != nil {
@@ -427,6 +446,9 @@ func (a *App) Shutdown(ctx context.Context) error {
 
 	// Stop processor first (stop accepting new work)
 	a.processor.Stop()
+
+	// Stop cleaner
+	a.cleaner.Stop()
 
 	// Shutdown servers
 	if err := a.smtpServer.Shutdown(shutdownCtx); err != nil {
