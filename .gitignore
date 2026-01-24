@@ -22,3 +22,7 @@ coverage.html
 # OS
 .DS_Store
 Thumbs.db
+
+# Claude
+CLAUDE.md
+tz.md
