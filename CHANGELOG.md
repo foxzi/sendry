@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sendry Web: CLI cleanup command (jobs, audit logs, template versions)
 - Sendry Web: status tracking for queued items via Sendry API
 - Sendry Web: OIDC authentication (Authentik, Keycloak, etc.) with group filtering
+- Sendry Web: dark/light theme toggle with localStorage persistence
+- Sendry Web: localization support (English and Russian)
+- Sendry Web: timezone configuration in settings
 
 ## [0.3.4] - 2025-01-25
 

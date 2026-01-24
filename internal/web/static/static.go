@@ -6,7 +6,7 @@ import (
 	"net/http"
 )
 
-//go:embed css/*
+//go:embed css/* js/*
 var staticFS embed.FS
 
 // Handler returns an http.Handler that serves static files
