@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/foxzi/sendry/internal/web/auth"
 	"github.com/foxzi/sendry/internal/web/config"
 	"github.com/foxzi/sendry/internal/web/db"
 	"github.com/foxzi/sendry/internal/web/repository"
@@ -18,6 +19,7 @@ type Handlers struct {
 	logger     *slog.Logger
 	views      *views.Engine
 	sendry     *sendry.Manager
+	oidc       *auth.OIDCProvider
 	templates  *repository.TemplateRepository
 	recipients *repository.RecipientRepository
 	campaigns  *repository.CampaignRepository
@@ -25,13 +27,14 @@ type Handlers struct {
 	settings   *repository.SettingsRepository
 }
 
-func New(cfg *config.Config, db *db.DB, logger *slog.Logger, v *views.Engine) *Handlers {
+func New(cfg *config.Config, db *db.DB, logger *slog.Logger, v *views.Engine, oidcProvider *auth.OIDCProvider) *Handlers {
 	return &Handlers{
 		cfg:        cfg,
 		db:         db,
 		logger:     logger,
 		views:      v,
 		sendry:     sendry.NewManager(cfg.Sendry.Servers),
+		oidc:       oidcProvider,
 		templates:  repository.NewTemplateRepository(db.DB),
 		recipients: repository.NewRecipientRepository(db.DB),
 		campaigns:  repository.NewCampaignRepository(db.DB),

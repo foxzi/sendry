@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/foxzi/sendry/internal/web/auth"
 	"github.com/foxzi/sendry/internal/web/config"
 	"github.com/foxzi/sendry/internal/web/db"
 	"github.com/foxzi/sendry/internal/web/handlers"
@@ -23,6 +24,7 @@ type Server struct {
 	views  *views.Engine
 	http   *http.Server
 	worker *worker.Worker
+	oidc   *auth.OIDCProvider
 }
 
 func New(cfg *config.Config, logger *slog.Logger) (*Server, error) {
@@ -43,12 +45,23 @@ func New(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		return nil, fmt.Errorf("failed to initialize views: %w", err)
 	}
 
+	// Initialize OIDC provider if enabled
+	var oidcProvider *auth.OIDCProvider
+	if cfg.Auth.OIDC.Enabled {
+		oidcProvider, err = auth.NewOIDCProvider(context.Background(), &cfg.Auth.OIDC)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize OIDC provider: %w", err)
+		}
+		logger.Info("OIDC provider initialized", "issuer", cfg.Auth.OIDC.IssuerURL)
+	}
+
 	// Create server
 	s := &Server{
 		cfg:    cfg,
 		logger: logger,
 		db:     database,
 		views:  viewEngine,
+		oidc:   oidcProvider,
 	}
 
 	// Setup HTTP server
@@ -70,7 +83,7 @@ func (s *Server) setupRoutes() http.Handler {
 	mux := http.NewServeMux()
 
 	// Create handlers
-	h := handlers.New(s.cfg, s.db, s.logger, s.views)
+	h := handlers.New(s.cfg, s.db, s.logger, s.views, s.oidc)
 
 	// Health check
 	mux.HandleFunc("GET /health", h.Health)
@@ -82,6 +95,7 @@ func (s *Server) setupRoutes() http.Handler {
 	mux.HandleFunc("GET /auth/login", h.LoginPage)
 	mux.HandleFunc("POST /auth/login", h.Login)
 	mux.HandleFunc("GET /auth/logout", h.Logout)
+	mux.HandleFunc("GET /auth/oidc/login", h.OIDCLogin)
 	mux.HandleFunc("GET /auth/callback", h.OIDCCallback)
 
 	// Protected routes

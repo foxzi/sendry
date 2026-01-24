@@ -47,30 +47,7 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create session
-	sessionID := uuid.New().String()
-	expiresAt := time.Now().Add(h.cfg.Auth.SessionTTL)
-
-	_, err = h.db.Exec(
-		"INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)",
-		sessionID, userID, expiresAt,
-	)
-	if err != nil {
-		h.logger.Error("failed to create session", "error", err)
-		h.renderLoginError(w, "Login failed")
-		return
-	}
-
-	// Set cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:     "session",
-		Value:    sessionID,
-		Path:     "/",
-		Expires:  expiresAt,
-		HttpOnly: true,
-		Secure:   h.cfg.Server.TLS.Enabled,
-		SameSite: http.SameSiteLaxMode,
-	})
-
+	h.createSession(w, userID, email)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -95,10 +72,130 @@ func (h *Handlers) Logout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
 }
 
+// OIDCLogin initiates OIDC login flow
+func (h *Handlers) OIDCLogin(w http.ResponseWriter, r *http.Request) {
+	if h.oidc == nil {
+		h.renderLoginError(w, "OIDC is not configured")
+		return
+	}
+
+	url, state, err := h.oidc.AuthCodeURL()
+	if err != nil {
+		h.logger.Error("failed to generate auth URL", "error", err)
+		h.renderLoginError(w, "Failed to initiate login")
+		return
+	}
+
+	// Store state in cookie for validation
+	http.SetCookie(w, &http.Cookie{
+		Name:     "oidc_state",
+		Value:    state,
+		Path:     "/",
+		MaxAge:   300, // 5 minutes
+		HttpOnly: true,
+		Secure:   h.cfg.Server.TLS.Enabled,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
+}
+
 // OIDCCallback handles OIDC callback
 func (h *Handlers) OIDCCallback(w http.ResponseWriter, r *http.Request) {
-	// TODO: implement OIDC callback
+	if h.oidc == nil {
+		h.renderLoginError(w, "OIDC is not configured")
+		return
+	}
+
+	// Get state from cookie
+	stateCookie, err := r.Cookie("oidc_state")
+	if err != nil {
+		h.renderLoginError(w, "Invalid state")
+		return
+	}
+
+	// Clear state cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "oidc_state",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+	})
+
+	state := r.URL.Query().Get("state")
+	if state != stateCookie.Value {
+		h.renderLoginError(w, "Invalid state")
+		return
+	}
+
+	code := r.URL.Query().Get("code")
+	if code == "" {
+		errorDesc := r.URL.Query().Get("error_description")
+		if errorDesc == "" {
+			errorDesc = r.URL.Query().Get("error")
+		}
+		if errorDesc == "" {
+			errorDesc = "Authorization failed"
+		}
+		h.renderLoginError(w, errorDesc)
+		return
+	}
+
+	// Exchange code for user info
+	userInfo, err := h.oidc.Exchange(r.Context(), state, code)
+	if err != nil {
+		h.logger.Error("OIDC exchange failed", "error", err)
+		h.renderLoginError(w, "Authentication failed: "+err.Error())
+		return
+	}
+
+	// Find or create user
+	var userID string
+	err = h.db.QueryRow("SELECT id FROM users WHERE email = ?", userInfo.Email).Scan(&userID)
+	if err != nil {
+		// Create new user from OIDC
+		userID = uuid.New().String()
+		_, err = h.db.Exec(
+			"INSERT INTO users (id, email, name, created_at, updated_at) VALUES (?, ?, ?, datetime('now'), datetime('now'))",
+			userID, userInfo.Email, userInfo.Name,
+		)
+		if err != nil {
+			h.logger.Error("failed to create OIDC user", "error", err)
+			h.renderLoginError(w, "Failed to create user")
+			return
+		}
+		h.logger.Info("created OIDC user", "email", userInfo.Email)
+	}
+
+	// Create session
+	h.createSession(w, userID, userInfo.Email)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (h *Handlers) createSession(w http.ResponseWriter, userID, email string) {
+	sessionID := uuid.New().String()
+	expiresAt := time.Now().Add(h.cfg.Auth.SessionTTL)
+
+	_, err := h.db.Exec(
+		"INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)",
+		sessionID, userID, expiresAt,
+	)
+	if err != nil {
+		h.logger.Error("failed to create session", "error", err, "email", email)
+		return
+	}
+
+	// Set cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session",
+		Value:    sessionID,
+		Path:     "/",
+		Expires:  expiresAt,
+		HttpOnly: true,
+		Secure:   h.cfg.Server.TLS.Enabled,
+		SameSite: http.SameSiteLaxMode,
+	})
 }
 
 func (h *Handlers) renderLoginError(w http.ResponseWriter, message string) {

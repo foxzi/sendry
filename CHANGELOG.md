@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sendry Web: scheduled jobs support (worker auto-starts jobs at scheduled time)
 - Sendry Web: CLI cleanup command (jobs, audit logs, template versions)
 - Sendry Web: status tracking for queued items via Sendry API
+- Sendry Web: OIDC authentication (Authentik, Keycloak, etc.) with group filtering
 
 ## [0.3.4] - 2025-01-25
 
