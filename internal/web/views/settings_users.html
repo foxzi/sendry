@@ -1,0 +1,40 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>Users</h1>
+    <div class="header-actions">
+        <a href="/settings" class="btn btn-secondary">Back to Settings</a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {{if .Users}}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Email</th>
+                    <th>Name</th>
+                    <th>Created</th>
+                    <th>Last Updated</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Users}}
+                <tr>
+                    <td>{{.Email}}</td>
+                    <td>{{if .Name}}{{.Name}}{{else}}<span class="text-muted">-</span>{{end}}</td>
+                    <td>{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
+                    <td>{{.UpdatedAt.Format "2006-01-02 15:04"}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <div class="empty-state">
+            <p>No users found</p>
+            <p class="text-muted">Users are created during initial setup or via OIDC login</p>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}

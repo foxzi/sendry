@@ -1,0 +1,38 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>Servers</h1>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {{if .Servers}}
+        <div class="server-grid">
+            {{range .Servers}}
+            <div class="server-card">
+                <div class="server-header">
+                    <h3>{{.Name}}</h3>
+                    <span class="badge badge-{{if .Online}}running{{else}}failed{{end}}">
+                        {{if .Online}}Online{{else}}Offline{{end}}
+                    </span>
+                </div>
+                <div class="server-info">
+                    <p class="text-muted">{{.BaseURL}}</p>
+                    <span class="badge badge-{{.Env}}">{{.Env}}</span>
+                </div>
+                <div class="server-actions">
+                    <a href="/servers/{{.Name}}" class="btn btn-sm">View</a>
+                    <a href="/servers/{{.Name}}/queue" class="btn btn-sm btn-secondary">Queue</a>
+                    <a href="/servers/{{.Name}}/sandbox" class="btn btn-sm btn-secondary">Sandbox</a>
+                </div>
+            </div>
+            {{end}}
+        </div>
+        {{else}}
+        <div class="empty-state">
+            <p>No servers configured</p>
+            <p class="text-muted">Add servers in your configuration file</p>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}

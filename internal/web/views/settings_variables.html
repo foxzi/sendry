@@ -1,0 +1,73 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>Global Variables</h1>
+    <div class="header-actions">
+        <a href="/settings" class="btn btn-secondary">Back to Settings</a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Add Variable</h3>
+    </div>
+    <div class="card-body">
+        <form method="post" action="/settings/variables" class="form-inline">
+            <input type="hidden" name="_method" value="PUT">
+            <div class="form-group">
+                <input type="text" name="key" class="input" placeholder="Variable key" required>
+            </div>
+            <div class="form-group">
+                <input type="text" name="value" class="input" placeholder="Value" required>
+            </div>
+            <div class="form-group">
+                <input type="text" name="description" class="input" placeholder="Description (optional)">
+            </div>
+            <button type="submit" class="btn btn-primary">Add</button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Variables</h3>
+    </div>
+    <div class="card-body">
+        {{if .Variables}}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Key</th>
+                    <th>Value</th>
+                    <th>Description</th>
+                    <th>Updated</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Variables}}
+                <tr>
+                    <td><code>{{`{{`}}.{{.Key}}{{`}}`}}</code></td>
+                    <td>{{.Value}}</td>
+                    <td class="text-muted">{{.Description}}</td>
+                    <td>{{.UpdatedAt.Format "2006-01-02 15:04"}}</td>
+                    <td class="actions">
+                        <form method="post" action="/settings/variables" style="display: inline;">
+                            <input type="hidden" name="_method" value="PUT">
+                            <input type="hidden" name="action" value="delete">
+                            <input type="hidden" name="key" value="{{.Key}}">
+                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this variable?')">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <div class="empty-state">
+            <p>No global variables defined</p>
+            <p class="text-muted">Add variables above to use them in templates</p>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}

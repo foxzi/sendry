@@ -1,0 +1,52 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>{{.ServerName}} - Queue</h1>
+    <div class="header-actions">
+        <a href="/servers/{{.ServerName}}" class="btn btn-secondary">Back to Server</a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <span>{{.Total}} messages in queue</span>
+    </div>
+    <div class="card-body">
+        {{if .Messages}}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>From</th>
+                    <th>To</th>
+                    <th>Subject</th>
+                    <th>Retry</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Messages}}
+                <tr>
+                    <td>{{slice .ID 0 8}}...</td>
+                    <td>{{.From}}</td>
+                    <td>{{.To}}</td>
+                    <td>{{.Subject}}</td>
+                    <td>{{.RetryCount}}</td>
+                    <td>{{.CreatedAt}}</td>
+                    <td class="actions">
+                        <button class="btn btn-sm">View</button>
+                        <button class="btn btn-sm btn-danger">Delete</button>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <div class="empty-state">
+            <p>Queue is empty</p>
+            <p class="text-muted">Messages waiting to be sent will appear here</p>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}

@@ -20,6 +20,7 @@ type Handlers struct {
 	recipients *repository.RecipientRepository
 	campaigns  *repository.CampaignRepository
 	jobs       *repository.JobRepository
+	settings   *repository.SettingsRepository
 }
 
 func New(cfg *config.Config, db *db.DB, logger *slog.Logger, v *views.Engine) *Handlers {
@@ -32,6 +33,7 @@ func New(cfg *config.Config, db *db.DB, logger *slog.Logger, v *views.Engine) *H
 		recipients: repository.NewRecipientRepository(db.DB),
 		campaigns:  repository.NewCampaignRepository(db.DB),
 		jobs:       repository.NewJobRepository(db.DB),
+		settings:   repository.NewSettingsRepository(db.DB),
 	}
 }
 

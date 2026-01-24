@@ -1,0 +1,58 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>Monitoring</h1>
+</div>
+
+<div class="stats-overview">
+    <div class="stat-card">
+        <div class="stat-value">{{.ActiveJobs}}</div>
+        <div class="stat-label">Active Jobs</div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Server Status</h3>
+    </div>
+    <div class="card-body">
+        {{if .Servers}}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Server</th>
+                    <th>Environment</th>
+                    <th>Status</th>
+                    <th>Queue</th>
+                    <th>DLQ</th>
+                    <th>Delivered (24h)</th>
+                    <th>Failed (24h)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Servers}}
+                <tr>
+                    <td><a href="/servers/{{.Name}}">{{.Name}}</a></td>
+                    <td><span class="badge badge-{{.Env}}">{{.Env}}</span></td>
+                    <td>
+                        {{if .Online}}
+                        <span class="badge badge-running">Online</span>
+                        {{else}}
+                        <span class="badge badge-failed">Offline</span>
+                        {{end}}
+                    </td>
+                    <td>{{.QueueSize}}</td>
+                    <td>{{.DLQSize}}</td>
+                    <td>{{.Delivered}}</td>
+                    <td>{{.Failed}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <div class="empty-state">
+            <p>No servers configured</p>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}

@@ -1,0 +1,87 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>Audit Log</h1>
+    <div class="header-actions">
+        <a href="/settings" class="btn btn-secondary">Back to Settings</a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <form class="filter-form" method="get" action="/settings/audit">
+            <select name="action" class="input">
+                <option value="">All Actions</option>
+                <option value="create" {{if eq .Filter.Action "create"}}selected{{end}}>Create</option>
+                <option value="update" {{if eq .Filter.Action "update"}}selected{{end}}>Update</option>
+                <option value="delete" {{if eq .Filter.Action "delete"}}selected{{end}}>Delete</option>
+                <option value="login" {{if eq .Filter.Action "login"}}selected{{end}}>Login</option>
+                <option value="logout" {{if eq .Filter.Action "logout"}}selected{{end}}>Logout</option>
+            </select>
+            <select name="entity_type" class="input">
+                <option value="">All Types</option>
+                <option value="template" {{if eq .Filter.EntityType "template"}}selected{{end}}>Template</option>
+                <option value="recipient_list" {{if eq .Filter.EntityType "recipient_list"}}selected{{end}}>Recipient List</option>
+                <option value="campaign" {{if eq .Filter.EntityType "campaign"}}selected{{end}}>Campaign</option>
+                <option value="job" {{if eq .Filter.EntityType "job"}}selected{{end}}>Job</option>
+                <option value="variable" {{if eq .Filter.EntityType "variable"}}selected{{end}}>Variable</option>
+            </select>
+            <button type="submit" class="btn">Filter</button>
+            {{if or .Filter.Action .Filter.EntityType}}
+            <a href="/settings/audit" class="btn btn-secondary">Clear</a>
+            {{end}}
+        </form>
+    </div>
+    <div class="card-body">
+        {{if .Entries}}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>User</th>
+                    <th>Action</th>
+                    <th>Entity</th>
+                    <th>Details</th>
+                    <th>IP</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Entries}}
+                <tr>
+                    <td>{{.CreatedAt.Format "2006-01-02 15:04:05"}}</td>
+                    <td>{{if .UserEmail}}{{.UserEmail}}{{else}}<span class="text-muted">System</span>{{end}}</td>
+                    <td><span class="badge badge-{{.Action}}">{{.Action}}</span></td>
+                    <td>
+                        {{if .EntityType}}
+                        {{.EntityType}}
+                        {{if .EntityID}}<code>{{slice .EntityID 0 8}}...</code>{{end}}
+                        {{else}}
+                        <span class="text-muted">-</span>
+                        {{end}}
+                    </td>
+                    <td class="text-muted">{{if .Details}}{{.Details}}{{else}}-{{end}}</td>
+                    <td class="text-muted">{{if .IPAddress}}{{.IPAddress}}{{else}}-{{end}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+
+        {{if gt .TotalPages 1}}
+        <div class="pagination">
+            {{if gt .Page 1}}
+            <a href="/settings/audit?page={{sub .Page 1}}{{if .Filter.Action}}&action={{.Filter.Action}}{{end}}{{if .Filter.EntityType}}&entity_type={{.Filter.EntityType}}{{end}}" class="btn btn-sm">&laquo; Prev</a>
+            {{end}}
+            <span class="pagination-info">Page {{.Page}} of {{.TotalPages}} ({{.Total}} total)</span>
+            {{if lt .Page .TotalPages}}
+            <a href="/settings/audit?page={{add .Page 1}}{{if .Filter.Action}}&action={{.Filter.Action}}{{end}}{{if .Filter.EntityType}}&entity_type={{.Filter.EntityType}}{{end}}" class="btn btn-sm">Next &raquo;</a>
+            {{end}}
+        </div>
+        {{end}}
+        {{else}}
+        <div class="empty-state">
+            <p>No audit log entries</p>
+            <p class="text-muted">Activity will be recorded here</p>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}
