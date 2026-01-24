@@ -158,12 +158,21 @@ type DKIMConfig struct {
 type AuthConfig struct {
 	Required bool              `yaml:"required"`
 	Users    map[string]string `yaml:"users"` // username -> password
+
+	// Brute force protection settings
+	MaxFailures   int           `yaml:"max_failures"`    // Max auth failures before blocking (default: 5)
+	BlockDuration time.Duration `yaml:"block_duration"`  // How long to block after max failures (default: 15m)
+	FailureWindow time.Duration `yaml:"failure_window"`  // Window for counting failures (default: 5m)
 }
 
 // APIConfig contains HTTP API settings
 type APIConfig struct {
-	ListenAddr string `yaml:"listen_addr"`
-	APIKey     string `yaml:"api_key"`
+	ListenAddr     string        `yaml:"listen_addr"`
+	APIKey         string        `yaml:"api_key"`
+	MaxHeaderBytes int           `yaml:"max_header_bytes"` // Max HTTP header size (default: 1MB)
+	ReadTimeout    time.Duration `yaml:"read_timeout"`     // HTTP read timeout (default: 30s)
+	WriteTimeout   time.Duration `yaml:"write_timeout"`    // HTTP write timeout (default: 30s)
+	IdleTimeout    time.Duration `yaml:"idle_timeout"`     // HTTP idle timeout (default: 60s)
 }
 
 // QueueConfig contains queue processor settings
@@ -245,8 +254,31 @@ func (c *Config) setDefaults() {
 		c.SMTP.WriteTimeout = 60 * time.Second
 	}
 
+	// Auth brute force protection defaults
+	if c.SMTP.Auth.MaxFailures == 0 {
+		c.SMTP.Auth.MaxFailures = 5
+	}
+	if c.SMTP.Auth.BlockDuration == 0 {
+		c.SMTP.Auth.BlockDuration = 15 * time.Minute
+	}
+	if c.SMTP.Auth.FailureWindow == 0 {
+		c.SMTP.Auth.FailureWindow = 5 * time.Minute
+	}
+
 	if c.API.ListenAddr == "" {
 		c.API.ListenAddr = ":8080"
+	}
+	if c.API.MaxHeaderBytes == 0 {
+		c.API.MaxHeaderBytes = 1 << 20 // 1 MB
+	}
+	if c.API.ReadTimeout == 0 {
+		c.API.ReadTimeout = 30 * time.Second
+	}
+	if c.API.WriteTimeout == 0 {
+		c.API.WriteTimeout = 30 * time.Second
+	}
+	if c.API.IdleTimeout == 0 {
+		c.API.IdleTimeout = 60 * time.Second
 	}
 
 	if c.Queue.Workers == 0 {

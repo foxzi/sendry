@@ -276,6 +276,10 @@ smtp:
     required: true
     users:
       %s: "%s"
+    # Brute force protection
+    max_failures: 5        # Max auth failures before blocking
+    block_duration: 15m    # How long to block after max failures
+    failure_window: 5m     # Window for counting failures
   tls:
 %s
 
@@ -298,6 +302,10 @@ rate_limit:
 api:
   listen_addr: ":8080"
   api_key: "%s"
+  max_header_bytes: 1048576  # 1 MB
+  read_timeout: 30s
+  write_timeout: 30s
+  idle_timeout: 60s
 
 queue:
   workers: 4

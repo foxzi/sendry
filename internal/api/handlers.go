@@ -104,11 +104,14 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check email size limits (10 MB max)
-	const maxEmailSize = 10 * 1024 * 1024
+	// Check email size limits
+	maxEmailSize := 10 * 1024 * 1024 // default 10 MB
+	if s.fullConfig != nil && s.fullConfig.SMTP.MaxMessageBytes > 0 {
+		maxEmailSize = s.fullConfig.SMTP.MaxMessageBytes
+	}
 	totalSize := len(req.Body) + len(req.HTML) + len(req.Subject)
 	if totalSize > maxEmailSize {
-		s.sendError(w, http.StatusRequestEntityTooLarge, "email content too large (max 10 MB)")
+		s.sendError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("email content too large (max %d bytes)", maxEmailSize))
 		return
 	}
 

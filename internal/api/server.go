@@ -164,10 +164,10 @@ func (s *Server) ListenAndServe() error {
 	s.httpServer = &http.Server{
 		Addr:           s.config.ListenAddr,
 		Handler:        s.router,
-		ReadTimeout:    30 * time.Second,
-		WriteTimeout:   30 * time.Second,
-		IdleTimeout:    60 * time.Second,
-		MaxHeaderBytes: 1 << 20, // 1 MB max header size
+		ReadTimeout:    s.config.ReadTimeout,
+		WriteTimeout:   s.config.WriteTimeout,
+		IdleTimeout:    s.config.IdleTimeout,
+		MaxHeaderBytes: s.config.MaxHeaderBytes,
 	}
 
 	if s.tlsConfig != nil {

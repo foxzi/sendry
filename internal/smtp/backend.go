@@ -31,16 +31,38 @@ type Backend struct {
 	// Auth brute force protection
 	authFailures map[string]*authFailure
 	authMu       sync.RWMutex
+
+	// Configurable limits (from auth config)
+	maxAuthFailures   int
+	authBlockDuration time.Duration
+	authFailureWindow time.Duration
 }
 
 // NewBackend creates a new SMTP backend
 func NewBackend(q queue.Queue, auth *config.AuthConfig, logger *slog.Logger) *Backend {
+	// Use configured values or defaults
+	maxFailures := auth.MaxFailures
+	if maxFailures == 0 {
+		maxFailures = 5
+	}
+	blockDuration := auth.BlockDuration
+	if blockDuration == 0 {
+		blockDuration = 15 * time.Minute
+	}
+	failureWindow := auth.FailureWindow
+	if failureWindow == 0 {
+		failureWindow = 5 * time.Minute
+	}
+
 	return &Backend{
-		queue:        q,
-		auth:         auth,
-		logger:       logger,
-		serverType:   "smtp",
-		authFailures: make(map[string]*authFailure),
+		queue:             q,
+		auth:              auth,
+		logger:            logger,
+		serverType:        "smtp",
+		authFailures:      make(map[string]*authFailure),
+		maxAuthFailures:   maxFailures,
+		authBlockDuration: blockDuration,
+		authFailureWindow: failureWindow,
 	}
 }
 
@@ -86,12 +108,6 @@ func (b *Backend) CheckRateLimit(ctx context.Context, req *ratelimit.Request) er
 	return nil
 }
 
-// Auth brute force protection constants
-const (
-	maxAuthFailures   = 5               // Max failures before blocking
-	authBlockDuration = 15 * time.Minute // How long to block
-	authFailureWindow = 5 * time.Minute  // Window for counting failures
-)
 
 // CheckAuthBlocked checks if IP is blocked due to too many auth failures
 func (b *Backend) CheckAuthBlocked(ip string) bool {
@@ -100,7 +116,7 @@ func (b *Backend) CheckAuthBlocked(ip string) bool {
 
 	if f, ok := b.authFailures[ip]; ok {
 		// Check if still blocked
-		if !f.blockedAt.IsZero() && time.Since(f.blockedAt) < authBlockDuration {
+		if !f.blockedAt.IsZero() && time.Since(f.blockedAt) < b.authBlockDuration {
 			return true
 		}
 	}
@@ -120,7 +136,7 @@ func (b *Backend) RecordAuthFailure(ip string) bool {
 	}
 
 	// Reset counter if outside window
-	if time.Since(f.lastFail) > authFailureWindow {
+	if time.Since(f.lastFail) > b.authFailureWindow {
 		f.count = 0
 		f.blockedAt = time.Time{}
 	}
@@ -129,7 +145,7 @@ func (b *Backend) RecordAuthFailure(ip string) bool {
 	f.lastFail = now
 
 	// Block if too many failures
-	if f.count >= maxAuthFailures {
+	if f.count >= b.maxAuthFailures {
 		f.blockedAt = now
 		b.logger.Warn("IP blocked due to auth failures", "ip", ip, "failures", f.count)
 		return true // Now blocked

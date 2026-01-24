@@ -174,6 +174,9 @@ curl -X DELETE http://localhost:8080/api/v1/queue/{message_id} \
 | `smtp.max_recipients` | `100` | Max recipients per message |
 | `smtp.auth.required` | `false` | Require authentication |
 | `smtp.auth.users` | `{}` | Username -> password map |
+| `smtp.auth.max_failures` | `5` | Max auth failures before blocking |
+| `smtp.auth.block_duration` | `15m` | How long to block after max failures |
+| `smtp.auth.failure_window` | `5m` | Window for counting failures |
 | `smtp.tls.cert_file` | `""` | TLS certificate file path |
 | `smtp.tls.key_file` | `""` | TLS private key file path |
 | `smtp.tls.acme.enabled` | `false` | Enable Let's Encrypt |
@@ -186,6 +189,10 @@ curl -X DELETE http://localhost:8080/api/v1/queue/{message_id} \
 | `dkim.key_file` | `""` | DKIM private key path |
 | `api.listen_addr` | `:8080` | HTTP API port |
 | `api.api_key` | `""` | API key (empty = no auth) |
+| `api.max_header_bytes` | `1048576` | Max HTTP header size (1MB) |
+| `api.read_timeout` | `30s` | HTTP read timeout |
+| `api.write_timeout` | `30s` | HTTP write timeout |
+| `api.idle_timeout` | `60s` | HTTP idle timeout |
 | `queue.workers` | `4` | Number of delivery workers |
 | `queue.retry_interval` | `5m` | Base retry interval |
 | `queue.max_retries` | `5` | Max delivery attempts |

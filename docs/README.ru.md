@@ -174,6 +174,9 @@ curl -X DELETE http://localhost:8080/api/v1/queue/{message_id} \
 | `smtp.max_recipients` | `100` | Макс. получателей на сообщение |
 | `smtp.auth.required` | `false` | Требовать аутентификацию |
 | `smtp.auth.users` | `{}` | Словарь username -> password |
+| `smtp.auth.max_failures` | `5` | Макс. неудачных попыток до блокировки |
+| `smtp.auth.block_duration` | `15m` | Время блокировки после превышения |
+| `smtp.auth.failure_window` | `5m` | Окно подсчета неудачных попыток |
 | `smtp.tls.cert_file` | `""` | Путь к TLS сертификату |
 | `smtp.tls.key_file` | `""` | Путь к приватному ключу TLS |
 | `smtp.tls.acme.enabled` | `false` | Включить Let's Encrypt |
@@ -186,6 +189,10 @@ curl -X DELETE http://localhost:8080/api/v1/queue/{message_id} \
 | `dkim.key_file` | `""` | Путь к приватному ключу DKIM |
 | `api.listen_addr` | `:8080` | Порт HTTP API |
 | `api.api_key` | `""` | API ключ (пусто = без авторизации) |
+| `api.max_header_bytes` | `1048576` | Макс. размер HTTP заголовка (1MB) |
+| `api.read_timeout` | `30s` | HTTP таймаут чтения |
+| `api.write_timeout` | `30s` | HTTP таймаут записи |
+| `api.idle_timeout` | `60s` | HTTP таймаут простоя |
 | `queue.workers` | `4` | Количество воркеров доставки |
 | `queue.retry_interval` | `5m` | Базовый интервал retry |
 | `queue.max_retries` | `5` | Макс. попыток доставки |

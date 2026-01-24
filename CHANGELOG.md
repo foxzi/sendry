@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3] - 2025-01-24
+
+### Added
+- Configurable auth brute force protection limits (max_failures, block_duration, failure_window)
+- Configurable API HTTP server limits (max_header_bytes, read_timeout, write_timeout, idle_timeout)
+
+### Changed
+- Auth brute force limits moved from hardcoded constants to configuration
+- API HTTP server limits moved from hardcoded values to configuration
+
 ## [0.3.2] - 2025-01-24
 
 ### Added
