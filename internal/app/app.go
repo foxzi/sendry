@@ -406,19 +406,23 @@ func (a *App) Run(ctx context.Context) error {
 		certCancel()
 		if err != nil {
 			a.logger.Error("failed to ensure certificates", "error", err)
-		} else {
-			for _, cert := range certs {
-				if cert.IsNew {
-					a.logger.Info("obtained new certificate",
-						"domain", cert.Domain,
-						"expires", cert.NotAfter.Format("2006-01-02"),
-						"days_left", cert.DaysLeft)
-				} else {
-					a.logger.Info("certificate valid",
-						"domain", cert.Domain,
-						"expires", cert.NotAfter.Format("2006-01-02"),
-						"days_left", cert.DaysLeft)
-				}
+			// Check if we have any valid certificates to continue with
+			if len(certs) == 0 {
+				return fmt.Errorf("ACME certificate acquisition failed and no valid certificates available: %w", err)
+			}
+			a.logger.Warn("continuing with existing certificates despite renewal failure")
+		}
+		for _, cert := range certs {
+			if cert.IsNew {
+				a.logger.Info("obtained new certificate",
+					"domain", cert.Domain,
+					"expires", cert.NotAfter.Format("2006-01-02"),
+					"days_left", cert.DaysLeft)
+			} else {
+				a.logger.Info("certificate valid",
+					"domain", cert.Domain,
+					"expires", cert.NotAfter.Format("2006-01-02"),
+					"days_left", cert.DaysLeft)
 			}
 		}
 	}

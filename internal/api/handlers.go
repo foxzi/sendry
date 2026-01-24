@@ -230,7 +230,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 	s.sendJSON(w, http.StatusOK, HealthResponse{
 		Status:  "ok",
-		Version: "0.3.0",
+		Version: "0.3.1",
 		Uptime:  time.Since(s.startTime).String(),
 		Queue:   stats,
 	})
@@ -247,9 +247,14 @@ func (s *Server) buildEmailData(req *SendRequest) []byte {
 	buf.WriteString(fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z)))
 	buf.WriteString(fmt.Sprintf("Message-ID: <%s@%s>\r\n", uuid.New().String(), email.ExtractDomainOrDefault(req.From, "localhost")))
 
-	// Custom headers
+	// Custom headers (sanitize to prevent header injection)
 	for k, v := range req.Headers {
-		buf.WriteString(fmt.Sprintf("%s: %s\r\n", k, v))
+		// Remove any CRLF characters to prevent header injection
+		k = sanitizeHeaderValue(k)
+		v = sanitizeHeaderValue(v)
+		if k != "" {
+			buf.WriteString(fmt.Sprintf("%s: %s\r\n", k, v))
+		}
 	}
 
 	// MIME headers
@@ -289,7 +294,16 @@ func (s *Server) buildEmailData(req *SendRequest) []byte {
 func (s *Server) sendJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		s.logger.Error("failed to encode JSON response", "error", err)
+	}
+}
+
+// sanitizeHeaderValue removes CRLF characters to prevent header injection
+func sanitizeHeaderValue(s string) string {
+	s = strings.ReplaceAll(s, "\r", "")
+	s = strings.ReplaceAll(s, "\n", "")
+	return strings.TrimSpace(s)
 }
 
 // sendError sends an error response

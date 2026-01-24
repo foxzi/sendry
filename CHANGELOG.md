@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2025-01-24
+
+### Fixed
+- Header injection vulnerability via CRLF in custom headers
+- JSON encoding errors now logged instead of silently ignored
+- SMTP error code parsing using regex instead of substring matching
+- Silent recipient filtering now returns error if no valid recipients
+- ACME certificate failures now fatal if no valid certificates exist
+
 ## [0.3.0] - 2025-01-24
 
 ### Added
@@ -83,7 +92,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DEB/RPM/APK packaging
 - Docker images
 
-[Unreleased]: https://github.com/foxzi/sendry/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/foxzi/sendry/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/foxzi/sendry/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/foxzi/sendry/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/foxzi/sendry/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/foxzi/sendry/compare/v0.1.0...v0.1.1

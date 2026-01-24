@@ -3,6 +3,7 @@ package queue
 import (
 	"context"
 	"log/slog"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -317,6 +318,9 @@ func (p *Processor) calculateBackoff(retryCount int) time.Duration {
 	return backoff
 }
 
+// smtpCodePattern matches SMTP response codes at word boundaries
+var smtpCodePattern = regexp.MustCompile(`\b(4\d{2}|5\d{2})\b`)
+
 // classifyError classifies delivery error into category for metrics
 func classifyError(err error) string {
 	if err == nil {
@@ -325,6 +329,25 @@ func classifyError(err error) string {
 
 	errStr := strings.ToLower(err.Error())
 
+	// First check for SMTP codes
+	matches := smtpCodePattern.FindStringSubmatch(err.Error())
+	if len(matches) > 1 {
+		code := matches[1]
+		// Check for relay denial first (more specific)
+		if (code == "550" || code == "551") && strings.Contains(errStr, "relay") {
+			return "relay_denied"
+		}
+		switch code {
+		case "550", "551", "552", "553":
+			return "recipient_rejected"
+		case "554":
+			return "spam_rejected"
+		case "530", "535":
+			return "auth_failed"
+		}
+	}
+
+	// Fall back to string matching for non-SMTP errors
 	switch {
 	case strings.Contains(errStr, "connection refused"):
 		return "connection_refused"
@@ -332,9 +355,9 @@ func classifyError(err error) string {
 		return "timeout"
 	case strings.Contains(errStr, "no such host") || strings.Contains(errStr, "dns"):
 		return "dns_error"
-	case strings.Contains(errStr, "550") || strings.Contains(errStr, "user unknown"):
+	case strings.Contains(errStr, "user unknown"):
 		return "recipient_rejected"
-	case strings.Contains(errStr, "554") || strings.Contains(errStr, "spam"):
+	case strings.Contains(errStr, "spam"):
 		return "spam_rejected"
 	case strings.Contains(errStr, "relay"):
 		return "relay_denied"

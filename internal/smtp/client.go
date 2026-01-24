@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/smtp"
+	"regexp"
 	"strings"
 	"time"
 
@@ -85,9 +86,18 @@ func (c *Client) Send(ctx context.Context, msg *queue.Message) error {
 	for _, to := range msg.To {
 		domain := dns.ExtractDomain(to)
 		if domain == "" {
+			c.logger.Warn("skipping recipient with invalid domain", "recipient", to)
 			continue
 		}
 		byDomain[domain] = append(byDomain[domain], to)
+	}
+
+	// Check if we have any valid recipients
+	if len(byDomain) == 0 {
+		return &DeliveryError{
+			Temporary: false,
+			Message:   "no valid recipients",
+		}
 	}
 
 	var lastErr error
@@ -279,20 +289,31 @@ func (c *Client) sendToMX(ctx context.Context, mx string, from string, to []stri
 	return nil
 }
 
+// smtpCodePattern matches SMTP response codes at word boundaries
+var smtpCodePattern = regexp.MustCompile(`\b(4\d{2}|5\d{2})\b`)
+
 // categorizeError determines if an SMTP error is temporary or permanent
 func (c *Client) categorizeError(err error, stage string) *DeliveryError {
 	msg := fmt.Sprintf("%s failed: %v", stage, err)
 
-	// Check for common permanent error codes (5xx)
+	// Extract SMTP code from error message
 	errStr := err.Error()
-	if strings.Contains(errStr, "550") ||
-		strings.Contains(errStr, "551") ||
-		strings.Contains(errStr, "552") ||
-		strings.Contains(errStr, "553") ||
-		strings.Contains(errStr, "554") {
-		return &DeliveryError{
-			Temporary: false,
-			Message:   msg,
+	matches := smtpCodePattern.FindStringSubmatch(errStr)
+	if len(matches) > 1 {
+		code := matches[1]
+		// 5xx codes are permanent errors
+		if strings.HasPrefix(code, "5") {
+			return &DeliveryError{
+				Temporary: false,
+				Message:   msg,
+			}
+		}
+		// 4xx codes are temporary errors
+		if strings.HasPrefix(code, "4") {
+			return &DeliveryError{
+				Temporary: true,
+				Message:   msg,
+			}
 		}
 	}
 
