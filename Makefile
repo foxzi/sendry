@@ -5,6 +5,7 @@ export PATH := $(PATH):$(HOME)/go/bin
 
 # Variables
 BINARY_NAME=sendry
+BINARY_WEB=sendry-web
 VERSION?=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
 COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -23,18 +24,27 @@ LDFLAGS=-ldflags "-s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X m
 # Directories
 BUILD_DIR=build
 CMD_DIR=./cmd/sendry
+CMD_WEB_DIR=./cmd/sendry-web
 
 # Default target
 .PHONY: all
-all: build
+all: build build-web
 
-# Build the binary
+# Build the main binary
 .PHONY: build
 build:
 	@echo "Building $(BINARY_NAME)..."
 	@mkdir -p $(BUILD_DIR)
 	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) $(CMD_DIR)
 	@echo "Binary built: $(BUILD_DIR)/$(BINARY_NAME)"
+
+# Build the web binary (requires CGO for SQLite)
+.PHONY: build-web
+build-web:
+	@echo "Building $(BINARY_WEB)..."
+	@mkdir -p $(BUILD_DIR)
+	CGO_ENABLED=1 $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_WEB) $(CMD_WEB_DIR)
+	@echo "Binary built: $(BUILD_DIR)/$(BINARY_WEB)"
 
 # Build for all platforms
 .PHONY: build-all
@@ -90,6 +100,12 @@ test-race:
 test-short:
 	@echo "Running short tests..."
 	$(GOTEST) -v -short ./...
+
+# Run tests for sendry-web only
+.PHONY: test-web
+test-web:
+	@echo "Running sendry-web tests..."
+	$(GOTEST) -v ./internal/web/...
 
 # Benchmark tests
 .PHONY: bench
@@ -336,13 +352,15 @@ help:
 	@echo "Usage: make [target]"
 	@echo ""
 	@echo "Build targets:"
-	@echo "  build            Build the binary"
+	@echo "  build            Build the main binary (sendry)"
+	@echo "  build-web        Build the web binary (sendry-web)"
 	@echo "  build-all        Build for all platforms (linux, darwin, amd64, arm64)"
 	@echo "  clean            Clean build artifacts"
 	@echo "  install          Install binary to GOPATH/bin"
 	@echo ""
 	@echo "Test targets:"
-	@echo "  test             Run tests"
+	@echo "  test             Run all tests"
+	@echo "  test-web         Run sendry-web tests only"
 	@echo "  test-cover       Run tests with coverage report"
 	@echo "  test-race        Run tests with race detector"
 	@echo "  bench            Run benchmarks"

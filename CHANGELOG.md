@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sendry Web: dark/light theme toggle with localStorage persistence
 - Sendry Web: localization support (English and Russian)
 - Sendry Web: timezone configuration in settings
+- Sendry Web: unit tests for auth, repository, and worker packages
 
 ## [0.3.4] - 2025-01-25
 
