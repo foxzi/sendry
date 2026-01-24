@@ -216,7 +216,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 	s.sendJSON(w, http.StatusOK, HealthResponse{
 		Status:  "ok",
-		Version: "0.1.0",
+		Version: "0.1.1",
 		Uptime:  time.Since(s.startTime).String(),
 		Queue:   stats,
 	})

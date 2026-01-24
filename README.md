@@ -90,7 +90,7 @@ Response:
 ```json
 {
   "status": "ok",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "uptime": "1h30m",
   "queue": {
     "pending": 5,
