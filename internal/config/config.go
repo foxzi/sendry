@@ -16,6 +16,7 @@ type Config struct {
 	Queue   QueueConfig   `yaml:"queue"`
 	Storage StorageConfig `yaml:"storage"`
 	Logging LoggingConfig `yaml:"logging"`
+	DKIM    DKIMConfig    `yaml:"dkim"`
 }
 
 // ServerConfig contains server-wide settings
@@ -27,12 +28,37 @@ type ServerConfig struct {
 type SMTPConfig struct {
 	ListenAddr      string        `yaml:"listen_addr"`
 	SubmissionAddr  string        `yaml:"submission_addr"`
+	SMTPSAddr       string        `yaml:"smtps_addr"`
 	Domain          string        `yaml:"domain"`
 	MaxMessageBytes int           `yaml:"max_message_bytes"`
 	MaxRecipients   int           `yaml:"max_recipients"`
 	ReadTimeout     time.Duration `yaml:"read_timeout"`
 	WriteTimeout    time.Duration `yaml:"write_timeout"`
 	Auth            AuthConfig    `yaml:"auth"`
+	TLS             TLSConfig     `yaml:"tls"`
+}
+
+// TLSConfig contains TLS certificate settings
+type TLSConfig struct {
+	CertFile string     `yaml:"cert_file"`
+	KeyFile  string     `yaml:"key_file"`
+	ACME     ACMEConfig `yaml:"acme"`
+}
+
+// ACMEConfig contains Let's Encrypt ACME settings
+type ACMEConfig struct {
+	Enabled  bool     `yaml:"enabled"`
+	Email    string   `yaml:"email"`
+	Domains  []string `yaml:"domains"`
+	CacheDir string   `yaml:"cache_dir"`
+}
+
+// DKIMConfig contains DKIM signing settings
+type DKIMConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	Selector string `yaml:"selector"`
+	KeyFile  string `yaml:"key_file"`
+	Domain   string `yaml:"domain"`
 }
 
 // AuthConfig contains SMTP authentication settings
@@ -100,6 +126,12 @@ func (c *Config) setDefaults() {
 	if c.SMTP.SubmissionAddr == "" {
 		c.SMTP.SubmissionAddr = ":587"
 	}
+	if c.SMTP.SMTPSAddr == "" {
+		c.SMTP.SMTPSAddr = ":465"
+	}
+	if c.SMTP.TLS.ACME.CacheDir == "" {
+		c.SMTP.TLS.ACME.CacheDir = "/var/lib/sendry/certs"
+	}
 	if c.SMTP.MaxMessageBytes == 0 {
 		c.SMTP.MaxMessageBytes = 10 * 1024 * 1024 // 10MB
 	}
@@ -162,5 +194,70 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("invalid logging.format: %s (must be json or text)", c.Logging.Format)
 	}
 
+	// Validate TLS configuration
+	if err := c.validateTLS(); err != nil {
+		return err
+	}
+
+	// Validate DKIM configuration
+	if err := c.validateDKIM(); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+// validateTLS validates TLS configuration
+func (c *Config) validateTLS() error {
+	tls := c.SMTP.TLS
+	hasCerts := tls.CertFile != "" && tls.KeyFile != ""
+	hasACME := tls.ACME.Enabled
+
+	if hasCerts && hasACME {
+		return fmt.Errorf("cannot use both manual certificates and ACME")
+	}
+
+	if hasCerts {
+		if tls.CertFile == "" {
+			return fmt.Errorf("smtp.tls.cert_file is required when using manual certificates")
+		}
+		if tls.KeyFile == "" {
+			return fmt.Errorf("smtp.tls.key_file is required when using manual certificates")
+		}
+	}
+
+	if hasACME {
+		if tls.ACME.Email == "" {
+			return fmt.Errorf("smtp.tls.acme.email is required when ACME is enabled")
+		}
+		if len(tls.ACME.Domains) == 0 {
+			return fmt.Errorf("smtp.tls.acme.domains must not be empty when ACME is enabled")
+		}
+	}
+
+	return nil
+}
+
+// validateDKIM validates DKIM configuration
+func (c *Config) validateDKIM() error {
+	if !c.DKIM.Enabled {
+		return nil
+	}
+
+	if c.DKIM.Selector == "" {
+		return fmt.Errorf("dkim.selector is required when DKIM is enabled")
+	}
+	if c.DKIM.KeyFile == "" {
+		return fmt.Errorf("dkim.key_file is required when DKIM is enabled")
+	}
+	if c.DKIM.Domain == "" {
+		return fmt.Errorf("dkim.domain is required when DKIM is enabled")
+	}
+
+	return nil
+}
+
+// HasTLS returns true if TLS is configured
+func (c *Config) HasTLS() bool {
+	return (c.SMTP.TLS.CertFile != "" && c.SMTP.TLS.KeyFile != "") || c.SMTP.TLS.ACME.Enabled
 }

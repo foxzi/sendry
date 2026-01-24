@@ -3,6 +3,7 @@ package smtp
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/foxzi/sendry/internal/dkim"
 	"github.com/foxzi/sendry/internal/dns"
 	"github.com/foxzi/sendry/internal/queue"
 )
@@ -31,6 +33,7 @@ type Client struct {
 	timeout    time.Duration
 	hostname   string
 	logger     *slog.Logger
+	dkimSigner *dkim.Signer
 }
 
 // NewClient creates a new SMTP client
@@ -44,6 +47,11 @@ func NewClient(resolver *dns.Resolver, hostname string, timeout time.Duration, l
 		hostname: hostname,
 		logger:   logger,
 	}
+}
+
+// SetDKIMSigner sets the DKIM signer for outgoing messages
+func (c *Client) SetDKIMSigner(signer *dkim.Signer) {
+	c.dkimSigner = signer
 }
 
 // Send sends a message to all recipients
@@ -170,6 +178,35 @@ func (c *Client) sendToMX(ctx context.Context, mx string, from string, to []stri
 		return c.categorizeError(err, "HELO")
 	}
 
+	// Try STARTTLS (opportunistic)
+	if ok, _ := client.Extension("STARTTLS"); ok {
+		tlsConfig := &tls.Config{
+			ServerName: mx,
+			MinVersion: tls.VersionTLS12,
+		}
+		if err := client.StartTLS(tlsConfig); err != nil {
+			c.logger.Warn("STARTTLS failed, continuing without encryption",
+				"mx", mx,
+				"error", err,
+			)
+		} else {
+			c.logger.Debug("STARTTLS successful", "mx", mx)
+		}
+	}
+
+	// Sign message with DKIM if signer is configured
+	messageData := data
+	if c.dkimSigner != nil {
+		signed, err := c.dkimSigner.Sign(data)
+		if err != nil {
+			c.logger.Warn("DKIM signing failed, sending unsigned",
+				"error", err,
+			)
+		} else {
+			messageData = signed
+		}
+	}
+
 	// Send MAIL FROM
 	if err := client.Mail(from); err != nil {
 		return c.categorizeError(err, "MAIL FROM")
@@ -188,7 +225,7 @@ func (c *Client) sendToMX(ctx context.Context, mx string, from string, to []stri
 		return c.categorizeError(err, "DATA")
 	}
 
-	_, err = bytes.NewReader(data).WriteTo(wc)
+	_, err = bytes.NewReader(messageData).WriteTo(wc)
 	if err != nil {
 		wc.Close()
 		return &DeliveryError{

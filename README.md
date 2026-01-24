@@ -7,6 +7,10 @@ MTA (Mail Transfer Agent) server for sending emails.
 ## Features
 
 - SMTP server (ports 25, 587) with AUTH support
+- SMTPS server (port 465) with implicit TLS
+- STARTTLS support for secure connections
+- Let's Encrypt (ACME) automatic certificate management
+- DKIM signing for outgoing emails
 - HTTP API for sending emails
 - Persistent queue with BoltDB
 - Retry logic with exponential backoff
@@ -154,11 +158,22 @@ curl -X DELETE http://localhost:8080/api/v1/queue/{message_id} \
 | `server.hostname` | OS hostname | Server FQDN |
 | `smtp.listen_addr` | `:25` | SMTP relay port |
 | `smtp.submission_addr` | `:587` | SMTP submission port |
+| `smtp.smtps_addr` | `:465` | SMTPS port (implicit TLS) |
 | `smtp.domain` | *required* | Mail domain |
 | `smtp.max_message_bytes` | `10485760` | Max message size (10MB) |
 | `smtp.max_recipients` | `100` | Max recipients per message |
 | `smtp.auth.required` | `false` | Require authentication |
 | `smtp.auth.users` | `{}` | Username -> password map |
+| `smtp.tls.cert_file` | `""` | TLS certificate file path |
+| `smtp.tls.key_file` | `""` | TLS private key file path |
+| `smtp.tls.acme.enabled` | `false` | Enable Let's Encrypt |
+| `smtp.tls.acme.email` | `""` | ACME account email |
+| `smtp.tls.acme.domains` | `[]` | Domains for certificate |
+| `smtp.tls.acme.cache_dir` | `/var/lib/sendry/certs` | Certificate cache |
+| `dkim.enabled` | `false` | Enable DKIM signing |
+| `dkim.selector` | `""` | DKIM selector |
+| `dkim.domain` | `""` | DKIM domain |
+| `dkim.key_file` | `""` | DKIM private key path |
 | `api.listen_addr` | `:8080` | HTTP API port |
 | `api.api_key` | `""` | API key (empty = no auth) |
 | `queue.workers` | `4` | Number of delivery workers |
@@ -167,6 +182,8 @@ curl -X DELETE http://localhost:8080/api/v1/queue/{message_id} \
 | `storage.path` | `/var/lib/sendry/queue.db` | BoltDB file path |
 | `logging.level` | `info` | Log level (debug/info/warn/error) |
 | `logging.format` | `json` | Log format (json/text) |
+
+See [TLS and DKIM documentation](docs/tls-dkim.md) for detailed setup instructions.
 
 ## Project Structure
 
@@ -177,9 +194,11 @@ sendry/
 │   ├── api/             # HTTP API server
 │   ├── app/             # Application orchestration
 │   ├── config/          # Configuration
+│   ├── dkim/            # DKIM signing
 │   ├── dns/             # MX resolver
 │   ├── queue/           # Message queue & storage
-│   └── smtp/            # SMTP server & client
+│   ├── smtp/            # SMTP server & client
+│   └── tls/             # TLS/ACME support
 ├── configs/             # Example configurations
 └── docs/                # Documentation
 ```

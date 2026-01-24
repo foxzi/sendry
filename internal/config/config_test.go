@@ -185,6 +185,250 @@ func TestValidate(t *testing.T) {
 	}
 }
 
+func TestValidateTLS(t *testing.T) {
+	tests := []struct {
+		name    string
+		cfg     Config
+		wantErr bool
+	}{
+		{
+			name: "no TLS configured",
+			cfg: Config{
+				SMTP:    SMTPConfig{Domain: "test.com"},
+				Logging: LoggingConfig{Level: "info", Format: "json"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "manual certs configured",
+			cfg: Config{
+				SMTP: SMTPConfig{
+					Domain: "test.com",
+					TLS: TLSConfig{
+						CertFile: "/path/to/cert.pem",
+						KeyFile:  "/path/to/key.pem",
+					},
+				},
+				Logging: LoggingConfig{Level: "info", Format: "json"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "ACME configured",
+			cfg: Config{
+				SMTP: SMTPConfig{
+					Domain: "test.com",
+					TLS: TLSConfig{
+						ACME: ACMEConfig{
+							Enabled: true,
+							Email:   "admin@test.com",
+							Domains: []string{"mail.test.com"},
+						},
+					},
+				},
+				Logging: LoggingConfig{Level: "info", Format: "json"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "both manual and ACME configured",
+			cfg: Config{
+				SMTP: SMTPConfig{
+					Domain: "test.com",
+					TLS: TLSConfig{
+						CertFile: "/path/to/cert.pem",
+						KeyFile:  "/path/to/key.pem",
+						ACME: ACMEConfig{
+							Enabled: true,
+							Email:   "admin@test.com",
+							Domains: []string{"mail.test.com"},
+						},
+					},
+				},
+				Logging: LoggingConfig{Level: "info", Format: "json"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "ACME without email",
+			cfg: Config{
+				SMTP: SMTPConfig{
+					Domain: "test.com",
+					TLS: TLSConfig{
+						ACME: ACMEConfig{
+							Enabled: true,
+							Domains: []string{"mail.test.com"},
+						},
+					},
+				},
+				Logging: LoggingConfig{Level: "info", Format: "json"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "ACME without domains",
+			cfg: Config{
+				SMTP: SMTPConfig{
+					Domain: "test.com",
+					TLS: TLSConfig{
+						ACME: ACMEConfig{
+							Enabled: true,
+							Email:   "admin@test.com",
+						},
+					},
+				},
+				Logging: LoggingConfig{Level: "info", Format: "json"},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.cfg.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateDKIM(t *testing.T) {
+	tests := []struct {
+		name    string
+		cfg     Config
+		wantErr bool
+	}{
+		{
+			name: "DKIM disabled",
+			cfg: Config{
+				SMTP:    SMTPConfig{Domain: "test.com"},
+				Logging: LoggingConfig{Level: "info", Format: "json"},
+				DKIM:    DKIMConfig{Enabled: false},
+			},
+			wantErr: false,
+		},
+		{
+			name: "DKIM enabled with all fields",
+			cfg: Config{
+				SMTP:    SMTPConfig{Domain: "test.com"},
+				Logging: LoggingConfig{Level: "info", Format: "json"},
+				DKIM: DKIMConfig{
+					Enabled:  true,
+					Selector: "sendry",
+					KeyFile:  "/path/to/key.pem",
+					Domain:   "test.com",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "DKIM enabled without selector",
+			cfg: Config{
+				SMTP:    SMTPConfig{Domain: "test.com"},
+				Logging: LoggingConfig{Level: "info", Format: "json"},
+				DKIM: DKIMConfig{
+					Enabled: true,
+					KeyFile: "/path/to/key.pem",
+					Domain:  "test.com",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "DKIM enabled without key file",
+			cfg: Config{
+				SMTP:    SMTPConfig{Domain: "test.com"},
+				Logging: LoggingConfig{Level: "info", Format: "json"},
+				DKIM: DKIMConfig{
+					Enabled:  true,
+					Selector: "sendry",
+					Domain:   "test.com",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "DKIM enabled without domain",
+			cfg: Config{
+				SMTP:    SMTPConfig{Domain: "test.com"},
+				Logging: LoggingConfig{Level: "info", Format: "json"},
+				DKIM: DKIMConfig{
+					Enabled:  true,
+					Selector: "sendry",
+					KeyFile:  "/path/to/key.pem",
+				},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.cfg.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestHasTLS(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  Config
+		want bool
+	}{
+		{
+			name: "no TLS",
+			cfg:  Config{},
+			want: false,
+		},
+		{
+			name: "manual certs",
+			cfg: Config{
+				SMTP: SMTPConfig{
+					TLS: TLSConfig{
+						CertFile: "/path/cert.pem",
+						KeyFile:  "/path/key.pem",
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "ACME enabled",
+			cfg: Config{
+				SMTP: SMTPConfig{
+					TLS: TLSConfig{
+						ACME: ACMEConfig{Enabled: true},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "only cert file",
+			cfg: Config{
+				SMTP: SMTPConfig{
+					TLS: TLSConfig{
+						CertFile: "/path/cert.pem",
+					},
+				},
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.cfg.HasTLS(); got != tt.want {
+				t.Errorf("HasTLS() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestLoadFileNotFound(t *testing.T) {
 	_, err := Load("/nonexistent/config.yaml")
 	if err == nil {
