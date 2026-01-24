@@ -1,0 +1,240 @@
+# Sendry Web
+
+Веб-интерфейс для управления серверами Sendry.
+
+## Возможности
+
+- Управление шаблонами с версионированием и деплоем
+- Управление списками получателей с импортом CSV/JSON
+- Управление кампаниями с поддержкой A/B тестирования
+- Управление рассылками с паузой/возобновлением/отменой
+- Поддержка нескольких серверов с балансировкой нагрузки
+- Мониторинг серверов (очередь, DLQ, домены, sandbox)
+- OIDC авторизация (Authentik, Keycloak и др.)
+
+## Установка
+
+Sendry Web входит в состав пакета sendry. После установки:
+
+```bash
+# Запуск сервиса
+sudo systemctl enable sendry-web
+sudo systemctl start sendry-web
+```
+
+## Конфигурация
+
+Файл конфигурации: `/etc/sendry/web.yaml`
+
+### Базовая конфигурация
+
+```yaml
+server:
+  listen_addr: ":8088"
+  tls:
+    enabled: false
+    cert_file: "/etc/sendry/certs/web.crt"
+    key_file: "/etc/sendry/certs/web.key"
+
+database:
+  path: "/var/lib/sendry-web/app.db"
+
+logging:
+  level: info    # debug, info, warn, error
+  format: json   # json, text
+```
+
+### Авторизация
+
+Sendry Web поддерживает два метода авторизации:
+
+#### Локальная авторизация
+
+```yaml
+auth:
+  local_enabled: true
+  session_secret: "ваш-секретный-ключ-минимум-32-символа"
+  session_ttl: 24h
+```
+
+Создание локальных пользователей через CLI:
+
+```bash
+sendry-web user create --email admin@example.com --password secretpassword
+```
+
+#### OIDC авторизация
+
+```yaml
+auth:
+  local_enabled: false  # можно true для fallback
+  session_secret: "ваш-секретный-ключ-минимум-32-символа"
+  session_ttl: 24h
+
+  oidc:
+    enabled: true
+    provider: "Authentik"  # отображаемое имя на странице входа
+    client_id: "sendry-web"
+    client_secret: "ваш-client-secret"
+    issuer_url: "https://auth.example.com/application/o/sendry-web/"
+    redirect_url: "https://panel.example.com/auth/callback"
+    scopes:
+      - openid
+      - profile
+      - email
+    allowed_groups:  # опционально, пустой = доступ всем авторизованным
+      - "sendry-admins"
+```
+
+### Серверы Sendry
+
+Настройка подключения к серверам Sendry MTA:
+
+```yaml
+sendry:
+  servers:
+    - name: "mta-prod-1"
+      base_url: "https://mta-1.example.com"
+      api_key: "ваш-api-ключ"
+      env: "prod"
+    - name: "mta-stage"
+      base_url: "https://mta-stage.example.com"
+      api_key: "ваш-api-ключ"
+      env: "stage"
+
+  multi_send:
+    strategy: weighted_round_robin  # round_robin, weighted_round_robin, domain_affinity
+    weights:
+      mta-prod-1: 3
+      mta-stage: 1
+    domain_affinity:
+      "example.com": "mta-prod-1"
+    failover:
+      enabled: true
+      max_retries: 2
+```
+
+## CLI команды
+
+### Управление сервером
+
+```bash
+# Запуск сервера
+sendry-web serve -c /etc/sendry/web.yaml
+
+# Проверка конфигурации
+sendry-web config validate -c /etc/sendry/web.yaml
+```
+
+### Управление пользователями
+
+```bash
+# Создание пользователя
+sendry-web user create --email admin@example.com --password secret
+
+# Список пользователей
+sendry-web user list
+
+# Удаление пользователя
+sendry-web user delete admin@example.com
+
+# Сброс пароля
+sendry-web user reset-password admin@example.com
+```
+
+### Управление базой данных
+
+```bash
+# Запуск миграций
+sendry-web migrate
+
+# Очистка старых данных
+sendry-web cleanup --days 30              # удалить элементы старше 30 дней
+sendry-web cleanup --days 90 --dry-run    # предпросмотр удаления
+```
+
+## Веб-интерфейс
+
+### Шаблоны
+
+- Создание и редактирование email шаблонов с HTML редактором
+- История версий с возможностью сравнения
+- Деплой шаблонов на серверы Sendry
+- Предпросмотр с подстановкой переменных
+
+### Получатели
+
+- Создание списков получателей
+- Импорт из CSV или JSON
+- Персональные переменные для каждого получателя
+- Отслеживание статуса (active, unsubscribed, bounced)
+
+### Кампании
+
+- Создание кампаний с настройками отправителя
+- Переменные уровня кампании
+- A/B тестирование с несколькими вариантами
+- Распределение трафика по весам
+
+### Рассылки
+
+- Создание рассылок из кампаний
+- Планирование на будущее время
+- Мониторинг прогресса в реальном времени
+- Операции паузы, возобновления, отмены
+- Повторная отправка неудачных элементов
+
+### Мониторинг
+
+- Дашборд со статусом серверов
+- Управление очередью и DLQ
+- Просмотр конфигурации доменов
+- Просмотр sandbox сообщений
+
+## Подстановка переменных
+
+Переменные объединяются с приоритетом (от высшего к низшему):
+1. Переменные получателя
+2. Переменные кампании
+3. Глобальные переменные
+
+Используйте синтаксис `{{имя_переменной}}` в шаблонах:
+
+```html
+<p>Здравствуйте, {{name}}!</p>
+<p>Ваш заказ #{{order_id}} отправлен.</p>
+<p>Свяжитесь с нами: {{support_email}}</p>
+```
+
+## Безопасность
+
+- Авторизация на основе сессий с настраиваемым TTL
+- CSRF защита через state параметр в OIDC
+- Безопасные настройки cookie (HttpOnly, Secure, SameSite)
+- Контроль доступа по группам через OIDC
+- Шифрование API ключей в БД (планируется)
+
+## Устранение неполадок
+
+### Проблемы с OIDC
+
+1. Проверьте доступность `issuer_url` с сервера
+2. Убедитесь, что `redirect_url` совпадает с настройками OIDC провайдера
+3. Проверьте правильность `client_id` и `client_secret`
+4. Смотрите логи для детальных сообщений об ошибках
+
+### Проблемы с базой данных
+
+```bash
+# Проверка прав доступа к файлу БД
+ls -la /var/lib/sendry-web/app.db
+
+# Запуск миграций вручную
+sendry-web migrate -c /etc/sendry/web.yaml
+```
+
+### Подключение к серверам Sendry
+
+1. Проверьте доступность `base_url`
+2. Убедитесь в валидности API ключа
+3. Проверьте доверие к TLS сертификатам
