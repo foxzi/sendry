@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sendry Web: monitoring dashboard with server status overview
 - Sendry Web: Sendry API client for server communication
 - Sendry Web: background worker for processing send jobs
+- Sendry Web: GrapesJS visual HTML editor for email templates
 
 ## [0.3.4] - 2025-01-25
 
