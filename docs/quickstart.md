@@ -26,6 +26,27 @@ sudo cp build/sendry /usr/local/bin/
 docker pull ghcr.io/foxzi/sendry:latest
 ```
 
+## Configuration Wizard
+
+The easiest way to create a configuration is using the init command:
+
+```bash
+# Interactive mode - prompts for values
+sendry init
+
+# Non-interactive with flags
+sendry init --domain example.com --hostname mail.example.com --dkim
+
+# Quick sandbox setup for testing
+sendry init --domain test.local --mode sandbox -o test.yaml
+```
+
+The wizard will:
+- Generate a complete configuration file
+- Optionally create DKIM keys
+- Show all DNS records you need to add (SPF, DKIM, DMARC)
+- Generate secure API key and SMTP password
+
 ## Quick Test (Sandbox Mode)
 
 Create a test config `test.yaml`:
@@ -114,7 +135,19 @@ curl http://localhost:8080/health
 
 ## Production Configuration
 
-For production use, see [full configuration example](../configs/sendry.example.yaml).
+### Using Init Wizard (Recommended)
+
+```bash
+# Full production setup with DKIM and Let's Encrypt
+sendry init --domain example.com --dkim --acme --acme-email admin@example.com
+
+# Or interactive mode
+sendry init
+```
+
+### Manual Setup
+
+For manual configuration, see [full configuration example](../configs/sendry.example.yaml).
 
 Key steps for production:
 1. Configure TLS certificates or enable ACME
@@ -123,13 +156,21 @@ Key steps for production:
 4. Configure proper rate limits
 5. Set domain mode to `production`
 
-### Generate DKIM Key
+### Generate DKIM Key (Manual)
 
 ```bash
-sendry dkim generate --domain example.com --selector mail --out /var/lib/sendry/dkim/
+sendry dkim generate --domain example.com --selector sendry --out /var/lib/sendry/dkim/
 ```
 
 Add the DNS TXT record shown in the output.
+
+### Check IP Reputation
+
+Before going to production, check if your server IP is blacklisted:
+
+```bash
+sendry ip check <your-server-ip>
+```
 
 ## Ports
 

@@ -26,6 +26,27 @@ sudo cp build/sendry /usr/local/bin/
 docker pull ghcr.io/foxzi/sendry:latest
 ```
 
+## Мастер настройки
+
+Самый простой способ создать конфигурацию - использовать команду init:
+
+```bash
+# Интерактивный режим - запрашивает значения
+sendry init
+
+# Неинтерактивный режим с флагами
+sendry init --domain example.com --hostname mail.example.com --dkim
+
+# Быстрая настройка sandbox для тестирования
+sendry init --domain test.local --mode sandbox -o test.yaml
+```
+
+Мастер выполнит:
+- Генерацию полного файла конфигурации
+- Создание DKIM ключей (опционально)
+- Покажет все DNS записи (SPF, DKIM, DMARC)
+- Сгенерирует безопасный API ключ и SMTP пароль
+
 ## Быстрый тест (Sandbox режим)
 
 Создайте тестовый конфиг `test.yaml`:
@@ -114,7 +135,19 @@ curl http://localhost:8080/health
 
 ## Конфигурация для продакшена
 
-Для продакшена смотрите [полный пример конфигурации](../configs/sendry.example.yaml).
+### Используя мастер Init (Рекомендуется)
+
+```bash
+# Полная настройка с DKIM и Let's Encrypt
+sendry init --domain example.com --dkim --acme --acme-email admin@example.com
+
+# Или интерактивный режим
+sendry init
+```
+
+### Ручная настройка
+
+Для ручной настройки смотрите [полный пример конфигурации](../configs/sendry.example.yaml).
 
 Основные шаги:
 1. Настройте TLS сертификаты или включите ACME
@@ -123,13 +156,21 @@ curl http://localhost:8080/health
 4. Настройте лимиты
 5. Установите режим домена `production`
 
-### Генерация DKIM ключа
+### Генерация DKIM ключа (Вручную)
 
 ```bash
-sendry dkim generate --domain example.com --selector mail --out /var/lib/sendry/dkim/
+sendry dkim generate --domain example.com --selector sendry --out /var/lib/sendry/dkim/
 ```
 
 Добавьте показанную DNS TXT запись.
+
+### Проверка репутации IP
+
+Перед запуском в продакшен проверьте, не в blacklist ли ваш IP:
+
+```bash
+sendry ip check <ip-вашего-сервера>
+```
 
 ## Порты
 
