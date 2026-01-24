@@ -25,19 +25,67 @@ MTA (Mail Transfer Agent) server for sending emails.
 - Graceful shutdown
 - Structured JSON logging
 
-## Requirements
+## Installation
 
-- Go 1.23+
+### From Package (recommended)
+
+Download from [GitHub Releases](https://github.com/foxzi/sendry/releases):
+
+```bash
+# Debian/Ubuntu
+wget https://github.com/foxzi/sendry/releases/latest/download/sendry_0.3.3-1_amd64.deb
+sudo dpkg -i sendry_0.3.3-1_amd64.deb
+
+# RHEL/CentOS
+wget https://github.com/foxzi/sendry/releases/latest/download/sendry-0.3.3-1.x86_64.rpm
+sudo rpm -i sendry-0.3.3-1.x86_64.rpm
+
+# Alpine
+wget https://github.com/foxzi/sendry/releases/latest/download/sendry_0.3.3-r1_x86_64.apk
+sudo apk add --allow-untrusted sendry_0.3.3-r1_x86_64.apk
+```
+
+### From Binary
+
+```bash
+wget https://github.com/foxzi/sendry/releases/latest/download/sendry-linux-amd64
+chmod +x sendry-linux-amd64
+sudo mv sendry-linux-amd64 /usr/local/bin/sendry
+```
+
+### Docker
+
+```bash
+docker pull ghcr.io/foxzi/sendry:latest
+docker run -p 25:25 -p 587:587 -p 8080:8080 \
+  -v /path/to/config.yaml:/etc/sendry/config.yaml \
+  ghcr.io/foxzi/sendry:latest
+```
+
+### Ansible
+
+For automated deployment on multiple servers, see [Ansible documentation](docs/ansible.md).
+
+```bash
+cd ansible
+cp inventory/hosts.yml.example inventory/hosts.yml
+# Edit hosts.yml with your servers
+ansible-playbook -i inventory/hosts.yml playbooks/sendry.yml
+```
+
+### Build from Source
+
+Requires Go 1.24+
+
+```bash
+git clone https://github.com/foxzi/sendry.git
+cd sendry
+make build
+```
 
 ## Quick Start
 
 For detailed quick start guide see [docs/quickstart.md](docs/quickstart.md).
-
-### Build
-
-```bash
-go build -o sendry ./cmd/sendry
-```
 
 ### Configuration
 
@@ -91,7 +139,7 @@ Response:
 ```json
 {
   "status": "ok",
-  "version": "0.2.0",
+  "version": "0.3.3",
   "uptime": "1h30m",
   "queue": {
     "pending": 5,
@@ -211,7 +259,13 @@ curl -X DELETE http://localhost:8080/api/v1/queue/{message_id} \
 | `metrics.flush_interval` | `10s` | Counter persistence interval |
 | `metrics.allowed_ips` | `[]` | IPs/CIDRs allowed to access metrics |
 
-See [HTTP API reference](docs/api.md), [TLS and DKIM documentation](docs/tls-dkim.md), [Message retention and DLQ](docs/retention.md), [Rate limiting](docs/ratelimit.md), and [Prometheus metrics](docs/metrics.md) for detailed instructions.
+See documentation:
+- [HTTP API reference](docs/api.md)
+- [TLS and DKIM](docs/tls-dkim.md)
+- [Message retention and DLQ](docs/retention.md)
+- [Rate limiting](docs/ratelimit.md)
+- [Prometheus metrics](docs/metrics.md)
+- [Ansible deployment](docs/ansible.md)
 
 ## Project Structure
 

@@ -1,0 +1,70 @@
+all:
+  children:
+    # Single server deployment
+    sendry_single:
+      hosts:
+        mail.example.com:
+          ansible_host: 192.168.1.10
+          sendry_hostname: mail.example.com
+          sendry_api_key: "change-this-api-key"
+          sendry_smtp_auth_users:
+            admin: "change-this-password"
+          sendry_domains:
+            example.com:
+              dkim_enabled: true
+              dkim_selector: mail
+              rate_limit:
+                messages_per_hour: 1000
+                messages_per_day: 10000
+
+    # Multi-server deployment with shared DKIM keys
+    sendry_cluster:
+      hosts:
+        mail1.example.com:
+          ansible_host: 192.168.1.20
+          sendry_hostname: mail1.example.com
+        mail2.example.com:
+          ansible_host: 192.168.1.21
+          sendry_hostname: mail2.example.com
+        mail3.example.com:
+          ansible_host: 192.168.1.22
+          sendry_hostname: mail3.example.com
+
+      vars:
+        ansible_user: root
+        sendry_install_method: package
+        sendry_version: latest
+
+        sendry_api_key: "shared-api-key-for-cluster"
+        sendry_smtp_auth_users:
+          admin: "shared-admin-password"
+          api: "shared-api-password"
+
+        sendry_domains:
+          example.com:
+            dkim_enabled: true
+            dkim_selector: mail
+            mode: production
+            rate_limit:
+              messages_per_hour: 5000
+              messages_per_day: 50000
+
+        # Shared DKIM keys for all servers in cluster
+        # Generate once: sendry dkim generate --domain example.com --selector mail --out ./
+        # Then encrypt with: ansible-vault encrypt_string --stdin-name 'private_key'
+        sendry_dkim_keys:
+          example.com:
+            private: |
+              -----BEGIN PRIVATE KEY-----
+              YOUR_PRIVATE_KEY_HERE
+              Generate with: sendry dkim generate --domain example.com
+              Store in Ansible Vault for security!
+              -----END PRIVATE KEY-----
+            public: |
+              -----BEGIN PUBLIC KEY-----
+              YOUR_PUBLIC_KEY_HERE
+              -----END PUBLIC KEY-----
+
+  vars:
+    ansible_user: root
+    # ansible_ssh_private_key_file: ~/.ssh/id_rsa

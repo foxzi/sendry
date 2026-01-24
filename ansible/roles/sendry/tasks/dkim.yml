@@ -1,0 +1,131 @@
+---
+- name: Initialize DKIM DNS records list
+  ansible.builtin.set_fact:
+    dkim_dns_records: []
+
+# Deploy shared DKIM keys (for multi-server setup)
+- name: Deploy shared DKIM keys
+  when: sendry_dkim_keys | length > 0
+  block:
+    - name: Deploy shared private keys
+      ansible.builtin.copy:
+        content: "{{ item.value.private }}"
+        dest: "{{ sendry_dkim_dir }}/{{ item.key }}.key"
+        owner: "{{ sendry_user }}"
+        group: "{{ sendry_group }}"
+        mode: "0600"
+      loop: "{{ sendry_dkim_keys | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      no_log: true
+
+    - name: Deploy shared public keys
+      ansible.builtin.copy:
+        content: "{{ item.value.public }}"
+        dest: "{{ sendry_dkim_dir }}/{{ item.key }}.pub"
+        owner: "{{ sendry_user }}"
+        group: "{{ sendry_group }}"
+        mode: "0644"
+      loop: "{{ sendry_dkim_keys | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+
+    - name: Build DNS records from shared keys
+      ansible.builtin.set_fact:
+        dkim_dns_records: "{{ dkim_dns_records + [dns_record] }}"
+      vars:
+        domain: "{{ item.key }}"
+        selector: "{{ sendry_domains[item.key].dkim_selector | default('mail') }}"
+        pubkey_clean: "{{ item.value.public | regex_replace('-----BEGIN PUBLIC KEY-----', '') | regex_replace('-----END PUBLIC KEY-----', '') | regex_replace('\\n', '') | trim }}"
+        dns_record:
+          domain: "{{ domain }}"
+          selector: "{{ selector }}"
+          record_name: "{{ selector }}._domainkey.{{ domain }}"
+          record_value: "v=DKIM1; k=rsa; p={{ pubkey_clean }}"
+      loop: "{{ sendry_dkim_keys | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+
+# Generate DKIM keys locally (for single-server setup)
+- name: Generate DKIM keys locally
+  when:
+    - sendry_dkim_keys | length == 0
+    - sendry_dkim_generate | bool
+  block:
+    - name: Check existing DKIM keys
+      ansible.builtin.stat:
+        path: "{{ sendry_dkim_dir }}/{{ item.key }}.key"
+      loop: "{{ sendry_domains | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      register: dkim_key_stats
+      when: item.value.dkim_enabled | default(false)
+
+    - name: Generate DKIM keys
+      ansible.builtin.command:
+        cmd: >
+          sendry dkim generate
+          --domain {{ item.item.key }}
+          --selector {{ item.item.value.dkim_selector | default('mail') }}
+          --bits {{ sendry_dkim_key_bits }}
+          --out {{ sendry_dkim_dir }}
+        creates: "{{ sendry_dkim_dir }}/{{ item.item.key }}.key"
+      loop: "{{ dkim_key_stats.results }}"
+      loop_control:
+        label: "{{ item.item.key }}"
+      when:
+        - item.item.value.dkim_enabled | default(false)
+        - not item.stat.exists
+      register: dkim_generated
+
+    - name: Set DKIM key permissions
+      ansible.builtin.file:
+        path: "{{ sendry_dkim_dir }}/{{ item.key }}.key"
+        owner: "{{ sendry_user }}"
+        group: "{{ sendry_group }}"
+        mode: "0600"
+      loop: "{{ sendry_domains | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      when: item.value.dkim_enabled | default(false)
+
+    - name: Read DKIM public keys
+      ansible.builtin.slurp:
+        src: "{{ sendry_dkim_dir }}/{{ item.key }}.pub"
+      loop: "{{ sendry_domains | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      register: dkim_pubkeys
+      when: item.value.dkim_enabled | default(false)
+
+    - name: Build DNS records from generated keys
+      ansible.builtin.set_fact:
+        dkim_dns_records: "{{ dkim_dns_records + [dns_record] }}"
+      vars:
+        selector: "{{ item.item.value.dkim_selector | default('mail') }}"
+        domain: "{{ item.item.key }}"
+        pubkey_content: "{{ item.content | b64decode }}"
+        pubkey_clean: "{{ pubkey_content | regex_replace('-----BEGIN PUBLIC KEY-----', '') | regex_replace('-----END PUBLIC KEY-----', '') | regex_replace('\\n', '') | trim }}"
+        dns_record:
+          domain: "{{ domain }}"
+          selector: "{{ selector }}"
+          record_name: "{{ selector }}._domainkey.{{ domain }}"
+          record_value: "v=DKIM1; k=rsa; p={{ pubkey_clean }}"
+      loop: "{{ dkim_pubkeys.results }}"
+      loop_control:
+        label: "{{ item.item.key | default('skipped') }}"
+      when:
+        - item.content is defined
+
+# Display DNS records
+- name: Display DKIM DNS records
+  ansible.builtin.debug:
+    msg: |
+      DKIM DNS Record for {{ item.domain }}:
+      Name: {{ item.record_name }}
+      Type: TXT
+      Value: {{ item.record_value }}
+  loop: "{{ dkim_dns_records }}"
+  loop_control:
+    label: "{{ item.domain }}"
+  when: dkim_dns_records | length > 0

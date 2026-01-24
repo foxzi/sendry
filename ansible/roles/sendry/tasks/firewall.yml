@@ -1,0 +1,35 @@
+---
+- name: Check if UFW is installed
+  ansible.builtin.command: which ufw
+  register: ufw_installed
+  changed_when: false
+  failed_when: false
+
+- name: Configure UFW firewall
+  when: ufw_installed.rc == 0
+  block:
+    - name: Allow Sendry ports
+      community.general.ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop: "{{ sendry_firewall_allowed_ports }}"
+
+- name: Check if firewalld is installed
+  ansible.builtin.command: which firewall-cmd
+  register: firewalld_installed
+  changed_when: false
+  failed_when: false
+
+- name: Configure firewalld
+  when:
+    - firewalld_installed.rc == 0
+    - ufw_installed.rc != 0
+  block:
+    - name: Allow Sendry ports in firewalld
+      ansible.posix.firewalld:
+        port: "{{ item }}/tcp"
+        permanent: true
+        immediate: true
+        state: enabled
+      loop: "{{ sendry_firewall_allowed_ports }}"

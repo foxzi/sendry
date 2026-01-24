@@ -1,0 +1,21 @@
+---
+- name: Generate configuration file
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: "{{ sendry_config_dir }}/config.yaml"
+    owner: root
+    group: "{{ sendry_group }}"
+    mode: "0640"
+  notify: Restart sendry
+
+- name: Enable sendry service
+  ansible.builtin.systemd:
+    name: sendry
+    enabled: "{{ sendry_service_enabled }}"
+    daemon_reload: true
+
+- name: Manage sendry service state
+  ansible.builtin.systemd:
+    name: sendry
+    state: "{{ sendry_service_state }}"
+  when: sendry_service_state != 'unchanged'

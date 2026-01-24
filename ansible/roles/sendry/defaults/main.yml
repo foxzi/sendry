@@ -1,0 +1,160 @@
+---
+# Sendry installation method: 'binary' or 'package'
+sendry_install_method: binary
+
+# Binary installation settings
+sendry_version: latest
+sendry_binary_url: ""  # If empty, will be constructed from version
+sendry_binary_checksum: ""  # Optional SHA256 checksum
+
+# Package installation settings (for DEB/RPM)
+sendry_package_path: ""  # Local path to package file
+
+# Server settings
+sendry_hostname: "{{ inventory_hostname }}"
+sendry_user: sendry
+sendry_group: sendry
+
+# Directory paths
+sendry_config_dir: /etc/sendry
+sendry_data_dir: /var/lib/sendry
+sendry_log_dir: /var/log/sendry
+sendry_dkim_dir: "{{ sendry_data_dir }}/dkim"
+
+# SMTP settings
+sendry_smtp_listen: ":25"
+sendry_smtp_submission: ":587"
+sendry_smtp_smtps: ":465"
+sendry_smtp_domain: "{{ sendry_hostname }}"
+sendry_smtp_max_message_bytes: 10485760
+sendry_smtp_max_recipients: 100
+sendry_smtp_read_timeout: 60s
+sendry_smtp_write_timeout: 60s
+
+# SMTP Authentication
+sendry_smtp_auth_required: true
+sendry_smtp_auth_users: {}
+#  admin: "secure_password"
+#  api: "api_password"
+
+# Brute force protection
+sendry_smtp_auth_max_failures: 5
+sendry_smtp_auth_block_duration: 15m
+sendry_smtp_auth_failure_window: 5m
+
+# TLS settings
+sendry_tls_cert_file: ""
+sendry_tls_key_file: ""
+
+# ACME (Let's Encrypt) settings
+sendry_acme_enabled: false
+sendry_acme_email: ""
+sendry_acme_domains: []
+sendry_acme_cache_dir: "{{ sendry_data_dir }}/certs"
+
+# Domain configuration
+sendry_domains: {}
+# Example:
+#   example.com:
+#     dkim_enabled: true
+#     dkim_selector: mail
+#     mode: production  # production, sandbox, redirect, bcc
+#     rate_limit:
+#       messages_per_hour: 1000
+#       messages_per_day: 10000
+#       recipients_per_message: 100
+#     redirect_to: []
+#     bcc_to: []
+
+# DKIM settings
+# If sendry_dkim_keys is defined, these keys will be deployed to all servers
+# Otherwise keys will be generated locally on each server
+sendry_dkim_generate: true
+sendry_dkim_key_bits: 2048
+
+# Shared DKIM keys for multi-server deployment
+# Store private keys in Ansible Vault for security
+# Example:
+#   sendry_dkim_keys:
+#     example.com:
+#       private: |
+#         -----BEGIN PRIVATE KEY-----
+#         ...
+#         -----END PRIVATE KEY-----
+#       public: |
+#         -----BEGIN PUBLIC KEY-----
+#         ...
+#         -----END PUBLIC KEY-----
+sendry_dkim_keys: {}
+
+# Rate limiting
+sendry_rate_limit_enabled: true
+sendry_rate_limit_global:
+  messages_per_hour: 50000
+  messages_per_day: 500000
+sendry_rate_limit_default_domain:
+  messages_per_hour: 1000
+  messages_per_day: 10000
+sendry_rate_limit_default_sender:
+  messages_per_hour: 100
+  messages_per_day: 1000
+sendry_rate_limit_default_ip:
+  messages_per_hour: 500
+  messages_per_day: 5000
+sendry_rate_limit_default_api_key:
+  messages_per_hour: 1000
+  messages_per_day: 10000
+
+# API settings
+sendry_api_listen: ":8080"
+sendry_api_key: ""  # Required! Set in inventory
+sendry_api_max_header_bytes: 1048576
+sendry_api_read_timeout: 30s
+sendry_api_write_timeout: 30s
+sendry_api_idle_timeout: 60s
+
+# Queue settings
+sendry_queue_workers: 4
+sendry_queue_retry_interval: 5m
+sendry_queue_max_retries: 5
+sendry_queue_process_interval: 10s
+
+# Storage settings
+sendry_storage_path: "{{ sendry_data_dir }}/queue.db"
+sendry_storage_retention_delivered_max_age: 7d
+sendry_storage_retention_cleanup_interval: 1h
+
+# DLQ settings
+sendry_dlq_enabled: true
+sendry_dlq_max_age: 30d
+sendry_dlq_max_count: 10000
+sendry_dlq_cleanup_interval: 1h
+
+# Logging
+sendry_log_level: info
+sendry_log_format: json
+
+# Header rules
+sendry_header_rules_global:
+  - action: remove
+    headers:
+      - X-Originating-IP
+      - X-Mailer
+      - User-Agent
+  - action: add
+    header: X-Processed-By
+    value: Sendry
+
+sendry_header_rules_domains: {}
+
+# Service management
+sendry_service_enabled: true
+sendry_service_state: started
+
+# Firewall (UFW) management
+sendry_configure_firewall: false
+sendry_firewall_allowed_ports:
+  - 25
+  - 587
+  - 465
+  - 8080

@@ -1,0 +1,25 @@
+---
+- name: Validate required variables
+  ansible.builtin.assert:
+    that:
+      - sendry_api_key | length > 0
+      - sendry_smtp_auth_users | length > 0
+    fail_msg: "Required variables sendry_api_key and sendry_smtp_auth_users must be set"
+  tags: [always]
+
+- name: Include installation tasks
+  ansible.builtin.include_tasks: install.yml
+  tags: [install]
+
+- name: Include DKIM tasks
+  ansible.builtin.include_tasks: dkim.yml
+  tags: [dkim]
+
+- name: Include configuration tasks
+  ansible.builtin.include_tasks: configure.yml
+  tags: [configure]
+
+- name: Include firewall tasks
+  ansible.builtin.include_tasks: firewall.yml
+  when: sendry_configure_firewall | bool
+  tags: [firewall]

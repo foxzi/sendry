@@ -25,19 +25,67 @@ MTA (Mail Transfer Agent) сервер для отправки электрон�
 - Graceful shutdown
 - Структурированное логирование (JSON)
 
-## Требования
+## Установка
 
-- Go 1.23+
+### Из пакета (рекомендуется)
+
+Скачайте с [GitHub Releases](https://github.com/foxzi/sendry/releases):
+
+```bash
+# Debian/Ubuntu
+wget https://github.com/foxzi/sendry/releases/latest/download/sendry_0.3.3-1_amd64.deb
+sudo dpkg -i sendry_0.3.3-1_amd64.deb
+
+# RHEL/CentOS
+wget https://github.com/foxzi/sendry/releases/latest/download/sendry-0.3.3-1.x86_64.rpm
+sudo rpm -i sendry-0.3.3-1.x86_64.rpm
+
+# Alpine
+wget https://github.com/foxzi/sendry/releases/latest/download/sendry_0.3.3-r1_x86_64.apk
+sudo apk add --allow-untrusted sendry_0.3.3-r1_x86_64.apk
+```
+
+### Бинарный файл
+
+```bash
+wget https://github.com/foxzi/sendry/releases/latest/download/sendry-linux-amd64
+chmod +x sendry-linux-amd64
+sudo mv sendry-linux-amd64 /usr/local/bin/sendry
+```
+
+### Docker
+
+```bash
+docker pull ghcr.io/foxzi/sendry:latest
+docker run -p 25:25 -p 587:587 -p 8080:8080 \
+  -v /path/to/config.yaml:/etc/sendry/config.yaml \
+  ghcr.io/foxzi/sendry:latest
+```
+
+### Ansible
+
+Для автоматического развертывания на нескольких серверах см. [документацию Ansible](ansible.ru.md).
+
+```bash
+cd ansible
+cp inventory/hosts.yml.example inventory/hosts.yml
+# Отредактируйте hosts.yml
+ansible-playbook -i inventory/hosts.yml playbooks/sendry.yml
+```
+
+### Сборка из исходников
+
+Требуется Go 1.24+
+
+```bash
+git clone https://github.com/foxzi/sendry.git
+cd sendry
+make build
+```
 
 ## Быстрый старт
 
 Подробное руководство: [quickstart.ru.md](quickstart.ru.md).
-
-### Сборка
-
-```bash
-go build -o sendry ./cmd/sendry
-```
 
 ### Конфигурация
 
@@ -91,7 +139,7 @@ curl http://localhost:8080/health
 ```json
 {
   "status": "ok",
-  "version": "0.2.0",
+  "version": "0.3.3",
   "uptime": "1h30m",
   "queue": {
     "pending": 5,
@@ -211,7 +259,13 @@ curl -X DELETE http://localhost:8080/api/v1/queue/{message_id} \
 | `metrics.flush_interval` | `10s` | Интервал сохранения счетчиков |
 | `metrics.allowed_ips` | `[]` | IP/CIDR с доступом к метрикам |
 
-Подробные инструкции смотрите в [справочнике по HTTP API](api.ru.md), [документации по TLS и DKIM](tls-dkim.ru.md), [хранению сообщений и DLQ](retention.ru.md), [Rate limiting](ratelimit.ru.md) и [Prometheus метрикам](metrics.ru.md).
+Документация:
+- [Справочник HTTP API](api.ru.md)
+- [TLS и DKIM](tls-dkim.ru.md)
+- [Хранение сообщений и DLQ](retention.ru.md)
+- [Rate limiting](ratelimit.ru.md)
+- [Prometheus метрики](metrics.ru.md)
+- [Развертывание через Ansible](ansible.ru.md)
 
 ## Структура проекта
 

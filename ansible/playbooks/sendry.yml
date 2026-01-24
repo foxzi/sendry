@@ -1,0 +1,14 @@
+---
+- name: Deploy Sendry MTA
+  hosts: sendry_servers
+  become: true
+
+  roles:
+    - sendry
+
+  post_tasks:
+    - name: Show DKIM DNS records
+      ansible.builtin.debug:
+        msg: "{{ dkim_dns_records | default([]) }}"
+      when: dkim_dns_records is defined and dkim_dns_records | length > 0
+      tags: [dkim, dns]

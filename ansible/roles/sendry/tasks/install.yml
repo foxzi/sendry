@@ -1,0 +1,127 @@
+---
+- name: Create sendry group
+  ansible.builtin.group:
+    name: "{{ sendry_group }}"
+    system: true
+    state: present
+
+- name: Create sendry user
+  ansible.builtin.user:
+    name: "{{ sendry_user }}"
+    group: "{{ sendry_group }}"
+    home: "{{ sendry_data_dir }}"
+    shell: /sbin/nologin
+    system: true
+    create_home: false
+    state: present
+
+- name: Create directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default(sendry_user) }}"
+    group: "{{ item.group | default(sendry_group) }}"
+    mode: "{{ item.mode | default('0755') }}"
+  loop:
+    - { path: "{{ sendry_config_dir }}" }
+    - { path: "{{ sendry_data_dir }}" }
+    - { path: "{{ sendry_log_dir }}" }
+    - { path: "{{ sendry_dkim_dir }}", mode: "0700" }
+    - { path: "{{ sendry_acme_cache_dir }}", mode: "0700" }
+
+- name: Install from GitHub package
+  when: sendry_install_method == 'package'
+  block:
+    - name: Get latest release version from GitHub
+      ansible.builtin.uri:
+        url: https://api.github.com/repos/foxzi/sendry/releases/latest
+        return_content: true
+      register: github_release
+      when: sendry_version == 'latest'
+
+    - name: Set version fact
+      ansible.builtin.set_fact:
+        sendry_actual_version: "{{ (sendry_version == 'latest') | ternary(github_release.json.tag_name | regex_replace('^v', ''), sendry_version) }}"
+
+    - name: Determine package type
+      ansible.builtin.set_fact:
+        sendry_package_type: "{{ (ansible_os_family == 'Debian') | ternary('deb', 'rpm') }}"
+        sendry_arch: "{{ (ansible_architecture == 'x86_64') | ternary('amd64', 'arm64') }}"
+
+    - name: Set package URL
+      ansible.builtin.set_fact:
+        sendry_package_url: "https://github.com/foxzi/sendry/releases/download/v{{ sendry_actual_version }}/sendry_{{ sendry_actual_version }}_{{ sendry_arch }}.{{ sendry_package_type }}"
+
+    - name: Download package
+      ansible.builtin.get_url:
+        url: "{{ sendry_package_url }}"
+        dest: "/tmp/sendry.{{ sendry_package_type }}"
+        mode: "0644"
+
+    - name: Install DEB package
+      ansible.builtin.apt:
+        deb: "/tmp/sendry.{{ sendry_package_type }}"
+        state: present
+      when: ansible_os_family == 'Debian'
+
+    - name: Install RPM package
+      ansible.builtin.yum:
+        name: "/tmp/sendry.{{ sendry_package_type }}"
+        state: present
+        disable_gpg_check: true
+      when: ansible_os_family == 'RedHat'
+
+    - name: Clean up package file
+      ansible.builtin.file:
+        path: "/tmp/sendry.{{ sendry_package_type }}"
+        state: absent
+
+- name: Install from binary
+  when: sendry_install_method == 'binary'
+  block:
+    - name: Get latest release version from GitHub
+      ansible.builtin.uri:
+        url: https://api.github.com/repos/foxzi/sendry/releases/latest
+        return_content: true
+      register: github_release
+      when: sendry_version == 'latest'
+
+    - name: Set version fact
+      ansible.builtin.set_fact:
+        sendry_actual_version: "{{ (sendry_version == 'latest') | ternary(github_release.json.tag_name | regex_replace('^v', ''), sendry_version) }}"
+
+    - name: Determine architecture
+      ansible.builtin.set_fact:
+        sendry_arch: "{{ (ansible_architecture == 'x86_64') | ternary('amd64', 'arm64') }}"
+
+    - name: Set binary URL
+      ansible.builtin.set_fact:
+        sendry_binary_download_url: "https://github.com/foxzi/sendry/releases/download/v{{ sendry_actual_version }}/sendry-linux-{{ sendry_arch }}"
+      when: sendry_binary_url | length == 0
+
+    - name: Use provided binary URL
+      ansible.builtin.set_fact:
+        sendry_binary_download_url: "{{ sendry_binary_url }}"
+      when: sendry_binary_url | length > 0
+
+    - name: Download binary
+      ansible.builtin.get_url:
+        url: "{{ sendry_binary_download_url }}"
+        dest: /usr/bin/sendry
+        mode: "0755"
+        checksum: "{{ sendry_binary_checksum | default(omit) }}"
+      notify: Restart sendry
+
+    - name: Install systemd service
+      ansible.builtin.template:
+        src: sendry.service.j2
+        dest: /usr/lib/systemd/system/sendry.service
+        mode: "0644"
+      notify:
+        - Reload systemd
+        - Restart sendry
+
+- name: Install dependencies
+  ansible.builtin.package:
+    name: ca-certificates
+    state: present
