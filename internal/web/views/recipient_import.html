@@ -1,0 +1,49 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>Import Recipients</h1>
+    <a href="/recipients/{{.List.ID}}" class="btn btn-secondary">Back to List</a>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>Import to: {{.List.Name}}</h2>
+    </div>
+    <div class="card-body">
+        <form method="post" action="/recipients/{{.List.ID}}/import" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="file">CSV File *</label>
+                <input type="file" id="file" name="file" accept=".csv" required class="input">
+                <small class="form-help">Maximum file size: 10 MB</small>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Import</button>
+        </form>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 1.5rem">
+    <div class="card-header">
+        <h2>CSV Format</h2>
+    </div>
+    <div class="card-body">
+        <p>Your CSV file should have headers in the first row. The following columns are recognized:</p>
+        <ul>
+            <li><strong>email</strong> (required) - also accepts: e-mail, email_address</li>
+            <li><strong>name</strong> (optional) - also accepts: full_name, fullname</li>
+        </ul>
+
+        <h3 style="margin-top: 1.5rem">Example CSV</h3>
+        <pre class="code-preview"><code>email,name
+john@example.com,John Doe
+jane@example.com,Jane Smith
+bob@example.com,</code></pre>
+
+        <h3 style="margin-top: 1.5rem">Notes</h3>
+        <ul>
+            <li>Existing recipients (by email) will be updated with new data</li>
+            <li>Empty email rows will be skipped</li>
+            <li>Invalid rows will be reported but won't stop the import</li>
+        </ul>
+    </div>
+</div>
+{{end}}

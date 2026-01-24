@@ -1,0 +1,71 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>Recipient Lists</h1>
+    <a href="/recipients/new" class="btn btn-primary">New List</a>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <form class="filter-form" method="get" action="/recipients">
+            <input type="text" name="search" placeholder="Search lists..." value="{{.Search}}" class="input">
+            <button type="submit" class="btn">Search</button>
+            {{if .Search}}
+            <a href="/recipients" class="btn btn-secondary">Clear</a>
+            {{end}}
+        </form>
+    </div>
+    <div class="card-body">
+        {{if .Lists}}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Source</th>
+                    <th>Recipients</th>
+                    <th>Active</th>
+                    <th>Updated</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Lists}}
+                <tr>
+                    <td>
+                        <a href="/recipients/{{.ID}}">{{.Name}}</a>
+                        {{if .Description}}
+                        <div class="text-muted">{{.Description}}</div>
+                        {{end}}
+                    </td>
+                    <td><span class="badge badge-{{.SourceType}}">{{.SourceType}}</span></td>
+                    <td>{{.TotalCount}}</td>
+                    <td>{{.ActiveCount}}</td>
+                    <td>{{.UpdatedAt.Format "2006-01-02 15:04"}}</td>
+                    <td class="actions">
+                        <a href="/recipients/{{.ID}}/import" class="btn btn-sm">Import</a>
+                        <a href="/recipients/{{.ID}}/edit" class="btn btn-sm">Edit</a>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+
+        {{if gt .TotalPages 1}}
+        <div class="pagination">
+            {{if gt .Page 1}}
+            <a href="/recipients?page={{sub .Page 1}}{{if .Search}}&search={{.Search}}{{end}}" class="btn btn-sm">&laquo; Prev</a>
+            {{end}}
+            <span class="pagination-info">Page {{.Page}} of {{.TotalPages}} ({{.Total}} total)</span>
+            {{if lt .Page .TotalPages}}
+            <a href="/recipients?page={{add .Page 1}}{{if .Search}}&search={{.Search}}{{end}}" class="btn btn-sm">Next &raquo;</a>
+            {{end}}
+        </div>
+        {{end}}
+        {{else}}
+        <div class="empty-state">
+            <p>No recipient lists found</p>
+            <a href="/recipients/new" class="btn btn-primary">Create your first list</a>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}

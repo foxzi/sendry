@@ -12,20 +12,22 @@ import (
 )
 
 type Handlers struct {
-	cfg       *config.Config
-	db        *db.DB
-	logger    *slog.Logger
-	views     *views.Engine
-	templates *repository.TemplateRepository
+	cfg        *config.Config
+	db         *db.DB
+	logger     *slog.Logger
+	views      *views.Engine
+	templates  *repository.TemplateRepository
+	recipients *repository.RecipientRepository
 }
 
 func New(cfg *config.Config, db *db.DB, logger *slog.Logger, v *views.Engine) *Handlers {
 	return &Handlers{
-		cfg:       cfg,
-		db:        db,
-		logger:    logger,
-		views:     v,
-		templates: repository.NewTemplateRepository(db.DB),
+		cfg:        cfg,
+		db:         db,
+		logger:     logger,
+		views:      v,
+		templates:  repository.NewTemplateRepository(db.DB),
+		recipients: repository.NewRecipientRepository(db.DB),
 	}
 }
 

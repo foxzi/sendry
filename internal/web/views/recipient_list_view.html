@@ -1,0 +1,163 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1>{{.List.Name}}</h1>
+        {{if .List.Description}}
+        <p class="text-muted">{{.List.Description}}</p>
+        {{end}}
+    </div>
+    <div class="header-actions">
+        <a href="/recipients/{{.List.ID}}/import" class="btn">Import CSV</a>
+        <a href="/recipients/{{.List.ID}}/edit" class="btn btn-primary">Edit List</a>
+    </div>
+</div>
+
+<div class="stats-grid" style="margin-bottom: 1.5rem">
+    <div class="stat-card">
+        <div class="stat-value">{{.List.TotalCount}}</div>
+        <div class="stat-label">Total Recipients</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{.List.ActiveCount}}</div>
+        <div class="stat-label">Active</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{.List.SourceType}}</div>
+        <div class="stat-label">Source Type</div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>Add Recipient</h2>
+    </div>
+    <div class="card-body">
+        <form method="post" action="/recipients/{{.List.ID}}/add" class="add-recipient-form">
+            <div class="form-row">
+                <div class="form-group">
+                    <input type="email" name="email" required class="input" placeholder="Email *">
+                </div>
+                <div class="form-group">
+                    <input type="text" name="name" class="input" placeholder="Name">
+                </div>
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary">Add</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 1.5rem">
+    <div class="card-header">
+        <h2>Recipients ({{.Total}})</h2>
+        <form class="filter-form" method="get" action="/recipients/{{.List.ID}}">
+            <input type="text" name="search" placeholder="Search..." value="{{.Search}}" class="input">
+            <select name="status" class="input">
+                <option value="">All Status</option>
+                <option value="active" {{if eq .Status "active"}}selected{{end}}>Active</option>
+                <option value="unsubscribed" {{if eq .Status "unsubscribed"}}selected{{end}}>Unsubscribed</option>
+                <option value="bounced" {{if eq .Status "bounced"}}selected{{end}}>Bounced</option>
+            </select>
+            {{if .Tags}}
+            <select name="tag" class="input">
+                <option value="">All Tags</option>
+                {{range .Tags}}
+                <option value="{{.}}" {{if eq . $.Tag}}selected{{end}}>{{.}}</option>
+                {{end}}
+            </select>
+            {{end}}
+            <button type="submit" class="btn">Filter</button>
+            {{if or .Search .Status .Tag}}
+            <a href="/recipients/{{.List.ID}}" class="btn btn-secondary">Clear</a>
+            {{end}}
+        </form>
+    </div>
+    <div class="card-body">
+        {{if .Recipients}}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Email</th>
+                    <th>Name</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Recipients}}
+                <tr>
+                    <td>{{.Email}}</td>
+                    <td>{{if .Name}}{{.Name}}{{else}}<span class="text-muted">-</span>{{end}}</td>
+                    <td>
+                        {{if eq .Status "active"}}
+                        <span class="badge badge-success">active</span>
+                        {{else if eq .Status "unsubscribed"}}
+                        <span class="badge badge-secondary">unsubscribed</span>
+                        {{else if eq .Status "bounced"}}
+                        <span class="badge badge-danger">bounced</span>
+                        {{else}}
+                        <span class="badge">{{.Status}}</span>
+                        {{end}}
+                    </td>
+                    <td>{{.CreatedAt.Format "2006-01-02"}}</td>
+                    <td>
+                        <form method="post" action="/recipients/{{$.List.ID}}/recipients/{{.ID}}" style="display:inline" onsubmit="return confirm('Delete this recipient?')">
+                            <input type="hidden" name="_method" value="DELETE">
+                            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+
+        {{if gt .TotalPages 1}}
+        <div class="pagination">
+            {{if gt .Page 1}}
+            <a href="/recipients/{{.List.ID}}?page={{sub .Page 1}}{{if .Search}}&search={{.Search}}{{end}}{{if .Status}}&status={{.Status}}{{end}}{{if .Tag}}&tag={{.Tag}}{{end}}" class="btn btn-sm">&laquo; Prev</a>
+            {{end}}
+            <span class="pagination-info">Page {{.Page}} of {{.TotalPages}}</span>
+            {{if lt .Page .TotalPages}}
+            <a href="/recipients/{{.List.ID}}?page={{add .Page 1}}{{if .Search}}&search={{.Search}}{{end}}{{if .Status}}&status={{.Status}}{{end}}{{if .Tag}}&tag={{.Tag}}{{end}}" class="btn btn-sm">Next &raquo;</a>
+            {{end}}
+        </div>
+        {{end}}
+        {{else}}
+        <div class="empty-state">
+            <p>No recipients in this list</p>
+            <p class="text-muted">Add recipients manually above or import from CSV</p>
+        </div>
+        {{end}}
+    </div>
+</div>
+
+<div class="card" style="margin-top: 1.5rem">
+    <div class="card-header">
+        <h2>Danger Zone</h2>
+    </div>
+    <div class="card-body">
+        <form method="post" action="/recipients/{{.List.ID}}" onsubmit="return confirm('Are you sure? This will delete all recipients in this list.')">
+            <input type="hidden" name="_method" value="DELETE">
+            <button type="submit" class="btn btn-danger">Delete List</button>
+            <span class="text-muted" style="margin-left: 1rem">This will permanently delete the list and all its recipients</span>
+        </form>
+    </div>
+</div>
+
+<style>
+.add-recipient-form .form-row {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-end;
+}
+.add-recipient-form .form-group {
+    margin-bottom: 0;
+    flex: 1;
+}
+.add-recipient-form .form-group:last-child {
+    flex: 0;
+}
+</style>
+{{end}}

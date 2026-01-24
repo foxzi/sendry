@@ -1,0 +1,38 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>New Recipient List</h1>
+</div>
+
+<form method="post" action="/recipients" class="card">
+    <div class="card-body">
+        <div class="form-group">
+            <label for="name">Name *</label>
+            <input type="text" id="name" name="name" required class="input" placeholder="Newsletter Subscribers">
+        </div>
+
+        <div class="form-group">
+            <label for="description">Description</label>
+            <textarea id="description" name="description" class="input" rows="3" placeholder="Describe this recipient list..."></textarea>
+        </div>
+    </div>
+
+    <div class="card-footer">
+        <a href="/recipients" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">Create List</button>
+    </div>
+</form>
+
+<div class="card" style="margin-top: 1.5rem">
+    <div class="card-header">
+        <h2>What's next?</h2>
+    </div>
+    <div class="card-body">
+        <p>After creating the list, you can:</p>
+        <ul>
+            <li>Import recipients from a CSV file</li>
+            <li>Add recipients manually one by one</li>
+            <li>Use the API to add recipients programmatically</li>
+        </ul>
+    </div>
+</div>
+{{end}}

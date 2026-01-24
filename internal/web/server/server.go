@@ -108,6 +108,8 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("GET /recipients/{id}/import", h.RecipientImportPage)
 	protected.HandleFunc("POST /recipients/{id}/import", h.RecipientImport)
 	protected.HandleFunc("GET /recipients/{id}/recipients", h.RecipientsList)
+	protected.HandleFunc("POST /recipients/{id}/add", h.RecipientAdd)
+	protected.HandleFunc("DELETE /recipients/{id}/recipients/{recipientId}", h.RecipientDelete)
 
 	// Campaigns
 	protected.HandleFunc("GET /campaigns", h.CampaignList)
