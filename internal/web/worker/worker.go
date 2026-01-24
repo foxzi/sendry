@@ -106,6 +106,9 @@ func (w *Worker) run() {
 }
 
 func (w *Worker) processJobs() {
+	// Check for scheduled jobs that are due to run
+	w.startScheduledJobs()
+
 	// Get all running jobs
 	jobs, err := w.jobs.GetRunningJobs()
 	if err != nil {
@@ -120,6 +123,31 @@ func (w *Worker) processJobs() {
 		default:
 			w.processJob(&job)
 		}
+	}
+}
+
+// startScheduledJobs checks for scheduled jobs that are due and starts them
+func (w *Worker) startScheduledJobs() {
+	scheduledJobs, err := w.jobs.GetScheduledJobsDue()
+	if err != nil {
+		w.logger.Error("failed to get scheduled jobs", "error", err)
+		return
+	}
+
+	for _, job := range scheduledJobs {
+		select {
+		case <-w.ctx.Done():
+			return
+		default:
+		}
+
+		// Update job status to running
+		if err := w.jobs.UpdateStatus(job.ID, "running"); err != nil {
+			w.logger.Error("failed to start scheduled job", "job_id", job.ID, "error", err)
+			continue
+		}
+
+		w.logger.Info("started scheduled job", "job_id", job.ID, "campaign", job.CampaignName, "scheduled_at", job.ScheduledAt)
 	}
 }
 

@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sendry Web: GrapesJS visual HTML editor for email templates
 - Sendry Web: template variable substitution in worker (global, campaign, recipient vars)
 - Sendry Web: template deployment to Sendry servers via API
+- Sendry Web: scheduled jobs support (worker auto-starts jobs at scheduled time)
 
 ## [0.3.4] - 2025-01-25
 
