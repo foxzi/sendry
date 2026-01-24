@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net/mail"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/foxzi/sendry/internal/headers"
@@ -32,9 +33,11 @@ type Sender struct {
 	domainProvider   DomainModeProvider
 	storage          *Storage
 	logger           *slog.Logger
+	headerProcessor  *headers.Processor
+
+	mu               sync.RWMutex
 	simulateErrors   bool
 	errorProbability float64 // 0.0 to 1.0
-	headerProcessor  *headers.Processor
 }
 
 // NewSender creates a new sandbox sender
@@ -59,6 +62,8 @@ func NewSender(
 
 // SetErrorSimulation enables/disables error simulation
 func (s *Sender) SetErrorSimulation(enabled bool, probability float64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.simulateErrors = enabled
 	if probability > 0 && probability <= 1 {
 		s.errorProbability = probability
@@ -112,7 +117,12 @@ func (s *Sender) handleSandbox(ctx context.Context, msg *queue.Message, domain s
 	)
 
 	// Simulate random errors if enabled
-	if s.simulateErrors && rand.Float64() < s.errorProbability {
+	s.mu.RLock()
+	simulateErrors := s.simulateErrors
+	errorProbability := s.errorProbability
+	s.mu.RUnlock()
+
+	if simulateErrors && rand.Float64() < errorProbability {
 		errorTypes := []string{
 			"550 User not found",
 			"451 Temporary failure",

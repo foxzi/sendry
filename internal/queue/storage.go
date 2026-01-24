@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -108,6 +109,8 @@ func (s *BoltStorage) Dequeue(ctx context.Context) (*Message, error) {
 
 			var m Message
 			if err := json.Unmarshal(msgData, &m); err != nil {
+				log.Printf("queue: corrupted message in deferred queue, id=%s: %v", string(v), err)
+				c.Delete() // Remove corrupted entry from index
 				continue
 			}
 
@@ -146,6 +149,8 @@ func (s *BoltStorage) Dequeue(ctx context.Context) (*Message, error) {
 
 			var m Message
 			if err := json.Unmarshal(msgData, &m); err != nil {
+				log.Printf("queue: corrupted message in pending queue, id=%s: %v", string(v), err)
+				c.Delete() // Remove corrupted entry from index
 				continue
 			}
 

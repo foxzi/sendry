@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - HTTP API documentation (EN/RU)
 - Tests for bounce, domain, and smtp packages
 
+### Fixed
+- Race condition in sandbox sender error simulation
+- Silent error handling in rate limiter persistence
+- Silent error handling for corrupted messages in queue
+
 ## [0.2.0] - 2024-01-24
 
 ### Added

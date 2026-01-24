@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -384,6 +385,7 @@ func (l *Limiter) persistCounters() error {
 		for key, counter := range l.counters {
 			data, err := json.Marshal(counter)
 			if err != nil {
+				log.Printf("ratelimit: failed to marshal counter %s: %v", key, err)
 				continue
 			}
 			if err := bucket.Put([]byte(key), data); err != nil {
