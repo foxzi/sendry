@@ -1,0 +1,55 @@
+server:
+  listen_addr: ":8088"
+  tls:
+    enabled: false
+    cert_file: ""
+    key_file: ""
+
+database:
+  path: "/var/lib/sendry-web/app.db"
+
+auth:
+  local_enabled: true
+  session_secret: "change-me-to-a-secure-random-string-at-least-32-chars"
+  session_ttl: 24h
+
+  oidc:
+    enabled: false
+    provider: authentik
+    client_id: "sendry-web"
+    client_secret: "secret"
+    issuer_url: "https://auth.example.com/application/o/sendry-web/"
+    redirect_url: "https://panel.example.com/auth/callback"
+    scopes:
+      - openid
+      - profile
+      - email
+    allowed_groups:
+      - "sendry-web-users"
+
+sendry:
+  servers:
+    - name: "mta-1"
+      base_url: "https://mta-1.example.com:8080"
+      api_key: "your-api-key-1"
+      env: "prod"
+    - name: "mta-2"
+      base_url: "https://mta-2.example.com:8080"
+      api_key: "your-api-key-2"
+      env: "stage"
+
+  multi_send:
+    strategy: round_robin  # round_robin, weighted_round_robin, domain_affinity
+    weights:
+      mta-1: 3
+      mta-2: 1
+    domain_affinity:
+      "example.com": "mta-1"
+      "example.org": "mta-2"
+    failover:
+      enabled: true
+      max_retries: 2
+
+logging:
+  level: info
+  format: json
