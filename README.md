@@ -14,6 +14,13 @@ MTA (Mail Transfer Agent) server for sending emails.
 - HTTP API for sending emails
 - Persistent queue with BoltDB
 - Retry logic with exponential backoff
+- Multi-domain support with different modes:
+  - `production` - normal delivery
+  - `sandbox` - capture emails locally (for testing)
+  - `redirect` - redirect all emails to specified addresses
+  - `bcc` - normal delivery + copy to archive
+- Rate limiting (per domain, sender, IP, API key)
+- Bounce handling
 - Graceful shutdown
 - Structured JSON logging
 
@@ -22,6 +29,8 @@ MTA (Mail Transfer Agent) server for sending emails.
 - Go 1.23+
 
 ## Quick Start
+
+For detailed quick start guide see [docs/quickstart.md](docs/quickstart.md).
 
 ### Build
 
@@ -205,4 +214,4 @@ sendry/
 
 ## License
 
-MIT
+GPL-3.0

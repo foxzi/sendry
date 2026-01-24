@@ -15,7 +15,7 @@ description: |
   SMTP relay, HTTP API, DKIM signing, rate limiting, and more.
 vendor: Sendry
 homepage: https://github.com/foxzi/sendry
-license: MIT
+license: GPL-3.0
 
 # Dependencies
 depends:
