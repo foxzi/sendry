@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -34,6 +35,7 @@ type App struct {
 	logger          *slog.Logger
 	tlsConfig       *tls.Config
 	acmeManager     *sendryTLS.ACMEManager
+	acmeServer      *http.Server
 	domainManager   *domain.Manager
 	rateLimiter     *ratelimit.Limiter
 	sandboxStorage  *sandbox.Storage
@@ -284,6 +286,27 @@ func (a *App) Run(ctx context.Context) error {
 		}
 	}()
 
+	// Start ACME HTTP challenge server on port 80 if ACME is enabled
+	if a.acmeManager != nil {
+		a.acmeServer = &http.Server{
+			Addr:    ":80",
+			Handler: a.acmeManager.HTTPHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Redirect all non-ACME requests to HTTPS
+				target := "https://" + r.Host + r.URL.Path
+				if r.URL.RawQuery != "" {
+					target += "?" + r.URL.RawQuery
+				}
+				http.Redirect(w, r, target, http.StatusMovedPermanently)
+			})),
+		}
+		go func() {
+			a.logger.Info("starting ACME HTTP challenge server", "addr", ":80")
+			if err := a.acmeServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				a.logger.Warn("ACME HTTP server error", "error", err)
+			}
+		}()
+	}
+
 	// Wait for shutdown signal or error
 	select {
 	case <-ctx.Done():
@@ -325,6 +348,13 @@ func (a *App) Shutdown(ctx context.Context) error {
 
 	if err := a.apiServer.Shutdown(shutdownCtx); err != nil {
 		a.logger.Error("api server shutdown error", "error", err)
+	}
+
+	// Shutdown ACME server if running
+	if a.acmeServer != nil {
+		if err := a.acmeServer.Shutdown(shutdownCtx); err != nil {
+			a.logger.Error("acme server shutdown error", "error", err)
+		}
 	}
 
 	// Stop rate limiter (persists counters)
