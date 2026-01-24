@@ -204,7 +204,7 @@ curl -X DELETE http://localhost:8080/api/v1/queue/{message_id} \
 | `metrics.flush_interval` | `10s` | Интервал сохранения счетчиков |
 | `metrics.allowed_ips` | `[]` | IP/CIDR с доступом к метрикам |
 
-Подробные инструкции смотрите в [справочнике по HTTP API](api.ru.md), [документации по TLS и DKIM](tls-dkim.ru.md), [хранению сообщений и DLQ](retention.ru.md) и [Prometheus метрикам](metrics.ru.md).
+Подробные инструкции смотрите в [справочнике по HTTP API](api.ru.md), [документации по TLS и DKIM](tls-dkim.ru.md), [хранению сообщений и DLQ](retention.ru.md), [Rate limiting](ratelimit.ru.md) и [Prometheus метрикам](metrics.ru.md).
 
 ## Структура проекта
 
