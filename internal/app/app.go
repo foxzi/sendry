@@ -20,6 +20,7 @@ import (
 	"github.com/foxzi/sendry/internal/ratelimit"
 	"github.com/foxzi/sendry/internal/sandbox"
 	"github.com/foxzi/sendry/internal/smtp"
+	"github.com/foxzi/sendry/internal/template"
 	sendryTLS "github.com/foxzi/sendry/internal/tls"
 )
 
@@ -120,6 +121,13 @@ func New(cfg *config.Config) (*App, error) {
 	}
 	logger.Info("sandbox storage enabled")
 
+	// Create template storage
+	templateStorage, err := template.NewStorage(storage.DB())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create template storage: %w", err)
+	}
+	logger.Info("template storage enabled")
+
 	// Create sandbox sender that wraps the real sender
 	sandboxSender := sandbox.NewSender(
 		smtpClient,
@@ -206,14 +214,15 @@ func New(cfg *config.Config) (*App, error) {
 
 	// Create API server with full options
 	apiServer := api.NewServerWithOptions(api.ServerOptions{
-		Queue:          storage,
-		Config:         &cfg.API,
-		FullConfig:     cfg,
-		Logger:         logger.With("component", "api"),
-		DomainManager:  domainMgr,
-		RateLimiter:    rateLimiter,
-		SandboxStorage: sandboxStorage,
-		TLSConfig:      tlsConfig,
+		Queue:           storage,
+		Config:          &cfg.API,
+		FullConfig:      cfg,
+		Logger:          logger.With("component", "api"),
+		DomainManager:   domainMgr,
+		RateLimiter:     rateLimiter,
+		SandboxStorage:  sandboxStorage,
+		TemplateStorage: templateStorage,
+		TLSConfig:       tlsConfig,
 	})
 
 	return &App{

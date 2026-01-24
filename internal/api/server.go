@@ -15,6 +15,7 @@ import (
 	"github.com/foxzi/sendry/internal/queue"
 	"github.com/foxzi/sendry/internal/ratelimit"
 	"github.com/foxzi/sendry/internal/sandbox"
+	"github.com/foxzi/sendry/internal/template"
 )
 
 // Server is the HTTP API server
@@ -32,20 +33,22 @@ type Server struct {
 	sandboxServer    *SandboxServer
 	sandboxStorage   *sandbox.Storage
 	tlsConfig        *tls.Config
+	templateServer   *TemplateServer
 }
 
 // ServerOptions contains options for creating an API server
 type ServerOptions struct {
-	Queue          queue.Queue
-	Config         *config.APIConfig
-	FullConfig     *config.Config
-	Logger         *slog.Logger
-	DomainManager  *domain.Manager
-	RateLimiter    *ratelimit.Limiter
-	SandboxStorage *sandbox.Storage
-	DKIMKeysDir    string
-	TLSCertsDir    string
-	TLSConfig      *tls.Config
+	Queue           queue.Queue
+	Config          *config.APIConfig
+	FullConfig      *config.Config
+	Logger          *slog.Logger
+	DomainManager   *domain.Manager
+	RateLimiter     *ratelimit.Limiter
+	SandboxStorage  *sandbox.Storage
+	TemplateStorage *template.Storage
+	DKIMKeysDir     string
+	TLSCertsDir     string
+	TLSConfig       *tls.Config
 }
 
 // NewServer creates a new API server
@@ -96,6 +99,11 @@ func NewServerWithOptions(opts ServerOptions) *Server {
 		s.sandboxServer = NewSandboxServer(opts.SandboxStorage, opts.Queue)
 	}
 
+	// Create template server if storage is available
+	if opts.TemplateStorage != nil {
+		s.templateServer = NewTemplateServer(opts.TemplateStorage, opts.Queue)
+	}
+
 	s.setupRoutes()
 	return s
 }
@@ -134,6 +142,11 @@ func (s *Server) setupRoutes() {
 		// Sandbox routes
 		if s.sandboxServer != nil {
 			s.sandboxServer.RegisterRoutes(r)
+		}
+
+		// Template routes
+		if s.templateServer != nil {
+			s.templateServer.RegisterRoutes(r)
 		}
 	})
 }
