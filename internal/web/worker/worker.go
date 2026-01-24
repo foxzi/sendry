@@ -109,6 +109,9 @@ func (w *Worker) processJobs() {
 	// Check for scheduled jobs that are due to run
 	w.startScheduledJobs()
 
+	// Track status of queued items
+	w.trackQueuedItems()
+
 	// Get all running jobs
 	jobs, err := w.jobs.GetRunningJobs()
 	if err != nil {
@@ -123,6 +126,64 @@ func (w *Worker) processJobs() {
 		default:
 			w.processJob(&job)
 		}
+	}
+}
+
+// trackQueuedItems checks status of queued items via Sendry API
+func (w *Worker) trackQueuedItems() {
+	items, err := w.jobs.GetQueuedItems(w.batchSize * 2)
+	if err != nil {
+		w.logger.Error("failed to get queued items", "error", err)
+		return
+	}
+
+	for _, item := range items {
+		select {
+		case <-w.ctx.Done():
+			return
+		default:
+		}
+
+		client, err := w.sendry.GetClient(item.ServerName)
+		if err != nil {
+			continue
+		}
+
+		status, err := client.GetStatus(w.ctx, item.SendryMsgID)
+		if err != nil {
+			w.logger.Debug("failed to get status", "item_id", item.ID, "sendry_id", item.SendryMsgID, "error", err)
+			continue
+		}
+
+		// Map Sendry status to local status
+		newStatus := mapSendryStatus(status.Status)
+		if newStatus != "" && newStatus != item.Status {
+			errorMsg := ""
+			if newStatus == "failed" {
+				errorMsg = status.LastError
+			}
+			if err := w.jobs.UpdateItemStatus(item.ID, newStatus, item.SendryMsgID, errorMsg); err != nil {
+				w.logger.Error("failed to update item status", "item_id", item.ID, "error", err)
+			} else {
+				w.logger.Debug("status updated", "item_id", item.ID, "old", item.Status, "new", newStatus)
+			}
+		}
+	}
+}
+
+// mapSendryStatus maps Sendry API status to local status
+func mapSendryStatus(status string) string {
+	switch status {
+	case "queued", "pending", "processing":
+		return "queued"
+	case "sent", "delivered":
+		return "sent"
+	case "failed", "rejected":
+		return "failed"
+	case "bounced":
+		return "failed"
+	default:
+		return ""
 	}
 }
 

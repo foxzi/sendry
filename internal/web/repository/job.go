@@ -501,3 +501,37 @@ func (r *JobRepository) GetPendingItems(jobID string, limit int) ([]models.SendJ
 
 	return items, nil
 }
+
+// GetQueuedItems returns items with status 'queued' for status tracking
+func (r *JobRepository) GetQueuedItems(limit int) ([]models.SendJobItem, error) {
+	rows, err := r.db.Query(`
+		SELECT i.id, i.job_id, i.recipient_id, r.email, i.variant_id, i.server_name,
+			i.status, i.sendry_msg_id, i.created_at
+		FROM send_job_items i
+		LEFT JOIN recipients r ON i.recipient_id = r.id
+		WHERE i.status = 'queued' AND i.sendry_msg_id != ''
+		ORDER BY i.created_at
+		LIMIT ?`, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := []models.SendJobItem{}
+	for rows.Next() {
+		var item models.SendJobItem
+		var email sql.NullString
+		err := rows.Scan(&item.ID, &item.JobID, &item.RecipientID, &email, &item.VariantID,
+			&item.ServerName, &item.Status, &item.SendryMsgID, &item.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+		if email.Valid {
+			item.Email = email.String
+		}
+		items = append(items, item)
+	}
+
+	return items, nil
+}

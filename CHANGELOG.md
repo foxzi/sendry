@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sendry Web: template deployment to Sendry servers via API
 - Sendry Web: scheduled jobs support (worker auto-starts jobs at scheduled time)
 - Sendry Web: CLI cleanup command (jobs, audit logs, template versions)
+- Sendry Web: status tracking for queued items via Sendry API
 
 ## [0.3.4] - 2025-01-25
 
