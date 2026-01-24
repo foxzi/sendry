@@ -10,13 +10,85 @@ import (
 
 // Config is the main configuration structure
 type Config struct {
-	Server  ServerConfig  `yaml:"server"`
-	SMTP    SMTPConfig    `yaml:"smtp"`
-	API     APIConfig     `yaml:"api"`
-	Queue   QueueConfig   `yaml:"queue"`
-	Storage StorageConfig `yaml:"storage"`
-	Logging LoggingConfig `yaml:"logging"`
-	DKIM    DKIMConfig    `yaml:"dkim"`
+	Server    ServerConfig            `yaml:"server"`
+	SMTP      SMTPConfig              `yaml:"smtp"`
+	API       APIConfig               `yaml:"api"`
+	Queue     QueueConfig             `yaml:"queue"`
+	Storage   StorageConfig           `yaml:"storage"`
+	Logging   LoggingConfig           `yaml:"logging"`
+	DKIM      DKIMConfig              `yaml:"dkim"`       // Legacy single-domain DKIM config
+	Domains   map[string]DomainConfig `yaml:"domains"`    // Multi-domain configuration
+	RateLimit RateLimitConfig         `yaml:"rate_limit"` // Rate limiting configuration
+}
+
+// RateLimitConfig contains global rate limiting settings
+type RateLimitConfig struct {
+	Enabled bool `yaml:"enabled"`
+
+	// Global limits (for entire server)
+	Global *LimitValues `yaml:"global,omitempty"`
+
+	// Default limits for domains
+	DefaultDomain *LimitValues `yaml:"default_domain,omitempty"`
+
+	// Default limits for senders
+	DefaultSender *LimitValues `yaml:"default_sender,omitempty"`
+
+	// Default limits for IPs
+	DefaultIP *LimitValues `yaml:"default_ip,omitempty"`
+
+	// Default limits for API keys
+	DefaultAPIKey *LimitValues `yaml:"default_api_key,omitempty"`
+}
+
+// LimitValues contains rate limit values
+type LimitValues struct {
+	MessagesPerHour int `yaml:"messages_per_hour"`
+	MessagesPerDay  int `yaml:"messages_per_day"`
+}
+
+// DomainConfig contains per-domain settings
+type DomainConfig struct {
+	// DKIM settings for this domain
+	DKIM *DomainDKIMConfig `yaml:"dkim,omitempty"`
+
+	// TLS settings for this domain (for SNI)
+	TLS *DomainTLSConfig `yaml:"tls,omitempty"`
+
+	// Rate limiting for this domain
+	RateLimit *DomainRateLimitConfig `yaml:"rate_limit,omitempty"`
+
+	// Default From address for this domain
+	DefaultFrom string `yaml:"default_from,omitempty"`
+
+	// Domain mode: production, sandbox, redirect, bcc
+	Mode string `yaml:"mode,omitempty"`
+
+	// Redirect settings (when mode=redirect)
+	RedirectTo []string `yaml:"redirect_to,omitempty"`
+
+	// BCC settings (when mode=bcc)
+	BCCTo []string `yaml:"bcc_to,omitempty"`
+}
+
+// DomainDKIMConfig contains DKIM settings for a domain
+type DomainDKIMConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	Selector string `yaml:"selector"`
+	KeyFile  string `yaml:"key_file"`
+}
+
+// DomainTLSConfig contains TLS settings for a domain
+type DomainTLSConfig struct {
+	CertFile string `yaml:"cert_file"`
+	KeyFile  string `yaml:"key_file"`
+}
+
+// DomainRateLimitConfig contains rate limit settings for a domain
+type DomainRateLimitConfig struct {
+	MessagesPerHour      int `yaml:"messages_per_hour"`
+	MessagesPerDay       int `yaml:"messages_per_day"`
+	RecipientsPerMessage int `yaml:"recipients_per_message"`
 }
 
 // ServerConfig contains server-wide settings
@@ -204,6 +276,11 @@ func (c *Config) Validate() error {
 		return err
 	}
 
+	// Validate multi-domain configuration
+	if err := c.validateDomains(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -260,4 +337,100 @@ func (c *Config) validateDKIM() error {
 // HasTLS returns true if TLS is configured
 func (c *Config) HasTLS() bool {
 	return (c.SMTP.TLS.CertFile != "" && c.SMTP.TLS.KeyFile != "") || c.SMTP.TLS.ACME.Enabled
+}
+
+// GetDomainConfig returns the configuration for a specific domain
+// Falls back to legacy config if domain not found in multi-domain config
+func (c *Config) GetDomainConfig(domain string) *DomainConfig {
+	if c.Domains != nil {
+		if dc, ok := c.Domains[domain]; ok {
+			return &dc
+		}
+	}
+	return nil
+}
+
+// GetDKIMConfig returns DKIM config for a domain
+// First checks multi-domain config, then falls back to legacy config
+func (c *Config) GetDKIMConfig(domain string) (enabled bool, selector, keyFile string) {
+	// Check multi-domain config first
+	if dc := c.GetDomainConfig(domain); dc != nil && dc.DKIM != nil && dc.DKIM.Enabled {
+		return true, dc.DKIM.Selector, dc.DKIM.KeyFile
+	}
+
+	// Fall back to legacy config if domain matches
+	if c.DKIM.Enabled && c.DKIM.Domain == domain {
+		return true, c.DKIM.Selector, c.DKIM.KeyFile
+	}
+
+	return false, "", ""
+}
+
+// GetAllDomains returns all configured domains
+func (c *Config) GetAllDomains() []string {
+	domains := make(map[string]bool)
+
+	// Add SMTP domain
+	if c.SMTP.Domain != "" {
+		domains[c.SMTP.Domain] = true
+	}
+
+	// Add legacy DKIM domain
+	if c.DKIM.Enabled && c.DKIM.Domain != "" {
+		domains[c.DKIM.Domain] = true
+	}
+
+	// Add multi-domain configs
+	for domain := range c.Domains {
+		domains[domain] = true
+	}
+
+	result := make([]string, 0, len(domains))
+	for domain := range domains {
+		result = append(result, domain)
+	}
+	return result
+}
+
+// validateDomains validates multi-domain configuration
+func (c *Config) validateDomains() error {
+	for domain, dc := range c.Domains {
+		if domain == "" {
+			return fmt.Errorf("empty domain name in domains configuration")
+		}
+
+		// Validate DKIM config
+		if dc.DKIM != nil && dc.DKIM.Enabled {
+			if dc.DKIM.Selector == "" {
+				return fmt.Errorf("domains.%s.dkim.selector is required when DKIM is enabled", domain)
+			}
+			if dc.DKIM.KeyFile == "" {
+				return fmt.Errorf("domains.%s.dkim.key_file is required when DKIM is enabled", domain)
+			}
+		}
+
+		// Validate TLS config
+		if dc.TLS != nil {
+			if (dc.TLS.CertFile == "") != (dc.TLS.KeyFile == "") {
+				return fmt.Errorf("domains.%s.tls requires both cert_file and key_file", domain)
+			}
+		}
+
+		// Validate mode
+		if dc.Mode != "" {
+			validModes := map[string]bool{"production": true, "sandbox": true, "redirect": true, "bcc": true}
+			if !validModes[dc.Mode] {
+				return fmt.Errorf("domains.%s.mode must be one of: production, sandbox, redirect, bcc", domain)
+			}
+
+			if dc.Mode == "redirect" && len(dc.RedirectTo) == 0 {
+				return fmt.Errorf("domains.%s.redirect_to is required when mode is redirect", domain)
+			}
+			if dc.Mode == "bcc" && len(dc.BCCTo) == 0 {
+				return fmt.Errorf("domains.%s.bcc_to is required when mode is bcc", domain)
+			}
+		}
+	}
+
+	return nil
 }

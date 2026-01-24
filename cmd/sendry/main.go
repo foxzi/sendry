@@ -12,8 +12,10 @@ import (
 )
 
 var (
-	cfgFile string
-	version = "0.1.0"
+	cfgFile   string
+	version   = "dev"
+	commit    = "unknown"
+	buildTime = "unknown"
 )
 
 func main() {
@@ -51,6 +53,12 @@ var versionCmd = &cobra.Command{
 	Short: "Print version information",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Printf("sendry version %s\n", version)
+		if commit != "unknown" {
+			fmt.Printf("  commit: %s\n", commit)
+		}
+		if buildTime != "unknown" {
+			fmt.Printf("  built:  %s\n", buildTime)
+		}
 	},
 }
 

@@ -4,6 +4,7 @@ server:
 smtp:
   listen_addr: ":25"
   submission_addr: ":587"
+  smtps_addr: ":465"
   domain: "example.com"
   max_message_bytes: 10485760  # 10MB
   max_recipients: 100
@@ -14,6 +15,98 @@ smtp:
     users:
       admin: "change_this_password"
       api: "change_this_api_password"
+  tls:
+    # Option 1: Manual certificates
+    # cert_file: "/etc/sendry/certs/cert.pem"
+    # key_file: "/etc/sendry/certs/key.pem"
+
+    # Option 2: Let's Encrypt (ACME)
+    acme:
+      enabled: false
+      email: "admin@example.com"
+      domains:
+        - "mail.example.com"
+      cache_dir: "/var/lib/sendry/certs"
+
+# Legacy single-domain DKIM (use 'domains' section for multi-domain)
+dkim:
+  enabled: false
+  selector: "mail"
+  domain: "example.com"
+  key_file: "/var/lib/sendry/dkim/example.com.key"
+
+# Multi-domain configuration
+# Domain modes:
+#   - production: normal delivery (default)
+#   - sandbox: capture messages locally, no delivery (for testing)
+#   - redirect: redirect all messages to specified addresses
+#   - bcc: send normally + copy to archive addresses
+domains:
+  example.com:
+    dkim:
+      enabled: true
+      selector: "mail"
+      key_file: "/var/lib/sendry/dkim/example.com.key"
+    rate_limit:
+      messages_per_hour: 1000
+      messages_per_day: 10000
+      recipients_per_message: 100
+    mode: production
+
+  # Staging domain - all emails redirected to QA team
+  # staging.example.com:
+  #   mode: redirect
+  #   redirect_to:
+  #     - qa@example.com
+  #     - testing@example.com
+  #   dkim:
+  #     enabled: true
+  #     selector: "mail"
+  #     key_file: "/var/lib/sendry/dkim/staging.example.com.key"
+
+  # Test domain - sandbox mode, emails captured but not sent
+  # View captured emails via API: GET /api/v1/sandbox/messages
+  # test.example.com:
+  #   mode: sandbox
+  #   dkim:
+  #     enabled: true
+  #     selector: "mail"
+  #     key_file: "/var/lib/sendry/dkim/test.example.com.key"
+
+  # Archive domain - send normally with BCC to compliance
+  # compliance.example.com:
+  #   mode: bcc
+  #   bcc_to:
+  #     - archive@example.com
+  #     - compliance@example.com
+  #   dkim:
+  #     enabled: true
+  #     selector: "mail"
+  #     key_file: "/var/lib/sendry/dkim/compliance.example.com.key"
+
+# Rate limiting configuration
+rate_limit:
+  enabled: true
+  # Global server limits
+  global:
+    messages_per_hour: 50000
+    messages_per_day: 500000
+  # Default limits per sending domain
+  default_domain:
+    messages_per_hour: 1000
+    messages_per_day: 10000
+  # Default limits per sender email
+  default_sender:
+    messages_per_hour: 100
+    messages_per_day: 1000
+  # Default limits per client IP
+  default_ip:
+    messages_per_hour: 500
+    messages_per_day: 5000
+  # Default limits per API key
+  default_api_key:
+    messages_per_hour: 1000
+    messages_per_day: 10000
 
 api:
   listen_addr: ":8080"

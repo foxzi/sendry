@@ -9,6 +9,7 @@ import (
 
 	"github.com/foxzi/sendry/internal/config"
 	"github.com/foxzi/sendry/internal/queue"
+	"github.com/foxzi/sendry/internal/ratelimit"
 )
 
 // Server wraps go-smtp server with configuration
@@ -22,12 +23,13 @@ type Server struct {
 
 // ServerOptions contains options for creating SMTP server
 type ServerOptions struct {
-	Config    *config.SMTPConfig
-	Queue     queue.Queue
-	Logger    *slog.Logger
-	TLSConfig *tls.Config
-	Implicit  bool // true for SMTPS (implicit TLS)
-	Addr      string
+	Config      *config.SMTPConfig
+	Queue       queue.Queue
+	Logger      *slog.Logger
+	TLSConfig   *tls.Config
+	Implicit    bool // true for SMTPS (implicit TLS)
+	Addr        string
+	RateLimiter *ratelimit.Limiter
 }
 
 // NewServer creates a new SMTP server
@@ -43,6 +45,9 @@ func NewServer(cfg *config.SMTPConfig, q queue.Queue, logger *slog.Logger) *Serv
 // NewServerWithOptions creates a new SMTP server with custom options
 func NewServerWithOptions(opts ServerOptions) *Server {
 	backend := NewBackend(opts.Queue, &opts.Config.Auth, opts.Logger)
+	if opts.RateLimiter != nil {
+		backend.SetRateLimiter(opts.RateLimiter)
+	}
 
 	srv := smtp.NewServer(backend)
 	srv.Domain = opts.Config.Domain

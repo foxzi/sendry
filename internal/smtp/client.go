@@ -17,6 +17,11 @@ import (
 	"github.com/foxzi/sendry/internal/queue"
 )
 
+// DKIMProvider provides DKIM signers for email addresses
+type DKIMProvider interface {
+	GetSignerForEmail(email string) *dkim.Signer
+}
+
 // DeliveryError represents a delivery error with type information
 type DeliveryError struct {
 	Temporary bool
@@ -29,11 +34,12 @@ func (e *DeliveryError) Error() string {
 
 // Client sends emails to external MX servers
 type Client struct {
-	resolver   *dns.Resolver
-	timeout    time.Duration
-	hostname   string
-	logger     *slog.Logger
-	dkimSigner *dkim.Signer
+	resolver     *dns.Resolver
+	timeout      time.Duration
+	hostname     string
+	logger       *slog.Logger
+	dkimSigner   *dkim.Signer   // Legacy single signer (deprecated)
+	dkimProvider DKIMProvider   // Multi-domain DKIM provider
 }
 
 // NewClient creates a new SMTP client
@@ -49,9 +55,27 @@ func NewClient(resolver *dns.Resolver, hostname string, timeout time.Duration, l
 	}
 }
 
-// SetDKIMSigner sets the DKIM signer for outgoing messages
+// SetDKIMSigner sets the DKIM signer for outgoing messages (deprecated, use SetDKIMProvider)
 func (c *Client) SetDKIMSigner(signer *dkim.Signer) {
 	c.dkimSigner = signer
+}
+
+// SetDKIMProvider sets the multi-domain DKIM provider
+func (c *Client) SetDKIMProvider(provider DKIMProvider) {
+	c.dkimProvider = provider
+}
+
+// getDKIMSigner returns the appropriate DKIM signer for an email address
+func (c *Client) getDKIMSigner(from string) *dkim.Signer {
+	// Try multi-domain provider first
+	if c.dkimProvider != nil {
+		if signer := c.dkimProvider.GetSignerForEmail(from); signer != nil {
+			return signer
+		}
+	}
+
+	// Fall back to legacy single signer
+	return c.dkimSigner
 }
 
 // Send sends a message to all recipients
@@ -194,16 +218,21 @@ func (c *Client) sendToMX(ctx context.Context, mx string, from string, to []stri
 		}
 	}
 
-	// Sign message with DKIM if signer is configured
+	// Sign message with DKIM if signer is configured for this sender
 	messageData := data
-	if c.dkimSigner != nil {
-		signed, err := c.dkimSigner.Sign(data)
+	if signer := c.getDKIMSigner(from); signer != nil {
+		signed, err := signer.Sign(data)
 		if err != nil {
 			c.logger.Warn("DKIM signing failed, sending unsigned",
+				"domain", signer.Domain(),
 				"error", err,
 			)
 		} else {
 			messageData = signed
+			c.logger.Debug("DKIM signed",
+				"domain", signer.Domain(),
+				"selector", signer.Selector(),
+			)
 		}
 	}
 

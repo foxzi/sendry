@@ -3,6 +3,7 @@ package queue
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 )
@@ -10,6 +11,16 @@ import (
 // Sender is an interface for sending messages
 type Sender interface {
 	Send(ctx context.Context, msg *Message) error
+}
+
+// BounceGenerator generates bounce messages
+type BounceGenerator interface {
+	GenerateDSN(msg *Message, errorMsg string, permanent bool) ([]byte, error)
+}
+
+// DLQStorage is an interface for dead letter queue operations
+type DLQStorage interface {
+	MoveToDLQ(ctx context.Context, msg *Message) error
 }
 
 // IsTemporaryError checks if the error is temporary
@@ -25,6 +36,8 @@ type Processor struct {
 	processInterval time.Duration
 	isTemporary     ErrorChecker
 	logger          *slog.Logger
+	bounceGenerator BounceGenerator
+	bounceEnabled   bool
 
 	stopCh chan struct{}
 	wg     sync.WaitGroup
@@ -67,6 +80,12 @@ func NewProcessor(q Queue, sender Sender, cfg ProcessorConfig, isTemp ErrorCheck
 		logger:          logger,
 		stopCh:          make(chan struct{}),
 	}
+}
+
+// SetBounceGenerator sets the bounce generator for sending NDRs
+func (p *Processor) SetBounceGenerator(bg BounceGenerator) {
+	p.bounceGenerator = bg
+	p.bounceEnabled = true
 }
 
 // Start starts the processor workers
@@ -169,11 +188,84 @@ func (p *Processor) processOne(ctx context.Context, logger *slog.Logger) {
 			"retry_count", msg.RetryCount,
 			"max_retries", p.maxRetries,
 		)
+
+		// Generate and send bounce message
+		p.sendBounce(ctx, msg, err.Error(), logger)
+
+		// Move to dead letter queue if supported
+		if dlq, ok := p.queue.(DLQStorage); ok {
+			if err := dlq.MoveToDLQ(ctx, msg); err != nil {
+				logger.Error("failed to move message to DLQ", "error", err)
+			} else {
+				logger.Info("message moved to DLQ", "id", msg.ID)
+				return // Already saved to DLQ, no need to Update
+			}
+		}
 	}
 
 	if err := p.queue.Update(ctx, msg); err != nil {
 		logger.Error("failed to update message status", "error", err)
 	}
+}
+
+// sendBounce generates and queues a bounce (NDR) message
+func (p *Processor) sendBounce(ctx context.Context, msg *Message, errorMsg string, logger *slog.Logger) {
+	if !p.bounceEnabled || p.bounceGenerator == nil {
+		return
+	}
+
+	// Don't send bounce for bounce messages (prevent loops)
+	if isBounceMessage(msg) {
+		logger.Debug("skipping bounce for bounce message")
+		return
+	}
+
+	// Generate DSN
+	bounceData, err := p.bounceGenerator.GenerateDSN(msg, errorMsg, true)
+	if err != nil {
+		logger.Error("failed to generate bounce", "error", err)
+		return
+	}
+
+	// Create bounce message
+	bounceMsg := &Message{
+		ID:        msg.ID + "-bounce",
+		From:      "", // Will be set by sender (postmaster)
+		To:        []string{msg.From},
+		Data:      bounceData,
+		Status:    StatusPending,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	// Enqueue bounce message
+	if err := p.queue.Enqueue(ctx, bounceMsg); err != nil {
+		logger.Error("failed to enqueue bounce message", "error", err)
+		return
+	}
+
+	logger.Info("bounce message queued", "bounce_id", bounceMsg.ID, "original_sender", msg.From)
+}
+
+// isBounceMessage checks if message is a bounce (to prevent loops)
+func isBounceMessage(msg *Message) bool {
+	// Check if message ID contains -bounce suffix
+	if strings.HasSuffix(msg.ID, "-bounce") {
+		return true
+	}
+
+	// Check for empty From (null sender)
+	if msg.From == "" || msg.From == "<>" {
+		return true
+	}
+
+	// Check for MAILER-DAEMON or postmaster
+	from := strings.ToLower(msg.From)
+	if strings.Contains(from, "mailer-daemon") || strings.Contains(from, "postmaster") {
+		return true
+	}
+
+	return false
 }
 
 // calculateBackoff calculates exponential backoff duration

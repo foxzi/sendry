@@ -12,9 +12,10 @@ import (
 )
 
 var (
-	bucketMessages = []byte("messages")
-	bucketPending  = []byte("pending")
-	bucketDeferred = []byte("deferred")
+	bucketMessages   = []byte("messages")
+	bucketPending    = []byte("pending")
+	bucketDeferred   = []byte("deferred")
+	bucketDeadLetter = []byte("dead_letter")
 )
 
 // BoltStorage implements Queue interface using BoltDB
@@ -39,7 +40,7 @@ func NewBoltStorage(path string) (*BoltStorage, error) {
 
 	// Create buckets
 	err = db.Update(func(tx *bolt.Tx) error {
-		for _, bucket := range [][]byte{bucketMessages, bucketPending, bucketDeferred} {
+		for _, bucket := range [][]byte{bucketMessages, bucketPending, bucketDeferred, bucketDeadLetter} {
 			if _, err := tx.CreateBucketIfNotExists(bucket); err != nil {
 				return fmt.Errorf("failed to create bucket %s: %w", bucket, err)
 			}
@@ -332,6 +333,11 @@ func (s *BoltStorage) Close() error {
 	return s.db.Close()
 }
 
+// DB returns the underlying bolt.DB instance
+func (s *BoltStorage) DB() *bolt.DB {
+	return s.db
+}
+
 // makeIndexKey creates a sortable key from timestamp and ID
 func makeIndexKey(t time.Time, id string) []byte {
 	// Format: timestamp (RFC3339Nano) + ":" + id
@@ -349,4 +355,222 @@ func parseTimestampFromKey(key []byte) time.Time {
 		}
 	}
 	return time.Time{}
+}
+
+// Dead Letter Queue methods
+
+// MoveToDLQ moves a failed message to the dead letter queue
+func (s *BoltStorage) MoveToDLQ(ctx context.Context, msg *Message) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		dlqBucket := tx.Bucket(bucketDeadLetter)
+		msgBucket := tx.Bucket(bucketMessages)
+
+		// Store in DLQ with timestamp key for ordering
+		msg.Status = StatusFailed
+		msg.UpdatedAt = time.Now()
+
+		data, err := json.Marshal(msg)
+		if err != nil {
+			return fmt.Errorf("failed to marshal message: %w", err)
+		}
+
+		// Add to DLQ index
+		indexKey := makeIndexKey(msg.UpdatedAt, msg.ID)
+		if err := dlqBucket.Put(indexKey, []byte(msg.ID)); err != nil {
+			return fmt.Errorf("failed to add to DLQ index: %w", err)
+		}
+
+		// Update message in main storage
+		if err := msgBucket.Put([]byte(msg.ID), data); err != nil {
+			return fmt.Errorf("failed to update message: %w", err)
+		}
+
+		return nil
+	})
+}
+
+// ListDLQ returns messages in the dead letter queue
+func (s *BoltStorage) ListDLQ(ctx context.Context, limit, offset int) ([]*Message, error) {
+	var messages []*Message
+
+	err := s.db.View(func(tx *bolt.Tx) error {
+		dlqBucket := tx.Bucket(bucketDeadLetter)
+		msgBucket := tx.Bucket(bucketMessages)
+		c := dlqBucket.Cursor()
+
+		count := 0
+		skipped := 0
+
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			// Apply offset
+			if skipped < offset {
+				skipped++
+				continue
+			}
+
+			// Get message data
+			msgData := msgBucket.Get(v)
+			if msgData == nil {
+				continue
+			}
+
+			var msg Message
+			if err := json.Unmarshal(msgData, &msg); err != nil {
+				continue
+			}
+
+			messages = append(messages, &msg)
+			count++
+
+			// Apply limit
+			if limit > 0 && count >= limit {
+				break
+			}
+		}
+
+		return nil
+	})
+
+	return messages, err
+}
+
+// GetFromDLQ retrieves a message from the dead letter queue
+func (s *BoltStorage) GetFromDLQ(ctx context.Context, id string) (*Message, error) {
+	var msg *Message
+
+	err := s.db.View(func(tx *bolt.Tx) error {
+		msgBucket := tx.Bucket(bucketMessages)
+		data := msgBucket.Get([]byte(id))
+		if data == nil {
+			return nil
+		}
+
+		msg = &Message{}
+		if err := json.Unmarshal(data, msg); err != nil {
+			return err
+		}
+
+		// Verify it's in DLQ (status = failed)
+		if msg.Status != StatusFailed {
+			msg = nil
+		}
+
+		return nil
+	})
+
+	return msg, err
+}
+
+// RetryFromDLQ moves a message from DLQ back to pending queue for retry
+func (s *BoltStorage) RetryFromDLQ(ctx context.Context, id string) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		dlqBucket := tx.Bucket(bucketDeadLetter)
+		msgBucket := tx.Bucket(bucketMessages)
+		pendingBucket := tx.Bucket(bucketPending)
+
+		// Get message
+		data := msgBucket.Get([]byte(id))
+		if data == nil {
+			return fmt.Errorf("message not found: %s", id)
+		}
+
+		var msg Message
+		if err := json.Unmarshal(data, &msg); err != nil {
+			return fmt.Errorf("failed to unmarshal message: %w", err)
+		}
+
+		// Remove from DLQ index
+		c := dlqBucket.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			if string(v) == id {
+				if err := c.Delete(); err != nil {
+					return err
+				}
+				break
+			}
+		}
+
+		// Reset message status
+		msg.Status = StatusPending
+		msg.RetryCount = 0
+		msg.LastError = ""
+		msg.UpdatedAt = time.Now()
+
+		newData, err := json.Marshal(&msg)
+		if err != nil {
+			return fmt.Errorf("failed to marshal message: %w", err)
+		}
+
+		// Update message
+		if err := msgBucket.Put([]byte(id), newData); err != nil {
+			return fmt.Errorf("failed to update message: %w", err)
+		}
+
+		// Add to pending queue
+		indexKey := makeIndexKey(msg.UpdatedAt, msg.ID)
+		if err := pendingBucket.Put(indexKey, []byte(msg.ID)); err != nil {
+			return fmt.Errorf("failed to add to pending: %w", err)
+		}
+
+		return nil
+	})
+}
+
+// DeleteFromDLQ permanently deletes a message from the dead letter queue
+func (s *BoltStorage) DeleteFromDLQ(ctx context.Context, id string) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		dlqBucket := tx.Bucket(bucketDeadLetter)
+		msgBucket := tx.Bucket(bucketMessages)
+
+		// Remove from DLQ index
+		c := dlqBucket.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			if string(v) == id {
+				if err := c.Delete(); err != nil {
+					return err
+				}
+				break
+			}
+		}
+
+		// Delete message
+		return msgBucket.Delete([]byte(id))
+	})
+}
+
+// DLQStats returns dead letter queue statistics
+func (s *BoltStorage) DLQStats(ctx context.Context) (*DLQStats, error) {
+	stats := &DLQStats{}
+
+	err := s.db.View(func(tx *bolt.Tx) error {
+		dlqBucket := tx.Bucket(bucketDeadLetter)
+		msgBucket := tx.Bucket(bucketMessages)
+
+		c := dlqBucket.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			stats.Total++
+
+			// Get oldest message timestamp
+			if stats.Total == 1 {
+				stats.OldestAt = parseTimestampFromKey(k)
+			}
+
+			// Get message for size calculation
+			msgData := msgBucket.Get(v)
+			if msgData != nil {
+				stats.TotalSize += int64(len(msgData))
+			}
+		}
+
+		return nil
+	})
+
+	return stats, err
+}
+
+// DLQStats contains dead letter queue statistics
+type DLQStats struct {
+	Total     int64     `json:"total"`
+	TotalSize int64     `json:"total_size"`
+	OldestAt  time.Time `json:"oldest_at,omitempty"`
 }

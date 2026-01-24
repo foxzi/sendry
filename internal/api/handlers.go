@@ -299,3 +299,139 @@ func extractDomain(email string) string {
 	}
 	return "localhost"
 }
+
+// Dead Letter Queue handlers
+
+// DLQResponse is the response for GET /api/v1/dlq
+type DLQResponse struct {
+	Stats    *queue.DLQStats  `json:"stats"`
+	Messages []*MessageSummary `json:"messages,omitempty"`
+}
+
+// handleDLQ handles GET /api/v1/dlq
+func (s *Server) handleDLQ(w http.ResponseWriter, r *http.Request) {
+	storage, ok := s.queue.(*queue.BoltStorage)
+	if !ok {
+		s.sendError(w, http.StatusInternalServerError, "DLQ not supported")
+		return
+	}
+
+	stats, err := storage.DLQStats(r.Context())
+	if err != nil {
+		s.logger.Error("failed to get DLQ stats", "error", err)
+		s.sendError(w, http.StatusInternalServerError, "Failed to get DLQ stats")
+		return
+	}
+
+	messages, err := storage.ListDLQ(r.Context(), 100, 0)
+	if err != nil {
+		s.logger.Error("failed to list DLQ messages", "error", err)
+		s.sendError(w, http.StatusInternalServerError, "Failed to list DLQ messages")
+		return
+	}
+
+	summaries := make([]*MessageSummary, len(messages))
+	for i, msg := range messages {
+		summaries[i] = &MessageSummary{
+			ID:        msg.ID,
+			From:      msg.From,
+			To:        msg.To,
+			Status:    string(msg.Status),
+			CreatedAt: msg.CreatedAt,
+		}
+	}
+
+	s.sendJSON(w, http.StatusOK, DLQResponse{
+		Stats:    stats,
+		Messages: summaries,
+	})
+}
+
+// handleDLQGet handles GET /api/v1/dlq/{id}
+func (s *Server) handleDLQGet(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		s.sendError(w, http.StatusBadRequest, "id is required")
+		return
+	}
+
+	storage, ok := s.queue.(*queue.BoltStorage)
+	if !ok {
+		s.sendError(w, http.StatusInternalServerError, "DLQ not supported")
+		return
+	}
+
+	msg, err := storage.GetFromDLQ(r.Context(), id)
+	if err != nil {
+		s.logger.Error("failed to get DLQ message", "id", id, "error", err)
+		s.sendError(w, http.StatusInternalServerError, "Failed to get DLQ message")
+		return
+	}
+
+	if msg == nil {
+		s.sendError(w, http.StatusNotFound, "Message not found in DLQ")
+		return
+	}
+
+	s.sendJSON(w, http.StatusOK, StatusResponse{
+		ID:         msg.ID,
+		Status:     string(msg.Status),
+		From:       msg.From,
+		To:         msg.To,
+		CreatedAt:  msg.CreatedAt,
+		UpdatedAt:  msg.UpdatedAt,
+		RetryCount: msg.RetryCount,
+		LastError:  msg.LastError,
+	})
+}
+
+// handleDLQRetry handles POST /api/v1/dlq/{id}/retry
+func (s *Server) handleDLQRetry(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		s.sendError(w, http.StatusBadRequest, "id is required")
+		return
+	}
+
+	storage, ok := s.queue.(*queue.BoltStorage)
+	if !ok {
+		s.sendError(w, http.StatusInternalServerError, "DLQ not supported")
+		return
+	}
+
+	if err := storage.RetryFromDLQ(r.Context(), id); err != nil {
+		s.logger.Error("failed to retry DLQ message", "id", id, "error", err)
+		s.sendError(w, http.StatusInternalServerError, "Failed to retry message")
+		return
+	}
+
+	s.logger.Info("message retried from DLQ", "id", id)
+	s.sendJSON(w, http.StatusOK, map[string]string{
+		"status":  "ok",
+		"message": "Message moved to pending queue",
+	})
+}
+
+// handleDLQDelete handles DELETE /api/v1/dlq/{id}
+func (s *Server) handleDLQDelete(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		s.sendError(w, http.StatusBadRequest, "id is required")
+		return
+	}
+
+	storage, ok := s.queue.(*queue.BoltStorage)
+	if !ok {
+		s.sendError(w, http.StatusInternalServerError, "DLQ not supported")
+		return
+	}
+
+	if err := storage.DeleteFromDLQ(r.Context(), id); err != nil {
+		s.logger.Error("failed to delete DLQ message", "id", id, "error", err)
+		s.sendError(w, http.StatusInternalServerError, "Failed to delete message")
+		return
+	}
+
+	s.logger.Info("message deleted from DLQ", "id", id)
+	w.WriteHeader(http.StatusNoContent)
+}

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net"
+	"strings"
 	"time"
 
 	"github.com/emersion/go-sasl"
@@ -12,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/foxzi/sendry/internal/queue"
+	"github.com/foxzi/sendry/internal/ratelimit"
 )
 
 // Session implements smtp.Session and smtp.AuthSession for go-smtp
@@ -90,6 +93,12 @@ func (s *Session) Rcpt(to string, opts *smtp.RcptOptions) error {
 
 // Data handles DATA command
 func (s *Session) Data(r io.Reader) error {
+	// Check rate limits before processing
+	ctx := context.Background()
+	if err := s.checkRateLimits(ctx); err != nil {
+		return err
+	}
+
 	data, err := io.ReadAll(r)
 	if err != nil {
 		return &smtp.SMTPError{
@@ -112,7 +121,6 @@ func (s *Session) Data(r io.Reader) error {
 	}
 
 	// Enqueue message
-	ctx := context.Background()
 	if err := s.backend.queue.Enqueue(ctx, msg); err != nil {
 		s.logger.Error("failed to enqueue message", "error", err)
 		return &smtp.SMTPError{
@@ -129,6 +137,35 @@ func (s *Session) Data(r io.Reader) error {
 	)
 
 	return nil
+}
+
+// checkRateLimits checks if the message is within rate limits
+func (s *Session) checkRateLimits(ctx context.Context) error {
+	req := &ratelimit.Request{
+		Domain: extractDomainFromEmail(s.from),
+		Sender: s.from,
+		IP:     extractIP(s.conn.Conn().RemoteAddr().String()),
+	}
+
+	return s.backend.CheckRateLimit(ctx, req)
+}
+
+// extractDomainFromEmail extracts domain from email address
+func extractDomainFromEmail(email string) string {
+	at := strings.LastIndex(email, "@")
+	if at < 0 || at == len(email)-1 {
+		return ""
+	}
+	return strings.ToLower(email[at+1:])
+}
+
+// extractIP extracts IP from address string (removes port)
+func extractIP(addr string) string {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return addr
+	}
+	return host
 }
 
 // Reset resets the session state

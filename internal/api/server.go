@@ -10,27 +10,86 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/foxzi/sendry/internal/config"
+	"github.com/foxzi/sendry/internal/domain"
 	"github.com/foxzi/sendry/internal/queue"
+	"github.com/foxzi/sendry/internal/ratelimit"
+	"github.com/foxzi/sendry/internal/sandbox"
 )
 
 // Server is the HTTP API server
 type Server struct {
-	router     *chi.Mux
-	httpServer *http.Server
-	queue      queue.Queue
-	config     *config.APIConfig
-	logger     *slog.Logger
-	startTime  time.Time
+	router           *chi.Mux
+	httpServer       *http.Server
+	queue            queue.Queue
+	config           *config.APIConfig
+	fullConfig       *config.Config
+	logger           *slog.Logger
+	startTime        time.Time
+	domainManager    *domain.Manager
+	rateLimiter      *ratelimit.Limiter
+	managementServer *ManagementServer
+	sandboxServer    *SandboxServer
+	sandboxStorage   *sandbox.Storage
+}
+
+// ServerOptions contains options for creating an API server
+type ServerOptions struct {
+	Queue          queue.Queue
+	Config         *config.APIConfig
+	FullConfig     *config.Config
+	Logger         *slog.Logger
+	DomainManager  *domain.Manager
+	RateLimiter    *ratelimit.Limiter
+	SandboxStorage *sandbox.Storage
+	DKIMKeysDir    string
+	TLSCertsDir    string
 }
 
 // NewServer creates a new API server
 func NewServer(q queue.Queue, cfg *config.APIConfig, logger *slog.Logger) *Server {
+	return NewServerWithOptions(ServerOptions{
+		Queue:  q,
+		Config: cfg,
+		Logger: logger,
+	})
+}
+
+// NewServerWithOptions creates a new API server with full options
+func NewServerWithOptions(opts ServerOptions) *Server {
 	s := &Server{
-		router:    chi.NewRouter(),
-		queue:     q,
-		config:    cfg,
-		logger:    logger,
-		startTime: time.Now(),
+		router:         chi.NewRouter(),
+		queue:          opts.Queue,
+		config:         opts.Config,
+		fullConfig:     opts.FullConfig,
+		logger:         opts.Logger,
+		startTime:      time.Now(),
+		domainManager:  opts.DomainManager,
+		rateLimiter:    opts.RateLimiter,
+		sandboxStorage: opts.SandboxStorage,
+	}
+
+	// Create management server if we have full config
+	if opts.FullConfig != nil {
+		dkimDir := opts.DKIMKeysDir
+		if dkimDir == "" {
+			dkimDir = "/var/lib/sendry/dkim"
+		}
+		tlsDir := opts.TLSCertsDir
+		if tlsDir == "" {
+			tlsDir = "/var/lib/sendry/certs"
+		}
+		s.managementServer = NewManagementServer(
+			opts.DomainManager,
+			opts.RateLimiter,
+			opts.FullConfig,
+			dkimDir,
+			tlsDir,
+		)
+	}
+
+	// Create sandbox server if storage is available
+	if opts.SandboxStorage != nil {
+		s.sandboxServer = NewSandboxServer(opts.SandboxStorage, opts.Queue)
 	}
 
 	s.setupRoutes()
@@ -56,6 +115,22 @@ func (s *Server) setupRoutes() {
 		r.Get("/status/{id}", s.handleStatus)
 		r.Get("/queue", s.handleQueue)
 		r.Delete("/queue/{id}", s.handleDeleteMessage)
+
+		// Dead Letter Queue routes
+		r.Get("/dlq", s.handleDLQ)
+		r.Get("/dlq/{id}", s.handleDLQGet)
+		r.Post("/dlq/{id}/retry", s.handleDLQRetry)
+		r.Delete("/dlq/{id}", s.handleDLQDelete)
+
+		// Management routes (DKIM, TLS, domains, rate limits)
+		if s.managementServer != nil {
+			s.managementServer.RegisterRoutes(r)
+		}
+
+		// Sandbox routes
+		if s.sandboxServer != nil {
+			s.sandboxServer.RegisterRoutes(r)
+		}
 	})
 }
 

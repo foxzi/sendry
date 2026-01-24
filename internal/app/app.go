@@ -11,26 +11,33 @@ import (
 	"time"
 
 	"github.com/foxzi/sendry/internal/api"
+	"github.com/foxzi/sendry/internal/bounce"
 	"github.com/foxzi/sendry/internal/config"
-	"github.com/foxzi/sendry/internal/dkim"
 	"github.com/foxzi/sendry/internal/dns"
+	"github.com/foxzi/sendry/internal/domain"
 	"github.com/foxzi/sendry/internal/queue"
+	"github.com/foxzi/sendry/internal/ratelimit"
+	"github.com/foxzi/sendry/internal/sandbox"
 	"github.com/foxzi/sendry/internal/smtp"
 	sendryTLS "github.com/foxzi/sendry/internal/tls"
 )
 
 // App is the main application
 type App struct {
-	config         *config.Config
-	queue          queue.Queue
-	smtpServer     *smtp.Server
-	smtpSubmission *smtp.Server
-	smtpsServer    *smtp.Server
-	apiServer      *api.Server
-	processor      *queue.Processor
-	logger         *slog.Logger
-	tlsConfig      *tls.Config
-	acmeManager    *sendryTLS.ACMEManager
+	config          *config.Config
+	queue           queue.Queue
+	smtpServer      *smtp.Server
+	smtpSubmission  *smtp.Server
+	smtpsServer     *smtp.Server
+	apiServer       *api.Server
+	processor       *queue.Processor
+	logger          *slog.Logger
+	tlsConfig       *tls.Config
+	acmeManager     *sendryTLS.ACMEManager
+	domainManager   *domain.Manager
+	rateLimiter     *ratelimit.Limiter
+	sandboxStorage  *sandbox.Storage
+	sandboxSender   *sandbox.Sender
 }
 
 // New creates a new application
@@ -44,26 +51,85 @@ func New(cfg *config.Config) (*App, error) {
 		return nil, fmt.Errorf("failed to create storage: %w", err)
 	}
 
+	// Create rate limiter if enabled
+	var rateLimiter *ratelimit.Limiter
+	if cfg.RateLimit.Enabled {
+		rlConfig := &ratelimit.Config{}
+		if cfg.RateLimit.Global != nil {
+			rlConfig.Global = &ratelimit.LimitConfig{
+				MessagesPerHour: cfg.RateLimit.Global.MessagesPerHour,
+				MessagesPerDay:  cfg.RateLimit.Global.MessagesPerDay,
+			}
+		}
+		if cfg.RateLimit.DefaultDomain != nil {
+			rlConfig.DefaultDomain = &ratelimit.LimitConfig{
+				MessagesPerHour: cfg.RateLimit.DefaultDomain.MessagesPerHour,
+				MessagesPerDay:  cfg.RateLimit.DefaultDomain.MessagesPerDay,
+			}
+		}
+		if cfg.RateLimit.DefaultSender != nil {
+			rlConfig.DefaultSender = &ratelimit.LimitConfig{
+				MessagesPerHour: cfg.RateLimit.DefaultSender.MessagesPerHour,
+				MessagesPerDay:  cfg.RateLimit.DefaultSender.MessagesPerDay,
+			}
+		}
+		if cfg.RateLimit.DefaultIP != nil {
+			rlConfig.DefaultIP = &ratelimit.LimitConfig{
+				MessagesPerHour: cfg.RateLimit.DefaultIP.MessagesPerHour,
+				MessagesPerDay:  cfg.RateLimit.DefaultIP.MessagesPerDay,
+			}
+		}
+		if cfg.RateLimit.DefaultAPIKey != nil {
+			rlConfig.DefaultAPIKey = &ratelimit.LimitConfig{
+				MessagesPerHour: cfg.RateLimit.DefaultAPIKey.MessagesPerHour,
+				MessagesPerDay:  cfg.RateLimit.DefaultAPIKey.MessagesPerDay,
+			}
+		}
+
+		rateLimiter, err = ratelimit.NewLimiter(storage.DB(), rlConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create rate limiter: %w", err)
+		}
+		logger.Info("rate limiting enabled")
+	}
+
 	// Create DNS resolver
 	resolver := dns.NewResolver(5 * time.Minute)
+
+	// Create Domain Manager for multi-domain support
+	domainMgr, err := domain.NewManager(cfg, logger.With("component", "domain_manager"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create domain manager: %w", err)
+	}
 
 	// Create SMTP client
 	smtpClient := smtp.NewClient(resolver, cfg.Server.Hostname, 30*time.Second, logger.With("component", "smtp_client"))
 
-	// Setup DKIM signer if configured
-	if cfg.DKIM.Enabled {
-		dkimSigner, err := dkim.NewSignerFromFile(cfg.DKIM.KeyFile, cfg.DKIM.Domain, cfg.DKIM.Selector)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create DKIM signer: %w", err)
-		}
-		smtpClient.SetDKIMSigner(dkimSigner)
-		logger.Info("DKIM signing enabled", "domain", cfg.DKIM.Domain, "selector", cfg.DKIM.Selector)
+	// Setup DKIM provider for multi-domain signing
+	if domainMgr.HasDKIM() {
+		smtpClient.SetDKIMProvider(domainMgr)
+		logger.Info("DKIM signing enabled", "domains", domainMgr.ListDomains())
 	}
 
-	// Create queue processor
+	// Create sandbox storage
+	sandboxStorage, err := sandbox.NewStorage(storage.DB())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create sandbox storage: %w", err)
+	}
+	logger.Info("sandbox storage enabled")
+
+	// Create sandbox sender that wraps the real sender
+	sandboxSender := sandbox.NewSender(
+		smtpClient,
+		domainMgr,
+		sandboxStorage,
+		logger.With("component", "sandbox_sender"),
+	)
+
+	// Create queue processor with sandbox sender
 	processor := queue.NewProcessor(
 		storage,
-		smtpClient,
+		sandboxSender,
 		queue.ProcessorConfig{
 			Workers:         cfg.Queue.Workers,
 			RetryInterval:   cfg.Queue.RetryInterval,
@@ -73,6 +139,11 @@ func New(cfg *config.Config) (*App, error) {
 		smtp.IsTemporaryError,
 		logger.With("component", "processor"),
 	)
+
+	// Setup bounce generator for NDR messages
+	bounceGen := bounce.NewGenerator(cfg.Server.Hostname)
+	processor.SetBounceGenerator(bounceGen)
+	logger.Info("bounce handling enabled", "hostname", cfg.Server.Hostname)
 
 	// Setup TLS configuration
 	var tlsConfig *tls.Config
@@ -96,52 +167,67 @@ func New(cfg *config.Config) (*App, error) {
 
 	// Create SMTP server (port 25) with STARTTLS
 	smtpServer := smtp.NewServerWithOptions(smtp.ServerOptions{
-		Config:    &cfg.SMTP,
-		Queue:     storage,
-		Logger:    logger.With("component", "smtp_server"),
-		TLSConfig: tlsConfig,
-		Implicit:  false,
-		Addr:      cfg.SMTP.ListenAddr,
+		Config:      &cfg.SMTP,
+		Queue:       storage,
+		Logger:      logger.With("component", "smtp_server"),
+		TLSConfig:   tlsConfig,
+		Implicit:    false,
+		Addr:        cfg.SMTP.ListenAddr,
+		RateLimiter: rateLimiter,
 	})
 
 	// Create SMTP submission server (port 587) with STARTTLS
 	submissionCfg := cfg.SMTP
 	smtpSubmission := smtp.NewServerWithOptions(smtp.ServerOptions{
-		Config:    &submissionCfg,
-		Queue:     storage,
-		Logger:    logger.With("component", "smtp_submission"),
-		TLSConfig: tlsConfig,
-		Implicit:  false,
-		Addr:      cfg.SMTP.SubmissionAddr,
+		Config:      &submissionCfg,
+		Queue:       storage,
+		Logger:      logger.With("component", "smtp_submission"),
+		TLSConfig:   tlsConfig,
+		Implicit:    false,
+		Addr:        cfg.SMTP.SubmissionAddr,
+		RateLimiter: rateLimiter,
 	})
 
 	// Create SMTPS server (port 465) with implicit TLS
 	var smtpsServer *smtp.Server
 	if tlsConfig != nil {
 		smtpsServer = smtp.NewServerWithOptions(smtp.ServerOptions{
-			Config:    &cfg.SMTP,
-			Queue:     storage,
-			Logger:    logger.With("component", "smtps_server"),
-			TLSConfig: tlsConfig,
-			Implicit:  true,
-			Addr:      cfg.SMTP.SMTPSAddr,
+			Config:      &cfg.SMTP,
+			Queue:       storage,
+			Logger:      logger.With("component", "smtps_server"),
+			TLSConfig:   tlsConfig,
+			Implicit:    true,
+			Addr:        cfg.SMTP.SMTPSAddr,
+			RateLimiter: rateLimiter,
 		})
 	}
 
-	// Create API server
-	apiServer := api.NewServer(storage, &cfg.API, logger.With("component", "api"))
+	// Create API server with full options
+	apiServer := api.NewServerWithOptions(api.ServerOptions{
+		Queue:          storage,
+		Config:         &cfg.API,
+		FullConfig:     cfg,
+		Logger:         logger.With("component", "api"),
+		DomainManager:  domainMgr,
+		RateLimiter:    rateLimiter,
+		SandboxStorage: sandboxStorage,
+	})
 
 	return &App{
-		config:         cfg,
-		queue:          storage,
-		smtpServer:     smtpServer,
-		smtpSubmission: smtpSubmission,
-		smtpsServer:    smtpsServer,
-		apiServer:      apiServer,
-		processor:      processor,
-		logger:         logger,
-		tlsConfig:      tlsConfig,
+		config:          cfg,
+		queue:           storage,
+		smtpServer:      smtpServer,
+		smtpSubmission:  smtpSubmission,
+		smtpsServer:     smtpsServer,
+		apiServer:       apiServer,
+		processor:       processor,
+		logger:          logger,
+		tlsConfig:       tlsConfig,
+		sandboxStorage:  sandboxStorage,
+		sandboxSender:   sandboxSender,
 		acmeManager:    acmeManager,
+		domainManager:  domainMgr,
+		rateLimiter:    rateLimiter,
 	}, nil
 }
 
@@ -239,6 +325,13 @@ func (a *App) Shutdown(ctx context.Context) error {
 
 	if err := a.apiServer.Shutdown(shutdownCtx); err != nil {
 		a.logger.Error("api server shutdown error", "error", err)
+	}
+
+	// Stop rate limiter (persists counters)
+	if a.rateLimiter != nil {
+		if err := a.rateLimiter.Stop(); err != nil {
+			a.logger.Error("rate limiter stop error", "error", err)
+		}
 	}
 
 	// Close storage
