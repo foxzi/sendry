@@ -247,6 +247,24 @@ func (r *TemplateRepository) GetVersion(templateID string, version int) (*models
 	return v, nil
 }
 
+// GetDeployment returns a single deployment for a template on a specific server
+func (r *TemplateRepository) GetDeployment(templateID, serverName string) (*models.TemplateDeployment, error) {
+	var d models.TemplateDeployment
+	err := r.db.QueryRow(`
+		SELECT id, template_id, server_name, remote_id, deployed_version, deployed_at
+		FROM template_deployments WHERE template_id = ? AND server_name = ?`,
+		templateID, serverName,
+	).Scan(&d.ID, &d.TemplateID, &d.ServerName, &d.RemoteID, &d.DeployedVersion, &d.DeployedAt)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &d, nil
+}
+
 // GetDeployments returns all deployments for a template
 func (r *TemplateRepository) GetDeployments(templateID string) ([]models.TemplateDeployment, error) {
 	rows, err := r.db.Query(`

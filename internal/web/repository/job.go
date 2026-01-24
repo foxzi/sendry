@@ -416,7 +416,8 @@ func (r *JobRepository) GetRunningJobs() ([]models.SendJob, error) {
 // GetPendingItems returns pending items for processing
 func (r *JobRepository) GetPendingItems(jobID string, limit int) ([]models.SendJobItem, error) {
 	rows, err := r.db.Query(`
-		SELECT i.id, i.job_id, i.recipient_id, r.email, i.variant_id, i.server_name, i.status, i.created_at
+		SELECT i.id, i.job_id, i.recipient_id, r.email, COALESCE(r.name, ''), COALESCE(r.variables, ''),
+			i.variant_id, i.server_name, i.status, i.created_at
 		FROM send_job_items i
 		LEFT JOIN recipients r ON i.recipient_id = r.id
 		WHERE i.job_id = ? AND i.status = 'pending'
@@ -431,13 +432,20 @@ func (r *JobRepository) GetPendingItems(jobID string, limit int) ([]models.SendJ
 	items := []models.SendJobItem{}
 	for rows.Next() {
 		var item models.SendJobItem
-		var email sql.NullString
-		err := rows.Scan(&item.ID, &item.JobID, &item.RecipientID, &email, &item.VariantID, &item.ServerName, &item.Status, &item.CreatedAt)
+		var email, name, variables sql.NullString
+		err := rows.Scan(&item.ID, &item.JobID, &item.RecipientID, &email, &name, &variables,
+			&item.VariantID, &item.ServerName, &item.Status, &item.CreatedAt)
 		if err != nil {
 			return nil, err
 		}
 		if email.Valid {
 			item.Email = email.String
+		}
+		if name.Valid {
+			item.RecipientName = name.String
+		}
+		if variables.Valid {
+			item.RecipientVariables = variables.String
 		}
 		items = append(items, item)
 	}

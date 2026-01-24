@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/foxzi/sendry/internal/web/models"
+	"github.com/foxzi/sendry/internal/web/sendry"
 )
 
 func (h *Handlers) TemplateList(w http.ResponseWriter, r *http.Request) {
@@ -275,21 +276,63 @@ func (h *Handlers) TemplateDeploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Deploy to Sendry server via API
-	// For now, just save deployment record
+	// Get Sendry client for this server
+	client, err := h.sendry.GetClient(serverName)
+	if err != nil {
+		h.error(w, http.StatusBadRequest, "Server not found: "+serverName)
+		return
+	}
+
+	// Check if template was already deployed to this server
+	existingDeployment, _ := h.templates.GetDeployment(id, serverName)
+
+	// Build template request for Sendry API
+	req := &sendry.TemplateCreateRequest{
+		Name:        t.Name,
+		Description: t.Description,
+		Subject:     t.Subject,
+		HTML:        t.HTML,
+		Text:        t.Text,
+	}
+
+	var remoteID string
+	ctx := r.Context()
+
+	if existingDeployment != nil && existingDeployment.RemoteID != "" {
+		// Update existing template on Sendry
+		resp, err := client.UpdateTemplate(ctx, existingDeployment.RemoteID, req)
+		if err != nil {
+			h.logger.Error("failed to update template on Sendry", "server", serverName, "error", err)
+			h.error(w, http.StatusInternalServerError, "Failed to deploy template: "+err.Error())
+			return
+		}
+		remoteID = resp.ID
+	} else {
+		// Create new template on Sendry
+		resp, err := client.CreateTemplate(ctx, req)
+		if err != nil {
+			h.logger.Error("failed to create template on Sendry", "server", serverName, "error", err)
+			h.error(w, http.StatusInternalServerError, "Failed to deploy template: "+err.Error())
+			return
+		}
+		remoteID = resp.ID
+	}
+
+	// Save deployment record
 	deployment := &models.TemplateDeployment{
 		TemplateID:      id,
 		ServerName:      serverName,
-		RemoteID:        "", // Will be set after API call
+		RemoteID:        remoteID,
 		DeployedVersion: t.CurrentVersion,
 	}
 
 	if err := h.templates.SaveDeployment(deployment); err != nil {
 		h.logger.Error("failed to save deployment", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to deploy template")
+		h.error(w, http.StatusInternalServerError, "Failed to save deployment record")
 		return
 	}
 
+	h.logger.Info("template deployed", "template_id", id, "server", serverName, "remote_id", remoteID, "version", t.CurrentVersion)
 	http.Redirect(w, r, "/templates/"+id, http.StatusSeeOther)
 }
 

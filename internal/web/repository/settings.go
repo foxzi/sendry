@@ -36,6 +36,25 @@ func (r *SettingsRepository) GetAllVariables() ([]models.GlobalVariable, error) 
 	return vars, nil
 }
 
+// GetGlobalVariablesMap returns all global variables as a map
+func (r *SettingsRepository) GetGlobalVariablesMap() (map[string]string, error) {
+	rows, err := r.db.Query(`SELECT key, value FROM global_variables`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	vars := make(map[string]string)
+	for rows.Next() {
+		var key, value string
+		if err := rows.Scan(&key, &value); err != nil {
+			return nil, err
+		}
+		vars[key] = value
+	}
+	return vars, nil
+}
+
 // GetVariable returns a single variable
 func (r *SettingsRepository) GetVariable(key string) (*models.GlobalVariable, error) {
 	v := &models.GlobalVariable{}

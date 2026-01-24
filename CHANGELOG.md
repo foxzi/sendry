@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sendry Web: Sendry API client for server communication
 - Sendry Web: background worker for processing send jobs
 - Sendry Web: GrapesJS visual HTML editor for email templates
+- Sendry Web: template variable substitution in worker (global, campaign, recipient vars)
+- Sendry Web: template deployment to Sendry servers via API
 
 ## [0.3.4] - 2025-01-25
 

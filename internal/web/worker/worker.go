@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log/slog"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,6 +23,7 @@ type Worker struct {
 	jobs      *repository.JobRepository
 	campaigns *repository.CampaignRepository
 	templates *repository.TemplateRepository
+	settings  *repository.SettingsRepository
 	sendry    *sendry.Manager
 
 	batchSize    int
@@ -31,6 +34,9 @@ type Worker struct {
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 }
+
+// variable pattern for template substitution: {{variable_name}}
+var varPattern = regexp.MustCompile(`\{\{([^}]+)\}\}`)
 
 // Config holds worker configuration
 type Config struct {
@@ -58,6 +64,7 @@ func New(cfg *config.Config, db *sql.DB, logger *slog.Logger, workerCfg Config) 
 		jobs:         repository.NewJobRepository(db),
 		campaigns:    repository.NewCampaignRepository(db),
 		templates:    repository.NewTemplateRepository(db),
+		settings:     repository.NewSettingsRepository(db),
 		sendry:       sendry.NewManager(cfg.Sendry.Servers),
 		batchSize:    workerCfg.BatchSize,
 		pollInterval: workerCfg.PollInterval,
@@ -179,10 +186,19 @@ func (w *Worker) processJob(job *models.SendJob) {
 		}
 	}
 
+	// Get global variables
+	globalVars, err := w.settings.GetGlobalVariablesMap()
+	if err != nil {
+		w.logger.Error("failed to get global variables", "job_id", job.ID, "error", err)
+		globalVars = make(map[string]string)
+	}
+
 	// Parse campaign variables
 	var campaignVars map[string]string
 	if campaign.Variables != "" {
-		json.Unmarshal([]byte(campaign.Variables), &campaignVars)
+		if err := json.Unmarshal([]byte(campaign.Variables), &campaignVars); err != nil {
+			w.logger.Error("failed to parse campaign variables", "job_id", job.ID, "error", err)
+		}
 	}
 
 	// Process items concurrently
@@ -205,7 +221,7 @@ func (w *Worker) processJob(job *models.SendJob) {
 				wg.Done()
 			}()
 
-			w.processItem(&item, campaign, variantMap, templateMap, campaignVars)
+			w.processItem(&item, campaign, variantMap, templateMap, globalVars, campaignVars)
 		}(item)
 	}
 
@@ -225,6 +241,7 @@ func (w *Worker) processItem(
 	campaign *models.Campaign,
 	variantMap map[string]*models.CampaignVariant,
 	templateMap map[string]*models.Template,
+	globalVars map[string]string,
 	campaignVars map[string]string,
 ) {
 	// Get variant
@@ -248,19 +265,35 @@ func (w *Worker) processItem(
 		return
 	}
 
-	// Build email subject
+	// Build merged variables map (priority: recipient > campaign > global)
+	vars := mergeVariables(globalVars, campaignVars, item.RecipientVariables)
+
+	// Add built-in variables
+	vars["email"] = item.Email
+	vars["recipient_email"] = item.Email
+	if item.RecipientName != "" {
+		vars["name"] = item.RecipientName
+		vars["recipient_name"] = item.RecipientName
+	}
+
+	// Build email subject with variable substitution
 	subject := tmpl.Subject
 	if variant.SubjectOverride != "" {
 		subject = variant.SubjectOverride
 	}
+	subject = renderTemplate(subject, vars)
+
+	// Render HTML and text with variable substitution
+	html := renderTemplate(tmpl.HTML, vars)
+	text := renderTemplate(tmpl.Text, vars)
 
 	// Build email request
 	req := &sendry.SendRequest{
 		From:    formatFrom(campaign.FromEmail, campaign.FromName),
 		To:      []string{item.Email},
 		Subject: subject,
-		Body:    tmpl.Text,
-		HTML:    tmpl.HTML,
+		Body:    text,
+		HTML:    html,
 	}
 
 	if campaign.ReplyTo != "" {
@@ -282,6 +315,50 @@ func (w *Worker) processItem(
 	}
 
 	w.logger.Debug("email queued", "item_id", item.ID, "email", item.Email, "sendry_id", resp.ID)
+}
+
+// mergeVariables merges variable maps with priority: recipient > campaign > global
+func mergeVariables(global, campaign map[string]string, recipientJSON string) map[string]string {
+	result := make(map[string]string)
+
+	// Start with global variables (lowest priority)
+	for k, v := range global {
+		result[k] = v
+	}
+
+	// Add campaign variables (medium priority)
+	for k, v := range campaign {
+		result[k] = v
+	}
+
+	// Add recipient variables (highest priority)
+	if recipientJSON != "" {
+		var recipientVars map[string]string
+		if err := json.Unmarshal([]byte(recipientJSON), &recipientVars); err == nil {
+			for k, v := range recipientVars {
+				result[k] = v
+			}
+		}
+	}
+
+	return result
+}
+
+// renderTemplate substitutes {{variable}} patterns in template string
+func renderTemplate(template string, vars map[string]string) string {
+	if template == "" {
+		return template
+	}
+
+	return varPattern.ReplaceAllStringFunc(template, func(match string) string {
+		// Extract variable name (remove {{ and }})
+		varName := strings.TrimSpace(match[2 : len(match)-2])
+		if value, ok := vars[varName]; ok {
+			return value
+		}
+		// Keep original if variable not found
+		return match
+	})
 }
 
 func (w *Worker) updateItemFailed(itemID, errorMsg string) {
