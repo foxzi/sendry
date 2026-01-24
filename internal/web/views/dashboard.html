@@ -1,0 +1,104 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>Dashboard</h1>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{.Stats.Templates}}</div>
+        <div class="stat-label">Templates</div>
+        <a href="/templates" class="stat-link">View all</a>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{.Stats.Campaigns}}</div>
+        <div class="stat-label">Campaigns</div>
+        <a href="/campaigns" class="stat-link">View all</a>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{.Stats.Recipients}}</div>
+        <div class="stat-label">Recipients</div>
+        <a href="/recipients" class="stat-link">View all</a>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{.Stats.ActiveJobs}}</div>
+        <div class="stat-label">Active Jobs</div>
+        <a href="/jobs?status=running" class="stat-link">View all</a>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">
+            <h2>Servers Status</h2>
+        </div>
+        <div class="card-body">
+            {{if .Servers}}
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Env</th>
+                        <th>Status</th>
+                        <th>Queue</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Servers}}
+                    <tr>
+                        <td><a href="/servers/{{.Name}}">{{.Name}}</a></td>
+                        <td><span class="badge badge-{{.Env}}">{{.Env}}</span></td>
+                        <td>
+                            {{if .Online}}
+                            <span class="status status-online">Online</span>
+                            {{else}}
+                            <span class="status status-offline">Offline</span>
+                            {{end}}
+                        </td>
+                        <td>{{.QueueSize}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+            {{else}}
+            <p class="empty-state">No servers configured</p>
+            {{end}}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h2>Recent Jobs</h2>
+        </div>
+        <div class="card-body">
+            {{if .RecentJobs}}
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Campaign</th>
+                        <th>Status</th>
+                        <th>Progress</th>
+                        <th>Created</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .RecentJobs}}
+                    <tr>
+                        <td><a href="/jobs/{{.ID}}">{{.CampaignName}}</a></td>
+                        <td><span class="badge badge-{{.Status}}">{{.Status}}</span></td>
+                        <td>
+                            <div class="progress">
+                                <div class="progress-bar" style="width: {{.Progress}}%"></div>
+                            </div>
+                        </td>
+                        <td>{{.CreatedAt}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+            {{else}}
+            <p class="empty-state">No recent jobs</p>
+            {{end}}
+        </div>
+    </div>
+</div>
+{{end}}

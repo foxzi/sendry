@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{if .Title}}{{.Title}} - {{end}}Sendry Web</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    {{if .User}}
+    <nav class="navbar">
+        <div class="navbar-brand">
+            <a href="/">Sendry Web</a>
+        </div>
+        <div class="navbar-menu">
+            <a href="/templates" {{if eq .Active "templates"}}class="active"{{end}}>Templates</a>
+            <a href="/recipients" {{if eq .Active "recipients"}}class="active"{{end}}>Recipients</a>
+            <a href="/campaigns" {{if eq .Active "campaigns"}}class="active"{{end}}>Campaigns</a>
+            <a href="/jobs" {{if eq .Active "jobs"}}class="active"{{end}}>Jobs</a>
+            <a href="/servers" {{if eq .Active "servers"}}class="active"{{end}}>Servers</a>
+            <a href="/monitoring" {{if eq .Active "monitoring"}}class="active"{{end}}>Monitoring</a>
+            <a href="/settings" {{if eq .Active "settings"}}class="active"{{end}}>Settings</a>
+        </div>
+        <div class="navbar-end">
+            <span class="user-email">{{.User.Email}}</span>
+            <a href="/auth/logout" class="btn btn-sm">Logout</a>
+        </div>
+    </nav>
+    {{end}}
+
+    <main class="container">
+        {{if .Flash}}
+        <div class="alert alert-{{.Flash.Type}}">
+            {{.Flash.Message}}
+        </div>
+        {{end}}
+
+        {{template "content" .}}
+    </main>
+
+    <footer class="footer">
+        <p>Sendry Web &copy; 2025</p>
+    </footer>
+</body>
+</html>

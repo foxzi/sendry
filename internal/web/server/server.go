@@ -11,12 +11,15 @@ import (
 	"github.com/foxzi/sendry/internal/web/db"
 	"github.com/foxzi/sendry/internal/web/handlers"
 	"github.com/foxzi/sendry/internal/web/middleware"
+	"github.com/foxzi/sendry/internal/web/static"
+	"github.com/foxzi/sendry/internal/web/views"
 )
 
 type Server struct {
 	cfg    *config.Config
 	logger *slog.Logger
 	db     *db.DB
+	views  *views.Engine
 	http   *http.Server
 }
 
@@ -32,11 +35,18 @@ func New(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
+	// Initialize views
+	viewEngine, err := views.New()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize views: %w", err)
+	}
+
 	// Create server
 	s := &Server{
 		cfg:    cfg,
 		logger: logger,
 		db:     database,
+		views:  viewEngine,
 	}
 
 	// Setup HTTP server
@@ -55,13 +65,13 @@ func (s *Server) setupRoutes() http.Handler {
 	mux := http.NewServeMux()
 
 	// Create handlers
-	h := handlers.New(s.cfg, s.db, s.logger)
+	h := handlers.New(s.cfg, s.db, s.logger, s.views)
 
 	// Health check
 	mux.HandleFunc("GET /health", h.Health)
 
-	// Static files
-	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("internal/web/static"))))
+	// Static files (embedded)
+	mux.Handle("GET /static/", http.StripPrefix("/static/", static.Handler()))
 
 	// Auth routes (public)
 	mux.HandleFunc("GET /auth/login", h.LoginPage)

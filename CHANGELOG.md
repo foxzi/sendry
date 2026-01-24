@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Sendry Web: web interface foundation (project structure, config, SQLite, routing)
+- Sendry Web: UI with login, dashboard, embedded templates and CSS
 
 ## [0.3.4] - 2025-01-25
 
