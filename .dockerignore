@@ -1,6 +1,7 @@
 # Build artifacts
 build/*
 !build/packages/
+!build/sendry-*
 *.exe
 *.dll
 *.so
