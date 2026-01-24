@@ -60,6 +60,19 @@ func (s *Session) Auth(mech string) (sasl.Server, error) {
 			return errors.New("identity must be empty or match username")
 		}
 
+		// Get client IP for brute force protection
+		clientIP := extractIP(s.conn.Conn().RemoteAddr().String())
+
+		// Check if IP is blocked due to too many failures
+		if s.backend.CheckAuthBlocked(clientIP) {
+			s.logger.Warn("authentication blocked", "ip", clientIP, "reason", "too many failures")
+			metrics.IncSMTPAuthFailed()
+			return &smtp.SMTPError{
+				Code:    454,
+				Message: "Too many authentication failures, try again later",
+			}
+		}
+
 		// Check credentials
 		if s.backend.auth == nil || s.backend.auth.Users == nil {
 			return errors.New("authentication not configured")
@@ -67,10 +80,14 @@ func (s *Session) Auth(mech string) (sasl.Server, error) {
 
 		expectedPassword, ok := s.backend.auth.Users[username]
 		if !ok || expectedPassword != password {
-			s.logger.Warn("authentication failed", "username", username)
+			s.logger.Warn("authentication failed", "username", username, "ip", clientIP)
 			metrics.IncSMTPAuthFailed()
+			s.backend.RecordAuthFailure(clientIP)
 			return smtp.ErrAuthFailed
 		}
+
+		// Clear failure record on success
+		s.backend.ClearAuthFailure(clientIP)
 
 		s.authUser = username
 		s.logger.Info("authentication successful", "username", username)

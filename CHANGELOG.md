@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2025-01-24
+
+### Added
+- Auth brute force protection (5 failures = 15 min block per IP)
+- Email size limit validation (10 MB max)
+- HTTP MaxHeaderBytes limit (1 MB)
+
+### Changed
+- Bounce message IDs now use UUID instead of predictable suffix
+- Queue storage logging now uses structured slog
+
+### Fixed
+- SMTP QUIT command errors now logged
+
 ## [0.3.1] - 2025-01-24
 
 ### Fixed
@@ -92,7 +106,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DEB/RPM/APK packaging
 - Docker images
 
-[Unreleased]: https://github.com/foxzi/sendry/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/foxzi/sendry/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/foxzi/sendry/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/foxzi/sendry/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/foxzi/sendry/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/foxzi/sendry/compare/v0.1.1...v0.2.0

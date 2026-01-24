@@ -104,6 +104,14 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check email size limits (10 MB max)
+	const maxEmailSize = 10 * 1024 * 1024
+	totalSize := len(req.Body) + len(req.HTML) + len(req.Subject)
+	if totalSize > maxEmailSize {
+		s.sendError(w, http.StatusRequestEntityTooLarge, "email content too large (max 10 MB)")
+		return
+	}
+
 	// Build email data (RFC 5322)
 	data := s.buildEmailData(&req)
 
@@ -230,7 +238,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 	s.sendJSON(w, http.StatusOK, HealthResponse{
 		Status:  "ok",
-		Version: "0.3.1",
+		Version: "0.3.2",
 		Uptime:  time.Since(s.startTime).String(),
 		Queue:   stats,
 	})

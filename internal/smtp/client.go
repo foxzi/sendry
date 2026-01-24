@@ -277,8 +277,10 @@ func (c *Client) sendToMX(ctx context.Context, mx string, from string, to []stri
 		return c.categorizeError(err, "DATA close")
 	}
 
-	// Quit
-	client.Quit()
+	// Quit (log error but don't fail - message was already accepted)
+	if err := client.Quit(); err != nil {
+		c.logger.Warn("QUIT command failed", "error", err, "mx", mx)
+	}
 
 	c.logger.Info("message delivered",
 		"mx", mx,

@@ -162,11 +162,12 @@ func (s *Server) setupRoutes() {
 // ListenAndServe starts the HTTP server
 func (s *Server) ListenAndServe() error {
 	s.httpServer = &http.Server{
-		Addr:         s.config.ListenAddr,
-		Handler:      s.router,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		Addr:           s.config.ListenAddr,
+		Handler:        s.router,
+		ReadTimeout:    30 * time.Second,
+		WriteTimeout:   30 * time.Second,
+		IdleTimeout:    60 * time.Second,
+		MaxHeaderBytes: 1 << 20, // 1 MB max header size
 	}
 
 	if s.tlsConfig != nil {

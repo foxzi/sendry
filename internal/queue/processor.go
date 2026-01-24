@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/foxzi/sendry/internal/email"
 	"github.com/foxzi/sendry/internal/metrics"
 )
@@ -254,9 +256,9 @@ func (p *Processor) sendBounce(ctx context.Context, msg *Message, errorMsg strin
 		return
 	}
 
-	// Create bounce message
+	// Create bounce message with unique ID
 	bounceMsg := &Message{
-		ID:        msg.ID + "-bounce",
+		ID:        uuid.New().String(),
 		From:      "", // Will be set by sender (postmaster)
 		To:        []string{msg.From},
 		Data:      bounceData,
