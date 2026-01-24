@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dead Letter Queue (DLQ) configuration with max_age and max_count
 - Delivered messages retention policy with automatic cleanup
 - HTTP API documentation (EN/RU)
+- Tests for bounce, domain, and smtp packages
 
 ## [0.2.0] - 2024-01-24
 
