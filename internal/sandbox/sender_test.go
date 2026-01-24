@@ -274,27 +274,6 @@ func TestSenderBCCMode(t *testing.T) {
 	}
 }
 
-func TestExtractDomain(t *testing.T) {
-	tests := []struct {
-		email    string
-		expected string
-	}{
-		{"user@example.com", "example.com"},
-		{"User Name <user@example.com>", "example.com"},
-		{"user@EXAMPLE.COM", "example.com"},
-		{"invalid", ""},
-		{"@example.com", ""},
-		{"user@", ""},
-	}
-
-	for _, tc := range tests {
-		result := extractDomain(tc.email)
-		if result != tc.expected {
-			t.Errorf("extractDomain(%q) = %q, expected %q", tc.email, result, tc.expected)
-		}
-	}
-}
-
 func TestExtractSubject(t *testing.T) {
 	tests := []struct {
 		data     []byte

@@ -6,13 +6,13 @@ import (
 	"io"
 	"log/slog"
 	"net"
-	"strings"
 	"time"
 
 	"github.com/emersion/go-sasl"
 	"github.com/emersion/go-smtp"
 	"github.com/google/uuid"
 
+	"github.com/foxzi/sendry/internal/email"
 	"github.com/foxzi/sendry/internal/metrics"
 	"github.com/foxzi/sendry/internal/queue"
 	"github.com/foxzi/sendry/internal/ratelimit"
@@ -152,21 +152,12 @@ func (s *Session) Data(r io.Reader) error {
 // checkRateLimits checks if the message is within rate limits
 func (s *Session) checkRateLimits(ctx context.Context) error {
 	req := &ratelimit.Request{
-		Domain: extractDomainFromEmail(s.from),
+		Domain: email.ExtractDomain(s.from),
 		Sender: s.from,
 		IP:     extractIP(s.conn.Conn().RemoteAddr().String()),
 	}
 
 	return s.backend.CheckRateLimit(ctx, req)
-}
-
-// extractDomainFromEmail extracts domain from email address
-func extractDomainFromEmail(email string) string {
-	at := strings.LastIndex(email, "@")
-	if at < 0 || at == len(email)-1 {
-		return ""
-	}
-	return strings.ToLower(email[at+1:])
 }
 
 // extractIP extracts IP from address string (removes port)

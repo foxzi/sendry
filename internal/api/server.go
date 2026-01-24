@@ -24,6 +24,7 @@ type Server struct {
 	router           *chi.Mux
 	httpServer       *http.Server
 	queue            queue.Queue
+	boltStorage      *queue.BoltStorage // typed reference for DLQ operations
 	config           *config.APIConfig
 	fullConfig       *config.Config
 	logger           *slog.Logger
@@ -74,6 +75,11 @@ func NewServerWithOptions(opts ServerOptions) *Server {
 		rateLimiter:    opts.RateLimiter,
 		sandboxStorage: opts.SandboxStorage,
 		tlsConfig:      opts.TLSConfig,
+	}
+
+	// Store typed reference for DLQ operations
+	if bs, ok := opts.Queue.(*queue.BoltStorage); ok {
+		s.boltStorage = bs
 	}
 
 	// Create management server if we have full config

@@ -6,11 +6,11 @@ import (
 	"io"
 	"log/slog"
 	"math/rand"
-	"net/mail"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/foxzi/sendry/internal/email"
 	"github.com/foxzi/sendry/internal/headers"
 	"github.com/foxzi/sendry/internal/queue"
 )
@@ -78,7 +78,7 @@ func (s *Sender) SetHeaderProcessor(p *headers.Processor) {
 // Send routes the message based on domain mode
 func (s *Sender) Send(ctx context.Context, msg *queue.Message) error {
 	// Extract sender domain
-	domain := extractDomain(msg.From)
+	domain := email.ExtractDomain(msg.From)
 	if domain == "" {
 		// Can't determine domain, use real sender
 		return s.realSender.Send(ctx, msg)
@@ -301,24 +301,6 @@ type SimulatedError struct {
 
 func (e *SimulatedError) Error() string {
 	return e.Message
-}
-
-// extractDomain extracts the domain from an email address
-func extractDomain(email string) string {
-	addr, err := mail.ParseAddress(email)
-	if err != nil {
-		// Try simple extraction
-		at := strings.LastIndex(email, "@")
-		if at <= 0 || at == len(email)-1 {
-			return ""
-		}
-		return strings.ToLower(email[at+1:])
-	}
-	at := strings.LastIndex(addr.Address, "@")
-	if at <= 0 || at == len(addr.Address)-1 {
-		return ""
-	}
-	return strings.ToLower(addr.Address[at+1:])
 }
 
 // extractSubject extracts the Subject header from email data

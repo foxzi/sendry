@@ -9,6 +9,7 @@ import (
 
 	"github.com/foxzi/sendry/internal/dkim"
 	"github.com/foxzi/sendry/internal/dns"
+	"github.com/foxzi/sendry/internal/email"
 )
 
 func TestNewClient(t *testing.T) {
@@ -174,8 +175,8 @@ type mockDKIMProvider struct {
 	signers map[string]*dkim.Signer
 }
 
-func (m *mockDKIMProvider) GetSignerForEmail(email string) *dkim.Signer {
-	domain := extractDomainFromEmail(email)
+func (m *mockDKIMProvider) GetSignerForEmail(addr string) *dkim.Signer {
+	domain := email.ExtractDomain(addr)
 	return m.signers[domain]
 }
 
@@ -220,30 +221,6 @@ func TestGetDKIMSignerPriority(t *testing.T) {
 	signer = client.getDKIMSigner("user@example.com")
 	if signer != nil {
 		t.Error("expected nil signer when provider has no signer for domain")
-	}
-}
-
-func TestExtractDomainFromEmail(t *testing.T) {
-	tests := []struct {
-		email    string
-		expected string
-	}{
-		{"user@example.com", "example.com"},
-		{"user@EXAMPLE.COM", "example.com"},
-		{"user@Sub.Domain.Com", "sub.domain.com"},
-		{"user@", ""},
-		{"nodomain", ""},
-		{"@domain.com", "domain.com"},
-		{"", ""},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.email, func(t *testing.T) {
-			result := extractDomainFromEmail(tc.email)
-			if result != tc.expected {
-				t.Errorf("extractDomainFromEmail(%q) = %q, want %q", tc.email, result, tc.expected)
-			}
-		})
 	}
 }
 

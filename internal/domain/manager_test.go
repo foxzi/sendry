@@ -229,31 +229,6 @@ func TestGetDomainConfig(t *testing.T) {
 	}
 }
 
-func TestExtractDomain(t *testing.T) {
-	tests := []struct {
-		email    string
-		expected string
-	}{
-		{"user@example.com", "example.com"},
-		{"user@EXAMPLE.COM", "example.com"},
-		{"user@Sub.Example.Com", "sub.example.com"},
-		{"user@", ""},
-		{"invalid", ""},
-		{"@domain.com", "domain.com"},
-		{"", ""},
-		{"user@a", "a"},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.email, func(t *testing.T) {
-			result := extractDomain(tc.email)
-			if result != tc.expected {
-				t.Errorf("extractDomain(%q) = %q, want %q", tc.email, result, tc.expected)
-			}
-		})
-	}
-}
-
 func TestGetSignerWithoutDKIM(t *testing.T) {
 	cfg := &config.Config{
 		DKIM: config.DKIMConfig{

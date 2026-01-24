@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/foxzi/sendry/internal/email"
 	"github.com/foxzi/sendry/internal/queue"
 )
 
@@ -84,9 +85,19 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 		s.sendError(w, http.StatusBadRequest, "from is required")
 		return
 	}
+	if _, err := mail.ParseAddress(req.From); err != nil {
+		s.sendError(w, http.StatusBadRequest, "invalid from address")
+		return
+	}
 	if len(req.To) == 0 {
 		s.sendError(w, http.StatusBadRequest, "to is required")
 		return
+	}
+	for _, to := range req.To {
+		if _, err := mail.ParseAddress(to); err != nil {
+			s.sendError(w, http.StatusBadRequest, fmt.Sprintf("invalid to address: %s", to))
+			return
+		}
 	}
 	if req.Subject == "" && req.Body == "" && req.HTML == "" {
 		s.sendError(w, http.StatusBadRequest, "subject, body or html is required")
@@ -212,11 +223,14 @@ func (s *Server) handleDeleteMessage(w http.ResponseWriter, r *http.Request) {
 
 // handleHealth handles GET /health
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	stats, _ := s.queue.Stats(r.Context())
+	stats, err := s.queue.Stats(r.Context())
+	if err != nil {
+		s.logger.Warn("failed to get queue stats for health check", "error", err)
+	}
 
 	s.sendJSON(w, http.StatusOK, HealthResponse{
 		Status:  "ok",
-		Version: "0.1.1",
+		Version: "0.3.0",
 		Uptime:  time.Since(s.startTime).String(),
 		Queue:   stats,
 	})
@@ -231,7 +245,7 @@ func (s *Server) buildEmailData(req *SendRequest) []byte {
 	buf.WriteString(fmt.Sprintf("To: %s\r\n", strings.Join(req.To, ", ")))
 	buf.WriteString(fmt.Sprintf("Subject: %s\r\n", req.Subject))
 	buf.WriteString(fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z)))
-	buf.WriteString(fmt.Sprintf("Message-ID: <%s@%s>\r\n", uuid.New().String(), extractDomain(req.From)))
+	buf.WriteString(fmt.Sprintf("Message-ID: <%s@%s>\r\n", uuid.New().String(), email.ExtractDomainOrDefault(req.From, "localhost")))
 
 	// Custom headers
 	for k, v := range req.Headers {
@@ -283,23 +297,6 @@ func (s *Server) sendError(w http.ResponseWriter, status int, message string) {
 	s.sendJSON(w, status, ErrorResponse{Error: message})
 }
 
-// extractDomain extracts domain from email address
-func extractDomain(email string) string {
-	addr, err := mail.ParseAddress(email)
-	if err != nil {
-		parts := strings.Split(email, "@")
-		if len(parts) == 2 {
-			return parts[1]
-		}
-		return "localhost"
-	}
-	parts := strings.Split(addr.Address, "@")
-	if len(parts) == 2 {
-		return parts[1]
-	}
-	return "localhost"
-}
-
 // Dead Letter Queue handlers
 
 // DLQResponse is the response for GET /api/v1/dlq
@@ -310,11 +307,11 @@ type DLQResponse struct {
 
 // handleDLQ handles GET /api/v1/dlq
 func (s *Server) handleDLQ(w http.ResponseWriter, r *http.Request) {
-	storage, ok := s.queue.(*queue.BoltStorage)
-	if !ok {
-		s.sendError(w, http.StatusInternalServerError, "DLQ not supported")
+	if s.boltStorage == nil {
+		s.sendError(w, http.StatusNotImplemented, "DLQ not supported with this storage backend")
 		return
 	}
+	storage := s.boltStorage
 
 	stats, err := storage.DLQStats(r.Context())
 	if err != nil {
@@ -355,11 +352,11 @@ func (s *Server) handleDLQGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	storage, ok := s.queue.(*queue.BoltStorage)
-	if !ok {
-		s.sendError(w, http.StatusInternalServerError, "DLQ not supported")
+	if s.boltStorage == nil {
+		s.sendError(w, http.StatusNotImplemented, "DLQ not supported with this storage backend")
 		return
 	}
+	storage := s.boltStorage
 
 	msg, err := storage.GetFromDLQ(r.Context(), id)
 	if err != nil {
@@ -393,11 +390,11 @@ func (s *Server) handleDLQRetry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	storage, ok := s.queue.(*queue.BoltStorage)
-	if !ok {
-		s.sendError(w, http.StatusInternalServerError, "DLQ not supported")
+	if s.boltStorage == nil {
+		s.sendError(w, http.StatusNotImplemented, "DLQ not supported with this storage backend")
 		return
 	}
+	storage := s.boltStorage
 
 	if err := storage.RetryFromDLQ(r.Context(), id); err != nil {
 		s.logger.Error("failed to retry DLQ message", "id", id, "error", err)
@@ -420,11 +417,11 @@ func (s *Server) handleDLQDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	storage, ok := s.queue.(*queue.BoltStorage)
-	if !ok {
-		s.sendError(w, http.StatusInternalServerError, "DLQ not supported")
+	if s.boltStorage == nil {
+		s.sendError(w, http.StatusNotImplemented, "DLQ not supported with this storage backend")
 		return
 	}
+	storage := s.boltStorage
 
 	if err := storage.DeleteFromDLQ(r.Context(), id); err != nil {
 		s.logger.Error("failed to delete DLQ message", "id", id, "error", err)

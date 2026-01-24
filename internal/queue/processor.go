@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/foxzi/sendry/internal/email"
 	"github.com/foxzi/sendry/internal/metrics"
 )
 
@@ -165,7 +166,7 @@ func (p *Processor) processOne(ctx context.Context, logger *slog.Logger) {
 		}
 
 		// Track metrics
-		metrics.IncMessagesSent(extractDomain(msg.From))
+		metrics.IncMessagesSent(email.ExtractDomain(msg.From))
 
 		logger.Info("message delivered", "from", msg.From, "to", msg.To)
 		return
@@ -185,7 +186,7 @@ func (p *Processor) processOne(ctx context.Context, logger *slog.Logger) {
 		msg.NextRetryAt = time.Now().Add(backoff)
 
 		// Track metrics
-		metrics.IncMessagesDeferred(extractDomain(msg.From))
+		metrics.IncMessagesDeferred(email.ExtractDomain(msg.From))
 
 		logger.Info("message deferred",
 			"retry_count", msg.RetryCount,
@@ -197,7 +198,7 @@ func (p *Processor) processOne(ctx context.Context, logger *slog.Logger) {
 		msg.Status = StatusFailed
 
 		// Track metrics
-		metrics.IncMessagesFailed(extractDomain(msg.From), classifyError(err))
+		metrics.IncMessagesFailed(email.ExtractDomain(msg.From), classifyError(err))
 
 		logger.Error("message failed permanently",
 			"retry_count", msg.RetryCount,
@@ -270,7 +271,7 @@ func (p *Processor) sendBounce(ctx context.Context, msg *Message, errorMsg strin
 	}
 
 	// Track bounce metrics
-	metrics.IncMessagesBounced(extractDomain(msg.From))
+	metrics.IncMessagesBounced(email.ExtractDomain(msg.From))
 
 	logger.Info("bounce message queued", "bounce_id", bounceMsg.ID, "original_sender", msg.From)
 }
@@ -314,15 +315,6 @@ func (p *Processor) calculateBackoff(retryCount int) time.Duration {
 	}
 
 	return backoff
-}
-
-// extractDomain extracts domain from email address
-func extractDomain(email string) string {
-	at := strings.LastIndex(email, "@")
-	if at < 0 || at == len(email)-1 {
-		return "unknown"
-	}
-	return strings.ToLower(email[at+1:])
 }
 
 // classifyError classifies delivery error into category for metrics

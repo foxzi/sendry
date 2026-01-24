@@ -8,6 +8,7 @@ import (
 
 	"github.com/foxzi/sendry/internal/config"
 	"github.com/foxzi/sendry/internal/dkim"
+	"github.com/foxzi/sendry/internal/email"
 )
 
 // Manager manages domain-specific configurations including DKIM signers
@@ -103,8 +104,8 @@ func (m *Manager) GetSigner(domain string) *dkim.Signer {
 }
 
 // GetSignerForEmail returns the DKIM signer for an email address
-func (m *Manager) GetSignerForEmail(email string) *dkim.Signer {
-	domain := extractDomain(email)
+func (m *Manager) GetSignerForEmail(addr string) *dkim.Signer {
+	domain := email.ExtractDomain(addr)
 	if domain == "" {
 		return nil
 	}
@@ -154,13 +155,4 @@ func (m *Manager) HasDKIM() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return len(m.signers) > 0
-}
-
-// extractDomain extracts the domain part from an email address
-func extractDomain(email string) string {
-	at := strings.LastIndex(email, "@")
-	if at < 0 || at == len(email)-1 {
-		return ""
-	}
-	return strings.ToLower(email[at+1:])
 }

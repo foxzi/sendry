@@ -1,8 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"mime"
+	"mime/multipart"
+	"net/mail"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -250,9 +255,15 @@ func runSandboxShow(cmd *cobra.Command, args []string) error {
 		return nil
 
 	case "html":
-		// TODO: Extract and display HTML part
-		fmt.Println("HTML view not yet implemented, showing raw data:")
-		fmt.Println(string(msg.Data))
+		html, err := extractHTMLPart(msg.Data)
+		if err != nil {
+			return fmt.Errorf("failed to extract HTML: %w", err)
+		}
+		if html == "" {
+			fmt.Println("No HTML part found in message")
+			return nil
+		}
+		fmt.Println(html)
 		return nil
 
 	default:
@@ -393,4 +404,63 @@ func runSandboxStats(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// extractHTMLPart extracts the HTML part from a MIME email message
+func extractHTMLPart(data []byte) (string, error) {
+	msg, err := mail.ReadMessage(bytes.NewReader(data))
+	if err != nil {
+		return "", fmt.Errorf("failed to parse email: %w", err)
+	}
+
+	contentType := msg.Header.Get("Content-Type")
+	if contentType == "" {
+		return "", nil // No Content-Type, plain text only
+	}
+
+	mediaType, params, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return "", nil // Invalid Content-Type
+	}
+
+	// Check if it's directly HTML
+	if strings.HasPrefix(mediaType, "text/html") {
+		body, err := io.ReadAll(msg.Body)
+		if err != nil {
+			return "", err
+		}
+		return string(body), nil
+	}
+
+	// Check if it's multipart
+	if !strings.HasPrefix(mediaType, "multipart/") {
+		return "", nil // Not multipart, no HTML
+	}
+
+	boundary := params["boundary"]
+	if boundary == "" {
+		return "", nil
+	}
+
+	mr := multipart.NewReader(msg.Body, boundary)
+	for {
+		part, err := mr.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+
+		partType := part.Header.Get("Content-Type")
+		if strings.HasPrefix(partType, "text/html") {
+			body, err := io.ReadAll(part)
+			if err != nil {
+				return "", err
+			}
+			return string(body), nil
+		}
+	}
+
+	return "", nil // No HTML part found
 }

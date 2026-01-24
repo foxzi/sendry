@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/foxzi/sendry/internal/email"
 	"github.com/foxzi/sendry/internal/queue"
 	"github.com/foxzi/sendry/internal/template"
 )
@@ -441,7 +442,7 @@ func (s *TemplateServer) buildEmailData(from string, to []string, subject, text,
 	buf.WriteString(fmt.Sprintf("To: %s\r\n", strings.Join(to, ", ")))
 	buf.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
 	buf.WriteString(fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z)))
-	buf.WriteString(fmt.Sprintf("Message-ID: <%s@%s>\r\n", uuid.New().String(), extractDomainFromEmail(from)))
+	buf.WriteString(fmt.Sprintf("Message-ID: <%s@%s>\r\n", uuid.New().String(), email.ExtractDomainOrDefault(from, "localhost")))
 
 	// Custom headers
 	for k, v := range headers {
@@ -479,14 +480,6 @@ func (s *TemplateServer) buildEmailData(from string, to []string, subject, text,
 	}
 
 	return buf.Bytes()
-}
-
-func extractDomainFromEmail(email string) string {
-	parts := strings.Split(email, "@")
-	if len(parts) == 2 {
-		return parts[1]
-	}
-	return "localhost"
 }
 
 func templateToResponse(tmpl *template.Template) *TemplateResponse {
