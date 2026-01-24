@@ -7,22 +7,25 @@ import (
 
 	"github.com/foxzi/sendry/internal/web/config"
 	"github.com/foxzi/sendry/internal/web/db"
+	"github.com/foxzi/sendry/internal/web/repository"
 	"github.com/foxzi/sendry/internal/web/views"
 )
 
 type Handlers struct {
-	cfg    *config.Config
-	db     *db.DB
-	logger *slog.Logger
-	views  *views.Engine
+	cfg       *config.Config
+	db        *db.DB
+	logger    *slog.Logger
+	views     *views.Engine
+	templates *repository.TemplateRepository
 }
 
 func New(cfg *config.Config, db *db.DB, logger *slog.Logger, v *views.Engine) *Handlers {
 	return &Handlers{
-		cfg:    cfg,
-		db:     db,
-		logger: logger,
-		views:  v,
+		cfg:       cfg,
+		db:        db,
+		logger:    logger,
+		views:     v,
+		templates: repository.NewTemplateRepository(db.DB),
 	}
 }
 

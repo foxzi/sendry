@@ -157,7 +157,8 @@ func (s *Server) setupRoutes() http.Handler {
 	mux.Handle("/", authMiddleware(protected))
 
 	// Apply global middleware
-	handler := middleware.Logger(s.logger)(mux)
+	handler := middleware.MethodOverride(mux)
+	handler = middleware.Logger(s.logger)(handler)
 	handler = middleware.Recovery(s.logger)(handler)
 
 	return handler

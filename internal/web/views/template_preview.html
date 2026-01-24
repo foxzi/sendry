@@ -1,0 +1,27 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>Preview: {{.Template.Name}}</h1>
+    <a href="/templates/{{.Template.ID}}" class="btn btn-secondary">Back to Template</a>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <strong>Subject:</strong> {{.Subject}}
+    </div>
+    <div class="card-body preview-frame">
+        <iframe srcdoc="{{.HTML}}" class="preview-iframe"></iframe>
+    </div>
+</div>
+
+<style>
+.preview-frame {
+    padding: 0;
+}
+.preview-iframe {
+    width: 100%;
+    height: 600px;
+    border: none;
+    background: white;
+}
+</style>
+{{end}}

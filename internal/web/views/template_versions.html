@@ -1,0 +1,49 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1>{{.Template.Name}} - Version History</h1>
+        <p class="text-muted">Current version: v{{.Template.CurrentVersion}}</p>
+    </div>
+    <a href="/templates/{{.Template.ID}}" class="btn btn-secondary">Back to Template</a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {{if .Versions}}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Version</th>
+                    <th>Subject</th>
+                    <th>Change Note</th>
+                    <th>Created By</th>
+                    <th>Created At</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Versions}}
+                <tr {{if eq .Version $.Template.CurrentVersion}}class="current-version"{{end}}>
+                    <td>
+                        v{{.Version}}
+                        {{if eq .Version $.Template.CurrentVersion}}
+                        <span class="badge badge-success">Current</span>
+                        {{end}}
+                    </td>
+                    <td><code>{{.Subject}}</code></td>
+                    <td>{{if .ChangeNote}}{{.ChangeNote}}{{else}}<span class="text-muted">-</span>{{end}}</td>
+                    <td>{{if .CreatedBy}}{{.CreatedBy}}{{else}}<span class="text-muted">-</span>{{end}}</td>
+                    <td>{{.CreatedAt.Format "2006-01-02 15:04:05"}}</td>
+                    <td>
+                        <a href="/templates/{{$.Template.ID}}/preview?version={{.Version}}" class="btn btn-sm" target="_blank">Preview</a>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <p class="empty-state">No version history available</p>
+        {{end}}
+    </div>
+</div>
+{{end}}

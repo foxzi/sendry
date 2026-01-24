@@ -16,6 +16,12 @@ var standaloneTemplates = map[string]bool{
 	"login": true,
 }
 
+// Template functions
+var funcs = template.FuncMap{
+	"add": func(a, b int) int { return a + b },
+	"sub": func(a, b int) int { return a - b },
+}
+
 type Engine struct {
 	templates   map[string]*template.Template
 	standalone  map[string]*template.Template
@@ -27,8 +33,8 @@ func New() (*Engine, error) {
 		standalone: make(map[string]*template.Template),
 	}
 
-	// Parse layout
-	layoutTmpl, err := template.ParseFS(templatesFS, "layout.html")
+	// Parse layout with functions
+	layoutTmpl, err := template.New("layout.html").Funcs(funcs).ParseFS(templatesFS, "layout.html")
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +55,7 @@ func New() (*Engine, error) {
 
 		// Check if standalone template
 		if standaloneTemplates[baseName] {
-			tmpl, err := template.ParseFS(templatesFS, name)
+			tmpl, err := template.New(name).Funcs(funcs).ParseFS(templatesFS, name)
 			if err != nil {
 				return nil, err
 			}
@@ -86,7 +92,7 @@ func (e *Engine) Render(w io.Writer, name string, data any) error {
 	}
 
 	// Try to parse on the fly
-	tmpl, err := template.ParseFS(templatesFS, name+".html")
+	tmpl, err := template.New(name + ".html").Funcs(funcs).ParseFS(templatesFS, name+".html")
 	if err != nil {
 		return err
 	}
@@ -95,7 +101,7 @@ func (e *Engine) Render(w io.Writer, name string, data any) error {
 
 // RenderPartial renders a template without layout (for HTMX responses)
 func (e *Engine) RenderPartial(w io.Writer, name string, data any) error {
-	tmpl, err := template.ParseFS(templatesFS, name+".html")
+	tmpl, err := template.New(name + ".html").Funcs(funcs).ParseFS(templatesFS, name+".html")
 	if err != nil {
 		return err
 	}

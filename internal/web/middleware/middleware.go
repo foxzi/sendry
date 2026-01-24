@@ -84,6 +84,19 @@ func Auth(cfg *config.Config, database *db.DB, logger *slog.Logger) func(http.Ha
 	}
 }
 
+// MethodOverride middleware allows overriding HTTP method via _method form field
+func MethodOverride(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			method := r.FormValue("_method")
+			if method != "" {
+				r.Method = method
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // responseWriter wraps http.ResponseWriter to capture status code
 type responseWriter struct {
 	http.ResponseWriter

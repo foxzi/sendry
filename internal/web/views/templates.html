@@ -1,0 +1,91 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>Templates</h1>
+    <a href="/templates/new" class="btn btn-primary">New Template</a>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <form class="filter-form" method="get" action="/templates">
+            <input type="text" name="search" placeholder="Search templates..." value="{{.Search}}" class="input">
+            <select name="folder" class="input">
+                <option value="">All Folders</option>
+                {{range .Folders}}
+                <option value="{{.}}" {{if eq . $.Folder}}selected{{end}}>{{.}}</option>
+                {{end}}
+            </select>
+            <button type="submit" class="btn">Filter</button>
+            {{if or .Search .Folder}}
+            <a href="/templates" class="btn btn-secondary">Clear</a>
+            {{end}}
+        </form>
+    </div>
+    <div class="card-body">
+        {{if .Templates}}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Folder</th>
+                    <th>Version</th>
+                    <th>Status</th>
+                    <th>Updated</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Templates}}
+                <tr>
+                    <td>
+                        <a href="/templates/{{.ID}}">{{.Name}}</a>
+                        {{if .Description}}
+                        <div class="text-muted">{{.Description}}</div>
+                        {{end}}
+                    </td>
+                    <td>
+                        {{if .Folder}}
+                        <span class="badge">{{.Folder}}</span>
+                        {{else}}
+                        <span class="text-muted">-</span>
+                        {{end}}
+                    </td>
+                    <td>v{{.CurrentVersion}}</td>
+                    <td>
+                        {{if eq .Status "draft"}}
+                        <span class="badge badge-secondary">Draft</span>
+                        {{else if eq .Status "deployed"}}
+                        <span class="badge badge-success">Deployed ({{.DeployedCount}})</span>
+                        {{else if eq .Status "out-of-sync"}}
+                        <span class="badge badge-warning">Out of Sync ({{.OutOfSyncCount}}/{{.DeployedCount}})</span>
+                        {{end}}
+                    </td>
+                    <td>{{.UpdatedAt.Format "2006-01-02 15:04"}}</td>
+                    <td class="actions">
+                        <a href="/templates/{{.ID}}/edit" class="btn btn-sm">Edit</a>
+                        <a href="/templates/{{.ID}}/versions" class="btn btn-sm">History</a>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+
+        {{if gt .TotalPages 1}}
+        <div class="pagination">
+            {{if gt .Page 1}}
+            <a href="/templates?page={{sub .Page 1}}{{if .Search}}&search={{.Search}}{{end}}{{if .Folder}}&folder={{.Folder}}{{end}}" class="btn btn-sm">&laquo; Prev</a>
+            {{end}}
+            <span class="pagination-info">Page {{.Page}} of {{.TotalPages}} ({{.Total}} total)</span>
+            {{if lt .Page .TotalPages}}
+            <a href="/templates?page={{add .Page 1}}{{if .Search}}&search={{.Search}}{{end}}{{if .Folder}}&folder={{.Folder}}{{end}}" class="btn btn-sm">Next &raquo;</a>
+            {{end}}
+        </div>
+        {{end}}
+        {{else}}
+        <div class="empty-state">
+            <p>No templates found</p>
+            <a href="/templates/new" class="btn btn-primary">Create your first template</a>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}

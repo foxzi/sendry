@@ -422,6 +422,203 @@ a:hover {
     color: var(--text-muted);
 }
 
+/* Text utilities */
+.text-muted {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+}
+
+/* Filter form */
+.filter-form {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+/* Form rows */
+.form-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+/* Input class */
+.input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 1rem;
+    background: var(--bg-card);
+    color: var(--text);
+    font-family: inherit;
+}
+
+.input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.input.code {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.875rem;
+}
+
+/* Form help text */
+.form-help {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+/* Card footer */
+.card-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+}
+
+/* Header actions */
+.header-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* Details list */
+.details-list {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.5rem 1rem;
+}
+
+.details-list dt {
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+.details-list dd {
+    color: var(--text);
+}
+
+/* Code preview */
+.code-preview {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    overflow-x: auto;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.875rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+code {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.875em;
+    background: var(--bg);
+    padding: 0.125rem 0.25rem;
+    border-radius: 4px;
+}
+
+/* Tabs */
+.tabs {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.tab {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-card);
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+}
+
+.tab:hover {
+    background: var(--bg);
+}
+
+.tab.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+.tab-content {
+    padding-top: 1rem;
+}
+
+/* Card header with flex */
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Pagination */
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 0;
+    margin-top: 1rem;
+    border-top: 1px solid var(--border);
+}
+
+.pagination-info {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+}
+
+/* Actions in table/bar */
+.actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.actions-bar {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+/* More badge variants */
+.badge-success { background: var(--success); }
+.badge-warning { background: var(--warning); }
+.badge-secondary { background: var(--secondary); }
+.badge-danger { background: var(--error); }
+
+/* Danger button */
+.btn-danger {
+    background: var(--error);
+    border-color: var(--error);
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #dc2626;
+}
+
+.btn-warning {
+    background: var(--warning);
+    border-color: var(--warning);
+    color: white;
+}
+
+/* Current version row highlight */
+.current-version {
+    background: rgba(59, 130, 246, 0.05);
+}
+
 /* Footer */
 .footer {
     text-align: center;

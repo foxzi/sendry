@@ -1,0 +1,57 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>New Template</h1>
+</div>
+
+<form method="post" action="/templates" class="card">
+    <div class="card-body">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="name">Name *</label>
+                <input type="text" id="name" name="name" required class="input" placeholder="Welcome Email">
+            </div>
+            <div class="form-group">
+                <label for="folder">Folder</label>
+                <input type="text" id="folder" name="folder" class="input" placeholder="marketing" list="folders">
+                <datalist id="folders">
+                    {{range .Folders}}
+                    <option value="{{.}}">
+                    {{end}}
+                </datalist>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="description">Description</label>
+            <textarea id="description" name="description" class="input" rows="2" placeholder="Brief description of this template"></textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="subject">Subject *</label>
+            <input type="text" id="subject" name="subject" required class="input" placeholder="Welcome to {{.CompanyName}}!">
+            <small class="form-help">Use {{"{{"}}variable{{"}}"}} syntax for dynamic content</small>
+        </div>
+
+        <div class="form-group">
+            <label for="html">HTML Content</label>
+            <textarea id="html" name="html" class="input code" rows="15" placeholder="<html>...</html>"></textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="text">Plain Text Content</label>
+            <textarea id="text" name="text" class="input code" rows="8" placeholder="Plain text fallback..."></textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="variables">Variables (JSON)</label>
+            <textarea id="variables" name="variables" class="input code" rows="4" placeholder='{"name": "string", "unsubscribe_url": "string"}'></textarea>
+            <small class="form-help">Define expected variables and their types</small>
+        </div>
+    </div>
+
+    <div class="card-footer">
+        <a href="/templates" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">Create Template</button>
+    </div>
+</form>
+{{end}}
