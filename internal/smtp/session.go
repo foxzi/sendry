@@ -13,27 +13,35 @@ import (
 	"github.com/emersion/go-smtp"
 	"github.com/google/uuid"
 
+	"github.com/foxzi/sendry/internal/metrics"
 	"github.com/foxzi/sendry/internal/queue"
 	"github.com/foxzi/sendry/internal/ratelimit"
 )
 
 // Session implements smtp.Session and smtp.AuthSession for go-smtp
 type Session struct {
-	backend  *Backend
-	conn     *smtp.Conn
-	from     string
-	to       []string
-	authUser string
-	logger   *slog.Logger
+	backend    *Backend
+	conn       *smtp.Conn
+	from       string
+	to         []string
+	authUser   string
+	logger     *slog.Logger
+	serverType string
 }
 
 // NewSession creates a new SMTP session
 func NewSession(b *Backend, c *smtp.Conn) *Session {
-	return &Session{
-		backend: b,
-		conn:    c,
-		logger:  b.logger.With("remote_addr", c.Conn().RemoteAddr().String()),
+	s := &Session{
+		backend:    b,
+		conn:       c,
+		logger:     b.logger.With("remote_addr", c.Conn().RemoteAddr().String()),
+		serverType: b.serverType,
 	}
+
+	// Track connection metrics
+	metrics.IncSMTPConnections(s.serverType)
+
+	return s
 }
 
 // AuthMechanisms returns supported authentication mechanisms
@@ -60,11 +68,13 @@ func (s *Session) Auth(mech string) (sasl.Server, error) {
 		expectedPassword, ok := s.backend.auth.Users[username]
 		if !ok || expectedPassword != password {
 			s.logger.Warn("authentication failed", "username", username)
+			metrics.IncSMTPAuthFailed()
 			return smtp.ErrAuthFailed
 		}
 
 		s.authUser = username
 		s.logger.Info("authentication successful", "username", username)
+		metrics.IncSMTPAuthSuccess()
 		return nil
 	}), nil
 }
@@ -177,5 +187,6 @@ func (s *Session) Reset() {
 // Logout handles session logout
 func (s *Session) Logout() error {
 	s.logger.Debug("session logout")
+	metrics.DecSMTPConnectionsActive()
 	return nil
 }

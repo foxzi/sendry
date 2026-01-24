@@ -21,6 +21,16 @@ type Config struct {
 	Domains     map[string]DomainConfig `yaml:"domains"`      // Multi-domain configuration
 	RateLimit   RateLimitConfig         `yaml:"rate_limit"`   // Rate limiting configuration
 	HeaderRules *headers.Config         `yaml:"header_rules"` // Header manipulation rules
+	Metrics     MetricsConfig           `yaml:"metrics"`      // Prometheus metrics configuration
+}
+
+// MetricsConfig contains Prometheus metrics settings
+type MetricsConfig struct {
+	Enabled       bool          `yaml:"enabled"`
+	ListenAddr    string        `yaml:"listen_addr"`    // Default: :9090
+	Path          string        `yaml:"path"`           // Default: /metrics
+	FlushInterval time.Duration `yaml:"flush_interval"` // Default: 10s
+	AllowedIPs    []string      `yaml:"allowed_ips"`    // IP addresses/CIDRs allowed to access metrics
 }
 
 // RateLimitConfig contains global rate limiting settings
@@ -245,6 +255,17 @@ func (c *Config) setDefaults() {
 	}
 	if c.Logging.Format == "" {
 		c.Logging.Format = "json"
+	}
+
+	// Metrics defaults
+	if c.Metrics.ListenAddr == "" {
+		c.Metrics.ListenAddr = ":9090"
+	}
+	if c.Metrics.Path == "" {
+		c.Metrics.Path = "/metrics"
+	}
+	if c.Metrics.FlushInterval == 0 {
+		c.Metrics.FlushInterval = 10 * time.Second
 	}
 }
 

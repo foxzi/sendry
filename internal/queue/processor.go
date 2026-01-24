@@ -6,6 +6,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/foxzi/sendry/internal/metrics"
 )
 
 // Sender is an interface for sending messages
@@ -159,6 +161,9 @@ func (p *Processor) processOne(ctx context.Context, logger *slog.Logger) {
 			logger.Error("failed to update message status", "error", err)
 		}
 
+		// Track metrics
+		metrics.IncMessagesSent(extractDomain(msg.From))
+
 		logger.Info("message delivered", "from", msg.From, "to", msg.To)
 		return
 	}
@@ -176,6 +181,9 @@ func (p *Processor) processOne(ctx context.Context, logger *slog.Logger) {
 		msg.Status = StatusDeferred
 		msg.NextRetryAt = time.Now().Add(backoff)
 
+		// Track metrics
+		metrics.IncMessagesDeferred(extractDomain(msg.From))
+
 		logger.Info("message deferred",
 			"retry_count", msg.RetryCount,
 			"next_retry_at", msg.NextRetryAt,
@@ -184,6 +192,10 @@ func (p *Processor) processOne(ctx context.Context, logger *slog.Logger) {
 	} else {
 		// Permanent failure or max retries exceeded
 		msg.Status = StatusFailed
+
+		// Track metrics
+		metrics.IncMessagesFailed(extractDomain(msg.From), classifyError(err))
+
 		logger.Error("message failed permanently",
 			"retry_count", msg.RetryCount,
 			"max_retries", p.maxRetries,
@@ -244,6 +256,9 @@ func (p *Processor) sendBounce(ctx context.Context, msg *Message, errorMsg strin
 		return
 	}
 
+	// Track bounce metrics
+	metrics.IncMessagesBounced(extractDomain(msg.From))
+
 	logger.Info("bounce message queued", "bounce_id", bounceMsg.ID, "original_sender", msg.From)
 }
 
@@ -286,4 +301,43 @@ func (p *Processor) calculateBackoff(retryCount int) time.Duration {
 	}
 
 	return backoff
+}
+
+// extractDomain extracts domain from email address
+func extractDomain(email string) string {
+	at := strings.LastIndex(email, "@")
+	if at < 0 || at == len(email)-1 {
+		return "unknown"
+	}
+	return strings.ToLower(email[at+1:])
+}
+
+// classifyError classifies delivery error into category for metrics
+func classifyError(err error) string {
+	if err == nil {
+		return "unknown"
+	}
+
+	errStr := strings.ToLower(err.Error())
+
+	switch {
+	case strings.Contains(errStr, "connection refused"):
+		return "connection_refused"
+	case strings.Contains(errStr, "connection timeout") || strings.Contains(errStr, "timeout"):
+		return "timeout"
+	case strings.Contains(errStr, "no such host") || strings.Contains(errStr, "dns"):
+		return "dns_error"
+	case strings.Contains(errStr, "550") || strings.Contains(errStr, "user unknown"):
+		return "recipient_rejected"
+	case strings.Contains(errStr, "554") || strings.Contains(errStr, "spam"):
+		return "spam_rejected"
+	case strings.Contains(errStr, "relay"):
+		return "relay_denied"
+	case strings.Contains(errStr, "authentication"):
+		return "auth_failed"
+	case strings.Contains(errStr, "tls") || strings.Contains(errStr, "certificate"):
+		return "tls_error"
+	default:
+		return "other"
+	}
 }

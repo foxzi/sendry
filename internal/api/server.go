@@ -12,6 +12,7 @@ import (
 
 	"github.com/foxzi/sendry/internal/config"
 	"github.com/foxzi/sendry/internal/domain"
+	"github.com/foxzi/sendry/internal/metrics"
 	"github.com/foxzi/sendry/internal/queue"
 	"github.com/foxzi/sendry/internal/ratelimit"
 	"github.com/foxzi/sendry/internal/sandbox"
@@ -113,6 +114,7 @@ func (s *Server) setupRoutes() {
 	// Middleware
 	s.router.Use(middleware.RequestID)
 	s.router.Use(middleware.RealIP)
+	s.router.Use(metrics.HTTPMiddleware)
 	s.router.Use(s.loggingMiddleware)
 	s.router.Use(middleware.Recoverer)
 

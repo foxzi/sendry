@@ -17,6 +17,7 @@ import (
 	"github.com/foxzi/sendry/internal/dns"
 	"github.com/foxzi/sendry/internal/domain"
 	"github.com/foxzi/sendry/internal/headers"
+	"github.com/foxzi/sendry/internal/metrics"
 	"github.com/foxzi/sendry/internal/queue"
 	"github.com/foxzi/sendry/internal/ratelimit"
 	"github.com/foxzi/sendry/internal/sandbox"
@@ -27,21 +28,23 @@ import (
 
 // App is the main application
 type App struct {
-	config          *config.Config
-	queue           queue.Queue
-	smtpServer      *smtp.Server
-	smtpSubmission  *smtp.Server
-	smtpsServer     *smtp.Server
-	apiServer       *api.Server
-	processor       *queue.Processor
-	logger          *slog.Logger
-	tlsConfig       *tls.Config
-	acmeManager     *sendryTLS.ACMEManager
-	acmeServer      *http.Server
-	domainManager   *domain.Manager
-	rateLimiter     *ratelimit.Limiter
-	sandboxStorage  *sandbox.Storage
-	sandboxSender   *sandbox.Sender
+	config           *config.Config
+	queue            queue.Queue
+	smtpServer       *smtp.Server
+	smtpSubmission   *smtp.Server
+	smtpsServer      *smtp.Server
+	apiServer        *api.Server
+	processor        *queue.Processor
+	logger           *slog.Logger
+	tlsConfig        *tls.Config
+	acmeManager      *sendryTLS.ACMEManager
+	acmeServer       *http.Server
+	domainManager    *domain.Manager
+	rateLimiter      *ratelimit.Limiter
+	sandboxStorage   *sandbox.Storage
+	sandboxSender    *sandbox.Sender
+	metricsServer    *metrics.Server
+	metricsCollector *metrics.Collector
 }
 
 // New creates a new application
@@ -95,6 +98,40 @@ func New(cfg *config.Config) (*App, error) {
 			return nil, fmt.Errorf("failed to create rate limiter: %w", err)
 		}
 		logger.Info("rate limiting enabled")
+	}
+
+	// Initialize metrics if enabled
+	var metricsInstance *metrics.Metrics
+	var metricsCollector *metrics.Collector
+	var metricsServer *metrics.Server
+
+	if cfg.Metrics.Enabled {
+		metricsInstance = metrics.New()
+		metrics.SetGlobal(metricsInstance)
+
+		// Create queue stats adapter for metrics
+		queueStatsAdapter := &queueStatsAdapter{queue: storage}
+
+		metricsCollector, err = metrics.NewCollector(
+			storage.DB(),
+			metricsInstance,
+			queueStatsAdapter,
+			cfg.Storage.Path,
+			cfg.Metrics.FlushInterval,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create metrics collector: %w", err)
+		}
+
+		metricsServer = metrics.NewServerWithAllowedIPs(
+			metricsInstance,
+			cfg.Metrics.ListenAddr,
+			cfg.Metrics.Path,
+			cfg.Metrics.AllowedIPs,
+			logger.With("component", "metrics"),
+		)
+
+		logger.Info("metrics enabled", "addr", cfg.Metrics.ListenAddr, "path", cfg.Metrics.Path)
 	}
 
 	// Create DNS resolver
@@ -192,6 +229,7 @@ func New(cfg *config.Config) (*App, error) {
 		Implicit:    false,
 		Addr:        cfg.SMTP.ListenAddr,
 		RateLimiter: rateLimiter,
+		ServerType:  "smtp",
 	})
 
 	// Create SMTP submission server (port 587) with STARTTLS
@@ -204,6 +242,7 @@ func New(cfg *config.Config) (*App, error) {
 		Implicit:    false,
 		Addr:        cfg.SMTP.SubmissionAddr,
 		RateLimiter: rateLimiter,
+		ServerType:  "submission",
 	})
 
 	// Create SMTPS server (port 465) with implicit TLS
@@ -217,6 +256,7 @@ func New(cfg *config.Config) (*App, error) {
 			Implicit:    true,
 			Addr:        cfg.SMTP.SMTPSAddr,
 			RateLimiter: rateLimiter,
+			ServerType:  "smtps",
 		})
 	}
 
@@ -234,20 +274,22 @@ func New(cfg *config.Config) (*App, error) {
 	})
 
 	return &App{
-		config:          cfg,
-		queue:           storage,
-		smtpServer:      smtpServer,
-		smtpSubmission:  smtpSubmission,
-		smtpsServer:     smtpsServer,
-		apiServer:       apiServer,
-		processor:       processor,
-		logger:          logger,
-		tlsConfig:       tlsConfig,
-		sandboxStorage:  sandboxStorage,
-		sandboxSender:   sandboxSender,
-		acmeManager:    acmeManager,
-		domainManager:  domainMgr,
-		rateLimiter:    rateLimiter,
+		config:           cfg,
+		queue:            storage,
+		smtpServer:       smtpServer,
+		smtpSubmission:   smtpSubmission,
+		smtpsServer:      smtpsServer,
+		apiServer:        apiServer,
+		processor:        processor,
+		logger:           logger,
+		tlsConfig:        tlsConfig,
+		sandboxStorage:   sandboxStorage,
+		sandboxSender:    sandboxSender,
+		acmeManager:      acmeManager,
+		domainManager:    domainMgr,
+		rateLimiter:      rateLimiter,
+		metricsServer:    metricsServer,
+		metricsCollector: metricsCollector,
 	}, nil
 }
 
@@ -270,6 +312,18 @@ func (a *App) Run(ctx context.Context) error {
 
 	// Start queue processor
 	a.processor.Start(ctx)
+
+	// Start metrics collector and server if enabled
+	if a.metricsCollector != nil {
+		a.metricsCollector.Start(ctx)
+	}
+	if a.metricsServer != nil {
+		go func() {
+			if err := a.metricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				a.logger.Error("metrics server error", "error", err)
+			}
+		}()
+	}
 
 	// Channel to collect errors
 	errCh := make(chan error, 4)
@@ -407,6 +461,20 @@ func (a *App) Shutdown(ctx context.Context) error {
 		}
 	}
 
+	// Stop metrics collector (persists counters)
+	if a.metricsCollector != nil {
+		if err := a.metricsCollector.Stop(); err != nil {
+			a.logger.Error("metrics collector stop error", "error", err)
+		}
+	}
+
+	// Shutdown metrics server
+	if a.metricsServer != nil {
+		if err := a.metricsServer.Shutdown(shutdownCtx); err != nil {
+			a.logger.Error("metrics server shutdown error", "error", err)
+		}
+	}
+
 	// Close storage
 	if err := a.queue.Close(); err != nil {
 		a.logger.Error("storage close error", "error", err)
@@ -441,4 +509,24 @@ func setupLogger(cfg config.LoggingConfig) *slog.Logger {
 	}
 
 	return slog.New(handler)
+}
+
+// queueStatsAdapter adapts queue.Queue to metrics.QueueStatsProvider
+type queueStatsAdapter struct {
+	queue queue.Queue
+}
+
+func (a *queueStatsAdapter) Stats(ctx context.Context) (*metrics.QueueStats, error) {
+	stats, err := a.queue.Stats(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &metrics.QueueStats{
+		Pending:   stats.Pending,
+		Sending:   stats.Sending,
+		Deferred:  stats.Deferred,
+		Delivered: stats.Delivered,
+		Failed:    stats.Failed,
+		Total:     stats.Total,
+	}, nil
 }
