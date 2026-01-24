@@ -1,0 +1,87 @@
+# nfpm configuration for building DEB/RPM/APK packages
+# https://nfpm.goreleaser.com/configuration/
+
+name: sendry
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+release: 1
+section: mail
+priority: optional
+maintainer: Sendry Team
+description: |
+  Sendry - Outbound Mail Transfer Agent
+  A high-performance MTA server for sending emails with support for
+  SMTP relay, HTTP API, DKIM signing, rate limiting, and more.
+vendor: Sendry
+homepage: https://github.com/foxzi/sendry
+license: MIT
+
+# Dependencies
+depends:
+  - ca-certificates
+
+recommends:
+  - openssl
+
+contents:
+  # Binary
+  - src: build/sendry-linux-${ARCH}
+    dst: /usr/bin/sendry
+    file_info:
+      mode: 0755
+
+  # Example configuration
+  - src: configs/sendry.example.yaml
+    dst: /etc/sendry/config.yaml.example
+    type: config
+    file_info:
+      mode: 0644
+
+  # Systemd service
+  - src: packaging/sendry.service
+    dst: /usr/lib/systemd/system/sendry.service
+    file_info:
+      mode: 0644
+
+  # Create directories
+  - dst: /var/lib/sendry
+    type: dir
+    file_info:
+      mode: 0755
+      owner: sendry
+      group: sendry
+
+  - dst: /var/log/sendry
+    type: dir
+    file_info:
+      mode: 0755
+      owner: sendry
+      group: sendry
+
+  - dst: /etc/sendry
+    type: dir
+    file_info:
+      mode: 0755
+
+  - dst: /var/lib/sendry/dkim
+    type: dir
+    file_info:
+      mode: 0700
+      owner: sendry
+      group: sendry
+
+scripts:
+  preinstall: packaging/preinstall.sh
+  postinstall: packaging/postinstall.sh
+  preremove: packaging/preremove.sh
+
+rpm:
+  group: System Environment/Daemons
+  compression: gzip
+
+deb:
+  compression: gzip
+
+apk:
+  # APK specific settings

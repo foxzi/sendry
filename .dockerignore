@@ -1,0 +1,49 @@
+# Build artifacts
+build/*
+!build/packages/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test artifacts
+*.test
+*.out
+coverage.html
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Development files
+.env
+.env.*
+*.local
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Package files
+*.deb
+*.rpm
+*.tar.gz
+*.zip

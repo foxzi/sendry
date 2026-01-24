@@ -1,0 +1,39 @@
+services:
+  sendry:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+        COMMIT: ${COMMIT:-unknown}
+        BUILD_TIME: ${BUILD_TIME:-unknown}
+    image: sendry:latest
+    container_name: sendry
+    restart: unless-stopped
+    ports:
+      - "25:25"
+      - "465:465"
+      - "587:587"
+      - "8080:8080"
+      - "9090:9090"
+    volumes:
+      - sendry-data:/var/lib/sendry
+      - ./configs/sendry.example.yaml:/etc/sendry/config.yaml:ro
+    environment:
+      - TZ=UTC
+    healthcheck:
+      test: ["CMD", "/usr/bin/sendry", "version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - sendry-net
+
+volumes:
+  sendry-data:
+    driver: local
+
+networks:
+  sendry-net:
+    driver: bridge

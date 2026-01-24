@@ -1,0 +1,46 @@
+[Unit]
+Description=Sendry - Outbound Mail Transfer Agent
+Documentation=https://github.com/foxzi/sendry
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sendry
+Group=sendry
+ExecStart=/usr/bin/sendry serve --config /etc/sendry/config.yaml
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+
+# Allow write access to data directories
+ReadWritePaths=/var/lib/sendry /var/log/sendry
+
+# Capabilities for binding to ports < 1024
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+# Resource limits
+LimitNOFILE=65535
+LimitNPROC=4096
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sendry
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,45 @@
+# Dockerfile for CI multi-arch builds
+# Uses pre-built binaries
+
+FROM alpine:3.19
+
+ARG TARGETARCH
+
+LABEL maintainer="sendry"
+LABEL description="Sendry - Outbound Mail Transfer Agent"
+LABEL org.opencontainers.image.source="https://github.com/foxzi/sendry"
+
+# Install ca-certificates for TLS and tzdata for timezones
+RUN apk add --no-cache ca-certificates tzdata
+
+# Create non-root user
+RUN addgroup -g 1000 sendry && \
+    adduser -u 1000 -G sendry -h /var/lib/sendry -s /sbin/nologin -D sendry
+
+# Copy pre-built binary based on target architecture
+COPY build/sendry-linux-${TARGETARCH} /usr/bin/sendry
+RUN chmod +x /usr/bin/sendry
+
+# Create directories
+RUN mkdir -p /etc/sendry /var/lib/sendry /var/log/sendry && \
+    chown -R sendry:sendry /var/lib/sendry /var/log/sendry
+
+# Copy example config
+COPY configs/sendry.example.yaml /etc/sendry/config.yaml.example
+
+# Expose ports
+EXPOSE 25 465 587 8080 9090
+
+# Volumes
+VOLUME ["/var/lib/sendry", "/etc/sendry"]
+
+# Switch to non-root user
+USER sendry
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD ["/usr/bin/sendry", "version"]
+
+# Default command
+ENTRYPOINT ["/usr/bin/sendry"]
+CMD ["serve", "--config", "/etc/sendry/config.yaml"]
