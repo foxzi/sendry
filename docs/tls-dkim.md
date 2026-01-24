@@ -35,6 +35,39 @@ Requirements for ACME:
 - Port 80 must be accessible for HTTP-01 challenge
 - DNS must resolve to the server
 
+**How it works:**
+
+1. On startup, Sendry starts HTTP server on port 80 for ACME challenges
+2. Certificates are fetched/validated for all configured domains
+3. Certificates are cached in `cache_dir`
+4. Automatic renewal 30 days before expiration
+
+Startup logs will show certificate status:
+```
+level=INFO msg="obtained new certificate" domain=mail.example.com expires=2025-04-24 days_left=90
+level=INFO msg="certificate valid" domain=mail.example.com expires=2025-04-24 days_left=85
+```
+
+**Certificate files:**
+```bash
+ls /var/lib/sendry/certs/
+# acme_account+key        - ACME account key
+# mail.example.com+rsa    - certificate and private key
+```
+
+### HTTPS for API
+
+When TLS is configured (ACME or manual), the API server automatically uses HTTPS:
+
+```
+level=INFO msg="starting HTTPS API server" addr=:8080
+```
+
+Access API via HTTPS:
+```bash
+curl -k https://mail.example.com:8080/health
+```
+
 ### Testing TLS
 
 ```bash
@@ -46,6 +79,9 @@ openssl s_client -starttls smtp -connect localhost:587
 
 # Test SMTPS on port 465
 openssl s_client -connect localhost:465
+
+# Test HTTPS API
+openssl s_client -connect localhost:8080
 ```
 
 ## DKIM (DomainKeys Identified Mail)

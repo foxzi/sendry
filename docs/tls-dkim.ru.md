@@ -35,6 +35,39 @@ smtp:
 - Порт 80 должен быть доступен для HTTP-01 проверки
 - DNS должен указывать на сервер
 
+**Как это работает:**
+
+1. При запуске Sendry запускает HTTP-сервер на порту 80 для ACME-проверок
+2. Сертификаты получаются/проверяются для всех настроенных доменов
+3. Сертификаты кэшируются в `cache_dir`
+4. Автоматическое обновление за 30 дней до истечения
+
+В логах при запуске отображается статус сертификатов:
+```
+level=INFO msg="obtained new certificate" domain=mail.example.com expires=2025-04-24 days_left=90
+level=INFO msg="certificate valid" domain=mail.example.com expires=2025-04-24 days_left=85
+```
+
+**Файлы сертификатов:**
+```bash
+ls /var/lib/sendry/certs/
+# acme_account+key        - ключ аккаунта ACME
+# mail.example.com+rsa    - сертификат и приватный ключ
+```
+
+### HTTPS для API
+
+Когда TLS настроен (ACME или вручную), API-сервер автоматически использует HTTPS:
+
+```
+level=INFO msg="starting HTTPS API server" addr=:8080
+```
+
+Доступ к API через HTTPS:
+```bash
+curl -k https://mail.example.com:8080/health
+```
+
 ### Проверка TLS
 
 ```bash
@@ -46,6 +79,9 @@ openssl s_client -starttls smtp -connect localhost:587
 
 # Проверка SMTPS на порту 465
 openssl s_client -connect localhost:465
+
+# Проверка HTTPS API
+openssl s_client -connect localhost:8080
 ```
 
 ## DKIM (DomainKeys Identified Mail)
