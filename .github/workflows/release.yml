@@ -66,10 +66,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: binary-linux-${{ matrix.arch }}
-          path: build/
+          path: artifacts/
 
-      - name: Rename binary
-        run: mv build/sendry-linux-${{ matrix.arch }} build/sendry-linux-${{ matrix.arch }}
+      - name: Prepare binary
+        run: |
+          mkdir -p build
+          mv artifacts/sendry-linux-${{ matrix.arch }} build/sendry-linux-${{ matrix.arch }}
+          chmod +x build/sendry-linux-${{ matrix.arch }}
 
       - name: Install nfpm
         run: |
@@ -113,18 +116,22 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: binary-linux-amd64
-          path: build/
+          path: artifacts/amd64/
 
       - name: Download linux arm64 binary
         uses: actions/download-artifact@v4
         with:
           name: binary-linux-arm64
-          path: build/
+          path: artifacts/arm64/
 
       - name: Prepare binaries
         run: |
+          mkdir -p build
+          mv artifacts/amd64/sendry-linux-amd64 build/sendry-linux-amd64
+          mv artifacts/arm64/sendry-linux-arm64 build/sendry-linux-arm64
           chmod +x build/sendry-linux-amd64
           chmod +x build/sendry-linux-arm64
+          ls -la build/
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
