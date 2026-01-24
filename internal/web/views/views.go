@@ -11,13 +11,20 @@ import (
 //go:embed *.html
 var templatesFS embed.FS
 
+// Standalone templates that don't use the layout
+var standaloneTemplates = map[string]bool{
+	"login": true,
+}
+
 type Engine struct {
-	templates map[string]*template.Template
+	templates   map[string]*template.Template
+	standalone  map[string]*template.Template
 }
 
 func New() (*Engine, error) {
 	e := &Engine{
-		templates: make(map[string]*template.Template),
+		templates:  make(map[string]*template.Template),
+		standalone: make(map[string]*template.Template),
 	}
 
 	// Parse layout
@@ -40,6 +47,16 @@ func New() (*Engine, error) {
 		name := entry.Name()
 		baseName := name[:len(name)-len(filepath.Ext(name))]
 
+		// Check if standalone template
+		if standaloneTemplates[baseName] {
+			tmpl, err := template.ParseFS(templatesFS, name)
+			if err != nil {
+				return nil, err
+			}
+			e.standalone[baseName] = tmpl
+			continue
+		}
+
 		// Clone layout and parse page template
 		tmpl, err := layoutTmpl.Clone()
 		if err != nil {
@@ -58,14 +75,20 @@ func New() (*Engine, error) {
 }
 
 func (e *Engine) Render(w io.Writer, name string, data any) error {
-	tmpl, ok := e.templates[name]
-	if !ok {
-		// Try to render without layout (like login page)
-		tmpl, err := template.ParseFS(templatesFS, name+".html")
-		if err != nil {
-			return err
-		}
+	// Check standalone first
+	if tmpl, ok := e.standalone[name]; ok {
 		return tmpl.Execute(w, data)
+	}
+
+	// Then check layout templates
+	if tmpl, ok := e.templates[name]; ok {
+		return tmpl.Execute(w, data)
+	}
+
+	// Try to parse on the fly
+	tmpl, err := template.ParseFS(templatesFS, name+".html")
+	if err != nil {
+		return err
 	}
 	return tmpl.Execute(w, data)
 }
