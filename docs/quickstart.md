@@ -90,6 +90,22 @@ sendry serve -c test.yaml
 
 ## Sending Test Emails
 
+### Via CLI (Recommended)
+
+```bash
+# Send test email through local server
+sendry test send -c config.yaml --to user@example.com
+
+# With custom subject and body
+sendry test send -c config.yaml --to user@example.com --subject "Test" --body "Hello!"
+
+# Skip TLS for local testing without certificates
+sendry test send -c config.yaml --to user@example.com --no-tls
+
+# Use specific port
+sendry test send -c config.yaml --to user@example.com --port 2525
+```
+
 ### Via SMTP
 
 ```bash

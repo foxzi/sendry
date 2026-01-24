@@ -90,6 +90,22 @@ sendry serve -c test.yaml
 
 ## Отправка тестовых писем
 
+### Через CLI (Рекомендуется)
+
+```bash
+# Отправить тестовое письмо через локальный сервер
+sendry test send -c config.yaml --to user@example.com
+
+# С указанием темы и текста
+sendry test send -c config.yaml --to user@example.com --subject "Тест" --body "Привет!"
+
+# Без TLS для локального тестирования без сертификатов
+sendry test send -c config.yaml --to user@example.com --no-tls
+
+# Использовать определённый порт
+sendry test send -c config.yaml --to user@example.com --port 2525
+```
+
 ### Через SMTP
 
 ```bash
