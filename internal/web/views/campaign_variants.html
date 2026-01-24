@@ -1,0 +1,97 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1>{{.Campaign.Name}} - Variants</h1>
+        <p class="text-muted">Configure template variants for A/B testing</p>
+    </div>
+    <a href="/campaigns/{{.Campaign.ID}}" class="btn btn-secondary">Back to Campaign</a>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>Add Variant</h2>
+    </div>
+    <div class="card-body">
+        <form method="post" action="/campaigns/{{.Campaign.ID}}/variants">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="name">Variant Name *</label>
+                    <input type="text" id="name" name="name" required class="input" placeholder="Variant A">
+                </div>
+                <div class="form-group">
+                    <label for="template_id">Template *</label>
+                    <select id="template_id" name="template_id" required class="input">
+                        <option value="">Select template...</option>
+                        {{range .Templates}}
+                        <option value="{{.ID}}">{{.Name}}</option>
+                        {{end}}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="weight">Weight (%)</label>
+                    <input type="number" id="weight" name="weight" class="input" value="100" min="1" max="100">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="subject_override">Subject Override (optional)</label>
+                <input type="text" id="subject_override" name="subject_override" class="input" placeholder="Override template subject">
+                <small class="form-help">Leave empty to use the template's subject</small>
+            </div>
+            <button type="submit" class="btn btn-primary">Add Variant</button>
+        </form>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 1.5rem">
+    <div class="card-header">
+        <h2>Current Variants</h2>
+    </div>
+    <div class="card-body">
+        {{if .Variants}}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Template</th>
+                    <th>Subject Override</th>
+                    <th>Weight</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Variants}}
+                <tr>
+                    <td>{{.Name}}</td>
+                    <td><a href="/templates/{{.TemplateID}}">{{.TemplateName}}</a></td>
+                    <td>{{if .SubjectOverride}}<code>{{.SubjectOverride}}</code>{{else}}<span class="text-muted">-</span>{{end}}</td>
+                    <td>{{.Weight}}%</td>
+                    <td>
+                        <form method="post" action="/campaigns/{{$.Campaign.ID}}/variants/{{.ID}}" style="display:inline" onsubmit="return confirm('Delete this variant?')">
+                            <input type="hidden" name="_method" value="DELETE">
+                            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+
+        {{$totalWeight := 0}}
+        {{range .Variants}}{{$totalWeight = add $totalWeight .Weight}}{{end}}
+        {{if gt (len .Variants) 1}}
+        <div class="alert {{if eq $totalWeight 100}}alert-success{{else}}alert-warning{{end}}" style="margin-top: 1rem">
+            Total weight: {{$totalWeight}}%
+            {{if ne $totalWeight 100}}
+            <br><small>Weights will be normalized proportionally during sending</small>
+            {{end}}
+        </div>
+        {{end}}
+        {{else}}
+        <div class="empty-state">
+            <p>No variants configured yet</p>
+            <p class="text-muted">Add at least one variant to send this campaign</p>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}

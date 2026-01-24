@@ -1,0 +1,85 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>Send: {{.Campaign.Name}}</h1>
+    <a href="/campaigns/{{.Campaign.ID}}" class="btn btn-secondary">Back to Campaign</a>
+</div>
+
+{{if not .Variants}}
+<div class="alert alert-error">
+    <strong>Cannot send:</strong> No template variants configured.
+    <a href="/campaigns/{{.Campaign.ID}}/variants">Add variants</a>
+</div>
+{{else}}
+
+<form method="post" action="/campaigns/{{.Campaign.ID}}/send" class="card">
+    <div class="card-body">
+        <h3>1. Select Recipients</h3>
+        <div class="form-group">
+            <label for="recipient_list_id">Recipient List *</label>
+            <select id="recipient_list_id" name="recipient_list_id" required class="input">
+                <option value="">Select list...</option>
+                {{range .RecipientLists}}
+                <option value="{{.ID}}">{{.Name}} ({{.ActiveCount}} active)</option>
+                {{end}}
+            </select>
+        </div>
+
+        <h3 style="margin-top: 1.5rem">2. Select Servers</h3>
+        <div class="form-group">
+            {{range .Servers}}
+            <label class="checkbox-label">
+                <input type="checkbox" name="servers" value="{{.Name}}" checked>
+                {{.Name}} <span class="badge badge-{{.Env}}">{{.Env}}</span>
+            </label>
+            {{end}}
+        </div>
+
+        <div class="form-group">
+            <label for="strategy">Distribution Strategy</label>
+            <select id="strategy" name="strategy" class="input">
+                <option value="round-robin">Round Robin</option>
+                <option value="random">Random</option>
+                <option value="weighted">Weighted (by server capacity)</option>
+            </select>
+        </div>
+
+        <h3 style="margin-top: 1.5rem">3. Schedule (Optional)</h3>
+        <div class="form-group">
+            <label for="scheduled_at">Schedule Send</label>
+            <input type="datetime-local" id="scheduled_at" name="scheduled_at" class="input">
+            <small class="form-help">Leave empty to send immediately</small>
+        </div>
+
+        <h3 style="margin-top: 1.5rem">4. Confirm</h3>
+        <div class="alert alert-warning">
+            <strong>Review before sending:</strong>
+            <ul style="margin: 0.5rem 0 0 1.5rem">
+                <li>Campaign: {{.Campaign.Name}}</li>
+                <li>Variants: {{len .Variants}}</li>
+                <li>From: {{if .Campaign.FromName}}{{.Campaign.FromName}} &lt;{{.Campaign.FromEmail}}&gt;{{else}}{{.Campaign.FromEmail}}{{end}}</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="card-footer">
+        <a href="/campaigns/{{.Campaign.ID}}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary" onclick="return confirm('Are you sure you want to send this campaign?')">
+            Send Campaign
+        </button>
+    </div>
+</form>
+{{end}}
+
+<style>
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+}
+.checkbox-label input[type="checkbox"] {
+    width: auto;
+}
+</style>
+{{end}}

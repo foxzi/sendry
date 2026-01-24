@@ -1,0 +1,73 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>Campaigns</h1>
+    <a href="/campaigns/new" class="btn btn-primary">New Campaign</a>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <form class="filter-form" method="get" action="/campaigns">
+            <input type="text" name="search" placeholder="Search campaigns..." value="{{.Search}}" class="input">
+            <button type="submit" class="btn">Search</button>
+            {{if .Search}}
+            <a href="/campaigns" class="btn btn-secondary">Clear</a>
+            {{end}}
+        </form>
+    </div>
+    <div class="card-body">
+        {{if .Campaigns}}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>From</th>
+                    <th>Variants</th>
+                    <th>Jobs</th>
+                    <th>Updated</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Campaigns}}
+                <tr>
+                    <td>
+                        <a href="/campaigns/{{.ID}}">{{.Name}}</a>
+                        {{if .Description}}
+                        <div class="text-muted">{{.Description}}</div>
+                        {{end}}
+                    </td>
+                    <td>
+                        {{if .FromName}}{{.FromName}} &lt;{{.FromEmail}}&gt;{{else}}{{.FromEmail}}{{end}}
+                    </td>
+                    <td>{{.VariantCount}}</td>
+                    <td>{{.JobCount}}</td>
+                    <td>{{.UpdatedAt.Format "2006-01-02 15:04"}}</td>
+                    <td class="actions">
+                        <a href="/campaigns/{{.ID}}/variants" class="btn btn-sm">Variants</a>
+                        <a href="/campaigns/{{.ID}}/edit" class="btn btn-sm">Edit</a>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+
+        {{if gt .TotalPages 1}}
+        <div class="pagination">
+            {{if gt .Page 1}}
+            <a href="/campaigns?page={{sub .Page 1}}{{if .Search}}&search={{.Search}}{{end}}" class="btn btn-sm">&laquo; Prev</a>
+            {{end}}
+            <span class="pagination-info">Page {{.Page}} of {{.TotalPages}} ({{.Total}} total)</span>
+            {{if lt .Page .TotalPages}}
+            <a href="/campaigns?page={{add .Page 1}}{{if .Search}}&search={{.Search}}{{end}}" class="btn btn-sm">Next &raquo;</a>
+            {{end}}
+        </div>
+        {{end}}
+        {{else}}
+        <div class="empty-state">
+            <p>No campaigns found</p>
+            <a href="/campaigns/new" class="btn btn-primary">Create your first campaign</a>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}

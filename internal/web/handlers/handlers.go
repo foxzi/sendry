@@ -18,6 +18,7 @@ type Handlers struct {
 	views      *views.Engine
 	templates  *repository.TemplateRepository
 	recipients *repository.RecipientRepository
+	campaigns  *repository.CampaignRepository
 }
 
 func New(cfg *config.Config, db *db.DB, logger *slog.Logger, v *views.Engine) *Handlers {
@@ -28,6 +29,7 @@ func New(cfg *config.Config, db *db.DB, logger *slog.Logger, v *views.Engine) *H
 		views:      v,
 		templates:  repository.NewTemplateRepository(db.DB),
 		recipients: repository.NewRecipientRepository(db.DB),
+		campaigns:  repository.NewCampaignRepository(db.DB),
 	}
 }
 

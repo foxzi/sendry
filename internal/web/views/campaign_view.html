@@ -1,0 +1,104 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1>{{.Campaign.Name}}</h1>
+        {{if .Campaign.Description}}
+        <p class="text-muted">{{.Campaign.Description}}</p>
+        {{end}}
+    </div>
+    <div class="header-actions">
+        <a href="/campaigns/{{.Campaign.ID}}/send" class="btn btn-primary">Send Campaign</a>
+        <a href="/campaigns/{{.Campaign.ID}}/edit" class="btn">Edit</a>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">
+            <h2>Campaign Details</h2>
+        </div>
+        <div class="card-body">
+            <dl class="details-list">
+                <dt>From</dt>
+                <dd>{{if .Campaign.FromName}}{{.Campaign.FromName}} &lt;{{.Campaign.FromEmail}}&gt;{{else}}{{.Campaign.FromEmail}}{{end}}</dd>
+
+                {{if .Campaign.ReplyTo}}
+                <dt>Reply-To</dt>
+                <dd>{{.Campaign.ReplyTo}}</dd>
+                {{end}}
+
+                {{if .Campaign.Tags}}
+                <dt>Tags</dt>
+                <dd><code>{{.Campaign.Tags}}</code></dd>
+                {{end}}
+
+                <dt>Created</dt>
+                <dd>{{.Campaign.CreatedAt.Format "2006-01-02 15:04:05"}}</dd>
+
+                <dt>Updated</dt>
+                <dd>{{.Campaign.UpdatedAt.Format "2006-01-02 15:04:05"}}</dd>
+            </dl>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h2>Template Variants</h2>
+            <a href="/campaigns/{{.Campaign.ID}}/variants" class="btn btn-sm">Manage</a>
+        </div>
+        <div class="card-body">
+            {{if .Variants}}
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Template</th>
+                        <th>Weight</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Variants}}
+                    <tr>
+                        <td>{{.Name}}</td>
+                        <td><a href="/templates/{{.TemplateID}}">{{.TemplateName}}</a></td>
+                        <td>{{.Weight}}%</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+            {{else}}
+            <div class="empty-state">
+                <p>No variants configured</p>
+                <a href="/campaigns/{{.Campaign.ID}}/variants" class="btn btn-sm btn-primary">Add Variant</a>
+            </div>
+            {{end}}
+        </div>
+    </div>
+</div>
+
+{{if .Campaign.Variables}}
+<div class="card" style="margin-top: 1.5rem">
+    <div class="card-header">
+        <h2>Campaign Variables</h2>
+        <a href="/campaigns/{{.Campaign.ID}}/variables" class="btn btn-sm">Edit</a>
+    </div>
+    <div class="card-body">
+        <pre class="code-preview"><code>{{.Campaign.Variables}}</code></pre>
+    </div>
+</div>
+{{end}}
+
+<div class="card" style="margin-top: 1.5rem">
+    <div class="card-header">
+        <h2>Quick Actions</h2>
+    </div>
+    <div class="card-body actions-bar">
+        <a href="/campaigns/{{.Campaign.ID}}/variables" class="btn">Edit Variables</a>
+        <a href="/campaigns/{{.Campaign.ID}}/jobs" class="btn">View Jobs</a>
+        <form method="post" action="/campaigns/{{.Campaign.ID}}" onsubmit="return confirm('Delete this campaign?')" style="margin-left: auto">
+            <input type="hidden" name="_method" value="DELETE">
+            <button type="submit" class="btn btn-danger">Delete Campaign</button>
+        </form>
+    </div>
+</div>
+{{end}}

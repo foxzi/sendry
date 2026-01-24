@@ -123,6 +123,7 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("PUT /campaigns/{id}/variables", h.CampaignVariablesUpdate)
 	protected.HandleFunc("GET /campaigns/{id}/variants", h.CampaignVariants)
 	protected.HandleFunc("POST /campaigns/{id}/variants", h.CampaignVariantCreate)
+	protected.HandleFunc("DELETE /campaigns/{id}/variants/{variantId}", h.CampaignVariantDelete)
 	protected.HandleFunc("GET /campaigns/{id}/send", h.CampaignSendPage)
 	protected.HandleFunc("POST /campaigns/{id}/send", h.CampaignSend)
 	protected.HandleFunc("GET /campaigns/{id}/jobs", h.CampaignJobs)

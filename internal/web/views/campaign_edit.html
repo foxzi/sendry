@@ -1,0 +1,48 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>Edit: {{.Campaign.Name}}</h1>
+</div>
+
+<form method="post" action="/campaigns/{{.Campaign.ID}}" class="card">
+    <input type="hidden" name="_method" value="PUT">
+    <div class="card-body">
+        <div class="form-group">
+            <label for="name">Campaign Name *</label>
+            <input type="text" id="name" name="name" required class="input" value="{{.Campaign.Name}}">
+        </div>
+
+        <div class="form-group">
+            <label for="description">Description</label>
+            <textarea id="description" name="description" class="input" rows="2">{{.Campaign.Description}}</textarea>
+        </div>
+
+        <h3 style="margin: 1.5rem 0 1rem">Sender Information</h3>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="from_email">From Email *</label>
+                <input type="email" id="from_email" name="from_email" required class="input" value="{{.Campaign.FromEmail}}">
+            </div>
+            <div class="form-group">
+                <label for="from_name">From Name</label>
+                <input type="text" id="from_name" name="from_name" class="input" value="{{.Campaign.FromName}}">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="reply_to">Reply-To (optional)</label>
+            <input type="email" id="reply_to" name="reply_to" class="input" value="{{.Campaign.ReplyTo}}">
+        </div>
+
+        <div class="form-group">
+            <label for="tags">Tags (JSON array)</label>
+            <input type="text" id="tags" name="tags" class="input" value="{{.Campaign.Tags}}">
+        </div>
+    </div>
+
+    <div class="card-footer">
+        <a href="/campaigns/{{.Campaign.ID}}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+    </div>
+</form>
+{{end}}

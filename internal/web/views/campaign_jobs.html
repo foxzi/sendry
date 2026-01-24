@@ -1,0 +1,46 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>{{.Campaign.Name}} - Jobs</h1>
+    <a href="/campaigns/{{.Campaign.ID}}" class="btn btn-secondary">Back to Campaign</a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {{if .Jobs}}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Status</th>
+                    <th>Progress</th>
+                    <th>Started</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Jobs}}
+                <tr>
+                    <td><a href="/jobs/{{.ID}}">{{.ID}}</a></td>
+                    <td><span class="badge badge-{{.Status}}">{{.Status}}</span></td>
+                    <td>
+                        <div class="progress">
+                            <div class="progress-bar" style="width: {{.Progress}}%"></div>
+                        </div>
+                    </td>
+                    <td>{{.StartedAt.Format "2006-01-02 15:04"}}</td>
+                    <td>
+                        <a href="/jobs/{{.ID}}" class="btn btn-sm">View</a>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <div class="empty-state">
+            <p>No send jobs for this campaign yet</p>
+            <a href="/campaigns/{{.Campaign.ID}}/send" class="btn btn-primary">Send Campaign</a>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}
