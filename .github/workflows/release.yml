@@ -51,10 +51,46 @@ jobs:
           name: binary-${{ matrix.goos }}-${{ matrix.goarch }}
           path: sendry-${{ matrix.goos }}-${{ matrix.goarch }}
 
+  build-web:
+    name: Build Sendry Web
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goarch: amd64
+            platform: linux/amd64
+          - goarch: arm64
+            platform: linux/arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        if: matrix.goarch == 'arm64'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Build sendry-web
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
+          COMMIT=${GITHUB_SHA::8}
+          LDFLAGS="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildTime=${BUILD_TIME}"
+          docker run --rm --platform ${{ matrix.platform }} \
+            -v ${{ github.workspace }}:/app -w /app \
+            golang:1.24-bookworm \
+            bash -c "apt-get update && apt-get install -y gcc && \
+              CGO_ENABLED=1 go build -ldflags \"${LDFLAGS}\" -o sendry-web-linux-${{ matrix.goarch }} ./cmd/sendry-web"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-linux-${{ matrix.goarch }}
+          path: sendry-web-linux-${{ matrix.goarch }}
+
   build-packages:
     name: Build Packages
     runs-on: ubuntu-latest
-    needs: build-binaries
+    needs: [build-binaries, build-web]
     strategy:
       matrix:
         arch: [amd64, arm64]
@@ -62,17 +98,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download binary
+      - name: Download sendry binary
         uses: actions/download-artifact@v4
         with:
           name: binary-linux-${{ matrix.arch }}
           path: artifacts/
 
-      - name: Prepare binary
+      - name: Download sendry-web binary
+        uses: actions/download-artifact@v4
+        with:
+          name: web-linux-${{ matrix.arch }}
+          path: artifacts/
+
+      - name: Prepare binaries
         run: |
           mkdir -p build
           mv artifacts/sendry-linux-${{ matrix.arch }} build/sendry-linux-${{ matrix.arch }}
+          mv artifacts/sendry-web-linux-${{ matrix.arch }} build/sendry-web-linux-${{ matrix.arch }}
           chmod +x build/sendry-linux-${{ matrix.arch }}
+          chmod +x build/sendry-web-linux-${{ matrix.arch }}
 
       - name: Install nfpm
         run: |
@@ -170,7 +214,7 @@ jobs:
   release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [build-binaries, build-packages, build-docker]
+    needs: [build-binaries, build-web, build-packages, build-docker]
     permissions:
       contents: write
     steps:
@@ -181,6 +225,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           pattern: binary-*
+          path: artifacts/
+
+      - name: Download web artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: web-*
           path: artifacts/
 
       - name: Download package artifacts
@@ -195,6 +245,13 @@ jobs:
 
           # Binaries
           for dir in artifacts/binary-*; do
+            if [ -d "$dir" ]; then
+              cp "$dir"/* release/
+            fi
+          done
+
+          # Web binaries
+          for dir in artifacts/web-*; do
             if [ -d "$dir" ]; then
               cp "$dir"/* release/
             fi
