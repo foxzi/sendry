@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Docker: Alpine base image updated to 3.23
+- Docker: sendry-web now built statically with musl for Alpine compatibility
 - Documentation: Docker Compose guide (EN/RU)
 - Documentation: expanded variable substitution docs in sendry-web guide (EN/RU)
 - Sendry Web: replaced GrapesJS with Quill + CodeMirror + Editor.js for template editing
