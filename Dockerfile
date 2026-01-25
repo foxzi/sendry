@@ -1,7 +1,14 @@
-# Build stage
-FROM golang:1.24-alpine AS builder
+# Universal Dockerfile for sendry and sendry-web
+# Usage:
+#   docker build --build-arg TARGET=sendry -t sendry .
+#   docker build --build-arg TARGET=sendry-web -t sendry-web .
 
-RUN apk add --no-cache git make ca-certificates tzdata
+# Build stage
+FROM golang:1.24-bookworm AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git make ca-certificates gcc libc6-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
 
@@ -12,58 +19,66 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build binary
+# Build arguments
+ARG TARGET=sendry
 ARG VERSION=dev
 ARG COMMIT=unknown
 ARG BUILD_TIME=unknown
 
-RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildTime=${BUILD_TIME}" \
-    -o /sendry ./cmd/sendry
+# Build binary
+# sendry-web requires CGO for SQLite, sendry doesn't
+RUN if [ "$TARGET" = "sendry-web" ]; then \
+        CGO_ENABLED=1 GOOS=linux go build \
+            -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildTime=${BUILD_TIME}" \
+            -o /app ./cmd/sendry-web; \
+    else \
+        CGO_ENABLED=0 GOOS=linux go build \
+            -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildTime=${BUILD_TIME}" \
+            -o /app ./cmd/sendry; \
+    fi
 
 # Final stage
-FROM alpine:3.19
+FROM debian:bookworm-slim
 
 LABEL maintainer="sendry"
-LABEL description="Sendry - Outbound Mail Transfer Agent"
 LABEL org.opencontainers.image.source="https://github.com/foxzi/sendry"
 
+ARG TARGET=sendry
+
 # Install ca-certificates for TLS and tzdata for timezones
-RUN apk add --no-cache ca-certificates tzdata
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates tzdata \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
-RUN addgroup -g 1000 sendry && \
-    adduser -u 1000 -G sendry -h /var/lib/sendry -s /sbin/nologin -D sendry
+RUN groupadd -g 1000 sendry && \
+    useradd -u 1000 -g sendry -d /var/lib/sendry -s /sbin/nologin sendry
 
 # Copy binary from builder
-COPY --from=builder /sendry /usr/bin/sendry
-RUN chmod +x /usr/bin/sendry
+COPY --from=builder /app /usr/bin/${TARGET}
+RUN chmod +x /usr/bin/${TARGET}
 
 # Create directories
-RUN mkdir -p /etc/sendry /var/lib/sendry /var/log/sendry && \
-    chown -R sendry:sendry /var/lib/sendry /var/log/sendry
+RUN mkdir -p /etc/sendry /var/lib/sendry /var/lib/sendry-web /var/log/sendry && \
+    chown -R sendry:sendry /var/lib/sendry /var/lib/sendry-web /var/log/sendry
 
-# Copy example config
+# Copy example configs
 COPY configs/sendry.example.yaml /etc/sendry/config.yaml.example
+COPY configs/web.example.yaml /etc/sendry/web.yaml.example
 
 # Expose ports
-# 25   - SMTP
-# 465  - SMTPS (implicit TLS)
-# 587  - Submission (STARTTLS)
-# 8080 - HTTP API
-# 9090 - Metrics
-EXPOSE 25 465 587 8080 9090
+# sendry: 25 (SMTP), 465 (SMTPS), 587 (Submission), 8080 (API), 9090 (Metrics)
+# sendry-web: 8088
+EXPOSE 25 465 587 8080 8088 9090
 
 # Volumes
-VOLUME ["/var/lib/sendry", "/etc/sendry"]
+VOLUME ["/var/lib/sendry", "/var/lib/sendry-web", "/etc/sendry"]
 
 # Switch to non-root user
 USER sendry
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD ["/usr/bin/sendry", "version"]
+# Set target as environment variable for entrypoint
+ENV TARGET=${TARGET}
 
-# Default command
-ENTRYPOINT ["/usr/bin/sendry"]
-CMD ["serve", "--config", "/etc/sendry/config.yaml"]
+# Default command (override in docker-compose or docker run)
+CMD ["sh", "-c", "exec /usr/bin/${TARGET} serve --config /etc/sendry/config.yaml"]

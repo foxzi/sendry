@@ -135,7 +135,7 @@ storage:
   # Message retention settings
   retention:
     # Delete delivered messages older than this (0 = keep forever)
-    delivered_max_age: 7d
+    delivered_max_age: 168h  # 7 days
     # How often to run cleanup
     cleanup_interval: 1h
 
@@ -145,7 +145,7 @@ dlq:
   # Enable DLQ (if false, failed messages are deleted immediately)
   enabled: true
   # Delete DLQ messages older than this (0 = keep forever)
-  max_age: 30d
+  max_age: 720h  # 30 days
   # Maximum messages in DLQ (0 = unlimited, oldest deleted first)
   max_count: 10000
   # How often to run DLQ cleanup

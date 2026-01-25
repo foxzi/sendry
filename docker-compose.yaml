@@ -4,6 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
+        TARGET: sendry
         VERSION: ${VERSION:-dev}
         COMMIT: ${COMMIT:-unknown}
         BUILD_TIME: ${BUILD_TIME:-unknown}
@@ -21,6 +22,7 @@ services:
       - ./configs/sendry.example.yaml:/etc/sendry/config.yaml:ro
     environment:
       - TZ=${TZ:-UTC}
+    command: ["sendry", "serve", "--config", "/etc/sendry/config.yaml"]
     healthcheck:
       test: ["CMD", "/usr/bin/sendry", "version"]
       interval: 30s
@@ -33,8 +35,9 @@ services:
   sendry-web:
     build:
       context: .
-      dockerfile: Dockerfile.web
+      dockerfile: Dockerfile
       args:
+        TARGET: sendry-web
         VERSION: ${VERSION:-dev}
         COMMIT: ${COMMIT:-unknown}
         BUILD_TIME: ${BUILD_TIME:-unknown}
@@ -48,6 +51,7 @@ services:
       - ./configs/web.example.yaml:/etc/sendry/web.yaml:ro
     environment:
       - TZ=${TZ:-UTC}
+    command: ["sendry-web", "serve", "--config", "/etc/sendry/web.yaml"]
     healthcheck:
       test: ["CMD", "/usr/bin/sendry-web", "version"]
       interval: 30s

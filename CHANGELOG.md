@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Docker: separate Dockerfile.web and docker-compose service for sendry-web
+- Docker: universal Dockerfile with TARGET build arg for sendry and sendry-web
 - Documentation: Docker Compose guide (EN/RU)
 - Documentation: expanded variable substitution docs in sendry-web guide (EN/RU)
 
@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Sendry Web: template deploy now converts {{var}} to {{.var}} for Go template compatibility
+- Config: duration format in example config (7d -> 168h, 30d -> 720h)
 
 ## [0.4.0] - 2026-01-25
 
