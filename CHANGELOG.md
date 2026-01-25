@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sendry Web: send test email for templates
 - Sendry Web: CSV export for recipient lists
 - Sendry Web: dry-run mode for send jobs (test on first N recipients)
+- Packaging: include sendry-web in DEB/RPM/APK packages
 
 ## [0.3.4] - 2025-01-25
 

@@ -62,6 +62,23 @@ build-linux-arm64:
 	@mkdir -p $(BUILD_DIR)
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64 $(CMD_DIR)
 
+# Build web for Linux (requires CGO for SQLite, uses Docker for cross-compilation)
+.PHONY: build-web-linux
+build-web-linux:
+	@echo "Building $(BINARY_WEB) for Linux amd64..."
+	@mkdir -p $(BUILD_DIR)
+	docker run --rm -v $(PWD):/app -w /app golang:1.23-bookworm \
+		bash -c "apt-get update && apt-get install -y gcc && \
+		CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_WEB)-linux-amd64 $(CMD_WEB_DIR)"
+
+.PHONY: build-web-linux-arm64
+build-web-linux-arm64:
+	@echo "Building $(BINARY_WEB) for Linux arm64..."
+	@mkdir -p $(BUILD_DIR)
+	docker run --rm -v $(PWD):/app -w /app --platform linux/arm64 golang:1.23-bookworm \
+		bash -c "apt-get update && apt-get install -y gcc && \
+		CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_WEB)-linux-arm64 $(CMD_WEB_DIR)"
+
 .PHONY: build-darwin
 build-darwin:
 	@echo "Building for macOS amd64..."
@@ -272,7 +289,7 @@ docker-logs:
 
 # Build DEB package (requires nfpm)
 .PHONY: package-deb
-package-deb: build-linux
+package-deb: build-linux build-web-linux
 	@echo "Building DEB package..."
 	@which nfpm > /dev/null || (echo "nfpm not installed. Install: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest" && exit 1)
 	@mkdir -p $(BUILD_DIR)/packages
@@ -282,7 +299,7 @@ package-deb: build-linux
 
 # Build DEB package for arm64
 .PHONY: package-deb-arm64
-package-deb-arm64: build-linux-arm64
+package-deb-arm64: build-linux-arm64 build-web-linux-arm64
 	@echo "Building DEB package for arm64..."
 	@which nfpm > /dev/null || (echo "nfpm not installed" && exit 1)
 	@mkdir -p $(BUILD_DIR)/packages
@@ -292,7 +309,7 @@ package-deb-arm64: build-linux-arm64
 
 # Build RPM package (requires nfpm)
 .PHONY: package-rpm
-package-rpm: build-linux
+package-rpm: build-linux build-web-linux
 	@echo "Building RPM package..."
 	@which nfpm > /dev/null || (echo "nfpm not installed. Install: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest" && exit 1)
 	@mkdir -p $(BUILD_DIR)/packages
@@ -302,7 +319,7 @@ package-rpm: build-linux
 
 # Build RPM package for arm64
 .PHONY: package-rpm-arm64
-package-rpm-arm64: build-linux-arm64
+package-rpm-arm64: build-linux-arm64 build-web-linux-arm64
 	@echo "Building RPM package for arm64..."
 	@which nfpm > /dev/null || (echo "nfpm not installed" && exit 1)
 	@mkdir -p $(BUILD_DIR)/packages
@@ -312,7 +329,7 @@ package-rpm-arm64: build-linux-arm64
 
 # Build APK package for Alpine (amd64)
 .PHONY: package-apk
-package-apk: build-linux
+package-apk: build-linux build-web-linux
 	@echo "Building APK package..."
 	@which nfpm > /dev/null || (echo "nfpm not installed. Install: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest" && exit 1)
 	@mkdir -p $(BUILD_DIR)/packages
@@ -322,7 +339,7 @@ package-apk: build-linux
 
 # Build APK package for Alpine (arm64)
 .PHONY: package-apk-arm64
-package-apk-arm64: build-linux-arm64
+package-apk-arm64: build-linux-arm64 build-web-linux-arm64
 	@echo "Building APK package for arm64..."
 	@which nfpm > /dev/null || (echo "nfpm not installed" && exit 1)
 	@mkdir -p $(BUILD_DIR)/packages
@@ -355,6 +372,8 @@ help:
 	@echo "  build            Build the main binary (sendry)"
 	@echo "  build-web        Build the web binary (sendry-web)"
 	@echo "  build-all        Build for all platforms (linux, darwin, amd64, arm64)"
+	@echo "  build-web-linux  Build sendry-web for Linux amd64 (via Docker)"
+	@echo "  build-web-linux-arm64  Build sendry-web for Linux arm64 (via Docker)"
 	@echo "  clean            Clean build artifacts"
 	@echo "  install          Install binary to GOPATH/bin"
 	@echo ""

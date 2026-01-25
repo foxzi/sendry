@@ -13,6 +13,7 @@ description: |
   Sendry - Outbound Mail Transfer Agent
   A high-performance MTA server for sending emails with support for
   SMTP relay, HTTP API, DKIM signing, rate limiting, and more.
+  Includes sendry-web for campaign management and server monitoring.
 vendor: Sendry
 homepage: https://github.com/foxzi/sendry
 license: GPL-3.0
@@ -25,27 +26,53 @@ recommends:
   - openssl
 
 contents:
-  # Binary
+  # Binary - sendry MTA
   - src: build/sendry-linux-${ARCH}
     dst: /usr/bin/sendry
     file_info:
       mode: 0755
 
-  # Example configuration
+  # Binary - sendry-web
+  - src: build/sendry-web-linux-${ARCH}
+    dst: /usr/bin/sendry-web
+    file_info:
+      mode: 0755
+
+  # Example configuration - sendry
   - src: configs/sendry.example.yaml
     dst: /etc/sendry/config.yaml.example
     type: config
     file_info:
       mode: 0644
 
-  # Systemd service
+  # Example configuration - sendry-web
+  - src: configs/web.example.yaml
+    dst: /etc/sendry/web.yaml.example
+    type: config
+    file_info:
+      mode: 0644
+
+  # Systemd service - sendry
   - src: packaging/sendry.service
     dst: /usr/lib/systemd/system/sendry.service
     file_info:
       mode: 0644
 
+  # Systemd service - sendry-web
+  - src: packaging/sendry-web.service
+    dst: /usr/lib/systemd/system/sendry-web.service
+    file_info:
+      mode: 0644
+
   # Create directories
   - dst: /var/lib/sendry
+    type: dir
+    file_info:
+      mode: 0755
+      owner: sendry
+      group: sendry
+
+  - dst: /var/lib/sendry-web
     type: dir
     file_info:
       mode: 0755
