@@ -7,7 +7,7 @@ services:
         VERSION: ${VERSION:-dev}
         COMMIT: ${COMMIT:-unknown}
         BUILD_TIME: ${BUILD_TIME:-unknown}
-    image: sendry:latest
+    image: sendry:${VERSION:-latest}
     container_name: sendry
     restart: unless-stopped
     ports:
@@ -20,7 +20,7 @@ services:
       - sendry-data:/var/lib/sendry
       - ./configs/sendry.example.yaml:/etc/sendry/config.yaml:ro
     environment:
-      - TZ=UTC
+      - TZ=${TZ:-UTC}
     healthcheck:
       test: ["CMD", "/usr/bin/sendry", "version"]
       interval: 30s
@@ -30,8 +30,39 @@ services:
     networks:
       - sendry-net
 
+  sendry-web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        VERSION: ${VERSION:-dev}
+        COMMIT: ${COMMIT:-unknown}
+        BUILD_TIME: ${BUILD_TIME:-unknown}
+    image: sendry-web:${VERSION:-latest}
+    container_name: sendry-web
+    restart: unless-stopped
+    ports:
+      - "8088:8088"
+    volumes:
+      - sendry-web-data:/var/lib/sendry-web
+      - ./configs/web.example.yaml:/etc/sendry/web.yaml:ro
+    environment:
+      - TZ=${TZ:-UTC}
+    healthcheck:
+      test: ["CMD", "/usr/bin/sendry-web", "version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - sendry-net
+    depends_on:
+      - sendry
+
 volumes:
   sendry-data:
+    driver: local
+  sendry-web-data:
     driver: local
 
 networks:
