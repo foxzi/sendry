@@ -7,21 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-01-25
+
 ### Added
 - Sendry Web: web interface foundation (project structure, config, SQLite, routing)
 - Sendry Web: UI with login, dashboard, embedded templates and CSS
 - Sendry Web: template management (CRUD, versioning, deployment tracking)
-- Sendry Web: recipient list management (CRUD, CSV import, filtering)
+- Sendry Web: recipient list management (CRUD, CSV import/export, filtering)
 - Sendry Web: campaign management (CRUD, variants for A/B testing, variables)
-- Sendry Web: job management (send jobs, status tracking, pause/resume/cancel)
+- Sendry Web: job management (send jobs, status tracking, pause/resume/cancel, dry-run)
 - Sendry Web: server monitoring (server list, queue, DLQ, domains, sandbox)
 - Sendry Web: settings (global variables, users list, audit log)
 - Sendry Web: monitoring dashboard with server status overview
 - Sendry Web: Sendry API client for server communication
 - Sendry Web: background worker for processing send jobs
 - Sendry Web: GrapesJS visual HTML editor for email templates
-- Sendry Web: template variable substitution in worker (global, campaign, recipient vars)
+- Sendry Web: template variable substitution (global, campaign, recipient vars)
 - Sendry Web: template deployment to Sendry servers via API
+- Sendry Web: template version diff view, import/export JSON, test email
 - Sendry Web: scheduled jobs support (worker auto-starts jobs at scheduled time)
 - Sendry Web: CLI cleanup command (jobs, audit logs, template versions)
 - Sendry Web: status tracking for queued items via Sendry API
@@ -30,11 +33,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sendry Web: localization support (English and Russian)
 - Sendry Web: timezone configuration in settings
 - Sendry Web: unit tests for auth, repository, and worker packages
-- Sendry Web: template version diff view (side-by-side comparison)
-- Sendry Web: template import/export JSON
-- Sendry Web: send test email for templates
-- Sendry Web: CSV export for recipient lists
-- Sendry Web: dry-run mode for send jobs (test on first N recipients)
 - Packaging: include sendry-web in DEB/RPM/APK packages
 
 ## [0.3.4] - 2025-01-25
