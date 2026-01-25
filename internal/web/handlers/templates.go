@@ -289,12 +289,13 @@ func (h *Handlers) TemplateDeploy(w http.ResponseWriter, r *http.Request) {
 	existingDeployment, _ := h.templates.GetDeployment(id, serverName)
 
 	// Build template request for Sendry API
+	// Convert {{variable}} to {{.variable}} for Go templates compatibility
 	req := &sendry.TemplateCreateRequest{
 		Name:        t.Name,
 		Description: t.Description,
-		Subject:     t.Subject,
-		HTML:        t.HTML,
-		Text:        t.Text,
+		Subject:     convertToGoTemplate(t.Subject),
+		HTML:        convertToGoTemplate(t.HTML),
+		Text:        convertToGoTemplate(t.Text),
 	}
 
 	var remoteID string
@@ -693,4 +694,101 @@ func indexString(s, substr string) int {
 		}
 	}
 	return -1
+}
+
+// convertToGoTemplate converts {{variable}} syntax to {{.variable}} for Go templates
+// This is needed because Sendry MTA uses Go's text/template which requires dot notation
+func convertToGoTemplate(template string) string {
+	if template == "" {
+		return template
+	}
+
+	result := template
+	i := 0
+	for i < len(result) {
+		// Find {{
+		start := indexString(result[i:], "{{")
+		if start == -1 {
+			break
+		}
+		start += i
+
+		// Find }}
+		end := indexString(result[start:], "}}")
+		if end == -1 {
+			break
+		}
+		end += start
+
+		// Extract content between {{ and }}
+		content := result[start+2 : end]
+
+		// Skip if already has a dot prefix or is a Go template function/action
+		trimmed := content
+		for len(trimmed) > 0 && (trimmed[0] == ' ' || trimmed[0] == '\t') {
+			trimmed = trimmed[1:]
+		}
+
+		// Skip if:
+		// - already starts with . (e.g., {{.name}})
+		// - is a range/if/else/end/define/template/block/with action
+		// - contains a pipe | (function call)
+		// - is empty
+		needsConvert := len(trimmed) > 0 &&
+			trimmed[0] != '.' &&
+			trimmed[0] != '$' &&
+			!startsWithKeyword(trimmed, "range") &&
+			!startsWithKeyword(trimmed, "if") &&
+			!startsWithKeyword(trimmed, "else") &&
+			!startsWithKeyword(trimmed, "end") &&
+			!startsWithKeyword(trimmed, "define") &&
+			!startsWithKeyword(trimmed, "template") &&
+			!startsWithKeyword(trimmed, "block") &&
+			!startsWithKeyword(trimmed, "with") &&
+			!containsChar(content, '|')
+
+		if needsConvert {
+			// Add dot prefix: {{name}} -> {{.name}}
+			// Preserve any leading whitespace
+			leadingSpace := ""
+			for j := 0; j < len(content); j++ {
+				if content[j] == ' ' || content[j] == '\t' {
+					leadingSpace += string(content[j])
+				} else {
+					break
+				}
+			}
+			newContent := leadingSpace + "." + trimmed
+			result = result[:start+2] + newContent + result[end:]
+			i = start + 2 + len(newContent) + 2
+		} else {
+			i = end + 2
+		}
+	}
+
+	return result
+}
+
+// startsWithKeyword checks if s starts with keyword followed by space or end
+func startsWithKeyword(s, keyword string) bool {
+	if len(s) < len(keyword) {
+		return false
+	}
+	if s[:len(keyword)] != keyword {
+		return false
+	}
+	if len(s) == len(keyword) {
+		return true
+	}
+	return s[len(keyword)] == ' ' || s[len(keyword)] == '\t'
+}
+
+// containsChar checks if s contains char c
+func containsChar(s string, c byte) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] == c {
+			return true
+		}
+	}
+	return false
 }
