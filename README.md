@@ -62,6 +62,19 @@ docker run -p 25:25 -p 587:587 -p 8080:8080 \
   ghcr.io/foxzi/sendry:latest
 ```
 
+### Docker Compose
+
+For running both Sendry MTA and Web management panel, see [Docker documentation](docs/docker.md).
+
+```bash
+git clone https://github.com/foxzi/sendry.git
+cd sendry
+cp configs/sendry.example.yaml configs/sendry.yaml
+cp configs/web.example.yaml configs/web.yaml
+# Edit configs
+docker compose up -d
+```
+
 ### Ansible
 
 For automated deployment on multiple servers, see [Ansible documentation](docs/ansible.md).
