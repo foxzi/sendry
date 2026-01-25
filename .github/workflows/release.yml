@@ -79,7 +79,7 @@ jobs:
             -v ${{ github.workspace }}:/app -w /app \
             golang:1.24-bookworm \
             bash -c "apt-get update && apt-get install -y gcc && \
-              CGO_ENABLED=1 go build -ldflags \"${LDFLAGS}\" -o sendry-web-linux-${{ matrix.goarch }} ./cmd/sendry-web"
+              CGO_ENABLED=1 go build -buildvcs=false -ldflags \"${LDFLAGS}\" -o sendry-web-linux-${{ matrix.goarch }} ./cmd/sendry-web"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
