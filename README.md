@@ -1,8 +1,38 @@
 # Sendry
 
-MTA (Mail Transfer Agent) server for sending emails.
+> Self-hosted email delivery infrastructure
+
+Fast. Reliable. Yours.
+
+```
+Your App → Sendry → Recipient
+         (SMTP/API)
+```
 
 [Русская версия](docs/README.ru.md)
+
+## What is Sendry?
+
+A complete email sending solution you can run on your own servers:
+
+- **MTA Server** — SMTP relay with queue, retries, DKIM, TLS
+- **HTTP API** — REST interface for sending and tracking emails
+- **Web Panel** — Manage templates, campaigns, and recipients
+
+## Key Features
+
+- **Secure** — Let's Encrypt, DKIM signing, auth protection
+- **Observable** — Prometheus metrics, detailed logging
+- **Scalable** — Persistent queue, concurrent workers
+- **Flexible** — Multi-domain, rate limiting, sandbox mode
+- **Manageable** — Web UI for everything
+
+## Who Uses Sendry?
+
+- Teams sending transactional emails (confirmations, alerts, reports)
+- Marketers running email campaigns without per-message costs
+- Developers who need a local SMTP server for testing
+- Organizations requiring email archiving and compliance
 
 ## Features
 
