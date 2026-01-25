@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Docker: separate Dockerfile.web and docker-compose service for sendry-web
 - Documentation: Docker Compose guide (EN/RU)
+- Documentation: expanded variable substitution docs in sendry-web guide (EN/RU)
 
 ## [0.4.0] - 2026-01-25
 

@@ -195,18 +195,69 @@ sendry-web cleanup --days 90 --dry-run    # preview what would be deleted
 
 ## Variable Substitution
 
-Variables are merged with priority (highest to lowest):
-1. Recipient variables
-2. Campaign variables
-3. Global variables
+Templates support dynamic variable substitution using the `{{variable_name}}` syntax.
 
-Use `{{variable_name}}` syntax in templates:
+### Variable Priority
+
+Variables are merged at send time with the following priority (highest to lowest):
+
+1. **Recipient variables** — individual data for each recipient from the list
+2. **Campaign variables** — shared values for all recipients in a campaign
+3. **Global variables** — server-wide defaults configured in Settings
+
+If the same variable is defined at multiple levels, the higher priority value is used.
+
+### Built-in Variables
+
+The following variables are automatically available:
+
+| Variable | Description |
+|----------|-------------|
+| `{{email}}` | Recipient's email address |
+| `{{name}}` | Recipient's name (if specified in the list) |
+
+### Variables (JSON) Field in Template Editor
+
+When editing a template, the **Variables (JSON)** field serves two purposes:
+
+1. **Documentation** — describes what variables the template expects
+2. **Test values** — used when sending test emails via "Test Email" button
+
+Example:
+
+```json
+{
+  "company_name": "Acme Corp",
+  "unsubscribe_link": "https://example.com/unsubscribe",
+  "promo_code": "SUMMER2024",
+  "order_id": "12345"
+}
+```
+
+This field does not affect production email sending — it's for documentation and testing only.
+
+### Usage Examples
+
+Template HTML:
 
 ```html
 <p>Hello, {{name}}!</p>
 <p>Your order #{{order_id}} has been shipped.</p>
+<p>Use promo code <b>{{promo_code}}</b> for your next purchase.</p>
 <p>Contact us at {{support_email}}</p>
+<p><a href="{{unsubscribe_link}}">Unsubscribe</a></p>
 ```
+
+### Global Variables
+
+Configure global variables in **Settings → Global Variables**. These are available in all templates and can be overridden by campaign or recipient variables.
+
+Common use cases:
+- Company name and contact info
+- Support email addresses
+- Social media links
+- Unsubscribe URLs
+- Legal disclaimers
 
 ## Security
 
