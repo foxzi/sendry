@@ -1,6 +1,7 @@
 {{define "content"}}
-<link href="https://unpkg.com/grapesjs/dist/css/grapes.min.css" rel="stylesheet">
-<link href="https://unpkg.com/grapesjs-preset-newsletter/dist/grapesjs-preset-newsletter.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/lib/codemirror.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/theme/dracula.min.css" rel="stylesheet">
 <style>
 .editor-container {
     border: 1px solid var(--border);
@@ -8,11 +9,6 @@
     overflow: hidden;
     margin-bottom: 1rem;
 }
-.gjs-one-bg { background-color: var(--bg-card); }
-.gjs-two-color { color: var(--text); }
-.gjs-three-bg { background-color: var(--bg); }
-.gjs-four-color, .gjs-four-color-h:hover { color: var(--primary); }
-#gjs-editor { min-height: 500px; }
 .editor-tabs {
     display: flex;
     gap: 0.5rem;
@@ -31,10 +27,54 @@
     color: white;
     border-color: var(--primary);
 }
-.code-editor { display: none; }
-.code-editor.active { display: block; }
-.visual-editor { display: none; }
-.visual-editor.active { display: block; }
+.editor-pane { display: none; }
+.editor-pane.active { display: block; }
+
+/* Quill customization */
+.ql-toolbar.ql-snow {
+    border: none;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+}
+.ql-container.ql-snow {
+    border: none;
+    font-family: inherit;
+}
+.ql-editor {
+    min-height: 300px;
+    font-size: 14px;
+}
+[data-theme="dark"] .ql-toolbar.ql-snow {
+    background: var(--bg-card);
+}
+[data-theme="dark"] .ql-stroke {
+    stroke: var(--text);
+}
+[data-theme="dark"] .ql-fill {
+    fill: var(--text);
+}
+[data-theme="dark"] .ql-picker-label {
+    color: var(--text);
+}
+
+/* CodeMirror customization */
+.CodeMirror {
+    height: 350px;
+    font-size: 13px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+[data-theme="dark"] .CodeMirror {
+    background: var(--bg-card);
+}
+
+.editor-preference {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-left: auto;
+}
+.editor-preference label {
+    cursor: pointer;
+}
 </style>
 
 <div class="page-header">
@@ -73,18 +113,25 @@
         <div class="form-group">
             <label>HTML Content</label>
             <div class="editor-tabs">
-                <button type="button" class="editor-tab active" data-editor="visual">Visual Editor</button>
-                <button type="button" class="editor-tab" data-editor="code">Code Editor</button>
-            </div>
-
-            <div class="visual-editor active">
-                <div class="editor-container">
-                    <div id="gjs-editor"></div>
+                <button type="button" class="editor-tab active" data-editor="visual">Visual</button>
+                <button type="button" class="editor-tab" data-editor="code">Code</button>
+                <div class="editor-preference">
+                    <label>
+                        <input type="checkbox" id="remember-editor"> Remember choice
+                    </label>
                 </div>
             </div>
 
-            <div class="code-editor">
-                <textarea id="html-code" class="input code" rows="15" placeholder="<html>...</html>"></textarea>
+            <div class="editor-pane active" id="visual-pane">
+                <div class="editor-container">
+                    <div id="quill-editor"></div>
+                </div>
+            </div>
+
+            <div class="editor-pane" id="code-pane">
+                <div class="editor-container">
+                    <textarea id="code-editor"></textarea>
+                </div>
             </div>
 
             <input type="hidden" name="html" id="html-hidden">
@@ -97,8 +144,8 @@
 
         <div class="form-group">
             <label for="variables">Variables (JSON)</label>
-            <textarea id="variables" name="variables" class="input code" rows="4" placeholder='{"name": "string", "unsubscribe_url": "string"}'></textarea>
-            <small class="form-help">Define expected variables and their types</small>
+            <textarea id="variables" name="variables" class="input code" rows="4" placeholder='{"name": "John Doe", "company": "Acme Inc"}'></textarea>
+            <small class="form-help">Define expected variables for documentation and test emails</small>
         </div>
     </div>
 
@@ -108,62 +155,128 @@
     </div>
 </form>
 
-<script src="https://unpkg.com/grapesjs"></script>
-<script src="https://unpkg.com/grapesjs-preset-newsletter"></script>
+<script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/lib/codemirror.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/mode/xml/xml.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/mode/javascript/javascript.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/mode/css/css.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/mode/htmlmixed/htmlmixed.min.js"></script>
 <script>
 (function() {
-    const editor = grapesjs.init({
-        container: '#gjs-editor',
-        plugins: ['grapesjs-preset-newsletter'],
-        pluginsOpts: {
-            'grapesjs-preset-newsletter': {}
+    // Initialize Quill
+    const quill = new Quill('#quill-editor', {
+        theme: 'snow',
+        modules: {
+            toolbar: [
+                [{ 'header': [1, 2, 3, false] }],
+                ['bold', 'italic', 'underline', 'strike'],
+                [{ 'color': [] }, { 'background': [] }],
+                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                [{ 'align': [] }],
+                ['link', 'image'],
+                ['clean']
+            ]
         },
-        height: '500px',
-        storageManager: false,
-        assetManager: {
-            embedAsBase64: true
-        }
+        placeholder: 'Start writing your email content...'
+    });
+
+    // Initialize CodeMirror
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const codeMirror = CodeMirror.fromTextArea(document.getElementById('code-editor'), {
+        mode: 'htmlmixed',
+        theme: isDark ? 'dracula' : 'default',
+        lineNumbers: true,
+        lineWrapping: true,
+        indentUnit: 2,
+        tabSize: 2,
+        autoCloseTags: true,
+        matchBrackets: true,
+        placeholder: '<html>...</html>'
     });
 
     // Tab switching
     const tabs = document.querySelectorAll('.editor-tab');
-    const visualEditor = document.querySelector('.visual-editor');
-    const codeEditor = document.querySelector('.code-editor');
-    const htmlCode = document.getElementById('html-code');
+    const visualPane = document.getElementById('visual-pane');
+    const codePane = document.getElementById('code-pane');
+    const rememberCheckbox = document.getElementById('remember-editor');
+
+    // Load saved preference
+    const savedEditor = localStorage.getItem('sendry-editor-preference');
+    if (savedEditor) {
+        rememberCheckbox.checked = true;
+        if (savedEditor === 'code') {
+            switchToCode();
+        }
+    }
+
+    function switchToVisual() {
+        tabs.forEach(t => t.classList.remove('active'));
+        tabs[0].classList.add('active');
+        visualPane.classList.add('active');
+        codePane.classList.remove('active');
+        // Sync code to visual
+        const code = codeMirror.getValue();
+        if (code) {
+            quill.clipboard.dangerouslyPasteHTML(code);
+        }
+    }
+
+    function switchToCode() {
+        tabs.forEach(t => t.classList.remove('active'));
+        tabs[1].classList.add('active');
+        visualPane.classList.remove('active');
+        codePane.classList.add('active');
+        // Sync visual to code
+        codeMirror.setValue(quill.getSemanticHTML());
+        codeMirror.refresh();
+    }
 
     tabs.forEach(tab => {
         tab.addEventListener('click', function() {
-            tabs.forEach(t => t.classList.remove('active'));
-            this.classList.add('active');
-
-            if (this.dataset.editor === 'visual') {
-                visualEditor.classList.add('active');
-                codeEditor.classList.remove('active');
-                // Load code into visual editor
-                if (htmlCode.value) {
-                    editor.setComponents(htmlCode.value);
-                }
+            const editor = this.dataset.editor;
+            if (editor === 'visual') {
+                switchToVisual();
             } else {
-                visualEditor.classList.remove('active');
-                codeEditor.classList.add('active');
-                // Export visual editor to code
-                htmlCode.value = editor.getHtml() + '<style>' + editor.getCss() + '</style>';
+                switchToCode();
+            }
+
+            // Save preference
+            if (rememberCheckbox.checked) {
+                localStorage.setItem('sendry-editor-preference', editor);
             }
         });
+    });
+
+    rememberCheckbox.addEventListener('change', function() {
+        if (!this.checked) {
+            localStorage.removeItem('sendry-editor-preference');
+        } else {
+            const active = document.querySelector('.editor-tab.active');
+            localStorage.setItem('sendry-editor-preference', active.dataset.editor);
+        }
     });
 
     // Form submission
     document.getElementById('template-form').addEventListener('submit', function(e) {
         const htmlHidden = document.getElementById('html-hidden');
 
-        if (visualEditor.classList.contains('active')) {
-            // Get HTML from visual editor
-            htmlHidden.value = editor.getHtml() + '<style>' + editor.getCss() + '</style>';
+        if (visualPane.classList.contains('active')) {
+            htmlHidden.value = quill.getSemanticHTML();
         } else {
-            // Get HTML from code editor
-            htmlHidden.value = htmlCode.value;
+            htmlHidden.value = codeMirror.getValue();
         }
     });
+
+    // Theme change listener
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.attributeName === 'data-theme') {
+                const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                codeMirror.setOption('theme', isDark ? 'dracula' : 'default');
+            }
+        });
+    });
+    observer.observe(document.documentElement, { attributes: true });
 })();
 </script>
 {{end}}

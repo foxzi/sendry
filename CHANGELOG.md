@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation: Docker Compose guide (EN/RU)
 - Documentation: expanded variable substitution docs in sendry-web guide (EN/RU)
 
+### Changed
+- Sendry Web: replaced GrapesJS with Quill + CodeMirror for template editing
+- Sendry Web: editor preference saved in localStorage
+
 ### Fixed
 - Sendry Web: template deploy now converts {{var}} to {{.var}} for Go template compatibility
 
