@@ -16,7 +16,8 @@ ansible/
 ├── inventory/
 │   └── hosts.yml.example
 ├── playbooks/
-│   └── sendry.yml
+│   ├── sendry.yml
+│   └── dkim.yml
 ├── roles/
 │   └── sendry/
 │       ├── defaults/main.yml
@@ -27,9 +28,15 @@ ansible/
 │       │   ├── configure.yml
 │       │   ├── dkim.yml
 │       │   └── firewall.yml
-│       └── templates/
-│           ├── config.yaml.j2
-│           └── sendry.service.j2
+│       ├── templates/
+│       │   ├── config.yaml.j2
+│       │   └── sendry.service.j2
+│       └── molecule/
+│           └── default/
+│               ├── molecule.yml
+│               ├── converge.yml
+│               ├── prepare.yml
+│               └── verify.yml
 └── README.md
 ```
 
@@ -222,6 +229,50 @@ all:
 
 ```bash
 ansible-playbook -i inventory/hosts.yml playbooks/sendry.yml --ask-vault-pass
+```
+
+## Testing with Molecule
+
+The role includes Molecule tests for validation.
+
+### Requirements
+
+```bash
+pip install molecule molecule-docker
+```
+
+### Run tests
+
+```bash
+cd ansible/roles/sendry
+molecule test
+```
+
+### Test scenario
+
+Tests deploy to two Ubuntu 22.04 containers and verify:
+
+- Binary installation
+- Systemd service running
+- DKIM keys with correct permissions (0600)
+- Configuration file
+- API health endpoint
+- DKIM key synchronization across hosts
+
+### Development workflow
+
+```bash
+# Create containers and run converge
+molecule converge
+
+# Run only verify
+molecule verify
+
+# Login to container for debugging
+molecule login -h sendry-test-1
+
+# Destroy containers
+molecule destroy
 ```
 
 ## All Variables

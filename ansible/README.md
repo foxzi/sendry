@@ -185,6 +185,15 @@ sendry_cluster:
 ansible-playbook -i inventory/hosts.yml playbooks/sendry.yml --ask-vault-pass
 ```
 
+## Testing with Molecule
+
+```bash
+cd roles/sendry
+molecule test
+```
+
+See [Ansible docs](../docs/ansible.md) for details.
+
 ## All Variables
 
 See `roles/sendry/defaults/main.yml` for all available variables with defaults.
@@ -285,3 +294,12 @@ sendry_cluster:
 ```bash
 ansible-playbook -i inventory/hosts.yml playbooks/sendry.yml --ask-vault-pass
 ```
+
+## Тестирование с Molecule
+
+```bash
+cd roles/sendry
+molecule test
+```
+
+См. [документацию Ansible](../docs/ansible.ru.md) для деталей.

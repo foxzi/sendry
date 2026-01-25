@@ -16,7 +16,8 @@ ansible/
 ├── inventory/
 │   └── hosts.yml.example
 ├── playbooks/
-│   └── sendry.yml
+│   ├── sendry.yml
+│   └── dkim.yml
 ├── roles/
 │   └── sendry/
 │       ├── defaults/main.yml
@@ -27,9 +28,15 @@ ansible/
 │       │   ├── configure.yml
 │       │   ├── dkim.yml
 │       │   └── firewall.yml
-│       └── templates/
-│           ├── config.yaml.j2
-│           └── sendry.service.j2
+│       ├── templates/
+│       │   ├── config.yaml.j2
+│       │   └── sendry.service.j2
+│       └── molecule/
+│           └── default/
+│               ├── molecule.yml
+│               ├── converge.yml
+│               ├── prepare.yml
+│               └── verify.yml
 └── README.md
 ```
 
@@ -265,3 +272,47 @@ all:
 | `sendry_configure_firewall` | `false` | Настроить UFW/firewalld |
 | `sendry_service_enabled` | `true` | Включить автозапуск |
 | `sendry_service_state` | `started` | Состояние сервиса |
+
+## Тестирование с Molecule
+
+Роль включает Molecule тесты для валидации.
+
+### Требования
+
+```bash
+pip install molecule molecule-docker
+```
+
+### Запуск тестов
+
+```bash
+cd ansible/roles/sendry
+molecule test
+```
+
+### Тестовый сценарий
+
+Тесты разворачивают два контейнера Ubuntu 22.04 и проверяют:
+
+- Установку бинарника
+- Запуск systemd сервиса
+- Наличие DKIM ключей с правильными правами (0600)
+- Конфигурационный файл
+- Health endpoint API
+- Синхронизацию DKIM ключей между хостами
+
+### Рабочий процесс разработки
+
+```bash
+# Создать контейнеры и запустить converge
+molecule converge
+
+# Запустить только verify
+molecule verify
+
+# Войти в контейнер для отладки
+molecule login -h sendry-test-1
+
+# Уничтожить контейнеры
+molecule destroy
+```
