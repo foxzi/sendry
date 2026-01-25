@@ -2,6 +2,49 @@
 <link href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/lib/codemirror.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/theme/dracula.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/@emoji-mart/css/emoji-mart.css" rel="stylesheet">
+<style>
+/* Editor.js styles */
+.editorjs-container {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-card);
+    min-height: 350px;
+    padding: 1rem;
+}
+.codex-editor__redactor {
+    padding-bottom: 100px !important;
+}
+.ce-block__content {
+    max-width: 100%;
+}
+.ce-toolbar__content {
+    max-width: 100%;
+}
+[data-theme="dark"] .ce-block--selected .ce-block__content {
+    background: var(--bg);
+}
+[data-theme="dark"] .ce-inline-toolbar,
+[data-theme="dark"] .ce-conversion-toolbar,
+[data-theme="dark"] .ce-settings,
+[data-theme="dark"] .ce-toolbox {
+    background: var(--bg-card);
+    border-color: var(--border);
+}
+[data-theme="dark"] .ce-inline-tool,
+[data-theme="dark"] .ce-conversion-tool,
+[data-theme="dark"] .ce-settings__button,
+[data-theme="dark"] .ce-toolbox__button {
+    color: var(--text);
+}
+[data-theme="dark"] .ce-popover {
+    background: var(--bg-card);
+    border-color: var(--border);
+}
+[data-theme="dark"] .ce-popover-item__title {
+    color: var(--text);
+}
+</style>
 <style>
 .editor-container {
     border: 1px solid var(--border);
@@ -67,6 +110,67 @@
     background: var(--bg-card);
 }
 
+/* Image resize handles */
+.ql-editor img {
+    cursor: pointer;
+    max-width: 100%;
+}
+.ql-editor img.selected {
+    outline: 2px solid var(--primary);
+}
+.image-resize-container {
+    position: relative;
+    display: inline-block;
+}
+.image-resize-handle {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background: var(--primary);
+    border: 1px solid white;
+}
+.image-resize-handle.se { bottom: -4px; right: -4px; cursor: se-resize; }
+.image-resize-handle.sw { bottom: -4px; left: -4px; cursor: sw-resize; }
+.image-resize-handle.ne { top: -4px; right: -4px; cursor: ne-resize; }
+.image-resize-handle.nw { top: -4px; left: -4px; cursor: nw-resize; }
+
+/* Emoji picker */
+.emoji-picker-container {
+    position: absolute;
+    z-index: 1000;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.ql-emoji {
+    width: 28px !important;
+}
+.ql-emoji::before {
+    content: "😀";
+}
+
+/* Table styles */
+.ql-editor table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1em 0;
+}
+.ql-editor table td, .ql-editor table th {
+    border: 1px solid var(--border);
+    padding: 8px;
+    min-width: 50px;
+}
+.ql-table::before {
+    content: "▦";
+}
+
+/* Drop zone */
+.ql-editor.drag-over {
+    background: var(--primary-light);
+    outline: 2px dashed var(--primary);
+}
+
 .editor-preference {
     font-size: 0.75rem;
     color: var(--text-muted);
@@ -115,6 +219,7 @@
             <label>HTML Content</label>
             <div class="editor-tabs">
                 <button type="button" class="editor-tab active" data-editor="visual">Visual</button>
+                <button type="button" class="editor-tab" data-editor="blocks">Blocks</button>
                 <button type="button" class="editor-tab" data-editor="code">Code</button>
                 <div class="editor-preference">
                     <label>
@@ -126,6 +231,12 @@
             <div class="editor-pane active" id="visual-pane">
                 <div class="editor-container">
                     <div id="quill-editor"></div>
+                </div>
+            </div>
+
+            <div class="editor-pane" id="blocks-pane">
+                <div class="editorjs-container">
+                    <div id="editorjs"></div>
                 </div>
             </div>
 
@@ -168,32 +279,305 @@
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/mode/javascript/javascript.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/mode/css/css.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/mode/htmlmixed/htmlmixed.min.js"></script>
-<script>
+<script src="https://cdn.jsdelivr.net/npm/@editorjs/editorjs@2.29.1/dist/editorjs.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@editorjs/header@2.8.7/dist/header.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@editorjs/list@1.9.0/dist/list.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@editorjs/image@2.9.3/dist/image.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@editorjs/table@2.4.1/dist/table.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@editorjs/quote@2.7.2/dist/quote.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@editorjs/delimiter@1.4.2/dist/delimiter.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@editorjs/raw@2.5.0/dist/raw.umd.min.js"></script>
+<script type="module">
+import { Picker } from 'https://cdn.jsdelivr.net/npm/emoji-mart@5.6.0/+esm';
+
 (function() {
     const initialHtml = document.getElementById('code-editor').value || '';
+    let currentEditor = 'visual';
+    let editorJsInstance = null;
 
-    // Initialize Quill
+    // ========== Editor.js Setup ==========
+    function initEditorJs(data = null) {
+        if (editorJsInstance) {
+            editorJsInstance.destroy();
+        }
+
+        editorJsInstance = new EditorJS({
+            holder: 'editorjs',
+            placeholder: 'Click to start adding blocks...',
+            tools: {
+                header: {
+                    class: Header,
+                    config: {
+                        levels: [1, 2, 3, 4],
+                        defaultLevel: 2
+                    }
+                },
+                list: {
+                    class: List,
+                    inlineToolbar: true
+                },
+                image: {
+                    class: ImageTool,
+                    config: {
+                        uploader: {
+                            uploadByFile(file) {
+                                return new Promise((resolve) => {
+                                    const reader = new FileReader();
+                                    reader.onload = (e) => {
+                                        resolve({
+                                            success: 1,
+                                            file: { url: e.target.result }
+                                        });
+                                    };
+                                    reader.readAsDataURL(file);
+                                });
+                            },
+                            uploadByUrl(url) {
+                                return Promise.resolve({
+                                    success: 1,
+                                    file: { url: url }
+                                });
+                            }
+                        }
+                    }
+                },
+                table: {
+                    class: Table,
+                    inlineToolbar: true
+                },
+                quote: Quote,
+                delimiter: Delimiter,
+                raw: RawTool
+            },
+            data: data
+        });
+
+        return editorJsInstance;
+    }
+
+    // Convert Editor.js JSON to HTML
+    function editorJsToHtml(data) {
+        if (!data || !data.blocks) return '';
+
+        return data.blocks.map(block => {
+            switch (block.type) {
+                case 'header':
+                    return `<h${block.data.level}>${block.data.text}</h${block.data.level}>`;
+                case 'paragraph':
+                    return `<p>${block.data.text}</p>`;
+                case 'list':
+                    const tag = block.data.style === 'ordered' ? 'ol' : 'ul';
+                    const items = block.data.items.map(item => `<li>${item}</li>`).join('');
+                    return `<${tag}>${items}</${tag}>`;
+                case 'image':
+                    const caption = block.data.caption ? `<figcaption>${block.data.caption}</figcaption>` : '';
+                    return `<figure><img src="${block.data.file.url}" alt="${block.data.caption || ''}">${caption}</figure>`;
+                case 'table':
+                    const rows = block.data.content.map(row =>
+                        '<tr>' + row.map(cell => `<td>${cell}</td>`).join('') + '</tr>'
+                    ).join('');
+                    return `<table><tbody>${rows}</tbody></table>`;
+                case 'quote':
+                    return `<blockquote><p>${block.data.text}</p><cite>${block.data.caption}</cite></blockquote>`;
+                case 'delimiter':
+                    return '<hr>';
+                case 'raw':
+                    return block.data.html;
+                default:
+                    return '';
+            }
+        }).join('\n');
+    }
+
+    // Convert HTML to Editor.js JSON (basic)
+    function htmlToEditorJs(html) {
+        const blocks = [];
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html || '<p></p>', 'text/html');
+        const elements = doc.body.children;
+
+        for (const el of elements) {
+            const tagName = el.tagName.toLowerCase();
+
+            if (tagName.match(/^h[1-6]$/)) {
+                blocks.push({
+                    type: 'header',
+                    data: { text: el.innerHTML, level: parseInt(tagName[1]) }
+                });
+            } else if (tagName === 'p') {
+                blocks.push({
+                    type: 'paragraph',
+                    data: { text: el.innerHTML }
+                });
+            } else if (tagName === 'ul' || tagName === 'ol') {
+                const items = Array.from(el.querySelectorAll('li')).map(li => li.innerHTML);
+                blocks.push({
+                    type: 'list',
+                    data: { style: tagName === 'ol' ? 'ordered' : 'unordered', items }
+                });
+            } else if (tagName === 'blockquote') {
+                blocks.push({
+                    type: 'quote',
+                    data: { text: el.querySelector('p')?.innerHTML || el.innerHTML, caption: el.querySelector('cite')?.innerHTML || '' }
+                });
+            } else if (tagName === 'hr') {
+                blocks.push({ type: 'delimiter', data: {} });
+            } else if (tagName === 'figure' || tagName === 'img') {
+                const img = tagName === 'img' ? el : el.querySelector('img');
+                if (img) {
+                    blocks.push({
+                        type: 'image',
+                        data: { file: { url: img.src }, caption: el.querySelector('figcaption')?.innerHTML || img.alt || '' }
+                    });
+                }
+            } else if (tagName === 'table') {
+                const content = Array.from(el.querySelectorAll('tr')).map(tr =>
+                    Array.from(tr.querySelectorAll('td, th')).map(cell => cell.innerHTML)
+                );
+                blocks.push({ type: 'table', data: { content } });
+            } else {
+                // Fallback to raw HTML
+                blocks.push({ type: 'raw', data: { html: el.outerHTML } });
+            }
+        }
+
+        return { blocks };
+    }
+
+    // ========== Quill Setup ==========
+    const TableModule = {
+        insertTable(rows = 3, cols = 3) {
+            const range = this.quill.getSelection(true);
+            let tableHtml = '<table><tbody>';
+            for (let i = 0; i < rows; i++) {
+                tableHtml += '<tr>';
+                for (let j = 0; j < cols; j++) {
+                    tableHtml += '<td><br></td>';
+                }
+                tableHtml += '</tr>';
+            }
+            tableHtml += '</tbody></table><p><br></p>';
+            this.quill.clipboard.dangerouslyPasteHTML(range.index, tableHtml);
+        }
+    };
+
+    const toolbarOptions = {
+        container: [
+            [{ 'header': [1, 2, 3, 4, false] }],
+            [{ 'font': [] }],
+            [{ 'size': ['small', false, 'large', 'huge'] }],
+            ['bold', 'italic', 'underline', 'strike'],
+            [{ 'color': [] }, { 'background': [] }],
+            [{ 'list': 'ordered'}, { 'list': 'bullet' }, { 'indent': '-1'}, { 'indent': '+1' }],
+            [{ 'align': [] }],
+            ['blockquote', 'code-block'],
+            ['link', 'image', 'video'],
+            ['table', 'emoji'],
+            ['clean']
+        ],
+        handlers: {
+            'table': function() {
+                const rows = prompt('Number of rows:', '3');
+                const cols = prompt('Number of columns:', '3');
+                if (rows && cols) {
+                    TableModule.insertTable.call({ quill: this.quill }, parseInt(rows), parseInt(cols));
+                }
+            },
+            'emoji': function() {
+                showEmojiPicker(this.quill);
+            }
+        }
+    };
+
     const quill = new Quill('#quill-editor', {
         theme: 'snow',
         modules: {
-            toolbar: [
-                [{ 'header': [1, 2, 3, false] }],
-                ['bold', 'italic', 'underline', 'strike'],
-                [{ 'color': [] }, { 'background': [] }],
-                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                [{ 'align': [] }],
-                ['link', 'image'],
-                ['clean']
-            ]
+            toolbar: toolbarOptions,
+            history: { delay: 1000, maxStack: 100, userOnly: true }
         }
     });
 
-    // Load initial content into Quill
+    // Emoji picker
+    let emojiContainer = null;
+
+    function showEmojiPicker(quillInstance) {
+        if (emojiContainer) {
+            emojiContainer.remove();
+            emojiContainer = null;
+            return;
+        }
+
+        emojiContainer = document.createElement('div');
+        emojiContainer.className = 'emoji-picker-container';
+
+        const toolbar = document.querySelector('.ql-toolbar');
+        const rect = toolbar.getBoundingClientRect();
+        emojiContainer.style.top = (rect.bottom + 5) + 'px';
+        emojiContainer.style.left = rect.left + 'px';
+        document.body.appendChild(emojiContainer);
+
+        new Picker({
+            parent: emojiContainer,
+            onEmojiSelect: (emoji) => {
+                const range = quillInstance.getSelection(true);
+                quillInstance.insertText(range.index, emoji.native);
+                quillInstance.setSelection(range.index + emoji.native.length);
+                emojiContainer.remove();
+                emojiContainer = null;
+            },
+            theme: document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'
+        });
+
+        setTimeout(() => {
+            document.addEventListener('click', function closeEmoji(e) {
+                if (emojiContainer && !emojiContainer.contains(e.target) && !e.target.closest('.ql-emoji')) {
+                    emojiContainer.remove();
+                    emojiContainer = null;
+                    document.removeEventListener('click', closeEmoji);
+                }
+            });
+        }, 100);
+    }
+
+    // Image drag & drop for Quill
+    const editorEl = document.querySelector('#quill-editor .ql-editor');
+    editorEl.addEventListener('dragover', (e) => { e.preventDefault(); editorEl.classList.add('drag-over'); });
+    editorEl.addEventListener('dragleave', () => { editorEl.classList.remove('drag-over'); });
+    editorEl.addEventListener('drop', (e) => {
+        e.preventDefault();
+        editorEl.classList.remove('drag-over');
+        for (const file of e.dataTransfer.files) {
+            if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const range = quill.getSelection(true);
+                    quill.insertEmbed(range.index, 'image', event.target.result);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+    });
+
+    // Image resize
+    editorEl.addEventListener('click', (e) => {
+        if (e.target.tagName === 'IMG') {
+            document.querySelectorAll('.ql-editor img.selected').forEach(img => img.classList.remove('selected'));
+            e.target.classList.add('selected');
+            e.target.addEventListener('dblclick', function() {
+                const newWidth = prompt('Enter new width (e.g., 300px or 50%):', e.target.style.width || e.target.width + 'px');
+                if (newWidth) { e.target.style.width = newWidth; e.target.style.height = 'auto'; }
+            }, { once: true });
+        } else {
+            document.querySelectorAll('.ql-editor img.selected').forEach(img => img.classList.remove('selected'));
+        }
+    });
+
+    // Load initial content
     if (initialHtml) {
         quill.clipboard.dangerouslyPasteHTML(initialHtml);
     }
 
-    // Initialize CodeMirror
+    // ========== CodeMirror Setup ==========
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     const codeMirror = CodeMirror.fromTextArea(document.getElementById('code-editor'), {
         mode: 'htmlmixed',
@@ -207,50 +591,94 @@
     });
     codeMirror.setValue(initialHtml);
 
-    // Tab switching
+    // ========== Tab Switching ==========
     const tabs = document.querySelectorAll('.editor-tab');
     const visualPane = document.getElementById('visual-pane');
+    const blocksPane = document.getElementById('blocks-pane');
     const codePane = document.getElementById('code-pane');
     const rememberCheckbox = document.getElementById('remember-editor');
+
+    function getHtmlFromCurrentEditor() {
+        if (currentEditor === 'visual') {
+            return quill.getSemanticHTML();
+        } else if (currentEditor === 'blocks' && editorJsInstance) {
+            // We'll get this synchronously from saved data
+            return codeMirror.getValue();
+        } else {
+            return codeMirror.getValue();
+        }
+    }
+
+    async function switchToVisual() {
+        // Save from previous editor
+        if (currentEditor === 'blocks' && editorJsInstance) {
+            const data = await editorJsInstance.save();
+            const html = editorJsToHtml(data);
+            codeMirror.setValue(html);
+        }
+
+        tabs.forEach(t => t.classList.remove('active'));
+        tabs[0].classList.add('active');
+        visualPane.classList.add('active');
+        blocksPane.classList.remove('active');
+        codePane.classList.remove('active');
+        quill.clipboard.dangerouslyPasteHTML(codeMirror.getValue());
+        currentEditor = 'visual';
+    }
+
+    async function switchToBlocks() {
+        // Save from previous editor
+        if (currentEditor === 'visual') {
+            codeMirror.setValue(quill.getSemanticHTML());
+        }
+
+        tabs.forEach(t => t.classList.remove('active'));
+        tabs[1].classList.add('active');
+        visualPane.classList.remove('active');
+        blocksPane.classList.add('active');
+        codePane.classList.remove('active');
+
+        const editorJsData = htmlToEditorJs(codeMirror.getValue());
+        initEditorJs(editorJsData);
+        currentEditor = 'blocks';
+    }
+
+    async function switchToCode() {
+        // Save from previous editor
+        if (currentEditor === 'visual') {
+            codeMirror.setValue(quill.getSemanticHTML());
+        } else if (currentEditor === 'blocks' && editorJsInstance) {
+            const data = await editorJsInstance.save();
+            codeMirror.setValue(editorJsToHtml(data));
+        }
+
+        tabs.forEach(t => t.classList.remove('active'));
+        tabs[2].classList.add('active');
+        visualPane.classList.remove('active');
+        blocksPane.classList.remove('active');
+        codePane.classList.add('active');
+        codeMirror.refresh();
+        currentEditor = 'code';
+    }
 
     // Load saved preference
     const savedEditor = localStorage.getItem('sendry-editor-preference');
     if (savedEditor) {
         rememberCheckbox.checked = true;
-        if (savedEditor === 'code') {
+        if (savedEditor === 'blocks') {
+            switchToBlocks();
+        } else if (savedEditor === 'code') {
             switchToCode();
         }
     }
 
-    function switchToVisual() {
-        tabs.forEach(t => t.classList.remove('active'));
-        tabs[0].classList.add('active');
-        visualPane.classList.add('active');
-        codePane.classList.remove('active');
-        // Sync code to visual
-        quill.clipboard.dangerouslyPasteHTML(codeMirror.getValue());
-    }
-
-    function switchToCode() {
-        tabs.forEach(t => t.classList.remove('active'));
-        tabs[1].classList.add('active');
-        visualPane.classList.remove('active');
-        codePane.classList.add('active');
-        // Sync visual to code
-        codeMirror.setValue(quill.getSemanticHTML());
-        codeMirror.refresh();
-    }
-
     tabs.forEach(tab => {
-        tab.addEventListener('click', function() {
+        tab.addEventListener('click', async function() {
             const editor = this.dataset.editor;
-            if (editor === 'visual') {
-                switchToVisual();
-            } else {
-                switchToCode();
-            }
+            if (editor === 'visual') await switchToVisual();
+            else if (editor === 'blocks') await switchToBlocks();
+            else await switchToCode();
 
-            // Save preference
             if (rememberCheckbox.checked) {
                 localStorage.setItem('sendry-editor-preference', editor);
             }
@@ -261,20 +689,25 @@
         if (!this.checked) {
             localStorage.removeItem('sendry-editor-preference');
         } else {
-            const active = document.querySelector('.editor-tab.active');
-            localStorage.setItem('sendry-editor-preference', active.dataset.editor);
+            localStorage.setItem('sendry-editor-preference', currentEditor);
         }
     });
 
     // Form submission
-    document.getElementById('template-form').addEventListener('submit', function(e) {
+    document.getElementById('template-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
         const htmlHidden = document.getElementById('html-hidden');
 
-        if (visualPane.classList.contains('active')) {
+        if (currentEditor === 'visual') {
             htmlHidden.value = quill.getSemanticHTML();
+        } else if (currentEditor === 'blocks' && editorJsInstance) {
+            const data = await editorJsInstance.save();
+            htmlHidden.value = editorJsToHtml(data);
         } else {
             htmlHidden.value = codeMirror.getValue();
         }
+
+        this.submit();
     });
 
     // Theme change listener

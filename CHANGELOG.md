@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation: expanded variable substitution docs in sendry-web guide (EN/RU)
 
 ### Changed
-- Sendry Web: replaced GrapesJS with Quill + CodeMirror for template editing
+- Sendry Web: replaced GrapesJS with Quill + CodeMirror + Editor.js for template editing
+- Sendry Web: three editor modes - Visual (Quill), Blocks (Editor.js), Code (CodeMirror)
 - Sendry Web: editor preference saved in localStorage
 
 ### Fixed
