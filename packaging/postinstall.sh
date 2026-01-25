@@ -4,6 +4,9 @@ set -e
 # Set correct ownership
 chown -R sendry:sendry /var/lib/sendry
 chown -R sendry:sendry /var/log/sendry
+if [ -d /var/lib/sendry-web ]; then
+    chown -R sendry:sendry /var/lib/sendry-web
+fi
 
 # Create default config if not exists
 if [ ! -f /etc/sendry/config.yaml ]; then
@@ -22,13 +25,17 @@ if command -v systemctl >/dev/null 2>&1; then
     echo ""
     echo "Sendry has been installed."
     echo ""
-    echo "To start the service:"
+    echo "To start the MTA service:"
     echo "  sudo systemctl start sendry"
-    echo ""
-    echo "To enable on boot:"
     echo "  sudo systemctl enable sendry"
     echo ""
-    echo "Configuration file: /etc/sendry/config.yaml"
+    echo "Configuration: /etc/sendry/config.yaml"
+    echo ""
+    echo "Optional: To enable Sendry Web (management UI):"
+    echo "  sudo cp /etc/sendry/web.yaml.example /etc/sendry/web.yaml"
+    echo "  sudo nano /etc/sendry/web.yaml"
+    echo "  sudo systemctl start sendry-web"
+    echo "  sudo systemctl enable sendry-web"
 fi
 
 exit 0
