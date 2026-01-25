@@ -1,0 +1,106 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: false
+
+  vars:
+    sendry_dkim_dir: /var/lib/sendry/dkim
+
+  tasks:
+    - name: Check sendry binary exists
+      ansible.builtin.stat:
+        path: /usr/bin/sendry
+      register: sendry_binary
+
+    - name: Assert sendry binary exists
+      ansible.builtin.assert:
+        that:
+          - sendry_binary.stat.exists
+        fail_msg: "Sendry binary not found"
+
+    - name: Check sendry service is running
+      ansible.builtin.systemd:
+        name: sendry
+      register: sendry_service
+
+    - name: Assert sendry service is active
+      ansible.builtin.assert:
+        that:
+          - sendry_service.status.ActiveState == "active"
+        fail_msg: "Sendry service is not running"
+
+    - name: Check DKIM private key exists
+      ansible.builtin.stat:
+        path: "{{ sendry_dkim_dir }}/example.com.key"
+      register: dkim_key
+
+    - name: Assert DKIM private key exists
+      ansible.builtin.assert:
+        that:
+          - dkim_key.stat.exists
+          - dkim_key.stat.mode == "0600"
+        fail_msg: "DKIM private key not found or wrong permissions"
+
+    - name: Check DKIM public key exists
+      ansible.builtin.stat:
+        path: "{{ sendry_dkim_dir }}/example.com.pub"
+      register: dkim_pub
+
+    - name: Assert DKIM public key exists
+      ansible.builtin.assert:
+        that:
+          - dkim_pub.stat.exists
+        fail_msg: "DKIM public key not found"
+
+    - name: Check config file exists
+      ansible.builtin.stat:
+        path: /etc/sendry/config.yaml
+      register: config_file
+
+    - name: Assert config exists
+      ansible.builtin.assert:
+        that:
+          - config_file.stat.exists
+        fail_msg: "Config file not found"
+
+    - name: Read config file
+      ansible.builtin.slurp:
+        src: /etc/sendry/config.yaml
+      register: config_content
+
+    - name: Check DKIM is configured
+      ansible.builtin.assert:
+        that:
+          - "'dkim' in (config_content.content | b64decode)"
+          - "'example.com' in (config_content.content | b64decode)"
+        fail_msg: "DKIM not configured in sendry.yaml"
+
+    - name: Check API is responding
+      ansible.builtin.uri:
+        url: http://localhost:8080/health
+        method: GET
+        status_code: 200
+      register: health_check
+      retries: 5
+      delay: 2
+      until: health_check.status == 200
+
+    - name: Verify DKIM keys are the same on all hosts
+      block:
+        - name: Get DKIM key checksum
+          ansible.builtin.stat:
+            path: "{{ sendry_dkim_dir }}/example.com.key"
+            checksum_algorithm: sha256
+          register: dkim_checksum
+
+        - name: Set fact for first host checksum
+          ansible.builtin.set_fact:
+            first_host_checksum: "{{ dkim_checksum.stat.checksum }}"
+          run_once: true
+
+        - name: Assert all hosts have the same DKIM key
+          ansible.builtin.assert:
+            that:
+              - dkim_checksum.stat.checksum == first_host_checksum
+            fail_msg: "DKIM keys differ between hosts!"

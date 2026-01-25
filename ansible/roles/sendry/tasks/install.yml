@@ -41,7 +41,7 @@
 
     - name: Set version fact
       ansible.builtin.set_fact:
-        sendry_actual_version: "{{ (sendry_version == 'latest') | ternary(github_release.json.tag_name | regex_replace('^v', ''), sendry_version) }}"
+        sendry_actual_version: "{{ sendry_version if sendry_version != 'latest' else (github_release.json.tag_name | regex_replace('^v', '')) }}"
 
     - name: Determine package type
       ansible.builtin.set_fact:
@@ -88,7 +88,7 @@
 
     - name: Set version fact
       ansible.builtin.set_fact:
-        sendry_actual_version: "{{ (sendry_version == 'latest') | ternary(github_release.json.tag_name | regex_replace('^v', ''), sendry_version) }}"
+        sendry_actual_version: "{{ sendry_version if sendry_version != 'latest' else (github_release.json.tag_name | regex_replace('^v', '')) }}"
 
     - name: Determine architecture
       ansible.builtin.set_fact:

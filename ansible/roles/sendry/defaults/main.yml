@@ -121,12 +121,12 @@ sendry_queue_process_interval: 10s
 
 # Storage settings
 sendry_storage_path: "{{ sendry_data_dir }}/queue.db"
-sendry_storage_retention_delivered_max_age: 7d
+sendry_storage_retention_delivered_max_age: 168h
 sendry_storage_retention_cleanup_interval: 1h
 
 # DLQ settings
 sendry_dlq_enabled: true
-sendry_dlq_max_age: 30d
+sendry_dlq_max_age: 720h
 sendry_dlq_max_count: 10000
 sendry_dlq_cleanup_interval: 1h
 

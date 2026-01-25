@@ -1,0 +1,64 @@
+---
+dependency:
+  name: galaxy
+
+driver:
+  name: docker
+
+platforms:
+  - name: sendry-test-1
+    image: geerlingguy/docker-ubuntu2204-ansible
+    pre_build_image: true
+    privileged: true
+    command: /lib/systemd/systemd
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    tmpfs:
+      - /run
+      - /tmp
+
+  - name: sendry-test-2
+    image: geerlingguy/docker-ubuntu2204-ansible
+    pre_build_image: true
+    privileged: true
+    command: /lib/systemd/systemd
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    tmpfs:
+      - /run
+      - /tmp
+
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "../../.."
+  inventory:
+    group_vars:
+      all:
+        sendry_install_method: binary
+        sendry_version: "0.4.1"
+        sendry_api_key: "test-api-key-12345"
+        sendry_smtp_auth_users:
+          admin: "test-password"
+        sendry_domains:
+          example.com:
+            dkim_enabled: true
+            dkim_selector: sendry
+            mode: sandbox
+        sendry_dkim_generate: false
+        sendry_acme_enabled: false
+        sendry_configure_firewall: false
+
+verifier:
+  name: ansible
+
+scenario:
+  test_sequence:
+    - dependency
+    - create
+    - prepare
+    - converge
+    - verify
+    - destroy

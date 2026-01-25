@@ -1,0 +1,77 @@
+---
+- name: Prepare - Generate DKIM keys on localhost
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    dkim_keys_dir: "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/dkim_keys"
+    dkim_domain: example.com
+    dkim_selector: sendry
+    dkim_bits: 2048
+
+  tasks:
+    - name: Create keys directory
+      ansible.builtin.file:
+        path: "{{ dkim_keys_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Generate private key
+      ansible.builtin.command:
+        cmd: openssl genrsa -out {{ dkim_keys_dir }}/{{ dkim_domain }}.key {{ dkim_bits }}
+        creates: "{{ dkim_keys_dir }}/{{ dkim_domain }}.key"
+
+    - name: Generate public key
+      ansible.builtin.command:
+        cmd: openssl rsa -in {{ dkim_keys_dir }}/{{ dkim_domain }}.key -pubout -out {{ dkim_keys_dir }}/{{ dkim_domain }}.pub
+        creates: "{{ dkim_keys_dir }}/{{ dkim_domain }}.pub"
+
+    - name: Save selector
+      ansible.builtin.copy:
+        content: "{{ dkim_selector }}"
+        dest: "{{ dkim_keys_dir }}/{{ dkim_domain }}.selector"
+        mode: "0644"
+
+
+- name: Prepare - Deploy DKIM keys to test instances
+  hosts: all
+  become: true
+
+  vars:
+    dkim_keys_dir: "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/dkim_keys"
+    sendry_dkim_dir: /var/lib/sendry/dkim
+    sendry_user: sendry
+    sendry_group: sendry
+
+  tasks:
+    - name: Create sendry user
+      ansible.builtin.user:
+        name: "{{ sendry_user }}"
+        system: true
+        shell: /usr/sbin/nologin
+        create_home: false
+
+    - name: Create DKIM directory
+      ansible.builtin.file:
+        path: "{{ sendry_dkim_dir }}"
+        state: directory
+        owner: "{{ sendry_user }}"
+        group: "{{ sendry_group }}"
+        mode: "0750"
+
+    - name: Deploy DKIM private key
+      ansible.builtin.copy:
+        src: "{{ dkim_keys_dir }}/example.com.key"
+        dest: "{{ sendry_dkim_dir }}/example.com.key"
+        owner: "{{ sendry_user }}"
+        group: "{{ sendry_group }}"
+        mode: "0600"
+
+    - name: Deploy DKIM public key
+      ansible.builtin.copy:
+        src: "{{ dkim_keys_dir }}/example.com.pub"
+        dest: "{{ sendry_dkim_dir }}/example.com.pub"
+        owner: "{{ sendry_user }}"
+        group: "{{ sendry_group }}"
+        mode: "0644"

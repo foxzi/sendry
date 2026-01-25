@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Sendry MTA: DKIM key upload endpoint (POST /api/v1/dkim/upload)
+- Sendry Web: DKIM key management (generate, store, deploy to servers)
+- Sendry Web: DKIM deployment tracking per server
+- Sendry Web: DKIM settings page with DNS record display
+- Ansible: DKIM playbook for centralized key generation and deployment
+- Ansible: Molecule tests for sendry role with multi-host DKIM key sync validation
+
+### Fixed
+- Ansible: duration format in defaults (7d -> 168h, 30d -> 720h for Go compatibility)
+- Ansible: version fact handling when sendry_version is not 'latest'
+
 ## [0.4.1] - 2026-01-26
 
 ### Added
