@@ -853,6 +853,65 @@ code {
     color: var(--success);
 }
 
+/* Diff view */
+.diff-form .form-row {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.diff-form .form-group {
+    flex: 1;
+    min-width: 200px;
+}
+
+.diff-container {
+    margin-top: 1rem;
+}
+
+.diff-panels {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.diff-panel {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.diff-panel-header {
+    background: var(--bg);
+    padding: 0.5rem 1rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.diff-content {
+    padding: 1rem;
+    background: var(--bg-card);
+}
+
+.diff-code {
+    margin: 0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+@media (max-width: 900px) {
+    .diff-panels {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .navbar {

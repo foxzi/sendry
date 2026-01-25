@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"encoding/csv"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -357,4 +359,61 @@ func (h *Handlers) RecipientDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, "/recipients/"+listID, http.StatusSeeOther)
+}
+
+// RecipientListExport exports recipients to CSV
+func (h *Handlers) RecipientListExport(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	list, err := h.recipients.GetListByID(id)
+	if err != nil || list == nil {
+		h.error(w, http.StatusNotFound, "Recipient list not found")
+		return
+	}
+
+	// Get all recipients (no pagination for export)
+	filter := models.RecipientFilter{
+		ListID: id,
+		Limit:  100000, // reasonable max
+		Offset: 0,
+	}
+
+	recipients, _, err := h.recipients.ListRecipients(filter)
+	if err != nil {
+		h.logger.Error("failed to list recipients for export", "error", err)
+		h.error(w, http.StatusInternalServerError, "Failed to export recipients")
+		return
+	}
+
+	// Set headers for CSV download
+	filename := fmt.Sprintf("%s-recipients.csv", list.Name)
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+
+	writer := csv.NewWriter(w)
+	defer writer.Flush()
+
+	// Write header
+	header := []string{"email", "name", "status", "variables", "tags"}
+	if err := writer.Write(header); err != nil {
+		h.logger.Error("failed to write CSV header", "error", err)
+		return
+	}
+
+	// Write recipients
+	for _, r := range recipients {
+		row := []string{
+			r.Email,
+			r.Name,
+			r.Status,
+			r.Variables,
+			r.Tags,
+		}
+		if err := writer.Write(row); err != nil {
+			h.logger.Error("failed to write CSV row", "error", err)
+			return
+		}
+	}
+
+	h.logger.Info("recipients exported", "list_id", id, "count", len(recipients))
 }

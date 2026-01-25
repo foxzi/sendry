@@ -366,6 +366,16 @@ func (h *Handlers) CampaignSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Handle dry-run mode
+	dryRun := r.FormValue("dry_run") == "on"
+	dryRunLimit := 0
+	if dryRun {
+		dryRunLimit, _ = strconv.Atoi(r.FormValue("dry_run_limit"))
+		if dryRunLimit <= 0 {
+			dryRunLimit = 10 // default
+		}
+	}
+
 	// Create servers JSON
 	serversJSON, _ := json.Marshal(servers)
 
@@ -375,6 +385,8 @@ func (h *Handlers) CampaignSend(w http.ResponseWriter, r *http.Request) {
 		RecipientListID: recipientListID,
 		Servers:         string(serversJSON),
 		Strategy:        strategy,
+		DryRun:          dryRun,
+		DryRunLimit:     dryRunLimit,
 	}
 
 	// Handle scheduled_at
@@ -393,10 +405,15 @@ func (h *Handlers) CampaignSend(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get recipients
+	recipientLimit := 100000 // Get all active recipients
+	if dryRun && dryRunLimit > 0 {
+		recipientLimit = dryRunLimit
+	}
+
 	recipients, _, err := h.recipients.ListRecipients(models.RecipientFilter{
 		ListID: recipientListID,
 		Status: "active",
-		Limit:  100000, // Get all active recipients
+		Limit:  recipientLimit,
 	})
 	if err != nil {
 		h.logger.Error("failed to get recipients", "error", err)

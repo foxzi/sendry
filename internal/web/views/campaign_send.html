@@ -50,7 +50,20 @@
             <small class="form-help">Leave empty to send immediately</small>
         </div>
 
-        <h3 style="margin-top: 1.5rem">4. Confirm</h3>
+        <h3 style="margin-top: 1.5rem">4. Test Mode (Optional)</h3>
+        <div class="form-group">
+            <label class="checkbox-label">
+                <input type="checkbox" name="dry_run" id="dry_run" onchange="toggleDryRunLimit()">
+                <strong>Dry-run mode</strong> - Send only to first N recipients for testing
+            </label>
+        </div>
+        <div class="form-group" id="dry_run_limit_group" style="display: none; margin-left: 1.5rem;">
+            <label for="dry_run_limit">Number of recipients</label>
+            <input type="number" id="dry_run_limit" name="dry_run_limit" class="input" value="10" min="1" max="100" style="width: 100px;">
+            <small class="form-help">Max 100 recipients for dry-run</small>
+        </div>
+
+        <h3 style="margin-top: 1.5rem">5. Confirm</h3>
         <div class="alert alert-warning">
             <strong>Review before sending:</strong>
             <ul style="margin: 0.5rem 0 0 1.5rem">
@@ -82,4 +95,12 @@
     width: auto;
 }
 </style>
+
+<script>
+function toggleDryRunLimit() {
+    const checkbox = document.getElementById('dry_run');
+    const limitGroup = document.getElementById('dry_run_limit_group');
+    limitGroup.style.display = checkbox.checked ? 'block' : 'none';
+}
+</script>
 {{end}}

@@ -1,0 +1,177 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1>{{.Template.Name}} - Compare Versions</h1>
+        <p class="text-muted">Select two versions to compare</p>
+    </div>
+    <a href="/templates/{{.Template.ID}}/versions" class="btn btn-secondary">Back to Versions</a>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" action="/templates/{{.Template.ID}}/diff" class="diff-form">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="v1">Version 1 (older)</label>
+                    <select name="v1" id="v1" class="form-control" required>
+                        <option value="">Select version...</option>
+                        {{range .Versions}}
+                        <option value="{{.Version}}" {{if eq .Version $.V1}}selected{{end}}>
+                            v{{.Version}} - {{.CreatedAt.Format "2006-01-02 15:04"}}
+                            {{if .ChangeNote}}({{.ChangeNote}}){{end}}
+                        </option>
+                        {{end}}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="v2">Version 2 (newer)</label>
+                    <select name="v2" id="v2" class="form-control" required>
+                        <option value="">Select version...</option>
+                        {{range .Versions}}
+                        <option value="{{.Version}}" {{if eq .Version $.V2}}selected{{end}}>
+                            v{{.Version}} - {{.CreatedAt.Format "2006-01-02 15:04"}}
+                            {{if .ChangeNote}}({{.ChangeNote}}){{end}}
+                        </option>
+                        {{end}}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>&nbsp;</label>
+                    <button type="submit" class="btn btn-primary">Compare</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{if and .Version1 .Version2}}
+<div class="diff-container">
+    <!-- Subject comparison -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <h3>Subject</h3>
+        </div>
+        <div class="card-body">
+            <div class="diff-panels">
+                <div class="diff-panel">
+                    <div class="diff-panel-header">v{{.V1}}</div>
+                    <div class="diff-content">
+                        <code>{{.Version1.Subject}}</code>
+                    </div>
+                </div>
+                <div class="diff-panel">
+                    <div class="diff-panel-header">v{{.V2}}</div>
+                    <div class="diff-content">
+                        <code>{{.Version2.Subject}}</code>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- HTML comparison -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <h3>HTML Content</h3>
+        </div>
+        <div class="card-body">
+            <div class="diff-panels">
+                <div class="diff-panel">
+                    <div class="diff-panel-header">v{{.V1}} ({{len .Version1.HTML}} chars)</div>
+                    <div class="diff-content">
+                        <pre class="diff-code">{{.Version1.HTML}}</pre>
+                    </div>
+                </div>
+                <div class="diff-panel">
+                    <div class="diff-panel-header">v{{.V2}} ({{len .Version2.HTML}} chars)</div>
+                    <div class="diff-content">
+                        <pre class="diff-code">{{.Version2.HTML}}</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Text comparison -->
+    {{if or .Version1.Text .Version2.Text}}
+    <div class="card mb-3">
+        <div class="card-header">
+            <h3>Text Content</h3>
+        </div>
+        <div class="card-body">
+            <div class="diff-panels">
+                <div class="diff-panel">
+                    <div class="diff-panel-header">v{{.V1}}</div>
+                    <div class="diff-content">
+                        <pre class="diff-code">{{if .Version1.Text}}{{.Version1.Text}}{{else}}<span class="text-muted">(empty)</span>{{end}}</pre>
+                    </div>
+                </div>
+                <div class="diff-panel">
+                    <div class="diff-panel-header">v{{.V2}}</div>
+                    <div class="diff-content">
+                        <pre class="diff-code">{{if .Version2.Text}}{{.Version2.Text}}{{else}}<span class="text-muted">(empty)</span>{{end}}</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {{end}}
+
+    <!-- Variables comparison -->
+    {{if or .Version1.Variables .Version2.Variables}}
+    <div class="card mb-3">
+        <div class="card-header">
+            <h3>Variables</h3>
+        </div>
+        <div class="card-body">
+            <div class="diff-panels">
+                <div class="diff-panel">
+                    <div class="diff-panel-header">v{{.V1}}</div>
+                    <div class="diff-content">
+                        <pre class="diff-code">{{if .Version1.Variables}}{{.Version1.Variables}}{{else}}<span class="text-muted">(none)</span>{{end}}</pre>
+                    </div>
+                </div>
+                <div class="diff-panel">
+                    <div class="diff-panel-header">v{{.V2}}</div>
+                    <div class="diff-content">
+                        <pre class="diff-code">{{if .Version2.Variables}}{{.Version2.Variables}}{{else}}<span class="text-muted">(none)</span>{{end}}</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {{end}}
+
+    <!-- Metadata -->
+    <div class="card">
+        <div class="card-header">
+            <h3>Version Info</h3>
+        </div>
+        <div class="card-body">
+            <div class="diff-panels">
+                <div class="diff-panel">
+                    <div class="diff-panel-header">v{{.V1}}</div>
+                    <div class="diff-content">
+                        <p><strong>Created:</strong> {{.Version1.CreatedAt.Format "2006-01-02 15:04:05"}}</p>
+                        <p><strong>By:</strong> {{if .Version1.CreatedBy}}{{.Version1.CreatedBy}}{{else}}-{{end}}</p>
+                        <p><strong>Note:</strong> {{if .Version1.ChangeNote}}{{.Version1.ChangeNote}}{{else}}-{{end}}</p>
+                    </div>
+                </div>
+                <div class="diff-panel">
+                    <div class="diff-panel-header">v{{.V2}}</div>
+                    <div class="diff-content">
+                        <p><strong>Created:</strong> {{.Version2.CreatedAt.Format "2006-01-02 15:04:05"}}</p>
+                        <p><strong>By:</strong> {{if .Version2.CreatedBy}}{{.Version2.CreatedBy}}{{else}}-{{end}}</p>
+                        <p><strong>Note:</strong> {{if .Version2.ChangeNote}}{{.Version2.ChangeNote}}{{else}}-{{end}}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{{else}}
+<div class="empty-state">
+    <p>Select two versions above to compare their content</p>
+</div>
+{{end}}
+{{end}}

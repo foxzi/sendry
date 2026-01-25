@@ -57,6 +57,15 @@ func (db *DB) Migrate() error {
 		}
 	}
 
+	// Run ALTER TABLE migrations (ignore errors for existing columns)
+	alterMigrations := []string{
+		"ALTER TABLE send_jobs ADD COLUMN dry_run INTEGER DEFAULT 0",
+		"ALTER TABLE send_jobs ADD COLUMN dry_run_limit INTEGER DEFAULT 0",
+	}
+	for _, m := range alterMigrations {
+		db.Exec(m) // Ignore errors (column may already exist)
+	}
+
 	return nil
 }
 
@@ -252,3 +261,4 @@ CREATE TABLE IF NOT EXISTS settings (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 `
+

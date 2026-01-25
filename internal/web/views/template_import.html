@@ -1,0 +1,78 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1>Import Template</h1>
+        <p class="text-muted">Import template from JSON file</p>
+    </div>
+    <a href="/templates" class="btn btn-secondary">Back to Templates</a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" action="/templates/import" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="file">JSON File</label>
+                <input type="file" name="file" id="file" class="form-control" accept=".json">
+                <span class="form-help">Select a JSON file exported from Sendry Web</span>
+            </div>
+
+            <div class="form-divider">
+                <span>OR</span>
+            </div>
+
+            <div class="form-group">
+                <label for="json">JSON Content</label>
+                <textarea name="json" id="json" class="form-control code" rows="10"
+                    placeholder='{"name": "My Template", "subject": "...", "html": "..."}'></textarea>
+                <span class="form-help">Paste JSON content directly</span>
+            </div>
+
+            <hr>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="name">Template Name (optional override)</label>
+                    <input type="text" name="name" id="name" class="form-control" placeholder="Leave empty to use name from JSON">
+                </div>
+
+                <div class="form-group">
+                    <label for="folder">Folder (optional override)</label>
+                    <input type="text" name="folder" id="folder" class="form-control" list="folders" placeholder="Leave empty to use folder from JSON">
+                    <datalist id="folders">
+                        {{range .Folders}}
+                        <option value="{{.}}">
+                        {{end}}
+                    </datalist>
+                </div>
+            </div>
+
+            <div class="card-footer">
+                <a href="/templates" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary">Import Template</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.form-divider {
+    text-align: center;
+    margin: 1.5rem 0;
+    position: relative;
+}
+.form-divider::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    border-top: 1px solid var(--border);
+}
+.form-divider span {
+    background: var(--bg-card);
+    padding: 0 1rem;
+    position: relative;
+    color: var(--text-muted);
+}
+</style>
+{{end}}

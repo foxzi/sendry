@@ -16,6 +16,8 @@ type SendJob struct {
 	Servers         string     `json:"servers"`  // JSON array of server names
 	Strategy        string     `json:"strategy"` // round-robin, random, weighted
 	Stats           string     `json:"stats"`    // JSON with stats
+	DryRun          bool       `json:"dry_run"`
+	DryRunLimit     int        `json:"dry_run_limit"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
 }

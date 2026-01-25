@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/foxzi/sendry/internal/web/models"
 	"github.com/foxzi/sendry/internal/web/sendry"
@@ -336,6 +338,71 @@ func (h *Handlers) TemplateDeploy(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/templates/"+id, http.StatusSeeOther)
 }
 
+func (h *Handlers) TemplateDiff(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	v1Str := r.URL.Query().Get("v1")
+	v2Str := r.URL.Query().Get("v2")
+
+	t, err := h.templates.GetByID(id)
+	if err != nil || t == nil {
+		h.error(w, http.StatusNotFound, "Template not found")
+		return
+	}
+
+	versions, err := h.templates.GetVersions(id)
+	if err != nil {
+		h.logger.Error("failed to get versions", "error", err)
+		h.error(w, http.StatusInternalServerError, "Failed to load versions")
+		return
+	}
+
+	// If no versions selected, show version selector
+	if v1Str == "" || v2Str == "" {
+		data := map[string]any{
+			"Title":    t.Name + " - Compare Versions",
+			"Active":   "templates",
+			"User":     h.getUserFromContext(r),
+			"Template": t,
+			"Versions": versions,
+		}
+		h.render(w, "template_diff", data)
+		return
+	}
+
+	v1, _ := strconv.Atoi(v1Str)
+	v2, _ := strconv.Atoi(v2Str)
+
+	// Get version 1 content
+	ver1, err := h.templates.GetVersion(id, v1)
+	if err != nil {
+		h.logger.Error("failed to get version", "version", v1, "error", err)
+		h.error(w, http.StatusNotFound, "Version not found")
+		return
+	}
+
+	// Get version 2 content
+	ver2, err := h.templates.GetVersion(id, v2)
+	if err != nil {
+		h.logger.Error("failed to get version", "version", v2, "error", err)
+		h.error(w, http.StatusNotFound, "Version not found")
+		return
+	}
+
+	data := map[string]any{
+		"Title":    t.Name + " - Compare v" + v1Str + " vs v" + v2Str,
+		"Active":   "templates",
+		"User":     h.getUserFromContext(r),
+		"Template": t,
+		"Versions": versions,
+		"V1":       v1,
+		"V2":       v2,
+		"Version1": ver1,
+		"Version2": ver2,
+	}
+
+	h.render(w, "template_diff", data)
+}
+
 func (h *Handlers) TemplatePreview(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	versionStr := r.URL.Query().Get("version")
@@ -371,4 +438,259 @@ func (h *Handlers) TemplatePreview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.render(w, "template_preview", data)
+}
+
+// TemplateExportData represents template data for export/import
+type TemplateExportData struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Subject     string `json:"subject"`
+	HTML        string `json:"html"`
+	Text        string `json:"text"`
+	Variables   string `json:"variables"`
+	Folder      string `json:"folder"`
+	ExportedAt  string `json:"exported_at"`
+	Version     int    `json:"version"`
+}
+
+func (h *Handlers) TemplateExport(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	t, err := h.templates.GetByID(id)
+	if err != nil || t == nil {
+		h.error(w, http.StatusNotFound, "Template not found")
+		return
+	}
+
+	export := TemplateExportData{
+		Name:        t.Name,
+		Description: t.Description,
+		Subject:     t.Subject,
+		HTML:        t.HTML,
+		Text:        t.Text,
+		Variables:   t.Variables,
+		Folder:      t.Folder,
+		ExportedAt:  time.Now().UTC().Format(time.RFC3339),
+		Version:     t.CurrentVersion,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", "attachment; filename=\""+t.Name+".json\"")
+
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(export); err != nil {
+		h.logger.Error("failed to encode template export", "error", err)
+	}
+}
+
+func (h *Handlers) TemplateImportPage(w http.ResponseWriter, r *http.Request) {
+	folders, _ := h.templates.GetFolders()
+
+	data := map[string]any{
+		"Title":   "Import Template",
+		"Active":  "templates",
+		"User":    h.getUserFromContext(r),
+		"Folders": folders,
+	}
+
+	h.render(w, "template_import", data)
+}
+
+func (h *Handlers) TemplateImport(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(10 << 20); err != nil { // 10MB max
+		// Try regular form parse
+		if err := r.ParseForm(); err != nil {
+			h.error(w, http.StatusBadRequest, "Invalid form data")
+			return
+		}
+	}
+
+	var importData TemplateExportData
+
+	// Check for file upload
+	file, _, err := r.FormFile("file")
+	if err == nil {
+		defer file.Close()
+		if err := json.NewDecoder(file).Decode(&importData); err != nil {
+			h.error(w, http.StatusBadRequest, "Invalid JSON file: "+err.Error())
+			return
+		}
+	} else {
+		// Try JSON text input
+		jsonText := r.FormValue("json")
+		if jsonText == "" {
+			h.error(w, http.StatusBadRequest, "No file or JSON provided")
+			return
+		}
+		if err := json.Unmarshal([]byte(jsonText), &importData); err != nil {
+			h.error(w, http.StatusBadRequest, "Invalid JSON: "+err.Error())
+			return
+		}
+	}
+
+	// Override folder if specified in form
+	if folder := r.FormValue("folder"); folder != "" {
+		importData.Folder = folder
+	}
+
+	// Override name if specified in form
+	if name := r.FormValue("name"); name != "" {
+		importData.Name = name
+	}
+
+	// Validate required fields
+	if importData.Name == "" || importData.Subject == "" {
+		h.error(w, http.StatusBadRequest, "Name and subject are required")
+		return
+	}
+
+	// Create template
+	t := &models.Template{
+		Name:        importData.Name,
+		Description: importData.Description,
+		Subject:     importData.Subject,
+		HTML:        importData.HTML,
+		Text:        importData.Text,
+		Variables:   importData.Variables,
+		Folder:      importData.Folder,
+	}
+
+	user := h.getUserFromContext(r)
+	if err := h.templates.Create(t, user["Email"]); err != nil {
+		h.logger.Error("failed to import template", "error", err)
+		h.error(w, http.StatusInternalServerError, "Failed to import template")
+		return
+	}
+
+	h.logger.Info("template imported", "id", t.ID, "name", t.Name, "user", user["Email"])
+	http.Redirect(w, r, "/templates/"+t.ID, http.StatusSeeOther)
+}
+
+func (h *Handlers) TemplateTestPage(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	t, err := h.templates.GetByID(id)
+	if err != nil || t == nil {
+		h.error(w, http.StatusNotFound, "Template not found")
+		return
+	}
+
+	// Get available servers from config
+	servers := make([]map[string]any, 0)
+	for _, s := range h.cfg.Sendry.Servers {
+		servers = append(servers, map[string]any{
+			"Name": s.Name,
+			"Env":  s.Env,
+		})
+	}
+
+	data := map[string]any{
+		"Title":    "Send Test Email - " + t.Name,
+		"Active":   "templates",
+		"User":     h.getUserFromContext(r),
+		"Template": t,
+		"Servers":  servers,
+	}
+
+	h.render(w, "template_test", data)
+}
+
+func (h *Handlers) TemplateTest(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	if err := r.ParseForm(); err != nil {
+		h.error(w, http.StatusBadRequest, "Invalid form data")
+		return
+	}
+
+	t, err := h.templates.GetByID(id)
+	if err != nil || t == nil {
+		h.error(w, http.StatusNotFound, "Template not found")
+		return
+	}
+
+	serverName := r.FormValue("server")
+	to := r.FormValue("to")
+	from := r.FormValue("from")
+
+	if serverName == "" || to == "" || from == "" {
+		h.error(w, http.StatusBadRequest, "Server, from, and to are required")
+		return
+	}
+
+	// Get Sendry client
+	client, err := h.sendry.GetClient(serverName)
+	if err != nil {
+		h.error(w, http.StatusBadRequest, "Server not found: "+serverName)
+		return
+	}
+
+	// Get global variables for substitution
+	globalVars, err := h.settings.GetGlobalVariablesMap()
+	if err != nil {
+		h.logger.Error("failed to get global variables", "error", err)
+		globalVars = make(map[string]string)
+	}
+
+	// Render template with variables
+	subject := renderTemplateVars(t.Subject, globalVars)
+	html := renderTemplateVars(t.HTML, globalVars)
+	text := renderTemplateVars(t.Text, globalVars)
+
+	// Send test email
+	req := &sendry.SendRequest{
+		From:    from,
+		To:      []string{to},
+		Subject: "[TEST] " + subject,
+		HTML:    html,
+		Body:    text,
+	}
+
+	ctx := r.Context()
+	resp, err := client.Send(ctx, req)
+	if err != nil {
+		h.logger.Error("failed to send test email", "error", err, "template_id", id, "server", serverName)
+		h.error(w, http.StatusInternalServerError, "Failed to send test email: "+err.Error())
+		return
+	}
+
+	user := h.getUserFromContext(r)
+	h.logger.Info("test email sent", "template_id", id, "server", serverName, "to", to, "message_id", resp.ID, "user", user["Email"])
+
+	// Redirect back to template with success message
+	http.Redirect(w, r, "/templates/"+id+"?test_sent=1", http.StatusSeeOther)
+}
+
+// renderTemplateVars replaces {{var}} with values from vars map
+func renderTemplateVars(template string, vars map[string]string) string {
+	result := template
+	for key, value := range vars {
+		result = replaceVar(result, key, value)
+	}
+	return result
+}
+
+// replaceVar replaces {{key}} with value in template
+func replaceVar(template, key, value string) string {
+	placeholder := "{{" + key + "}}"
+	for i := 0; i < len(template); {
+		idx := indexString(template[i:], placeholder)
+		if idx == -1 {
+			break
+		}
+		template = template[:i+idx] + value + template[i+idx+len(placeholder):]
+		i = i + idx + len(value)
+	}
+	return template
+}
+
+// indexString returns the index of substr in s, or -1 if not found
+func indexString(s, substr string) int {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
 }

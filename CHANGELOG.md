@@ -30,6 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sendry Web: localization support (English and Russian)
 - Sendry Web: timezone configuration in settings
 - Sendry Web: unit tests for auth, repository, and worker packages
+- Sendry Web: template version diff view (side-by-side comparison)
+- Sendry Web: template import/export JSON
+- Sendry Web: send test email for templates
+- Sendry Web: CSV export for recipient lists
+- Sendry Web: dry-run mode for send jobs (test on first N recipients)
 
 ## [0.3.4] - 2025-01-25
 

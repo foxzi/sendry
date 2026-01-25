@@ -166,6 +166,7 @@ sendry-web cleanup --days 90 --dry-run    # preview what would be deleted
 
 - Create recipient lists
 - Import from CSV or JSON
+- Export to CSV
 - Per-recipient variables for personalization
 - Status tracking (active, unsubscribed, bounced)
 
@@ -180,6 +181,7 @@ sendry-web cleanup --days 90 --dry-run    # preview what would be deleted
 
 - Create send jobs from campaigns
 - Schedule for future delivery
+- Dry-run mode (test on first N recipients before full send)
 - Real-time progress monitoring
 - Pause, resume, cancel operations
 - Retry failed items

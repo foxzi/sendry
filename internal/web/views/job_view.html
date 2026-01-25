@@ -48,7 +48,10 @@
 <div class="card" style="margin-bottom: 1.5rem">
     <div class="card-header">
         <h2>Progress</h2>
-        <span class="badge badge-{{.Job.Status}}">{{.Job.Status}}</span>
+        <div>
+            {{if .Job.DryRun}}<span class="badge badge-warning">DRY-RUN ({{.Job.DryRunLimit}})</span>{{end}}
+            <span class="badge badge-{{.Job.Status}}">{{.Job.Status}}</span>
+        </div>
     </div>
     <div class="card-body">
         <div class="progress" style="height: 24px">
@@ -73,6 +76,11 @@
 
                 <dt>Strategy</dt>
                 <dd>{{.Job.Strategy}}</dd>
+
+                {{if .Job.DryRun}}
+                <dt>Test Mode</dt>
+                <dd><span class="badge badge-warning">Dry-run</span> (first {{.Job.DryRunLimit}} recipients)</dd>
+                {{end}}
 
                 <dt>Servers</dt>
                 <dd>

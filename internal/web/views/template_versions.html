@@ -4,7 +4,10 @@
         <h1>{{.Template.Name}} - Version History</h1>
         <p class="text-muted">Current version: v{{.Template.CurrentVersion}}</p>
     </div>
-    <a href="/templates/{{.Template.ID}}" class="btn btn-secondary">Back to Template</a>
+    <div class="header-actions">
+        <a href="/templates/{{.Template.ID}}/diff" class="btn btn-secondary">Compare Versions</a>
+        <a href="/templates/{{.Template.ID}}" class="btn btn-secondary">Back to Template</a>
+    </div>
 </div>
 
 <div class="card">

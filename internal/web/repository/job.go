@@ -26,9 +26,9 @@ func (r *JobRepository) Create(job *models.SendJob) error {
 	job.UpdatedAt = job.CreatedAt
 
 	_, err := r.db.Exec(`
-		INSERT INTO send_jobs (id, campaign_id, recipient_list_id, status, scheduled_at, servers, strategy, stats, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		job.ID, job.CampaignID, job.RecipientListID, job.Status, job.ScheduledAt, job.Servers, job.Strategy, job.Stats, job.CreatedAt, job.UpdatedAt,
+		INSERT INTO send_jobs (id, campaign_id, recipient_list_id, status, scheduled_at, servers, strategy, stats, dry_run, dry_run_limit, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		job.ID, job.CampaignID, job.RecipientListID, job.Status, job.ScheduledAt, job.Servers, job.Strategy, job.Stats, job.DryRun, job.DryRunLimit, job.CreatedAt, job.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create job: %w", err)
@@ -44,13 +44,15 @@ func (r *JobRepository) GetByID(id string) (*models.SendJob, error) {
 
 	err := r.db.QueryRow(`
 		SELECT j.id, j.campaign_id, c.name, j.recipient_list_id, rl.name, j.status,
-			j.scheduled_at, j.started_at, j.completed_at, j.servers, j.strategy, j.stats, j.created_at, j.updated_at
+			j.scheduled_at, j.started_at, j.completed_at, j.servers, j.strategy, j.stats,
+			COALESCE(j.dry_run, 0), COALESCE(j.dry_run_limit, 0), j.created_at, j.updated_at
 		FROM send_jobs j
 		LEFT JOIN campaigns c ON j.campaign_id = c.id
 		LEFT JOIN recipient_lists rl ON j.recipient_list_id = rl.id
 		WHERE j.id = ?`, id,
 	).Scan(&job.ID, &job.CampaignID, &campaignName, &job.RecipientListID, &listName, &job.Status,
-		&scheduledAt, &startedAt, &completedAt, &job.Servers, &job.Strategy, &job.Stats, &job.CreatedAt, &job.UpdatedAt)
+		&scheduledAt, &startedAt, &completedAt, &job.Servers, &job.Strategy, &job.Stats,
+		&job.DryRun, &job.DryRunLimit, &job.CreatedAt, &job.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -101,7 +103,8 @@ func (r *JobRepository) List(filter models.JobListFilter) ([]models.SendJob, int
 	// Get jobs
 	query := `
 		SELECT j.id, j.campaign_id, c.name, j.recipient_list_id, rl.name, j.status,
-			j.scheduled_at, j.started_at, j.completed_at, j.servers, j.strategy, j.stats, j.created_at, j.updated_at
+			j.scheduled_at, j.started_at, j.completed_at, j.servers, j.strategy, j.stats,
+			COALESCE(j.dry_run, 0), COALESCE(j.dry_run_limit, 0), j.created_at, j.updated_at
 		FROM send_jobs j
 		LEFT JOIN campaigns c ON j.campaign_id = c.id
 		LEFT JOIN recipient_lists rl ON j.recipient_list_id = rl.id
@@ -141,7 +144,8 @@ func (r *JobRepository) List(filter models.JobListFilter) ([]models.SendJob, int
 		var campaignName, listName sql.NullString
 
 		err := rows.Scan(&job.ID, &job.CampaignID, &campaignName, &job.RecipientListID, &listName, &job.Status,
-			&scheduledAt, &startedAt, &completedAt, &job.Servers, &job.Strategy, &job.Stats, &job.CreatedAt, &job.UpdatedAt)
+			&scheduledAt, &startedAt, &completedAt, &job.Servers, &job.Strategy, &job.Stats,
+			&job.DryRun, &job.DryRunLimit, &job.CreatedAt, &job.UpdatedAt)
 		if err != nil {
 			return nil, 0, err
 		}
