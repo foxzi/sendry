@@ -1,12 +1,13 @@
 # Dockerfile for CI multi-arch builds
 # Uses pre-built binaries
+# Contains both sendry and sendry-web
 
-FROM alpine:3.19
+FROM alpine:3.23
 
 ARG TARGETARCH
 
 LABEL maintainer="sendry"
-LABEL description="Sendry - Outbound Mail Transfer Agent"
+LABEL description="Sendry - Mail Transfer Agent and Web Management Interface"
 LABEL org.opencontainers.image.source="https://github.com/foxzi/sendry"
 
 # Install ca-certificates for TLS and tzdata for timezones
@@ -16,30 +17,34 @@ RUN apk add --no-cache ca-certificates tzdata
 RUN addgroup -g 1000 sendry && \
     adduser -u 1000 -G sendry -h /var/lib/sendry -s /sbin/nologin -D sendry
 
-# Copy pre-built binary based on target architecture
+# Copy pre-built binaries based on target architecture
 COPY build/sendry-linux-${TARGETARCH} /usr/bin/sendry
-RUN chmod +x /usr/bin/sendry
+COPY build/sendry-web-linux-${TARGETARCH} /usr/bin/sendry-web
+RUN chmod +x /usr/bin/sendry /usr/bin/sendry-web
 
 # Create directories
-RUN mkdir -p /etc/sendry /var/lib/sendry /var/log/sendry && \
-    chown -R sendry:sendry /var/lib/sendry /var/log/sendry
+RUN mkdir -p /etc/sendry /var/lib/sendry /var/lib/sendry-web /var/log/sendry && \
+    chown -R sendry:sendry /var/lib/sendry /var/lib/sendry-web /var/log/sendry
 
-# Copy example config
+# Copy example configs
 COPY configs/sendry.example.yaml /etc/sendry/config.yaml.example
+COPY configs/web.example.yaml /etc/sendry/web.yaml.example
 
 # Expose ports
-EXPOSE 25 465 587 8080 9090
+# sendry: 25 (SMTP), 465 (SMTPS), 587 (Submission), 8080 (API), 9090 (Metrics)
+# sendry-web: 8088
+EXPOSE 25 465 587 8080 8088 9090
 
 # Volumes
-VOLUME ["/var/lib/sendry", "/etc/sendry"]
+VOLUME ["/var/lib/sendry", "/var/lib/sendry-web", "/etc/sendry"]
 
 # Switch to non-root user
 USER sendry
 
-# Health check
+# Health check (default for sendry)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD ["/usr/bin/sendry", "version"]
 
-# Default command
+# Default command (sendry MTA)
 ENTRYPOINT ["/usr/bin/sendry"]
 CMD ["serve", "--config", "/etc/sendry/config.yaml"]

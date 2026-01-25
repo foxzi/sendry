@@ -9,10 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Docker: universal Dockerfile with TARGET build arg for sendry and sendry-web
-- Documentation: Docker Compose guide (EN/RU)
-- Documentation: expanded variable substitution docs in sendry-web guide (EN/RU)
+- Docker: CI image now includes both sendry and sendry-web binaries
 
 ### Changed
+- Docker: Alpine base image updated to 3.23
+- Documentation: Docker Compose guide (EN/RU)
+- Documentation: expanded variable substitution docs in sendry-web guide (EN/RU)
 - Sendry Web: replaced GrapesJS with Quill + CodeMirror + Editor.js for template editing
 - Sendry Web: three editor modes - Visual (Quill), Blocks (Editor.js), Code (CodeMirror)
 - Sendry Web: editor preference saved in localStorage

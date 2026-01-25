@@ -2,7 +2,7 @@
 # Build the APK first: make package-apk
 # Then build this image: make docker-build-apk
 
-FROM alpine:3.19
+FROM alpine:3.23
 
 LABEL maintainer="sendry"
 LABEL description="Sendry - Outbound Mail Transfer Agent"
