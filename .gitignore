@@ -1,5 +1,7 @@
 # Binaries
 /sendry
+/sendry-web
+/build/
 *.exe
 
 # IDE
@@ -26,3 +28,11 @@ Thumbs.db
 # Claude
 CLAUDE.md
 tz.md
+tz-web.md
+
+# Test configs
+configs/test.yaml
+configs/web-test.yaml
+
+# Scripts (local)
+/scripts/
