@@ -198,6 +198,10 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("POST /servers/{server}/dkim/{id}/deploy", h.DKIMDeploy)
 	protected.HandleFunc("DELETE /servers/{server}/dkim/{id}/deployments", h.DKIMDeploymentDelete)
 
+	// DNS/IP Checks (per server)
+	protected.HandleFunc("GET /servers/{server}/dns-check", h.DNSCheck)
+	protected.HandleFunc("GET /servers/{server}/ip-check", h.IPCheck)
+
 	// Wrap protected routes with auth middleware
 	authMiddleware := middleware.Auth(s.cfg, s.db, s.logger)
 	mux.Handle("/", authMiddleware(protected))

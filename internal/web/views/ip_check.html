@@ -1,0 +1,120 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>{{.ServerName}} - IP Check</h1>
+    <div class="header-actions">
+        <a href="/servers/{{.ServerName}}" class="btn btn-secondary">Back to Server</a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Check IP in DNSBL</h3>
+    </div>
+    <div class="card-body">
+        <form method="GET" action="/servers/{{.ServerName}}/ip-check" class="form-inline">
+            <div class="form-group" style="display: flex; gap: 1rem; align-items: flex-end;">
+                <div>
+                    <label for="ip">IP Address (IPv4)</label>
+                    <input type="text" id="ip" name="ip" value="{{.IP}}" placeholder="1.2.3.4" required class="form-control" style="min-width: 200px;" pattern="^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$">
+                </div>
+                <div>
+                    <button type="submit" class="btn btn-primary">Check IP</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{if .Error}}
+<div class="card" style="margin-top: 1rem;">
+    <div class="card-body">
+        <div class="alert alert-danger">
+            Error: {{.Error}}
+        </div>
+    </div>
+</div>
+{{end}}
+
+{{if .Result}}
+<div class="card" style="margin-top: 1rem;">
+    <div class="card-header">
+        <h3>Results for {{.Result.IP}}</h3>
+    </div>
+    <div class="card-body">
+        <!-- Summary -->
+        <div class="summary-badges" style="margin-bottom: 1rem;">
+            <span class="badge badge-running">{{.Result.Summary.Clean}} Clean</span>
+            {{if gt .Result.Summary.Listed 0}}
+            <span class="badge badge-failed">{{.Result.Summary.Listed}} Listed</span>
+            {{end}}
+            {{if gt .Result.Summary.Errors 0}}
+            <span class="badge badge-warning">{{.Result.Summary.Errors}} Errors</span>
+            {{end}}
+        </div>
+
+        {{if gt .Result.Summary.Listed 0}}
+        <div class="alert alert-danger" style="margin-bottom: 1rem;">
+            <strong>Warning:</strong> IP is listed in one or more blacklists. This may affect email deliverability.
+        </div>
+        {{else if eq .Result.Summary.Errors 0}}
+        <div class="alert alert-success" style="margin-bottom: 1rem;">
+            IP address is clean - not listed in any checked blacklists.
+        </div>
+        {{end}}
+
+        <!-- Results table -->
+        <table class="table">
+            <thead>
+                <tr>
+                    <th style="width: 100px;">Status</th>
+                    <th style="width: 200px;">Blacklist</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Result.Results}}
+                <tr>
+                    <td>
+                        {{if .Error}}
+                        <span class="badge badge-warning">ERROR</span>
+                        {{else if .Listed}}
+                        <span class="badge badge-failed">LISTED</span>
+                        {{else}}
+                        <span class="badge badge-running">CLEAN</span>
+                        {{end}}
+                    </td>
+                    <td>
+                        <strong>{{.DNSBL.Name}}</strong>
+                        <br>
+                        <small class="text-muted">{{.DNSBL.Zone}}</small>
+                    </td>
+                    <td>
+                        {{if .Error}}
+                        <span class="text-muted">{{.Error}}</span>
+                        {{else if .Listed}}
+                        {{if .ReturnCodes}}
+                        Return codes: <code>{{range $i, $v := .ReturnCodes}}{{if $i}}, {{end}}{{$v}}{{end}}</code>
+                        {{end}}
+                        {{else}}
+                        <span class="text-muted">{{.DNSBL.Description}}</span>
+                        {{end}}
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+{{end}}
+
+{{if not .IP}}
+<div class="card" style="margin-top: 1rem;">
+    <div class="card-body">
+        <div class="empty-state">
+            <p>Enter an IPv4 address to check against 15 popular DNS blacklists (DNSBL).</p>
+            <p class="text-muted">This helps diagnose email deliverability issues caused by IP reputation.</p>
+        </div>
+    </div>
+</div>
+{{end}}
+{{end}}

@@ -287,3 +287,61 @@ type DKIMVerifyResponse struct {
 	Error    string `json:"error,omitempty"`
 	DNSName  string `json:"dns_name"`
 }
+
+// DNSCheckResult represents DNS check result for a domain
+type DNSCheckResult struct {
+	Domain  string           `json:"domain"`
+	Results []DNSCheckItem   `json:"results"`
+	Summary DNSCheckSummary  `json:"summary"`
+}
+
+// DNSCheckItem represents a single DNS check result
+type DNSCheckItem struct {
+	Type    string `json:"type"`
+	Status  string `json:"status"` // ok, warning, error, not_found
+	Value   string `json:"value,omitempty"`
+	Message string `json:"message,omitempty"`
+}
+
+// DNSCheckSummary represents DNS check summary
+type DNSCheckSummary struct {
+	OK       int `json:"ok"`
+	Warnings int `json:"warnings"`
+	Errors   int `json:"errors"`
+	NotFound int `json:"not_found"`
+}
+
+// IPCheckResult represents IP DNSBL check result
+type IPCheckResult struct {
+	IP      string          `json:"ip"`
+	Results []DNSBLResult   `json:"results"`
+	Summary IPCheckSummary  `json:"summary"`
+}
+
+// DNSBLResult represents a single DNSBL check result
+type DNSBLResult struct {
+	DNSBL       DNSBLInfo `json:"dnsbl"`
+	Listed      bool      `json:"listed"`
+	ReturnCodes []string  `json:"return_codes,omitempty"`
+	Error       string    `json:"error,omitempty"`
+}
+
+// DNSBLInfo represents DNSBL service info
+type DNSBLInfo struct {
+	Name        string `json:"name"`
+	Zone        string `json:"zone"`
+	Description string `json:"description"`
+}
+
+// IPCheckSummary represents IP check summary
+type IPCheckSummary struct {
+	Clean  int `json:"clean"`
+	Listed int `json:"listed"`
+	Errors int `json:"errors"`
+}
+
+// DNSBLListResponse represents DNSBL list response
+type DNSBLListResponse struct {
+	DNSBLs []DNSBLInfo `json:"dnsbls"`
+	Count  int         `json:"count"`
+}

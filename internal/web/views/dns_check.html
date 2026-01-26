@@ -1,0 +1,114 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>{{.ServerName}} - DNS Check</h1>
+    <div class="header-actions">
+        <a href="/servers/{{.ServerName}}" class="btn btn-secondary">Back to Server</a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Check Domain DNS Records</h3>
+    </div>
+    <div class="card-body">
+        <form method="GET" action="/servers/{{.ServerName}}/dns-check" class="form-inline">
+            <div class="form-group" style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
+                <div>
+                    <label for="domain">Domain</label>
+                    <input type="text" id="domain" name="domain" value="{{.Domain}}" placeholder="example.com" required class="form-control" style="min-width: 250px;">
+                </div>
+                <div>
+                    <label for="selector">DKIM Selector</label>
+                    <input type="text" id="selector" name="selector" value="{{.Selector}}" placeholder="sendry" class="form-control" style="width: 150px;">
+                </div>
+                <div>
+                    <button type="submit" class="btn btn-primary">Check DNS</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{if .Error}}
+<div class="card" style="margin-top: 1rem;">
+    <div class="card-body">
+        <div class="alert alert-danger">
+            Error: {{.Error}}
+        </div>
+    </div>
+</div>
+{{end}}
+
+{{if .Result}}
+<div class="card" style="margin-top: 1rem;">
+    <div class="card-header">
+        <h3>Results for {{.Result.Domain}}</h3>
+    </div>
+    <div class="card-body">
+        <!-- Summary -->
+        <div class="summary-badges" style="margin-bottom: 1rem;">
+            {{if gt .Result.Summary.OK 0}}
+            <span class="badge badge-running">{{.Result.Summary.OK}} OK</span>
+            {{end}}
+            {{if gt .Result.Summary.Warnings 0}}
+            <span class="badge badge-warning">{{.Result.Summary.Warnings}} Warnings</span>
+            {{end}}
+            {{if gt .Result.Summary.Errors 0}}
+            <span class="badge badge-failed">{{.Result.Summary.Errors}} Errors</span>
+            {{end}}
+            {{if gt .Result.Summary.NotFound 0}}
+            <span class="badge badge-draft">{{.Result.Summary.NotFound}} Not Found</span>
+            {{end}}
+        </div>
+
+        <!-- Results table -->
+        <table class="table">
+            <thead>
+                <tr>
+                    <th style="width: 50px;">Status</th>
+                    <th style="width: 200px;">Type</th>
+                    <th>Value / Message</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Result.Results}}
+                <tr>
+                    <td>
+                        {{if eq .Status "ok"}}
+                        <span class="badge badge-running">OK</span>
+                        {{else if eq .Status "warning"}}
+                        <span class="badge badge-warning">WARN</span>
+                        {{else if eq .Status "error"}}
+                        <span class="badge badge-failed">ERR</span>
+                        {{else if eq .Status "not_found"}}
+                        <span class="badge badge-draft">N/A</span>
+                        {{end}}
+                    </td>
+                    <td><strong>{{.Type}}</strong></td>
+                    <td>
+                        {{if .Value}}
+                        <code style="word-break: break-all;">{{.Value}}</code>
+                        <br>
+                        {{end}}
+                        {{if .Message}}
+                        <span class="text-muted">{{.Message}}</span>
+                        {{end}}
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+{{end}}
+
+{{if not .Domain}}
+<div class="card" style="margin-top: 1rem;">
+    <div class="card-body">
+        <div class="empty-state">
+            <p>Enter a domain name to check MX, SPF, DKIM, DMARC, and MTA-STS records.</p>
+        </div>
+    </div>
+</div>
+{{end}}
+{{end}}
