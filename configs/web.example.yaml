@@ -29,14 +29,16 @@ auth:
 
 sendry:
   servers:
+    # For docker-compose use: http://sendry:8080
     - name: "mta-1"
-      base_url: "https://mta-1.example.com:8080"
-      api_key: "your-api-key-1"
+      base_url: "http://sendry:8080"
+      api_key: "change_this_api_key"
       env: "prod"
-    - name: "mta-2"
-      base_url: "https://mta-2.example.com:8080"
-      api_key: "your-api-key-2"
-      env: "stage"
+    # Add more servers as needed
+    # - name: "mta-2"
+    #   base_url: "https://mta-2.example.com:8080"
+    #   api_key: "your-api-key-2"
+    #   env: "stage"
 
   multi_send:
     strategy: round_robin  # round_robin, weighted_round_robin, domain_affinity
