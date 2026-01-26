@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Sendry MTA: Recipient domain rate limiting (limit emails to gmail.com, mail.ru, etc.)
+- Sendry MTA: DNS check API endpoint (GET /api/v1/dns/check/{domain})
+- Sendry MTA: IP/DNSBL check API endpoint (GET /api/v1/ip/check/{ip})
+- Sendry MTA: DNSBL list API endpoint (GET /api/v1/ip/dnsbls)
+- Sendry Web: DNS Check page (check MX, SPF, DKIM, DMARC, MTA-STS records)
+- Sendry Web: IP Check page (check IP against 15 DNSBL services)
 - Sendry Web: Domain management UI (create, edit, view, delete domains per server)
 - Sendry Web: Domain configuration with mode, DKIM, rate limits, redirect/bcc settings
 - Sendry API Client: CreateDomain, UpdateDomain, DeleteDomain, GetDomain methods
@@ -17,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sendry Web: DKIM keys now accessible via /servers/{server}/dkim
 - Sendry Web: Auto-deploy option when creating DKIM keys from server context
 - Documentation: Added Sendry Web campaign guide to quickstart (EN/RU)
+
+### Fixed
+- Security: Input validation for domain names and DKIM selectors in DNS check API
+- Security: Sanitized error messages in IP check API (no internal details exposure)
+- Optimization: Rate limiter now cleans up expired counters hourly (prevents memory leak)
 
 ## [0.4.2] - 2026-01-26
 
