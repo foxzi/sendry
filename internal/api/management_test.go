@@ -392,3 +392,206 @@ func TestTLSUpload(t *testing.T) {
 		t.Errorf("key file was not created: %s", keyFile)
 	}
 }
+
+func TestDNSCheckValidDomain(t *testing.T) {
+	cfg := &config.Config{}
+	mgmt := NewManagementServer(nil, nil, cfg, t.TempDir(), t.TempDir())
+
+	router := chi.NewRouter()
+	mgmt.RegisterRoutes(router)
+
+	req := httptest.NewRequest("GET", "/dns/check/example.com", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp["domain"] != "example.com" {
+		t.Errorf("expected domain example.com, got %v", resp["domain"])
+	}
+	if resp["results"] == nil {
+		t.Error("expected results array")
+	}
+	if resp["summary"] == nil {
+		t.Error("expected summary object")
+	}
+}
+
+func TestDNSCheckInvalidDomain(t *testing.T) {
+	cfg := &config.Config{}
+	mgmt := NewManagementServer(nil, nil, cfg, t.TempDir(), t.TempDir())
+
+	router := chi.NewRouter()
+	mgmt.RegisterRoutes(router)
+
+	tests := []struct {
+		name   string
+		domain string
+	}{
+		{"path injection", "../etc/passwd"},
+		{"invalid chars", "exam!ple.com"},
+		{"empty", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := "/dns/check/" + tt.domain
+			if tt.domain == "" {
+				path = "/dns/check/"
+			}
+			req := httptest.NewRequest("GET", path, nil)
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, req)
+
+			// Either 400 Bad Request or 404 Not Found for empty
+			if w.Code != http.StatusBadRequest && w.Code != http.StatusNotFound {
+				t.Errorf("expected status 400 or 404, got %d: %s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestDNSCheckWithSelector(t *testing.T) {
+	cfg := &config.Config{}
+	mgmt := NewManagementServer(nil, nil, cfg, t.TempDir(), t.TempDir())
+
+	router := chi.NewRouter()
+	mgmt.RegisterRoutes(router)
+
+	req := httptest.NewRequest("GET", "/dns/check/example.com?selector=dkim2024", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+}
+
+func TestIPCheckValidIP(t *testing.T) {
+	cfg := &config.Config{}
+	mgmt := NewManagementServer(nil, nil, cfg, t.TempDir(), t.TempDir())
+
+	router := chi.NewRouter()
+	mgmt.RegisterRoutes(router)
+
+	// Use localhost - will be clean in all DNSBLs
+	req := httptest.NewRequest("GET", "/ip/check/127.0.0.1", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp["ip"] != "127.0.0.1" {
+		t.Errorf("expected ip 127.0.0.1, got %v", resp["ip"])
+	}
+	if resp["results"] == nil {
+		t.Error("expected results array")
+	}
+}
+
+func TestIPCheckInvalidIP(t *testing.T) {
+	cfg := &config.Config{}
+	mgmt := NewManagementServer(nil, nil, cfg, t.TempDir(), t.TempDir())
+
+	router := chi.NewRouter()
+	mgmt.RegisterRoutes(router)
+
+	tests := []struct {
+		name string
+		ip   string
+	}{
+		{"not an IP", "notanip"},
+		{"invalid format", "999.999.999.999"},
+		{"partial", "192.168"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/ip/check/"+tt.ip, nil)
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, req)
+
+			if w.Code != http.StatusBadRequest {
+				t.Errorf("expected status 400, got %d: %s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestIPCheckIPv6NotSupported(t *testing.T) {
+	cfg := &config.Config{}
+	mgmt := NewManagementServer(nil, nil, cfg, t.TempDir(), t.TempDir())
+
+	router := chi.NewRouter()
+	mgmt.RegisterRoutes(router)
+
+	req := httptest.NewRequest("GET", "/ip/check/::1", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	errMsg, ok := resp["error"].(string)
+	if !ok || errMsg == "" {
+		t.Error("expected error message")
+	}
+}
+
+func TestDNSBLList(t *testing.T) {
+	cfg := &config.Config{}
+	mgmt := NewManagementServer(nil, nil, cfg, t.TempDir(), t.TempDir())
+
+	router := chi.NewRouter()
+	mgmt.RegisterRoutes(router)
+
+	req := httptest.NewRequest("GET", "/ip/dnsbls", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	count, ok := resp["count"].(float64)
+	if !ok || count < 10 {
+		t.Errorf("expected count >= 10, got %v", resp["count"])
+	}
+
+	dnsbls, ok := resp["dnsbls"].([]interface{})
+	if !ok || len(dnsbls) < 10 {
+		t.Errorf("expected at least 10 DNSBLs, got %d", len(dnsbls))
+	}
+}
