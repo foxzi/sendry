@@ -122,12 +122,18 @@ func (s *TemplateServer) handleList(w http.ResponseWriter, r *http.Request) {
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
 		if limit, err := strconv.Atoi(limitStr); err == nil && limit > 0 {
 			filter.Limit = limit
+			if filter.Limit > 1000 {
+				filter.Limit = 1000 // Prevent DoS via excessive limit
+			}
 		}
 	}
 
 	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
 		if offset, err := strconv.Atoi(offsetStr); err == nil && offset > 0 {
 			filter.Offset = offset
+			if filter.Offset > 1000000 {
+				filter.Offset = 1000000 // Prevent excessive offset
+			}
 		}
 	}
 

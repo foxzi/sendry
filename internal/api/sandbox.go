@@ -75,12 +75,18 @@ func (s *SandboxServer) handleList(w http.ResponseWriter, r *http.Request) {
 	if limit := r.URL.Query().Get("limit"); limit != "" {
 		if l, err := strconv.Atoi(limit); err == nil && l > 0 {
 			filter.Limit = l
+			if filter.Limit > 1000 {
+				filter.Limit = 1000 // Prevent DoS via excessive limit
+			}
 		}
 	}
 
 	if offset := r.URL.Query().Get("offset"); offset != "" {
 		if o, err := strconv.Atoi(offset); err == nil && o >= 0 {
 			filter.Offset = o
+			if filter.Offset > 1000000 {
+				filter.Offset = 1000000 // Prevent excessive offset
+			}
 		}
 	}
 

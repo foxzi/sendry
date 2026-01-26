@@ -36,6 +36,9 @@ type Backend struct {
 	maxAuthFailures   int
 	authBlockDuration time.Duration
 	authFailureWindow time.Duration
+
+	// Cleanup goroutine control
+	cleanupStopCh chan struct{}
 }
 
 // NewBackend creates a new SMTP backend
@@ -54,7 +57,7 @@ func NewBackend(q queue.Queue, auth *config.AuthConfig, logger *slog.Logger) *Ba
 		failureWindow = 5 * time.Minute
 	}
 
-	return &Backend{
+	b := &Backend{
 		queue:             q,
 		auth:              auth,
 		logger:            logger,
@@ -63,6 +66,51 @@ func NewBackend(q queue.Queue, auth *config.AuthConfig, logger *slog.Logger) *Ba
 		maxAuthFailures:   maxFailures,
 		authBlockDuration: blockDuration,
 		authFailureWindow: failureWindow,
+		cleanupStopCh:     make(chan struct{}),
+	}
+
+	// Start background cleanup of expired auth failures
+	go b.cleanupLoop()
+
+	return b
+}
+
+// Stop stops the backend cleanup goroutine
+func (b *Backend) Stop() {
+	close(b.cleanupStopCh)
+}
+
+// cleanupLoop periodically removes expired auth failure entries to prevent memory leaks
+func (b *Backend) cleanupLoop() {
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-b.cleanupStopCh:
+			return
+		case <-ticker.C:
+			b.cleanupExpiredAuthFailures()
+		}
+	}
+}
+
+// cleanupExpiredAuthFailures removes auth failure entries that are no longer relevant
+func (b *Backend) cleanupExpiredAuthFailures() {
+	b.authMu.Lock()
+	defer b.authMu.Unlock()
+
+	now := time.Now()
+	expireThreshold := b.authBlockDuration + b.authFailureWindow
+
+	for ip, f := range b.authFailures {
+		// Remove if both block expired and last failure is old enough
+		blockExpired := f.blockedAt.IsZero() || now.Sub(f.blockedAt) > b.authBlockDuration
+		failureExpired := now.Sub(f.lastFail) > expireThreshold
+
+		if blockExpired && failureExpired {
+			delete(b.authFailures, ip)
+		}
 	}
 }
 

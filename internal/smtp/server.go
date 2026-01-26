@@ -15,6 +15,7 @@ import (
 // Server wraps go-smtp server with configuration
 type Server struct {
 	server    *smtp.Server
+	backend   *Backend
 	addr      string
 	tlsConfig *tls.Config
 	implicit  bool // true for SMTPS (implicit TLS on port 465)
@@ -84,6 +85,7 @@ func NewServerWithOptions(opts ServerOptions) *Server {
 
 	return &Server{
 		server:    srv,
+		backend:   backend,
 		addr:      opts.Addr,
 		tlsConfig: opts.TLSConfig,
 		implicit:  opts.Implicit,
@@ -105,6 +107,7 @@ func (s *Server) ListenAndServe() error {
 // Shutdown gracefully shuts down the server
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.logger.Info("shutting down SMTP server")
+	s.backend.Stop()
 	return s.server.Shutdown(ctx)
 }
 
