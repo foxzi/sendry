@@ -1,0 +1,236 @@
+---
+# DKIM Key Management Playbook
+#
+# Generate DKIM keys locally and deploy to all Sendry servers.
+#
+# Usage:
+#   # Generate keys locally (requires openssl):
+#   ansible-playbook playbooks/dkim.yml -e dkim_action=generate -e dkim_domain=example.com
+#
+#   # Deploy keys to all servers:
+#   ansible-playbook playbooks/dkim.yml -e dkim_action=deploy
+#
+#   # Generate and deploy in one run:
+#   ansible-playbook playbooks/dkim.yml -e dkim_action=all -e dkim_domain=example.com
+#
+#   # Show DNS records:
+#   ansible-playbook playbooks/dkim.yml -e dkim_action=dns
+#
+# Variables:
+#   dkim_domain: Domain to generate/deploy DKIM for (required for generate)
+#   dkim_selector: DKIM selector (default: sendry)
+#   dkim_bits: Key size in bits (default: 2048)
+#   dkim_keys_dir: Local directory to store keys (default: ./dkim_keys)
+
+- name: DKIM Key Management
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    dkim_action: "{{ dkim_action | default('help') }}"
+    dkim_selector: "{{ dkim_selector | default('sendry') }}"
+    dkim_bits: "{{ dkim_bits | default(2048) }}"
+    dkim_keys_dir: "{{ playbook_dir }}/../dkim_keys"
+
+  tasks:
+    - name: Show help
+      when: dkim_action == 'help'
+      ansible.builtin.debug:
+        msg: |
+          DKIM Key Management Playbook
+
+          Actions:
+            generate - Generate DKIM keys locally (requires -e dkim_domain=...)
+            deploy   - Deploy existing keys to all servers
+            all      - Generate and deploy (requires -e dkim_domain=...)
+            dns      - Show DNS records for all domains
+
+          Examples:
+            ansible-playbook playbooks/dkim.yml -e dkim_action=generate -e dkim_domain=example.com
+            ansible-playbook playbooks/dkim.yml -e dkim_action=deploy
+            ansible-playbook playbooks/dkim.yml -e dkim_action=all -e dkim_domain=example.com -e dkim_selector=mail
+
+    - name: Generate DKIM keys
+      when: dkim_action in ['generate', 'all']
+      block:
+        - name: Validate domain is provided
+          ansible.builtin.assert:
+            that:
+              - dkim_domain is defined
+              - dkim_domain | length > 0
+            fail_msg: "dkim_domain is required for key generation"
+
+        - name: Create keys directory
+          ansible.builtin.file:
+            path: "{{ dkim_keys_dir }}"
+            state: directory
+            mode: "0700"
+
+        - name: Check if key already exists
+          ansible.builtin.stat:
+            path: "{{ dkim_keys_dir }}/{{ dkim_domain }}.key"
+          register: existing_key
+
+        - name: Warn if key exists
+          when: existing_key.stat.exists
+          ansible.builtin.debug:
+            msg: "Key for {{ dkim_domain }} already exists. Delete {{ dkim_keys_dir }}/{{ dkim_domain }}.* to regenerate."
+
+        - name: Generate private key
+          when: not existing_key.stat.exists
+          ansible.builtin.command:
+            cmd: openssl genrsa -out {{ dkim_keys_dir }}/{{ dkim_domain }}.key {{ dkim_bits }}
+            creates: "{{ dkim_keys_dir }}/{{ dkim_domain }}.key"
+
+        - name: Set private key permissions
+          ansible.builtin.file:
+            path: "{{ dkim_keys_dir }}/{{ dkim_domain }}.key"
+            mode: "0600"
+
+        - name: Generate public key
+          when: not existing_key.stat.exists
+          ansible.builtin.command:
+            cmd: openssl rsa -in {{ dkim_keys_dir }}/{{ dkim_domain }}.key -pubout -out {{ dkim_keys_dir }}/{{ dkim_domain }}.pub
+            creates: "{{ dkim_keys_dir }}/{{ dkim_domain }}.pub"
+
+        - name: Save selector info
+          ansible.builtin.copy:
+            content: "{{ dkim_selector }}"
+            dest: "{{ dkim_keys_dir }}/{{ dkim_domain }}.selector"
+            mode: "0644"
+
+        - name: Read public key
+          ansible.builtin.slurp:
+            src: "{{ dkim_keys_dir }}/{{ dkim_domain }}.pub"
+          register: pubkey_content
+
+        - name: Display DNS record
+          vars:
+            pubkey_clean: "{{ pubkey_content.content | b64decode | regex_replace('-----BEGIN PUBLIC KEY-----', '') | regex_replace('-----END PUBLIC KEY-----', '') | regex_replace('\\n', '') | trim }}"
+          ansible.builtin.debug:
+            msg: |
+              DKIM key generated for {{ dkim_domain }}
+
+              Add this DNS TXT record:
+              Name:  {{ dkim_selector }}._domainkey.{{ dkim_domain }}
+              Value: v=DKIM1; k=rsa; p={{ pubkey_clean }}
+
+              Key files saved to:
+              - {{ dkim_keys_dir }}/{{ dkim_domain }}.key (private)
+              - {{ dkim_keys_dir }}/{{ dkim_domain }}.pub (public)
+
+    - name: Show DNS records for all domains
+      when: dkim_action == 'dns'
+      block:
+        - name: Find all public keys
+          ansible.builtin.find:
+            paths: "{{ dkim_keys_dir }}"
+            patterns: "*.pub"
+          register: pubkey_files
+
+        - name: Read public keys
+          ansible.builtin.slurp:
+            src: "{{ item.path }}"
+          loop: "{{ pubkey_files.files }}"
+          loop_control:
+            label: "{{ item.path | basename }}"
+          register: pubkeys
+
+        - name: Read selectors
+          ansible.builtin.slurp:
+            src: "{{ item.path | regex_replace('\\.pub$', '.selector') }}"
+          loop: "{{ pubkey_files.files }}"
+          loop_control:
+            label: "{{ item.path | basename }}"
+          register: selectors
+          ignore_errors: true
+
+        - name: Display DNS records
+          vars:
+            domain: "{{ item.source | basename | regex_replace('\\.pub$', '') }}"
+            selector_file: "{{ selectors.results[idx] }}"
+            selector: "{{ (selector_file.content | default('c2VuZHJ5') | b64decode | trim) if selector_file.content is defined else 'sendry' }}"
+            pubkey_clean: "{{ item.content | b64decode | regex_replace('-----BEGIN PUBLIC KEY-----', '') | regex_replace('-----END PUBLIC KEY-----', '') | regex_replace('\\n', '') | trim }}"
+          ansible.builtin.debug:
+            msg: |
+              {{ domain }}:
+              Name:  {{ selector }}._domainkey.{{ domain }}
+              Type:  TXT
+              Value: v=DKIM1; k=rsa; p={{ pubkey_clean }}
+          loop: "{{ pubkeys.results }}"
+          loop_control:
+            label: "{{ item.source | basename }}"
+            index_var: idx
+
+
+- name: Deploy DKIM keys to servers
+  hosts: sendry_servers
+  become: true
+  gather_facts: false
+
+  vars:
+    dkim_action: "{{ dkim_action | default('help') }}"
+    dkim_keys_dir: "{{ playbook_dir }}/../dkim_keys"
+    sendry_dkim_dir: "{{ sendry_dkim_dir | default('/var/lib/sendry/dkim') }}"
+    sendry_user: "{{ sendry_user | default('sendry') }}"
+    sendry_group: "{{ sendry_group | default('sendry') }}"
+
+  tasks:
+    - name: Deploy keys to servers
+      when: dkim_action in ['deploy', 'all']
+      block:
+        - name: Find all DKIM keys locally
+          delegate_to: localhost
+          become: false
+          ansible.builtin.find:
+            paths: "{{ dkim_keys_dir }}"
+            patterns: "*.key"
+          register: local_keys
+
+        - name: Check keys exist
+          ansible.builtin.assert:
+            that:
+              - local_keys.files | length > 0
+            fail_msg: "No DKIM keys found in {{ dkim_keys_dir }}. Run with dkim_action=generate first."
+
+        - name: Ensure DKIM directory exists
+          ansible.builtin.file:
+            path: "{{ sendry_dkim_dir }}"
+            state: directory
+            owner: "{{ sendry_user }}"
+            group: "{{ sendry_group }}"
+            mode: "0750"
+
+        - name: Deploy private keys
+          ansible.builtin.copy:
+            src: "{{ item.path }}"
+            dest: "{{ sendry_dkim_dir }}/{{ item.path | basename }}"
+            owner: "{{ sendry_user }}"
+            group: "{{ sendry_group }}"
+            mode: "0600"
+          loop: "{{ local_keys.files }}"
+          loop_control:
+            label: "{{ item.path | basename }}"
+          notify: restart sendry
+
+        - name: Deploy public keys
+          ansible.builtin.copy:
+            src: "{{ item.path | regex_replace('\\.key$', '.pub') }}"
+            dest: "{{ sendry_dkim_dir }}/{{ item.path | basename | regex_replace('\\.key$', '.pub') }}"
+            owner: "{{ sendry_user }}"
+            group: "{{ sendry_group }}"
+            mode: "0644"
+          loop: "{{ local_keys.files }}"
+          loop_control:
+            label: "{{ item.path | basename }}"
+
+        - name: Show deployed keys
+          ansible.builtin.debug:
+            msg: "Deployed DKIM keys: {{ local_keys.files | map(attribute='path') | map('basename') | list }}"
+
+  handlers:
+    - name: restart sendry
+      ansible.builtin.systemd:
+        name: sendry
+        state: restarted

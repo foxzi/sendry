@@ -49,21 +49,23 @@ all:
               messages_per_hour: 5000
               messages_per_day: 50000
 
-        # Shared DKIM keys for all servers in cluster
-        # Generate once: sendry dkim generate --domain example.com --selector mail --out ./
-        # Then encrypt with: ansible-vault encrypt_string --stdin-name 'private_key'
-        sendry_dkim_keys:
-          example.com:
-            private: |
-              -----BEGIN PRIVATE KEY-----
-              YOUR_PRIVATE_KEY_HERE
-              Generate with: sendry dkim generate --domain example.com
-              Store in Ansible Vault for security!
-              -----END PRIVATE KEY-----
-            public: |
-              -----BEGIN PUBLIC KEY-----
-              YOUR_PUBLIC_KEY_HERE
-              -----END PUBLIC KEY-----
+        # DKIM keys management:
+        # Option 1: Use the DKIM playbook (recommended):
+        #   ansible-playbook playbooks/dkim.yml -e dkim_action=generate -e dkim_domain=example.com
+        #   ansible-playbook playbooks/dkim.yml -e dkim_action=deploy
+        #
+        # Option 2: Provide keys manually in sendry_dkim_keys (store in Ansible Vault):
+        # sendry_dkim_keys:
+        #   example.com:
+        #     private: |
+        #       -----BEGIN PRIVATE KEY-----
+        #       ...
+        #       -----END PRIVATE KEY-----
+        #     public: |
+        #       -----BEGIN PUBLIC KEY-----
+        #       ...
+        #       -----END PUBLIC KEY-----
+        sendry_dkim_keys: {}
 
   vars:
     ansible_user: root

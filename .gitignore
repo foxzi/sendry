@@ -36,3 +36,6 @@ configs/web-test.yaml
 
 # Scripts (local)
 /scripts/
+
+# Ansible DKIM keys (contain private keys)
+ansible/dkim_keys/
