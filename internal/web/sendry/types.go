@@ -231,6 +231,21 @@ type SandboxStatsResponse struct {
 	TotalSize int64          `json:"total_size"`
 }
 
+// DomainCreateRequest represents domain create/update request
+type DomainCreateRequest struct {
+	Domain      string        `json:"domain,omitempty"`
+	DKIM        *DKIMConfig   `json:"dkim,omitempty"`
+	TLS         *TLSConfig    `json:"tls,omitempty"`
+	RateLimit   *RateLimitCfg `json:"rate_limit,omitempty"`
+	Mode        string        `json:"mode,omitempty"`
+	DefaultFrom string        `json:"default_from,omitempty"`
+	RedirectTo  []string      `json:"redirect_to,omitempty"`
+	BCCTo       []string      `json:"bcc_to,omitempty"`
+}
+
+// DomainUpdateRequest is alias for DomainCreateRequest
+type DomainUpdateRequest = DomainCreateRequest
+
 // DKIMGenerateRequest represents DKIM generation request
 type DKIMGenerateRequest struct {
 	Domain   string `json:"domain"`

@@ -52,7 +52,7 @@ dkim:
 domains:
   example.com:
     dkim:
-      enabled: true
+      enabled: false
       selector: "mail"
       key_file: "/var/lib/sendry/dkim/example.com.key"
     rate_limit:

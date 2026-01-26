@@ -1,0 +1,132 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>Add Domain to {{.ServerName}}</h1>
+    <div class="header-actions">
+        <a href="/servers/{{.ServerName}}/domains" class="btn btn-secondary">Cancel</a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" action="/servers/{{.ServerName}}/domains">
+            <div class="form-group">
+                <label for="domain">Domain Name *</label>
+                <input type="text" id="domain" name="domain" class="form-control" required
+                       placeholder="example.com" pattern="[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]">
+                <small class="text-muted">The domain name for sending emails</small>
+            </div>
+
+            <div class="form-group">
+                <label for="mode">Mode</label>
+                <select id="mode" name="mode" class="form-control" onchange="toggleModeFields()">
+                    {{range .Modes}}
+                    <option value="{{.}}" {{if eq . "production"}}selected{{end}}>{{.}}</option>
+                    {{end}}
+                </select>
+                <small class="text-muted">
+                    production: normal delivery | sandbox: capture only | redirect: send to other addresses | bcc: copy to archive
+                </small>
+            </div>
+
+            <div id="redirect-fields" style="display: none;">
+                <div class="form-group">
+                    <label for="redirect_to">Redirect To</label>
+                    <textarea id="redirect_to" name="redirect_to" class="form-control" rows="3"
+                              placeholder="qa@example.com&#10;test@example.com"></textarea>
+                    <small class="text-muted">One email per line</small>
+                </div>
+            </div>
+
+            <div id="bcc-fields" style="display: none;">
+                <div class="form-group">
+                    <label for="bcc_to">BCC To</label>
+                    <textarea id="bcc_to" name="bcc_to" class="form-control" rows="3"
+                              placeholder="archive@example.com"></textarea>
+                    <small class="text-muted">One email per line</small>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="default_from">Default From Address</label>
+                <input type="email" id="default_from" name="default_from" class="form-control"
+                       placeholder="noreply@example.com">
+            </div>
+
+            <h3>DKIM Settings</h3>
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="dkim_enabled" id="dkim_enabled" onchange="toggleDKIMFields()">
+                    Enable DKIM Signing
+                </label>
+            </div>
+
+            <div id="dkim-fields" style="display: none;">
+                <div class="form-group">
+                    <label for="dkim_selector">DKIM Selector</label>
+                    <input type="text" id="dkim_selector" name="dkim_selector" class="form-control"
+                           value="mail" placeholder="mail">
+                </div>
+
+                <div class="form-group">
+                    <label for="dkim_key_id">DKIM Key</label>
+                    <select id="dkim_key_id" name="dkim_key_id" class="form-control">
+                        <option value="">-- Select existing key or create new --</option>
+                        {{range .DKIMKeys}}
+                        <option value="{{.ID}}" data-domain="{{.Domain}}" data-selector="{{.Selector}}">
+                            {{.Domain}} ({{.Selector}})
+                        </option>
+                        {{end}}
+                    </select>
+                    <small class="text-muted">
+                        Select a key that matches the domain, or <a href="/settings/dkim/new" target="_blank">create new key</a>
+                    </small>
+                </div>
+            </div>
+
+            <h3>Rate Limits</h3>
+            <div class="form-row">
+                <div class="form-group col-md-4">
+                    <label for="rate_limit_hour">Messages per Hour</label>
+                    <input type="number" id="rate_limit_hour" name="rate_limit_hour" class="form-control"
+                           min="0" placeholder="1000">
+                </div>
+                <div class="form-group col-md-4">
+                    <label for="rate_limit_day">Messages per Day</label>
+                    <input type="number" id="rate_limit_day" name="rate_limit_day" class="form-control"
+                           min="0" placeholder="10000">
+                </div>
+                <div class="form-group col-md-4">
+                    <label for="rate_limit_recipients">Recipients per Message</label>
+                    <input type="number" id="rate_limit_recipients" name="rate_limit_recipients" class="form-control"
+                           min="0" placeholder="100">
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Create Domain</button>
+                <a href="/servers/{{.ServerName}}/domains" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function toggleModeFields() {
+    var mode = document.getElementById('mode').value;
+    document.getElementById('redirect-fields').style.display = mode === 'redirect' ? 'block' : 'none';
+    document.getElementById('bcc-fields').style.display = mode === 'bcc' ? 'block' : 'none';
+}
+
+function toggleDKIMFields() {
+    var enabled = document.getElementById('dkim_enabled').checked;
+    document.getElementById('dkim-fields').style.display = enabled ? 'block' : 'none';
+}
+
+document.getElementById('dkim_key_id').addEventListener('change', function() {
+    var option = this.options[this.selectedIndex];
+    if (option.value) {
+        document.getElementById('dkim_selector').value = option.dataset.selector || 'mail';
+    }
+});
+</script>
+{{end}}

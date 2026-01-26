@@ -150,6 +150,38 @@ func (c *Client) ListDomains(ctx context.Context) (*DomainsListResponse, error) 
 	return &resp, nil
 }
 
+// GetDomain gets a domain by name
+func (c *Client) GetDomain(ctx context.Context, domain string) (*Domain, error) {
+	var resp Domain
+	if err := c.request(ctx, http.MethodGet, "/api/v1/domains/"+domain, nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// CreateDomain creates a new domain
+func (c *Client) CreateDomain(ctx context.Context, req *DomainCreateRequest) (*Domain, error) {
+	var resp Domain
+	if err := c.request(ctx, http.MethodPost, "/api/v1/domains", req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// UpdateDomain updates an existing domain
+func (c *Client) UpdateDomain(ctx context.Context, domain string, req *DomainUpdateRequest) (*Domain, error) {
+	var resp Domain
+	if err := c.request(ctx, http.MethodPut, "/api/v1/domains/"+domain, req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// DeleteDomain deletes a domain
+func (c *Client) DeleteDomain(ctx context.Context, domain string) error {
+	return c.request(ctx, http.MethodDelete, "/api/v1/domains/"+domain, nil, nil)
+}
+
 // ListTemplates lists templates
 func (c *Client) ListTemplates(ctx context.Context, search string, limit, offset int) (*TemplateListResponse, error) {
 	path := "/api/v1/templates"

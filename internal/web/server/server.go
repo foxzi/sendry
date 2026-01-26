@@ -168,8 +168,16 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("GET /servers/{name}", h.ServerView)
 	protected.HandleFunc("GET /servers/{name}/queue", h.ServerQueue)
 	protected.HandleFunc("GET /servers/{name}/dlq", h.ServerDLQ)
-	protected.HandleFunc("GET /servers/{name}/domains", h.ServerDomains)
 	protected.HandleFunc("GET /servers/{name}/sandbox", h.ServerSandbox)
+
+	// Domains (per server)
+	protected.HandleFunc("GET /servers/{server}/domains", h.DomainsList)
+	protected.HandleFunc("GET /servers/{server}/domains/new", h.DomainsNew)
+	protected.HandleFunc("POST /servers/{server}/domains", h.DomainsCreate)
+	protected.HandleFunc("GET /servers/{server}/domains/{domain}", h.DomainsView)
+	protected.HandleFunc("GET /servers/{server}/domains/{domain}/edit", h.DomainsEdit)
+	protected.HandleFunc("POST /servers/{server}/domains/{domain}", h.DomainsUpdate)
+	protected.HandleFunc("POST /servers/{server}/domains/{domain}/delete", h.DomainsDelete)
 
 	// Monitoring
 	protected.HandleFunc("GET /monitoring", h.Monitoring)
