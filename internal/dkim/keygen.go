@@ -101,3 +101,28 @@ func LoadPrivateKey(path string) (*rsa.PrivateKey, error) {
 		return nil, fmt.Errorf("unsupported key type: %s", block.Type)
 	}
 }
+
+// ParsePrivateKey parses an RSA private key from PEM data
+func ParsePrivateKey(data []byte) (*rsa.PrivateKey, error) {
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return nil, fmt.Errorf("failed to decode PEM block")
+	}
+
+	switch block.Type {
+	case "RSA PRIVATE KEY":
+		return x509.ParsePKCS1PrivateKey(block.Bytes)
+	case "PRIVATE KEY":
+		key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+		if err != nil {
+			return nil, err
+		}
+		rsaKey, ok := key.(*rsa.PrivateKey)
+		if !ok {
+			return nil, fmt.Errorf("key is not RSA")
+		}
+		return rsaKey, nil
+	default:
+		return nil, fmt.Errorf("unsupported key type: %s", block.Type)
+	}
+}

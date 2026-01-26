@@ -45,6 +45,7 @@ func (m *ManagementServer) RegisterRoutes(r chi.Router) {
 	// DKIM management
 	r.Route("/dkim", func(r chi.Router) {
 		r.Post("/generate", m.handleDKIMGenerate)
+		r.Post("/upload", m.handleDKIMUpload)
 		r.Get("/{domain}", m.handleDKIMGet)
 		r.Get("/{domain}/verify", m.handleDKIMVerify)
 		r.Delete("/{domain}/{selector}", m.handleDKIMDelete)
@@ -119,6 +120,70 @@ func (m *ManagementServer) handleDKIMGenerate(w http.ResponseWriter, r *http.Req
 	if err := keyPair.SavePrivateKey(keyFile); err != nil {
 		sendError(w, http.StatusInternalServerError, "Failed to save DKIM key")
 		return
+	}
+
+	sendJSON(w, http.StatusCreated, DKIMGenerateResponse{
+		Domain:    req.Domain,
+		Selector:  req.Selector,
+		DNSName:   keyPair.DNSName(),
+		DNSRecord: keyPair.DNSRecord(),
+		KeyFile:   keyFile,
+	})
+}
+
+// DKIMUploadRequest is the request for POST /api/v1/dkim/upload
+type DKIMUploadRequest struct {
+	Domain     string `json:"domain"`
+	Selector   string `json:"selector"`
+	PrivateKey string `json:"private_key"`
+}
+
+// handleDKIMUpload handles POST /api/v1/dkim/upload
+func (m *ManagementServer) handleDKIMUpload(w http.ResponseWriter, r *http.Request) {
+	var req DKIMUploadRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if req.Domain == "" {
+		sendError(w, http.StatusBadRequest, "domain is required")
+		return
+	}
+	if req.PrivateKey == "" {
+		sendError(w, http.StatusBadRequest, "private_key is required")
+		return
+	}
+	if req.Selector == "" {
+		req.Selector = "default"
+	}
+
+	// Validate the private key by trying to parse it
+	privateKey, err := dkim.ParsePrivateKey([]byte(req.PrivateKey))
+	if err != nil {
+		sendError(w, http.StatusBadRequest, "Invalid private key: "+err.Error())
+		return
+	}
+
+	// Create domain directory
+	domainDir := filepath.Join(m.dkimKeysDir, req.Domain)
+	if err := os.MkdirAll(domainDir, 0755); err != nil {
+		sendError(w, http.StatusInternalServerError, "Failed to create DKIM directory")
+		return
+	}
+
+	// Save private key
+	keyFile := filepath.Join(domainDir, req.Selector+".key")
+	if err := os.WriteFile(keyFile, []byte(req.PrivateKey), 0600); err != nil {
+		sendError(w, http.StatusInternalServerError, "Failed to save DKIM key")
+		return
+	}
+
+	// Create KeyPair to get DNS record
+	keyPair := &dkim.KeyPair{
+		PrivateKey: privateKey,
+		Domain:     req.Domain,
+		Selector:   req.Selector,
 	}
 
 	sendJSON(w, http.StatusCreated, DKIMGenerateResponse{
