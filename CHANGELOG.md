@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sendry Web: Domain management UI (create, edit, view, delete domains per server)
 - Sendry Web: Domain configuration with mode, DKIM, rate limits, redirect/bcc settings
 - Sendry API Client: CreateDomain, UpdateDomain, DeleteDomain, GetDomain methods
+- Tests: Comprehensive tests for dnscheck, ratelimit, queue processor packages
 
 ### Changed
 - Sendry Web: DKIM management moved from Settings to Servers section

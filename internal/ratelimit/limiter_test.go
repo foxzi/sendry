@@ -688,3 +688,291 @@ func TestZeroLimits(t *testing.T) {
 		}
 	}
 }
+
+func TestCleanupExpiredCounters(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cfg := &Config{
+		Global: &LimitConfig{
+			MessagesPerHour: 100,
+		},
+		FlushInterval: time.Hour,
+	}
+
+	limiter, err := NewLimiter(db, cfg)
+	if err != nil {
+		t.Fatalf("failed to create limiter: %v", err)
+	}
+	defer limiter.Stop()
+
+	ctx := context.Background()
+
+	// Create some counters
+	limiter.Allow(ctx, &Request{Domain: "example1.com"})
+	limiter.Allow(ctx, &Request{Domain: "example2.com"})
+	limiter.Allow(ctx, &Request{Domain: "example3.com"})
+
+	// Verify we have counters
+	limiter.mu.RLock()
+	initialCount := len(limiter.counters)
+	limiter.mu.RUnlock()
+
+	if initialCount == 0 {
+		t.Fatal("expected some counters to be created")
+	}
+
+	// Manually expire counters by setting old timestamps
+	limiter.mu.Lock()
+	oldTime := time.Now().Add(-48 * time.Hour)
+	for _, counter := range limiter.counters {
+		counter.HourStart = oldTime
+		counter.DayStart = oldTime
+	}
+	limiter.mu.Unlock()
+
+	// Run cleanup
+	limiter.cleanupExpiredCounters()
+
+	// All counters should be removed
+	limiter.mu.RLock()
+	finalCount := len(limiter.counters)
+	limiter.mu.RUnlock()
+
+	if finalCount != 0 {
+		t.Errorf("expected 0 counters after cleanup, got %d", finalCount)
+	}
+}
+
+func TestCleanupKeepsRecentCounters(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cfg := &Config{
+		Global: &LimitConfig{
+			MessagesPerHour: 100,
+		},
+		FlushInterval: time.Hour,
+	}
+
+	limiter, err := NewLimiter(db, cfg)
+	if err != nil {
+		t.Fatalf("failed to create limiter: %v", err)
+	}
+	defer limiter.Stop()
+
+	ctx := context.Background()
+
+	// Create counter
+	limiter.Allow(ctx, &Request{Domain: "recent.com"})
+
+	// Verify counter exists
+	limiter.mu.RLock()
+	countBefore := len(limiter.counters)
+	limiter.mu.RUnlock()
+
+	if countBefore == 0 {
+		t.Fatal("expected counter to be created")
+	}
+
+	// Run cleanup (counters are recent, should not be removed)
+	limiter.cleanupExpiredCounters()
+
+	limiter.mu.RLock()
+	countAfter := len(limiter.counters)
+	limiter.mu.RUnlock()
+
+	if countAfter != countBefore {
+		t.Errorf("recent counters should not be removed: before=%d, after=%d", countBefore, countAfter)
+	}
+}
+
+func TestResetExpiredCounters(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cfg := &Config{
+		Global: &LimitConfig{
+			MessagesPerHour: 100,
+			MessagesPerDay:  1000,
+		},
+		FlushInterval: time.Hour,
+	}
+
+	limiter, err := NewLimiter(db, cfg)
+	if err != nil {
+		t.Fatalf("failed to create limiter: %v", err)
+	}
+	defer limiter.Stop()
+
+	ctx := context.Background()
+	req := &Request{Domain: "example.com"}
+
+	// Make some requests
+	for i := 0; i < 5; i++ {
+		limiter.Allow(ctx, req)
+	}
+
+	// Verify counts
+	stats, _ := limiter.GetStats(ctx, LevelGlobal, "global")
+	if stats.HourlyCount != 5 {
+		t.Errorf("expected HourlyCount=5, got %d", stats.HourlyCount)
+	}
+
+	// Manually set hour start to 2 hours ago
+	limiter.mu.Lock()
+	key := makeKey(LevelGlobal, "global")
+	if counter, ok := limiter.counters[key]; ok {
+		counter.HourStart = time.Now().Add(-2 * time.Hour)
+	}
+	limiter.mu.Unlock()
+
+	// Next request should reset hourly counter
+	limiter.Allow(ctx, req)
+
+	stats, _ = limiter.GetStats(ctx, LevelGlobal, "global")
+	if stats.HourlyCount != 1 {
+		t.Errorf("expected HourlyCount=1 after reset, got %d", stats.HourlyCount)
+	}
+}
+
+func TestDailyLimitReset(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cfg := &Config{
+		Global: &LimitConfig{
+			MessagesPerHour: 100,
+			MessagesPerDay:  5,
+		},
+		FlushInterval: time.Hour,
+	}
+
+	limiter, err := NewLimiter(db, cfg)
+	if err != nil {
+		t.Fatalf("failed to create limiter: %v", err)
+	}
+	defer limiter.Stop()
+
+	ctx := context.Background()
+	req := &Request{Domain: "example.com"}
+
+	// Hit daily limit
+	for i := 0; i < 5; i++ {
+		limiter.Allow(ctx, req)
+	}
+
+	// Should be denied
+	result, _ := limiter.Allow(ctx, req)
+	if result.Allowed {
+		t.Error("expected request to be denied by daily limit")
+	}
+
+	// Manually set day start to 25 hours ago
+	limiter.mu.Lock()
+	key := makeKey(LevelGlobal, "global")
+	if counter, ok := limiter.counters[key]; ok {
+		counter.DayStart = time.Now().Add(-25 * time.Hour)
+		counter.HourStart = time.Now().Add(-25 * time.Hour)
+	}
+	limiter.mu.Unlock()
+
+	// Next request should reset and be allowed
+	result, _ = limiter.Allow(ctx, req)
+	if !result.Allowed {
+		t.Error("expected request to be allowed after daily reset")
+	}
+}
+
+func TestGetRecipientDomainLimit(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cfg := &Config{
+		DefaultRecipientDomain: &LimitConfig{
+			MessagesPerHour: 100,
+		},
+		RecipientDomains: map[string]*LimitConfig{
+			"gmail.com": {MessagesPerHour: 50},
+			"yahoo.com": {MessagesPerHour: 75},
+		},
+		FlushInterval: time.Hour,
+	}
+
+	limiter, err := NewLimiter(db, cfg)
+	if err != nil {
+		t.Fatalf("failed to create limiter: %v", err)
+	}
+	defer limiter.Stop()
+
+	tests := []struct {
+		domain   string
+		expected int
+	}{
+		{"gmail.com", 50},
+		{"yahoo.com", 75},
+		{"outlook.com", 100}, // uses default
+		{"mail.ru", 100},    // uses default
+	}
+
+	for _, tt := range tests {
+		limit := limiter.getRecipientDomainLimit(tt.domain)
+		if limit == nil {
+			t.Errorf("expected limit for %s, got nil", tt.domain)
+			continue
+		}
+		if limit.MessagesPerHour != tt.expected {
+			t.Errorf("getRecipientDomainLimit(%s) = %d, want %d",
+				tt.domain, limit.MessagesPerHour, tt.expected)
+		}
+	}
+}
+
+func TestCheckWithoutIncrement(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cfg := &Config{
+		Global: &LimitConfig{
+			MessagesPerHour: 3,
+		},
+		FlushInterval: time.Hour,
+	}
+
+	limiter, err := NewLimiter(db, cfg)
+	if err != nil {
+		t.Fatalf("failed to create limiter: %v", err)
+	}
+	defer limiter.Stop()
+
+	ctx := context.Background()
+	req := &Request{Domain: "example.com"}
+
+	// Use up 2 of 3 allowed
+	limiter.Allow(ctx, req)
+	limiter.Allow(ctx, req)
+
+	// Check should say allowed but not increment
+	result, _ := limiter.Check(ctx, req)
+	if !result.Allowed {
+		t.Error("Check should report allowed")
+	}
+
+	// Another Check should still be allowed
+	result, _ = limiter.Check(ctx, req)
+	if !result.Allowed {
+		t.Error("Check should still report allowed (no increment)")
+	}
+
+	// Allow consumes the last one
+	result, _ = limiter.Allow(ctx, req)
+	if !result.Allowed {
+		t.Error("Allow should succeed")
+	}
+
+	// Now Check should report denied
+	result, _ = limiter.Check(ctx, req)
+	if result.Allowed {
+		t.Error("Check should report denied after limit reached")
+	}
+}
