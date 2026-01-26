@@ -179,6 +179,124 @@ curl -X POST http://localhost:8080/api/v1/send/template \
 
 See [Templates Guide](templates.md) for more details.
 
+## Sendry Web Panel
+
+Sendry Web is a web interface for managing email campaigns, templates, and recipient lists.
+
+### Starting Sendry Web
+
+```bash
+# Using binary
+sendry-web serve --config /etc/sendry/web.yaml
+
+# Using Docker Compose
+docker compose up -d
+```
+
+Access the panel at `http://localhost:8088` (default credentials depend on your setup).
+
+### Creating a Campaign (Step-by-Step)
+
+#### 1. Add Server Connection
+
+Edit `web.yaml` to add your Sendry MTA server:
+
+```yaml
+sendry:
+  servers:
+    - name: "mta-1"
+      base_url: "http://localhost:8080"
+      api_key: "your-api-key"
+      env: "prod"
+```
+
+#### 2. Create a Template
+
+1. Go to **Templates** → **New Template**
+2. Fill in:
+   - **Name**: e.g., "Welcome Email"
+   - **Subject**: e.g., "Welcome, {{name}}!"
+   - **Content**: HTML body with variables like `{{name}}`, `{{email}}`
+3. Choose editor mode:
+   - **Visual** (Quill) - WYSIWYG editing
+   - **Blocks** (Editor.js) - block-based editing
+   - **Code** (CodeMirror) - raw HTML
+4. Click **Save**
+5. Click **Deploy** to send template to MTA server
+
+#### 3. Create a Recipient List
+
+1. Go to **Recipients** → **New List**
+2. Enter list name (e.g., "Newsletter Subscribers")
+3. Click **Create**
+4. Add recipients:
+   - **Manual**: Click **Add Recipient**, enter email and variables
+   - **CSV Import**: Click **Import**, upload CSV file
+
+CSV format example:
+```csv
+email,name,company
+john@example.com,John Doe,Acme Inc
+jane@example.com,Jane Smith,Tech Corp
+```
+
+#### 4. Create a Campaign
+
+1. Go to **Campaigns** → **New Campaign**
+2. Fill in:
+   - **Name**: e.g., "January Newsletter"
+   - **From**: sender email (e.g., `newsletter@example.com`)
+   - **Template**: select your template
+   - **Recipient List**: select your list
+3. Click **Create**
+4. (Optional) Add **Variables** for the campaign (available in templates as `{{var_name}}`)
+5. (Optional) Create **Variants** for A/B testing
+
+#### 5. Send the Campaign
+
+1. Open the campaign → Click **Send**
+2. Configure send options:
+   - **Server**: select MTA server
+   - **Schedule**: send now or schedule for later
+   - **Dry Run**: test without actually sending (sandbox mode)
+   - **Batch Size**: emails per batch
+   - **Delay**: pause between batches
+3. Click **Start Job**
+
+#### 6. Monitor Progress
+
+1. Go to **Jobs** to see all jobs
+2. Click on a job to view:
+   - Progress (sent/failed/pending)
+   - Individual item status
+   - Error messages
+3. Actions available:
+   - **Pause** / **Resume** - pause/resume sending
+   - **Cancel** - stop the job
+   - **Retry Failed** - retry failed items
+
+### DKIM Setup (Per Server)
+
+1. Go to **Servers** → select server → **DKIM Keys**
+2. Click **New DKIM Key**
+3. Enter:
+   - **Domain**: e.g., `example.com`
+   - **Selector**: e.g., `sendry`
+4. Check **Deploy to server after creation**
+5. Click **Generate Key**
+6. Add the displayed DNS TXT record to your domain
+
+### Domain Configuration
+
+1. Go to **Servers** → select server → **Domains**
+2. Click **New Domain**
+3. Configure:
+   - **Domain**: e.g., `example.com`
+   - **Mode**: production/sandbox/redirect/bcc
+   - **DKIM**: enable and select key
+   - **Rate Limits**: messages per hour/day
+4. Click **Create**
+
 ## Viewing Captured Emails (Sandbox Mode)
 
 ```bash

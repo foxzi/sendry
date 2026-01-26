@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sendry Web: DKIM management moved from Settings to Servers section
 - Sendry Web: DKIM keys now accessible via /servers/{server}/dkim
 - Sendry Web: Auto-deploy option when creating DKIM keys from server context
+- Documentation: Added Sendry Web campaign guide to quickstart (EN/RU)
 
 ## [0.4.2] - 2026-01-26
 
