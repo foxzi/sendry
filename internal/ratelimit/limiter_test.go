@@ -500,6 +500,141 @@ func TestPersistence(t *testing.T) {
 	}
 }
 
+func TestAllowRecipientDomainLimit(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cfg := &Config{
+		DefaultRecipientDomain: &LimitConfig{
+			MessagesPerHour: 3,
+			MessagesPerDay:  10,
+		},
+		FlushInterval: time.Hour,
+	}
+
+	limiter, err := NewLimiter(db, cfg)
+	if err != nil {
+		t.Fatalf("failed to create limiter: %v", err)
+	}
+	defer limiter.Stop()
+
+	ctx := context.Background()
+
+	// First 3 requests to gmail.com should be allowed
+	for i := 0; i < 3; i++ {
+		result, err := limiter.AllowRecipient(ctx, "gmail.com")
+		if err != nil {
+			t.Fatalf("AllowRecipient failed: %v", err)
+		}
+		if !result.Allowed {
+			t.Errorf("request %d to gmail.com should be allowed", i+1)
+		}
+	}
+
+	// 4th request to gmail.com should be denied
+	result, err := limiter.AllowRecipient(ctx, "gmail.com")
+	if err != nil {
+		t.Fatalf("AllowRecipient failed: %v", err)
+	}
+	if result.Allowed {
+		t.Error("request 4 to gmail.com should be denied")
+	}
+	if result.DeniedBy != LevelRecipient {
+		t.Errorf("expected DeniedBy=recipient_domain, got %s", result.DeniedBy)
+	}
+	if result.RetryAfter <= 0 {
+		t.Error("expected positive RetryAfter")
+	}
+
+	// Different domain (mail.ru) should still have its own limit
+	result, err = limiter.AllowRecipient(ctx, "mail.ru")
+	if err != nil {
+		t.Fatalf("AllowRecipient failed: %v", err)
+	}
+	if !result.Allowed {
+		t.Error("request 1 to mail.ru should be allowed")
+	}
+}
+
+func TestAllowRecipientDomainOverride(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cfg := &Config{
+		DefaultRecipientDomain: &LimitConfig{
+			MessagesPerHour: 100,
+			MessagesPerDay:  1000,
+		},
+		RecipientDomains: map[string]*LimitConfig{
+			"gmail.com": {
+				MessagesPerHour: 2,
+				MessagesPerDay:  10,
+			},
+		},
+		FlushInterval: time.Hour,
+	}
+
+	limiter, err := NewLimiter(db, cfg)
+	if err != nil {
+		t.Fatalf("failed to create limiter: %v", err)
+	}
+	defer limiter.Stop()
+
+	ctx := context.Background()
+
+	// gmail.com should use the override limit (2)
+	for i := 0; i < 2; i++ {
+		result, _ := limiter.AllowRecipient(ctx, "gmail.com")
+		if !result.Allowed {
+			t.Errorf("request %d to gmail.com should be allowed", i+1)
+		}
+	}
+	result, _ := limiter.AllowRecipient(ctx, "gmail.com")
+	if result.Allowed {
+		t.Error("request 3 to gmail.com should be denied (override limit is 2)")
+	}
+
+	// yahoo.com should use default limit (100)
+	for i := 0; i < 10; i++ {
+		result, _ := limiter.AllowRecipient(ctx, "yahoo.com")
+		if !result.Allowed {
+			t.Errorf("request %d to yahoo.com should be allowed (default limit is 100)", i+1)
+		}
+	}
+}
+
+func TestAllowRecipientNoConfig(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// No recipient domain config
+	cfg := &Config{
+		Global: &LimitConfig{
+			MessagesPerHour: 10,
+		},
+		FlushInterval: time.Hour,
+	}
+
+	limiter, err := NewLimiter(db, cfg)
+	if err != nil {
+		t.Fatalf("failed to create limiter: %v", err)
+	}
+	defer limiter.Stop()
+
+	ctx := context.Background()
+
+	// All requests should be allowed when no recipient limit is configured
+	for i := 0; i < 100; i++ {
+		result, err := limiter.AllowRecipient(ctx, "gmail.com")
+		if err != nil {
+			t.Fatalf("AllowRecipient failed: %v", err)
+		}
+		if !result.Allowed {
+			t.Errorf("request %d should be allowed (no recipient limit configured)", i+1)
+		}
+	}
+}
+
 func TestMakeKey(t *testing.T) {
 	tests := []struct {
 		level    Level
@@ -511,6 +646,7 @@ func TestMakeKey(t *testing.T) {
 		{LevelSender, "user@example.com", "sender:user@example.com"},
 		{LevelIP, "192.168.1.1", "ip:192.168.1.1"},
 		{LevelAPIKey, "key-123", "api_key:key-123"},
+		{LevelRecipient, "gmail.com", "recipient_domain:gmail.com"},
 	}
 
 	for _, tc := range tests {

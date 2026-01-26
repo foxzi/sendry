@@ -12,6 +12,7 @@ import (
 
 	"github.com/foxzi/sendry/internal/email"
 	"github.com/foxzi/sendry/internal/metrics"
+	"github.com/foxzi/sendry/internal/ratelimit"
 )
 
 // Sender is an interface for sending messages
@@ -45,6 +46,7 @@ type Processor struct {
 	bounceGenerator BounceGenerator
 	bounceEnabled   bool
 	dlqEnabled      bool
+	rateLimiter     *ratelimit.Limiter
 
 	stopCh chan struct{}
 	wg     sync.WaitGroup
@@ -95,6 +97,11 @@ func NewProcessor(q Queue, sender Sender, cfg ProcessorConfig, isTemp ErrorCheck
 func (p *Processor) SetBounceGenerator(bg BounceGenerator) {
 	p.bounceGenerator = bg
 	p.bounceEnabled = true
+}
+
+// SetRateLimiter sets the rate limiter for recipient domain limiting
+func (p *Processor) SetRateLimiter(rl *ratelimit.Limiter) {
+	p.rateLimiter = rl
 }
 
 // Start starts the processor workers
@@ -153,6 +160,41 @@ func (p *Processor) processOne(ctx context.Context, logger *slog.Logger) {
 
 	logger = logger.With("message_id", msg.ID)
 	logger.Debug("processing message")
+
+	// Check recipient domain rate limits before sending
+	if p.rateLimiter != nil {
+		for _, rcpt := range msg.To {
+			domain := email.ExtractDomain(rcpt)
+			if domain == "" {
+				continue
+			}
+
+			result, err := p.rateLimiter.AllowRecipient(ctx, domain)
+			if err != nil {
+				logger.Error("failed to check recipient rate limit", "error", err, "domain", domain)
+				continue
+			}
+
+			if !result.Allowed {
+				// Rate limited - defer the message
+				msg.Status = StatusDeferred
+				msg.LastError = "recipient domain rate limit exceeded: " + domain
+				msg.UpdatedAt = time.Now()
+				msg.NextRetryAt = time.Now().Add(result.RetryAfter)
+
+				logger.Info("message deferred due to recipient rate limit",
+					"domain", domain,
+					"retry_after", result.RetryAfter,
+					"next_retry_at", msg.NextRetryAt,
+				)
+
+				if err := p.queue.Update(ctx, msg); err != nil {
+					logger.Error("failed to update message status", "error", err)
+				}
+				return
+			}
+		}
+	}
 
 	// Try to send
 	sendCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)

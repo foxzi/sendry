@@ -6,15 +6,18 @@ Sendry provides multi-level rate limiting to protect against abuse and ensure fa
 
 Rate limiting operates at multiple levels, each with independent counters:
 
-| Level | Description | Example Key |
-|-------|-------------|-------------|
-| `global` | Server-wide limit | `global` |
-| `domain` | Per sending domain | `example.com` |
-| `sender` | Per sender email | `user@example.com` |
-| `ip` | Per client IP | `192.168.1.1` |
-| `api_key` | Per API key | `key-abc123` |
+| Level | Description | Example Key | Check Time |
+|-------|-------------|-------------|------------|
+| `global` | Server-wide limit | `global` | At receive |
+| `domain` | Per sending domain | `example.com` | At receive |
+| `sender` | Per sender email | `user@example.com` | At receive |
+| `ip` | Per client IP | `192.168.1.1` | At receive |
+| `api_key` | Per API key | `key-abc123` | At receive |
+| `recipient_domain` | Per recipient domain | `gmail.com` | At send |
 
-When a message is sent, all applicable limits are checked. If any limit is exceeded, the message is rejected.
+When a message is received (via SMTP or API), the first 5 levels are checked. If any limit is exceeded, the message is rejected.
+
+Recipient domain limits are checked at **send time** (in the queue processor). If exceeded, the message is **deferred** (not rejected) and will be retried when the rate limit window resets.
 
 ## Configuration
 
@@ -46,6 +49,24 @@ rate_limit:
   default_api_key:
     messages_per_hour: 1000
     messages_per_day: 10000
+
+  # Default limits per recipient domain (e.g., gmail.com, mail.ru)
+  # Checked at send time - if exceeded, message is deferred
+  default_recipient_domain:
+    messages_per_hour: 5000
+    messages_per_day: 50000
+
+  # Per-recipient-domain limits (override default)
+  recipient_domains:
+    gmail.com:
+      messages_per_hour: 1000
+      messages_per_day: 10000
+    mail.ru:
+      messages_per_hour: 1000
+      messages_per_day: 10000
+    yandex.ru:
+      messages_per_hour: 1000
+      messages_per_day: 10000
 ```
 
 ### Per-Domain Overrides
@@ -75,7 +96,7 @@ domains:
 
 ### Limit Evaluation Order
 
-When a message is sent, limits are checked in this order:
+When a message is received, limits are checked in this order:
 
 1. Global limit
 2. Domain limit
@@ -84,6 +105,12 @@ When a message is sent, limits are checked in this order:
 5. API key limit
 
 The first limit that is exceeded causes rejection. All counters for allowed messages are incremented atomically.
+
+When a message is sent (from queue), recipient domain limits are checked:
+
+6. Recipient domain limit (for each recipient)
+
+If the recipient domain limit is exceeded, the message is **deferred** (not rejected) and scheduled for retry.
 
 ### Zero Value
 
@@ -159,6 +186,10 @@ curl http://localhost:8080/api/v1/ratelimits/ip/192.168.1.1 \
 
 # API key stats
 curl http://localhost:8080/api/v1/ratelimits/api_key/key-123 \
+  -H "Authorization: Bearer YOUR_API_KEY"
+
+# Recipient domain stats
+curl http://localhost:8080/api/v1/ratelimits/recipient_domain/gmail.com \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
@@ -274,6 +305,39 @@ rate_limit:
   default_sender:
     messages_per_hour: 20
     messages_per_day: 100
+```
+
+### Recipient Domain Limiting
+
+Limit outgoing emails to major mail providers to avoid being blocked:
+
+```yaml
+rate_limit:
+  enabled: true
+  # Default for all recipient domains
+  default_recipient_domain:
+    messages_per_hour: 5000
+    messages_per_day: 50000
+  # Specific limits for major providers
+  recipient_domains:
+    gmail.com:
+      messages_per_hour: 1000
+      messages_per_day: 10000
+    mail.ru:
+      messages_per_hour: 1000
+      messages_per_day: 10000
+    yandex.ru:
+      messages_per_hour: 1000
+      messages_per_day: 10000
+    yahoo.com:
+      messages_per_hour: 1000
+      messages_per_day: 10000
+    outlook.com:
+      messages_per_hour: 1000
+      messages_per_day: 10000
+    hotmail.com:
+      messages_per_hour: 1000
+      messages_per_day: 10000
 ```
 
 ### Development (Disabled)

@@ -93,6 +93,21 @@ func New(cfg *config.Config) (*App, error) {
 				MessagesPerDay:  cfg.RateLimit.DefaultAPIKey.MessagesPerDay,
 			}
 		}
+		if cfg.RateLimit.DefaultRecipientDomain != nil {
+			rlConfig.DefaultRecipientDomain = &ratelimit.LimitConfig{
+				MessagesPerHour: cfg.RateLimit.DefaultRecipientDomain.MessagesPerHour,
+				MessagesPerDay:  cfg.RateLimit.DefaultRecipientDomain.MessagesPerDay,
+			}
+		}
+		if cfg.RateLimit.RecipientDomains != nil {
+			rlConfig.RecipientDomains = make(map[string]*ratelimit.LimitConfig)
+			for domain, limit := range cfg.RateLimit.RecipientDomains {
+				rlConfig.RecipientDomains[domain] = &ratelimit.LimitConfig{
+					MessagesPerHour: limit.MessagesPerHour,
+					MessagesPerDay:  limit.MessagesPerDay,
+				}
+			}
+		}
 
 		rateLimiter, err = ratelimit.NewLimiter(storage.DB(), rlConfig)
 		if err != nil {
@@ -214,6 +229,11 @@ func New(cfg *config.Config) (*App, error) {
 	bounceGen := bounce.NewGenerator(cfg.Server.Hostname)
 	processor.SetBounceGenerator(bounceGen)
 	logger.Info("bounce handling enabled", "hostname", cfg.Server.Hostname)
+
+	// Setup rate limiter for recipient domain limiting
+	if rateLimiter != nil {
+		processor.SetRateLimiter(rateLimiter)
+	}
 
 	// Setup TLS configuration
 	var tlsConfig *tls.Config

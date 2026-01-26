@@ -60,6 +60,12 @@ type RateLimitConfig struct {
 
 	// Default limits for API keys
 	DefaultAPIKey *LimitValues `yaml:"default_api_key,omitempty"`
+
+	// Default limits for recipient domains (e.g., gmail.com, mail.ru)
+	DefaultRecipientDomain *LimitValues `yaml:"default_recipient_domain,omitempty"`
+
+	// Per-recipient-domain limits (overrides DefaultRecipientDomain)
+	RecipientDomains map[string]*LimitValues `yaml:"recipient_domains,omitempty"`
 }
 
 // LimitValues contains rate limit values
@@ -161,9 +167,9 @@ type AuthConfig struct {
 	Users    map[string]string `yaml:"users"` // username -> password
 
 	// Brute force protection settings
-	MaxFailures   int           `yaml:"max_failures"`    // Max auth failures before blocking (default: 5)
-	BlockDuration time.Duration `yaml:"block_duration"`  // How long to block after max failures (default: 15m)
-	FailureWindow time.Duration `yaml:"failure_window"`  // Window for counting failures (default: 5m)
+	MaxFailures   int           `yaml:"max_failures"`   // Max auth failures before blocking (default: 5)
+	BlockDuration time.Duration `yaml:"block_duration"` // How long to block after max failures (default: 15m)
+	FailureWindow time.Duration `yaml:"failure_window"` // Window for counting failures (default: 5m)
 }
 
 // APIConfig contains HTTP API settings

@@ -42,6 +42,12 @@ type Config struct {
 	// Default limits for API keys without specific config
 	DefaultAPIKey *LimitConfig `yaml:"default_api_key,omitempty"`
 
+	// Default limits for recipient domains (e.g., gmail.com, mail.ru)
+	DefaultRecipientDomain *LimitConfig `yaml:"default_recipient_domain,omitempty"`
+
+	// Per-recipient-domain limits (overrides DefaultRecipientDomain)
+	RecipientDomains map[string]*LimitConfig `yaml:"recipient_domains,omitempty"`
+
 	// Persistence settings
 	FlushInterval time.Duration `yaml:"flush_interval,omitempty"`
 }
@@ -151,6 +157,55 @@ func (l *Limiter) Allow(ctx context.Context, req *Request) (*Result, error) {
 		counter.HourlyCount++
 		counter.DailyCount++
 	}
+
+	return result, nil
+}
+
+// AllowRecipient checks if sending to the recipient domain is allowed and increments counter.
+// This is used by the queue processor at send time to limit emails to specific providers.
+func (l *Limiter) AllowRecipient(ctx context.Context, recipientDomain string) (*Result, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	result := &Result{
+		Allowed: true,
+	}
+
+	// Get limit for this recipient domain
+	limit := l.getRecipientDomainLimit(recipientDomain)
+	if limit == nil {
+		// No limit configured for recipient domains
+		return result, nil
+	}
+
+	now := time.Now()
+	key := makeKey(LevelRecipient, recipientDomain)
+	counter := l.getOrCreateCounter(key, now)
+
+	// Reset counters if time window has passed
+	l.resetExpiredCounters(counter, now)
+
+	// Check hourly limit
+	if limit.MessagesPerHour > 0 && counter.HourlyCount >= limit.MessagesPerHour {
+		result.Allowed = false
+		result.DeniedBy = LevelRecipient
+		result.DeniedKey = key
+		result.RetryAfter = counter.HourStart.Add(time.Hour).Sub(now)
+		return result, nil
+	}
+
+	// Check daily limit
+	if limit.MessagesPerDay > 0 && counter.DailyCount >= limit.MessagesPerDay {
+		result.Allowed = false
+		result.DeniedBy = LevelRecipient
+		result.DeniedKey = key
+		result.RetryAfter = counter.DayStart.Add(24 * time.Hour).Sub(now)
+		return result, nil
+	}
+
+	// Increment counter
+	counter.HourlyCount++
+	counter.DailyCount++
 
 	return result, nil
 }
@@ -328,7 +383,32 @@ func (l *Limiter) getChecks(req *Request) []limitCheck {
 		})
 	}
 
+	// Recipient domain limit
+	if req.Recipient != "" {
+		limit := l.getRecipientDomainLimit(req.Recipient)
+		if limit != nil {
+			checks = append(checks, limitCheck{
+				level: LevelRecipient,
+				key:   makeKey(LevelRecipient, req.Recipient),
+				limit: limit,
+			})
+		}
+	}
+
 	return checks
+}
+
+// getRecipientDomainLimit returns the limit config for a recipient domain.
+// It first checks per-domain overrides, then falls back to default.
+func (l *Limiter) getRecipientDomainLimit(domain string) *LimitConfig {
+	// Check per-domain override first
+	if l.config.RecipientDomains != nil {
+		if limit, ok := l.config.RecipientDomains[domain]; ok {
+			return limit
+		}
+	}
+	// Fall back to default
+	return l.config.DefaultRecipientDomain
 }
 
 func (l *Limiter) getOrCreateCounter(key string, now time.Time) *Counter {
@@ -400,12 +480,34 @@ func (l *Limiter) persistLoop() {
 	ticker := time.NewTicker(l.config.FlushInterval)
 	defer ticker.Stop()
 
+	// Clean up expired counters every hour
+	cleanupTicker := time.NewTicker(time.Hour)
+	defer cleanupTicker.Stop()
+
 	for {
 		select {
 		case <-l.stopCh:
 			return
 		case <-ticker.C:
 			l.persistCounters()
+		case <-cleanupTicker.C:
+			l.cleanupExpiredCounters()
+		}
+	}
+}
+
+// cleanupExpiredCounters removes counters that haven't been used for 24+ hours
+func (l *Limiter) cleanupExpiredCounters() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	now := time.Now()
+	expireThreshold := 24 * time.Hour
+
+	for key, counter := range l.counters {
+		// If both hourly and daily counters are expired (>24h old), remove the counter
+		if now.Sub(counter.HourStart) > expireThreshold && now.Sub(counter.DayStart) > expireThreshold {
+			delete(l.counters, key)
 		}
 	}
 }

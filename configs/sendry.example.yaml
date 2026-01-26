@@ -116,6 +116,26 @@ rate_limit:
     messages_per_hour: 1000
     messages_per_day: 10000
 
+  # Default limits per recipient domain (for all recipient domains not listed below)
+  # This controls how many emails can be sent TO specific mail providers
+  # Checked at send time - if exceeded, message is deferred (not rejected)
+  # default_recipient_domain:
+  #   messages_per_hour: 5000
+  #   messages_per_day: 50000
+
+  # Per-recipient-domain limits (override default_recipient_domain)
+  # Use this to set specific limits for major mail providers
+  # recipient_domains:
+  #   gmail.com:
+  #     messages_per_hour: 1000
+  #     messages_per_day: 10000
+  #   mail.ru:
+  #     messages_per_hour: 1000
+  #     messages_per_day: 10000
+  #   yandex.ru:
+  #     messages_per_hour: 1000
+  #     messages_per_day: 10000
+
 api:
   listen_addr: ":8080"
   api_key: "change_this_api_key"
