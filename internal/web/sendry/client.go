@@ -260,3 +260,46 @@ func (c *Client) GetSandboxStats(ctx context.Context) (*SandboxStatsResponse, er
 	}
 	return &resp, nil
 }
+
+// GenerateDKIM generates a new DKIM key on the server
+func (c *Client) GenerateDKIM(ctx context.Context, domain, selector string) (*DKIMResponse, error) {
+	req := &DKIMGenerateRequest{Domain: domain, Selector: selector}
+	var resp DKIMResponse
+	if err := c.request(ctx, http.MethodPost, "/api/v1/dkim/generate", req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// UploadDKIM uploads an existing DKIM key to the server
+func (c *Client) UploadDKIM(ctx context.Context, domain, selector, privateKey string) (*DKIMResponse, error) {
+	req := &DKIMUploadRequest{Domain: domain, Selector: selector, PrivateKey: privateKey}
+	var resp DKIMResponse
+	if err := c.request(ctx, http.MethodPost, "/api/v1/dkim/upload", req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// GetDKIM gets DKIM information for a domain
+func (c *Client) GetDKIM(ctx context.Context, domain string) (*DKIMInfoResponse, error) {
+	var resp DKIMInfoResponse
+	if err := c.request(ctx, http.MethodGet, "/api/v1/dkim/"+domain, nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// VerifyDKIM verifies DKIM setup for a domain
+func (c *Client) VerifyDKIM(ctx context.Context, domain string) (*DKIMVerifyResponse, error) {
+	var resp DKIMVerifyResponse
+	if err := c.request(ctx, http.MethodGet, "/api/v1/dkim/"+domain+"/verify", nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// DeleteDKIM deletes a DKIM key from the server
+func (c *Client) DeleteDKIM(ctx context.Context, domain, selector string) error {
+	return c.request(ctx, http.MethodDelete, "/api/v1/dkim/"+domain+"/"+selector, nil, nil)
+}

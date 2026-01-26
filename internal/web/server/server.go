@@ -181,6 +181,15 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("GET /settings/users", h.UserList)
 	protected.HandleFunc("GET /settings/audit", h.AuditLog)
 
+	// DKIM
+	protected.HandleFunc("GET /settings/dkim", h.DKIMList)
+	protected.HandleFunc("GET /settings/dkim/new", h.DKIMNew)
+	protected.HandleFunc("POST /settings/dkim", h.DKIMCreate)
+	protected.HandleFunc("GET /settings/dkim/{id}", h.DKIMView)
+	protected.HandleFunc("DELETE /settings/dkim/{id}", h.DKIMDelete)
+	protected.HandleFunc("POST /settings/dkim/{id}/deploy", h.DKIMDeploy)
+	protected.HandleFunc("DELETE /settings/dkim/{id}/deployments/{server}", h.DKIMDeploymentDelete)
+
 	// Wrap protected routes with auth middleware
 	authMiddleware := middleware.Auth(s.cfg, s.db, s.logger)
 	mux.Handle("/", authMiddleware(protected))

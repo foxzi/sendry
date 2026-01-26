@@ -1,0 +1,130 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>DKIM Key: {{.Key.Domain}}</h1>
+    <div class="header-actions">
+        <a href="/settings/dkim" class="btn btn-secondary">Back to DKIM Keys</a>
+        <form method="POST" action="/settings/dkim/{{.Key.ID}}" style="display:inline;">
+            <input type="hidden" name="_method" value="DELETE">
+            <button type="submit" class="btn btn-danger" onclick="return confirm('Delete this DKIM key? This will remove it from the database but NOT from deployed servers.')">Delete</button>
+        </form>
+    </div>
+</div>
+
+<div class="grid grid-2">
+    <div class="card">
+        <div class="card-header">
+            <h3>Key Details</h3>
+        </div>
+        <div class="card-body">
+            <table class="table table-details">
+                <tr>
+                    <th>Domain</th>
+                    <td>{{.Key.Domain}}</td>
+                </tr>
+                <tr>
+                    <th>Selector</th>
+                    <td>{{.Key.Selector}}</td>
+                </tr>
+                <tr>
+                    <th>DNS Name</th>
+                    <td><code>{{.DNSName}}</code></td>
+                </tr>
+                <tr>
+                    <th>Created</th>
+                    <td>{{.Key.CreatedAt.Format "2006-01-02 15:04:05"}}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3>DNS Record</h3>
+        </div>
+        <div class="card-body">
+            <p>Add this TXT record to your DNS:</p>
+            <div class="form-group">
+                <label>Record Name</label>
+                <input type="text" class="form-control" value="{{.DNSName}}" readonly onclick="this.select()">
+            </div>
+            <div class="form-group">
+                <label>Record Value</label>
+                <textarea class="form-control" rows="4" readonly onclick="this.select()">{{.Key.DNSRecord}}</textarea>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Deployments</h3>
+    </div>
+    <div class="card-body">
+        {{if .Key.Deployments}}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Server</th>
+                    <th>Status</th>
+                    <th>Deployed At</th>
+                    <th>Error</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Key.Deployments}}
+                <tr>
+                    <td>{{.ServerName}}</td>
+                    <td>
+                        {{if eq .Status "deployed"}}
+                        <span class="badge badge-running">Deployed</span>
+                        {{else}}
+                        <span class="badge badge-failed">Failed</span>
+                        {{end}}
+                    </td>
+                    <td>{{.DeployedAt.Format "2006-01-02 15:04"}}</td>
+                    <td>{{.Error}}</td>
+                    <td>
+                        <form method="POST" action="/settings/dkim/{{$.Key.ID}}/deployments/{{.ServerName}}" style="display:inline;">
+                            <input type="hidden" name="_method" value="DELETE">
+                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Remove deployment from {{.ServerName}}?')">Remove</button>
+                        </form>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <p class="text-muted">This key has not been deployed to any servers yet.</p>
+        {{end}}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Deploy to Servers</h3>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="/settings/dkim/{{.Key.ID}}/deploy">
+            {{if .Servers}}
+            <div class="form-group">
+                <label>Select servers to deploy this DKIM key:</label>
+                {{range .Servers}}
+                <div class="checkbox">
+                    <label>
+                        <input type="checkbox" name="servers" value="{{.Name}}">
+                        {{.Name}} ({{.Env}})
+                    </label>
+                </div>
+                {{end}}
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Deploy</button>
+            </div>
+            {{else}}
+            <p class="text-muted">No servers configured. Add servers in the configuration to deploy DKIM keys.</p>
+            {{end}}
+        </form>
+    </div>
+</div>
+{{end}}

@@ -25,6 +25,7 @@ type Handlers struct {
 	campaigns  *repository.CampaignRepository
 	jobs       *repository.JobRepository
 	settings   *repository.SettingsRepository
+	dkim       *repository.DKIMRepository
 }
 
 func New(cfg *config.Config, db *db.DB, logger *slog.Logger, v *views.Engine, oidcProvider *auth.OIDCProvider) *Handlers {
@@ -40,6 +41,7 @@ func New(cfg *config.Config, db *db.DB, logger *slog.Logger, v *views.Engine, oi
 		campaigns:  repository.NewCampaignRepository(db.DB),
 		jobs:       repository.NewJobRepository(db.DB),
 		settings:   repository.NewSettingsRepository(db.DB),
+		dkim:       repository.NewDKIMRepository(db.DB),
 	}
 }
 

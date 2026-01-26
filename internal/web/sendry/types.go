@@ -230,3 +230,45 @@ type SandboxStatsResponse struct {
 	NewestAt  *time.Time     `json:"newest_at,omitempty"`
 	TotalSize int64          `json:"total_size"`
 }
+
+// DKIMGenerateRequest represents DKIM generation request
+type DKIMGenerateRequest struct {
+	Domain   string `json:"domain"`
+	Selector string `json:"selector"`
+}
+
+// DKIMUploadRequest represents DKIM upload request
+type DKIMUploadRequest struct {
+	Domain     string `json:"domain"`
+	Selector   string `json:"selector"`
+	PrivateKey string `json:"private_key"`
+}
+
+// DKIMResponse represents DKIM generation/upload response
+type DKIMResponse struct {
+	Domain    string `json:"domain"`
+	Selector  string `json:"selector"`
+	DNSName   string `json:"dns_name"`
+	DNSRecord string `json:"dns_record"`
+	KeyFile   string `json:"key_file"`
+}
+
+// DKIMInfoResponse represents DKIM info response
+type DKIMInfoResponse struct {
+	Domain    string   `json:"domain"`
+	Enabled   bool     `json:"enabled"`
+	Selector  string   `json:"selector,omitempty"`
+	KeyFile   string   `json:"key_file,omitempty"`
+	DNSName   string   `json:"dns_name,omitempty"`
+	DNSRecord string   `json:"dns_record,omitempty"`
+	Selectors []string `json:"selectors,omitempty"`
+}
+
+// DKIMVerifyResponse represents DKIM verification response
+type DKIMVerifyResponse struct {
+	Domain   string `json:"domain"`
+	Selector string `json:"selector"`
+	Valid    bool   `json:"valid"`
+	Error    string `json:"error,omitempty"`
+	DNSName  string `json:"dns_name"`
+}

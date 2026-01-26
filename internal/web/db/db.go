@@ -49,6 +49,8 @@ func (db *DB) Migrate() error {
 		migrationGlobalVariables,
 		migrationAuditLog,
 		migrationSettings,
+		migrationDKIMKeys,
+		migrationDKIMDeployments,
 	}
 
 	for _, m := range migrations {
@@ -260,5 +262,32 @@ CREATE TABLE IF NOT EXISTS settings (
     value TEXT NOT NULL,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+`
+
+const migrationDKIMKeys = `
+CREATE TABLE IF NOT EXISTS dkim_keys (
+    id TEXT PRIMARY KEY,
+    domain TEXT NOT NULL,
+    selector TEXT NOT NULL,
+    private_key TEXT NOT NULL,
+    dns_record TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(domain, selector)
+);
+CREATE INDEX IF NOT EXISTS idx_dkim_keys_domain ON dkim_keys(domain);
+`
+
+const migrationDKIMDeployments = `
+CREATE TABLE IF NOT EXISTS dkim_deployments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    dkim_key_id TEXT NOT NULL REFERENCES dkim_keys(id) ON DELETE CASCADE,
+    server_name TEXT NOT NULL,
+    deployed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    status TEXT DEFAULT 'deployed',
+    error TEXT,
+    UNIQUE(dkim_key_id, server_name)
+);
+CREATE INDEX IF NOT EXISTS idx_dkim_deployments_key ON dkim_deployments(dkim_key_id);
 `
 
