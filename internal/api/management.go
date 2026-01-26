@@ -1,15 +1,18 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/foxzi/sendry/internal/config"
 	"github.com/foxzi/sendry/internal/dkim"
+	"github.com/foxzi/sendry/internal/dnscheck"
 	"github.com/foxzi/sendry/internal/domain"
 	"github.com/foxzi/sendry/internal/ratelimit"
 )
@@ -72,6 +75,17 @@ func (m *ManagementServer) RegisterRoutes(r chi.Router) {
 		r.Get("/", m.handleRateLimitsGet)
 		r.Get("/{level}/{key}", m.handleRateLimitStats)
 		r.Put("/{domain}", m.handleRateLimitsUpdate)
+	})
+
+	// DNS checking
+	r.Route("/dns", func(r chi.Router) {
+		r.Get("/check/{domain}", m.handleDNSCheck)
+	})
+
+	// IP/DNSBL checking
+	r.Route("/ip", func(r chi.Router) {
+		r.Get("/check/{ip}", m.handleIPCheck)
+		r.Get("/dnsbls", m.handleDNSBLList)
 	})
 }
 
@@ -859,4 +873,79 @@ func sendJSON(w http.ResponseWriter, status int, v interface{}) {
 
 func sendError(w http.ResponseWriter, status int, message string) {
 	sendJSON(w, status, map[string]string{"error": message})
+}
+
+// DNS Check Handlers
+
+// handleDNSCheck handles GET /api/v1/dns/check/{domain}
+func (m *ManagementServer) handleDNSCheck(w http.ResponseWriter, r *http.Request) {
+	domainName := chi.URLParam(r, "domain")
+	if domainName == "" {
+		sendError(w, http.StatusBadRequest, "domain is required")
+		return
+	}
+
+	// Parse query parameters for check options
+	opts := dnscheck.CheckOptions{
+		MX:       r.URL.Query().Get("mx") == "true",
+		SPF:      r.URL.Query().Get("spf") == "true",
+		DKIM:     r.URL.Query().Get("dkim") == "true",
+		DMARC:    r.URL.Query().Get("dmarc") == "true",
+		MTASTS:   r.URL.Query().Get("mta_sts") == "true",
+		Selector: r.URL.Query().Get("selector"),
+	}
+
+	// Default selector
+	if opts.Selector == "" {
+		opts.Selector = "sendry"
+	}
+
+	// Use 30 second timeout
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	result, err := dnscheck.CheckDomain(ctx, domainName, opts)
+	if err != nil {
+		sendError(w, http.StatusBadRequest, "invalid domain or selector")
+		return
+	}
+	sendJSON(w, http.StatusOK, result)
+}
+
+// handleIPCheck handles GET /api/v1/ip/check/{ip}
+func (m *ManagementServer) handleIPCheck(w http.ResponseWriter, r *http.Request) {
+	ipAddr := chi.URLParam(r, "ip")
+	if ipAddr == "" {
+		sendError(w, http.StatusBadRequest, "ip is required")
+		return
+	}
+
+	// Use 30 second timeout
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	result, err := dnscheck.CheckIP(ctx, ipAddr)
+	if err != nil {
+		// Return user-friendly error without internal details
+		switch err {
+		case dnscheck.ErrInvalidIP:
+			sendError(w, http.StatusBadRequest, "invalid IPv4 address format")
+		case dnscheck.ErrIPv6NotSupported:
+			sendError(w, http.StatusBadRequest, "only IPv4 addresses are supported")
+		default:
+			sendError(w, http.StatusBadRequest, "invalid IP address")
+		}
+		return
+	}
+
+	sendJSON(w, http.StatusOK, result)
+}
+
+// handleDNSBLList handles GET /api/v1/ip/dnsbls
+func (m *ManagementServer) handleDNSBLList(w http.ResponseWriter, r *http.Request) {
+	dnsbls := dnscheck.ListDNSBLs()
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"dnsbls": dnsbls,
+		"count":  len(dnsbls),
+	})
 }

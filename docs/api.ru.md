@@ -830,6 +830,148 @@ PUT /api/v1/ratelimits/{domain}
 
 ---
 
+## Проверка DNS
+
+Проверка DNS записей для доменов и репутации IP.
+
+### Проверить DNS записи домена
+
+```
+GET /api/v1/dns/check/{domain}
+```
+
+Проверка MX, SPF, DKIM, DMARC и MTA-STS записей для домена.
+
+**Query параметры:**
+
+| Параметр | По умолчанию | Описание |
+|----------|--------------|----------|
+| `mx` | false | Проверить только MX записи |
+| `spf` | false | Проверить только SPF запись |
+| `dkim` | false | Проверить только DKIM запись |
+| `dmarc` | false | Проверить только DMARC запись |
+| `mta_sts` | false | Проверить только MTA-STS запись |
+| `selector` | sendry | DKIM селектор для проверки |
+
+Если конкретная проверка не указана, проверяются все записи.
+
+**Ответ:**
+```json
+{
+  "domain": "example.com",
+  "results": [
+    {
+      "type": "MX Records",
+      "status": "ok",
+      "value": "mail.example.com (priority 10)",
+      "message": "1 MX record(s) found"
+    },
+    {
+      "type": "SPF Record",
+      "status": "ok",
+      "value": "v=spf1 include:_spf.example.com -all",
+      "message": "SPF configured with strict policy (-all)"
+    },
+    {
+      "type": "DKIM Record (sendry._domainkey)",
+      "status": "ok",
+      "value": "v=DKIM1; k=rsa; p=MIIBIjANBgkq...",
+      "message": "DKIM configured with RSA key"
+    },
+    {
+      "type": "DMARC Record",
+      "status": "ok",
+      "value": "v=DMARC1; p=reject; rua=mailto:dmarc@example.com",
+      "message": "DMARC configured with reject policy (strict)"
+    },
+    {
+      "type": "MTA-STS Record",
+      "status": "not_found",
+      "message": "No MTA-STS record found (optional)"
+    }
+  ],
+  "summary": {
+    "ok": 4,
+    "warnings": 0,
+    "errors": 0,
+    "not_found": 1
+  }
+}
+```
+
+**Значения статуса:** `ok`, `warning`, `error`, `not_found`
+
+### Проверить IP в DNSBL
+
+```
+GET /api/v1/ip/check/{ip}
+```
+
+Проверка IPv4 адреса в DNS-based blackhole списках (DNSBL).
+
+**Ответ:**
+```json
+{
+  "ip": "1.2.3.4",
+  "results": [
+    {
+      "dnsbl": {
+        "name": "Spamhaus ZEN",
+        "zone": "zen.spamhaus.org",
+        "description": "Combined Spamhaus blocklist (SBL, XBL, PBL)"
+      },
+      "listed": false,
+      "return_codes": null,
+      "error": ""
+    },
+    {
+      "dnsbl": {
+        "name": "Barracuda",
+        "zone": "b.barracudacentral.org",
+        "description": "Barracuda Reputation Block List"
+      },
+      "listed": true,
+      "return_codes": ["127.0.0.2"],
+      "error": ""
+    }
+  ],
+  "summary": {
+    "clean": 17,
+    "listed": 1,
+    "errors": 0
+  }
+}
+```
+
+### Список DNSBL сервисов
+
+```
+GET /api/v1/ip/dnsbls
+```
+
+Список всех DNS blacklist сервисов для проверки.
+
+**Ответ:**
+```json
+{
+  "dnsbls": [
+    {
+      "name": "Spamhaus ZEN",
+      "zone": "zen.spamhaus.org",
+      "description": "Combined Spamhaus blocklist (SBL, XBL, PBL)"
+    },
+    {
+      "name": "Barracuda",
+      "zone": "b.barracudacentral.org",
+      "description": "Barracuda Reputation Block List"
+    }
+  ],
+  "count": 15
+}
+```
+
+---
+
 ## Ответы об ошибках
 
 Все эндпоинты возвращают ошибки в следующем формате:

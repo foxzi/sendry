@@ -830,6 +830,148 @@ PUT /api/v1/ratelimits/{domain}
 
 ---
 
+## DNS Checking
+
+Check DNS records for domains and IP reputation.
+
+### Check Domain DNS Records
+
+```
+GET /api/v1/dns/check/{domain}
+```
+
+Check MX, SPF, DKIM, DMARC, and MTA-STS records for a domain.
+
+**Query Parameters:**
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `mx` | false | Check only MX records |
+| `spf` | false | Check only SPF record |
+| `dkim` | false | Check only DKIM record |
+| `dmarc` | false | Check only DMARC record |
+| `mta_sts` | false | Check only MTA-STS record |
+| `selector` | sendry | DKIM selector to check |
+
+If no specific check is requested, all records are checked.
+
+**Response:**
+```json
+{
+  "domain": "example.com",
+  "results": [
+    {
+      "type": "MX Records",
+      "status": "ok",
+      "value": "mail.example.com (priority 10)",
+      "message": "1 MX record(s) found"
+    },
+    {
+      "type": "SPF Record",
+      "status": "ok",
+      "value": "v=spf1 include:_spf.example.com -all",
+      "message": "SPF configured with strict policy (-all)"
+    },
+    {
+      "type": "DKIM Record (sendry._domainkey)",
+      "status": "ok",
+      "value": "v=DKIM1; k=rsa; p=MIIBIjANBgkq...",
+      "message": "DKIM configured with RSA key"
+    },
+    {
+      "type": "DMARC Record",
+      "status": "ok",
+      "value": "v=DMARC1; p=reject; rua=mailto:dmarc@example.com",
+      "message": "DMARC configured with reject policy (strict)"
+    },
+    {
+      "type": "MTA-STS Record",
+      "status": "not_found",
+      "message": "No MTA-STS record found (optional)"
+    }
+  ],
+  "summary": {
+    "ok": 4,
+    "warnings": 0,
+    "errors": 0,
+    "not_found": 1
+  }
+}
+```
+
+**Status values:** `ok`, `warning`, `error`, `not_found`
+
+### Check IP Against DNSBL
+
+```
+GET /api/v1/ip/check/{ip}
+```
+
+Check an IPv4 address against DNS-based blackhole lists (DNSBL).
+
+**Response:**
+```json
+{
+  "ip": "1.2.3.4",
+  "results": [
+    {
+      "dnsbl": {
+        "name": "Spamhaus ZEN",
+        "zone": "zen.spamhaus.org",
+        "description": "Combined Spamhaus blocklist (SBL, XBL, PBL)"
+      },
+      "listed": false,
+      "return_codes": null,
+      "error": ""
+    },
+    {
+      "dnsbl": {
+        "name": "Barracuda",
+        "zone": "b.barracudacentral.org",
+        "description": "Barracuda Reputation Block List"
+      },
+      "listed": true,
+      "return_codes": ["127.0.0.2"],
+      "error": ""
+    }
+  ],
+  "summary": {
+    "clean": 17,
+    "listed": 1,
+    "errors": 0
+  }
+}
+```
+
+### List DNSBL Services
+
+```
+GET /api/v1/ip/dnsbls
+```
+
+List all DNS blacklist services that are checked.
+
+**Response:**
+```json
+{
+  "dnsbls": [
+    {
+      "name": "Spamhaus ZEN",
+      "zone": "zen.spamhaus.org",
+      "description": "Combined Spamhaus blocklist (SBL, XBL, PBL)"
+    },
+    {
+      "name": "Barracuda",
+      "zone": "b.barracudacentral.org",
+      "description": "Barracuda Reputation Block List"
+    }
+  ],
+  "count": 15
+}
+```
+
+---
+
 ## Error Responses
 
 All endpoints return errors in the following format:
