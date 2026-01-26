@@ -2,8 +2,8 @@
 <div class="page-header">
     <h1>DKIM Key: {{.Key.Domain}}</h1>
     <div class="header-actions">
-        <a href="/settings/dkim" class="btn btn-secondary">Back to DKIM Keys</a>
-        <form method="POST" action="/settings/dkim/{{.Key.ID}}" style="display:inline;">
+        <a href="/servers/{{.ServerName}}/dkim" class="btn btn-secondary">Back to DKIM Keys</a>
+        <form method="POST" action="/servers/{{.ServerName}}/dkim/{{.Key.ID}}" style="display:inline;">
             <input type="hidden" name="_method" value="DELETE">
             <button type="submit" class="btn btn-danger" onclick="return confirm('Delete this DKIM key? This will remove it from the database but NOT from deployed servers.')">Delete</button>
         </form>
@@ -28,6 +28,16 @@
                 <tr>
                     <th>DNS Name</th>
                     <td><code>{{.DNSName}}</code></td>
+                </tr>
+                <tr>
+                    <th>Status on {{.ServerName}}</th>
+                    <td>
+                        {{if .IsDeployed}}
+                        <span class="badge badge-running">Deployed</span>
+                        {{else}}
+                        <span class="badge badge-draft">Not deployed</span>
+                        {{end}}
+                    </td>
                 </tr>
                 <tr>
                     <th>Created</th>
@@ -55,9 +65,37 @@
     </div>
 </div>
 
+{{if .IsDeployed}}
 <div class="card">
     <div class="card-header">
-        <h3>Deployments</h3>
+        <h3>Deployment on {{.ServerName}}</h3>
+    </div>
+    <div class="card-body">
+        <p>This key is deployed to {{.ServerName}}.</p>
+        <form method="POST" action="/servers/{{.ServerName}}/dkim/{{.Key.ID}}/deployments" style="display:inline;">
+            <input type="hidden" name="_method" value="DELETE">
+            <button type="submit" class="btn btn-danger" onclick="return confirm('Remove deployment from {{.ServerName}}? This will delete the key from the server.')">Remove from {{.ServerName}}</button>
+        </form>
+    </div>
+</div>
+{{else}}
+<div class="card">
+    <div class="card-header">
+        <h3>Deploy to {{.ServerName}}</h3>
+    </div>
+    <div class="card-body">
+        <p>This key is not deployed to {{.ServerName}}.</p>
+        <form method="POST" action="/servers/{{.ServerName}}/dkim/{{.Key.ID}}/deploy">
+            <input type="hidden" name="servers" value="{{.ServerName}}">
+            <button type="submit" class="btn btn-primary">Deploy to {{.ServerName}}</button>
+        </form>
+    </div>
+</div>
+{{end}}
+
+<div class="card">
+    <div class="card-header">
+        <h3>All Deployments</h3>
     </div>
     <div class="card-body">
         {{if .Key.Deployments}}
@@ -68,7 +106,6 @@
                     <th>Status</th>
                     <th>Deployed At</th>
                     <th>Error</th>
-                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -84,12 +121,6 @@
                     </td>
                     <td>{{.DeployedAt.Format "2006-01-02 15:04"}}</td>
                     <td>{{.Error}}</td>
-                    <td>
-                        <form method="POST" action="/settings/dkim/{{$.Key.ID}}/deployments/{{.ServerName}}" style="display:inline;">
-                            <input type="hidden" name="_method" value="DELETE">
-                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Remove deployment from {{.ServerName}}?')">Remove</button>
-                        </form>
-                    </td>
                 </tr>
                 {{end}}
             </tbody>
@@ -100,16 +131,16 @@
     </div>
 </div>
 
+{{if .OtherServers}}
 <div class="card">
     <div class="card-header">
-        <h3>Deploy to Servers</h3>
+        <h3>Deploy to Other Servers</h3>
     </div>
     <div class="card-body">
-        <form method="POST" action="/settings/dkim/{{.Key.ID}}/deploy">
-            {{if .Servers}}
+        <form method="POST" action="/servers/{{.ServerName}}/dkim/{{.Key.ID}}/deploy">
             <div class="form-group">
                 <label>Select servers to deploy this DKIM key:</label>
-                {{range .Servers}}
+                {{range .OtherServers}}
                 <div class="checkbox">
                     <label>
                         <input type="checkbox" name="servers" value="{{.Name}}">
@@ -119,12 +150,10 @@
                 {{end}}
             </div>
             <div class="form-actions">
-                <button type="submit" class="btn btn-primary">Deploy</button>
+                <button type="submit" class="btn btn-primary">Deploy to Selected</button>
             </div>
-            {{else}}
-            <p class="text-muted">No servers configured. Add servers in the configuration to deploy DKIM keys.</p>
-            {{end}}
         </form>
     </div>
 </div>
+{{end}}
 {{end}}

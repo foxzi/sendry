@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sendry Web: Domain configuration with mode, DKIM, rate limits, redirect/bcc settings
 - Sendry API Client: CreateDomain, UpdateDomain, DeleteDomain, GetDomain methods
 
+### Changed
+- Sendry Web: DKIM management moved from Settings to Servers section
+- Sendry Web: DKIM keys now accessible via /servers/{server}/dkim
+- Sendry Web: Auto-deploy option when creating DKIM keys from server context
+
 ## [0.4.2] - 2026-01-26
 
 ### Added

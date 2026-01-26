@@ -28,11 +28,13 @@ type DKIMDeployment struct {
 
 // DKIMKeyListItem represents a DKIM key in list view (without private key)
 type DKIMKeyListItem struct {
-	ID              string    `json:"id"`
-	Domain          string    `json:"domain"`
-	Selector        string    `json:"selector"`
-	DNSName         string    `json:"dns_name"`
-	DNSRecord       string    `json:"dns_record"`
-	CreatedAt       time.Time `json:"created_at"`
-	DeploymentCount int       `json:"deployment_count"`
+	ID              string           `json:"id"`
+	Domain          string           `json:"domain"`
+	Selector        string           `json:"selector"`
+	DNSName         string           `json:"dns_name"`
+	DNSRecord       string           `json:"dns_record"`
+	CreatedAt       time.Time        `json:"created_at"`
+	DeploymentCount int              `json:"deployment_count"`
+	Deployments     []DKIMDeployment `json:"deployments,omitempty"`
+	IsDeployed      bool             `json:"is_deployed"` // For server-specific views
 }

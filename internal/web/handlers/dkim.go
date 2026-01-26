@@ -12,8 +12,16 @@ import (
 	"github.com/foxzi/sendry/internal/web/models"
 )
 
-// DKIMList shows all DKIM keys
+// DKIMList shows all DKIM keys for a server
 func (h *Handlers) DKIMList(w http.ResponseWriter, r *http.Request) {
+	serverName := r.PathValue("server")
+
+	// Verify server exists
+	if _, err := h.sendry.GetClient(serverName); err != nil {
+		h.error(w, http.StatusNotFound, "Server not found")
+		return
+	}
+
 	keys, err := h.dkim.List()
 	if err != nil {
 		h.logger.Error("failed to list DKIM keys", "error", err)
@@ -21,11 +29,23 @@ func (h *Handlers) DKIMList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Compute IsDeployed for each key
+	for i := range keys {
+		deployments, _ := h.dkim.GetDeployments(keys[i].ID)
+		for _, d := range deployments {
+			if d.ServerName == serverName && d.Status == "deployed" {
+				keys[i].IsDeployed = true
+				break
+			}
+		}
+	}
+
 	data := map[string]any{
-		"Title":  "DKIM Keys",
-		"Active": "settings",
-		"User":   h.getUserFromContext(r),
-		"Keys":   keys,
+		"Title":      "DKIM Keys",
+		"Active":     "servers",
+		"User":       h.getUserFromContext(r),
+		"Keys":       keys,
+		"ServerName": serverName,
 	}
 
 	h.render(w, "dkim_list", data)
@@ -33,10 +53,19 @@ func (h *Handlers) DKIMList(w http.ResponseWriter, r *http.Request) {
 
 // DKIMNew shows the new DKIM key form
 func (h *Handlers) DKIMNew(w http.ResponseWriter, r *http.Request) {
+	serverName := r.PathValue("server")
+
+	// Verify server exists
+	if _, err := h.sendry.GetClient(serverName); err != nil {
+		h.error(w, http.StatusNotFound, "Server not found")
+		return
+	}
+
 	data := map[string]any{
-		"Title":  "New DKIM Key",
-		"Active": "settings",
-		"User":   h.getUserFromContext(r),
+		"Title":      "New DKIM Key",
+		"Active":     "servers",
+		"User":       h.getUserFromContext(r),
+		"ServerName": serverName,
 	}
 
 	h.render(w, "dkim_new", data)
@@ -44,6 +73,8 @@ func (h *Handlers) DKIMNew(w http.ResponseWriter, r *http.Request) {
 
 // DKIMCreate creates a new DKIM key
 func (h *Handlers) DKIMCreate(w http.ResponseWriter, r *http.Request) {
+	serverName := r.PathValue("server")
+
 	if err := r.ParseForm(); err != nil {
 		h.error(w, http.StatusBadRequest, "Invalid form data")
 		return
@@ -51,6 +82,7 @@ func (h *Handlers) DKIMCreate(w http.ResponseWriter, r *http.Request) {
 
 	domain := strings.TrimSpace(r.FormValue("domain"))
 	selector := strings.TrimSpace(r.FormValue("selector"))
+	autoDeploy := r.FormValue("auto_deploy") == "on"
 
 	if domain == "" || selector == "" {
 		h.error(w, http.StatusBadRequest, "Domain and selector are required")
@@ -110,12 +142,32 @@ func (h *Handlers) DKIMCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/settings/dkim/"+key.ID, http.StatusSeeOther)
+	// Auto-deploy to current server if requested
+	if autoDeploy {
+		client, err := h.sendry.GetClient(serverName)
+		if err == nil {
+			_, err = client.UploadDKIM(r.Context(), key.Domain, key.Selector, key.PrivateKey)
+			if err != nil {
+				h.dkim.CreateDeployment(key.ID, serverName, "failed", err.Error())
+			} else {
+				h.dkim.CreateDeployment(key.ID, serverName, "deployed", "")
+			}
+		}
+	}
+
+	http.Redirect(w, r, fmt.Sprintf("/servers/%s/dkim/%s", serverName, key.ID), http.StatusSeeOther)
 }
 
 // DKIMView shows a single DKIM key
 func (h *Handlers) DKIMView(w http.ResponseWriter, r *http.Request) {
+	serverName := r.PathValue("server")
 	id := r.PathValue("id")
+
+	// Verify server exists
+	if _, err := h.sendry.GetClient(serverName); err != nil {
+		h.error(w, http.StatusNotFound, "Server not found")
+		return
+	}
 
 	key, err := h.dkim.GetByID(id)
 	if err != nil {
@@ -128,16 +180,36 @@ func (h *Handlers) DKIMView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get server list for deployment
+	// Check if deployed to current server
+	isDeployed := false
+	for _, d := range key.Deployments {
+		if d.ServerName == serverName && d.Status == "deployed" {
+			isDeployed = true
+			break
+		}
+	}
+
+	// Get all servers for deployment
 	servers := h.getServersStatus()
 
+	// Filter out current server for "other servers" list
+	var otherServers []map[string]any
+	for _, s := range servers {
+		if s["Name"] != serverName {
+			otherServers = append(otherServers, s)
+		}
+	}
+
 	data := map[string]any{
-		"Title":   fmt.Sprintf("DKIM: %s._domainkey.%s", key.Selector, key.Domain),
-		"Active":  "settings",
-		"User":    h.getUserFromContext(r),
-		"Key":     key,
-		"DNSName": key.Selector + "._domainkey." + key.Domain,
-		"Servers": servers,
+		"Title":        fmt.Sprintf("DKIM: %s._domainkey.%s", key.Selector, key.Domain),
+		"Active":       "servers",
+		"User":         h.getUserFromContext(r),
+		"Key":          key,
+		"DNSName":      key.Selector + "._domainkey." + key.Domain,
+		"Servers":      servers,
+		"OtherServers": otherServers,
+		"ServerName":   serverName,
+		"IsDeployed":   isDeployed,
 	}
 
 	h.render(w, "dkim_view", data)
@@ -145,6 +217,7 @@ func (h *Handlers) DKIMView(w http.ResponseWriter, r *http.Request) {
 
 // DKIMDelete deletes a DKIM key
 func (h *Handlers) DKIMDelete(w http.ResponseWriter, r *http.Request) {
+	serverName := r.PathValue("server")
 	id := r.PathValue("id")
 
 	if err := h.dkim.Delete(id); err != nil {
@@ -153,11 +226,12 @@ func (h *Handlers) DKIMDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/settings/dkim", http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("/servers/%s/dkim", serverName), http.StatusSeeOther)
 }
 
 // DKIMDeploy deploys a DKIM key to selected servers
 func (h *Handlers) DKIMDeploy(w http.ResponseWriter, r *http.Request) {
+	serverName := r.PathValue("server")
 	id := r.PathValue("id")
 
 	if err := r.ParseForm(); err != nil {
@@ -178,20 +252,20 @@ func (h *Handlers) DKIMDeploy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var deployErrors []string
-	for _, serverName := range servers {
-		client, err := h.sendry.GetClient(serverName)
+	for _, srvName := range servers {
+		client, err := h.sendry.GetClient(srvName)
 		if err != nil {
-			deployErrors = append(deployErrors, fmt.Sprintf("%s: %v", serverName, err))
-			h.dkim.CreateDeployment(key.ID, serverName, "failed", err.Error())
+			deployErrors = append(deployErrors, fmt.Sprintf("%s: %v", srvName, err))
+			h.dkim.CreateDeployment(key.ID, srvName, "failed", err.Error())
 			continue
 		}
 
 		_, err = client.UploadDKIM(r.Context(), key.Domain, key.Selector, key.PrivateKey)
 		if err != nil {
-			deployErrors = append(deployErrors, fmt.Sprintf("%s: %v", serverName, err))
-			h.dkim.CreateDeployment(key.ID, serverName, "failed", err.Error())
+			deployErrors = append(deployErrors, fmt.Sprintf("%s: %v", srvName, err))
+			h.dkim.CreateDeployment(key.ID, srvName, "failed", err.Error())
 		} else {
-			h.dkim.CreateDeployment(key.ID, serverName, "deployed", "")
+			h.dkim.CreateDeployment(key.ID, srvName, "deployed", "")
 		}
 	}
 
@@ -199,13 +273,13 @@ func (h *Handlers) DKIMDeploy(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("some deployments failed", "errors", deployErrors)
 	}
 
-	http.Redirect(w, r, "/settings/dkim/"+id, http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("/servers/%s/dkim/%s", serverName, id), http.StatusSeeOther)
 }
 
 // DKIMDeploymentDelete removes a deployment record and optionally the key from server
 func (h *Handlers) DKIMDeploymentDelete(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
 	serverName := r.PathValue("server")
+	id := r.PathValue("id")
 
 	key, err := h.dkim.GetByID(id)
 	if err != nil || key == nil {
@@ -224,5 +298,5 @@ func (h *Handlers) DKIMDeploymentDelete(w http.ResponseWriter, r *http.Request) 
 		h.logger.Error("failed to delete deployment", "error", err)
 	}
 
-	http.Redirect(w, r, "/settings/dkim/"+id, http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("/servers/%s/dkim/%s", serverName, id), http.StatusSeeOther)
 }
