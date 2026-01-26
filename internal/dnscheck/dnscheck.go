@@ -21,6 +21,9 @@ var (
 // domainRegex validates domain name format (RFC 1035)
 var domainRegex = regexp.MustCompile(`^(?i)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$`)
 
+// selectorRegex validates DKIM selector format (pre-compiled for performance)
+var selectorRegex = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$`)
+
 // ValidateDomain checks if domain name is valid
 func ValidateDomain(domain string) error {
 	if domain == "" {
@@ -43,8 +46,8 @@ func ValidateSelector(selector string) error {
 	if len(selector) > 63 {
 		return errors.New("selector too long")
 	}
-	// Selector follows same rules as domain label
-	if !regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$`).MatchString(selector) {
+	// Selector follows same rules as domain label (use pre-compiled regex)
+	if !selectorRegex.MatchString(selector) {
 		return errors.New("invalid selector format")
 	}
 	return nil

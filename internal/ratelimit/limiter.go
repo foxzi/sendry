@@ -497,18 +497,35 @@ func (l *Limiter) persistLoop() {
 }
 
 // cleanupExpiredCounters removes counters that haven't been used for 24+ hours
+// from both in-memory map and BoltDB storage
 func (l *Limiter) cleanupExpiredCounters() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	now := time.Now()
 	expireThreshold := 24 * time.Hour
+	var expiredKeys []string
 
 	for key, counter := range l.counters {
 		// If both hourly and daily counters are expired (>24h old), remove the counter
 		if now.Sub(counter.HourStart) > expireThreshold && now.Sub(counter.DayStart) > expireThreshold {
 			delete(l.counters, key)
+			expiredKeys = append(expiredKeys, key)
 		}
+	}
+
+	// Also remove from BoltDB to prevent database growth
+	if len(expiredKeys) > 0 {
+		l.db.Update(func(tx *bolt.Tx) error {
+			bucket := tx.Bucket(bucketRateLimits)
+			if bucket == nil {
+				return nil
+			}
+			for _, key := range expiredKeys {
+				bucket.Delete([]byte(key))
+			}
+			return nil
+		})
 	}
 }
 

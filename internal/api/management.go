@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -118,9 +119,20 @@ func (m *ManagementServer) handleDKIMGenerate(w http.ResponseWriter, r *http.Req
 		sendError(w, http.StatusBadRequest, "domain is required")
 		return
 	}
-	if req.Selector == "" {
-		req.Selector = "default"
+
+	// Validate and sanitize domain and selector for file path safety
+	safeDomain := sanitizeDomainForPath(req.Domain)
+	if safeDomain == "" {
+		sendError(w, http.StatusBadRequest, "invalid domain format")
+		return
 	}
+
+	safeSelector := sanitizeSelectorForPath(req.Selector)
+	if safeSelector == "" {
+		sendError(w, http.StatusBadRequest, "invalid selector format")
+		return
+	}
+	req.Selector = safeSelector
 
 	// Generate DKIM key
 	keyPair, err := dkim.GenerateKey(req.Domain, req.Selector)
@@ -129,8 +141,8 @@ func (m *ManagementServer) handleDKIMGenerate(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Save private key
-	keyFile := filepath.Join(m.dkimKeysDir, req.Domain, req.Selector+".key")
+	// Save private key (use sanitized values for path)
+	keyFile := filepath.Join(m.dkimKeysDir, safeDomain, safeSelector+".key")
 	if err := keyPair.SavePrivateKey(keyFile); err != nil {
 		sendError(w, http.StatusInternalServerError, "Failed to save DKIM key")
 		return
@@ -168,19 +180,30 @@ func (m *ManagementServer) handleDKIMUpload(w http.ResponseWriter, r *http.Reque
 		sendError(w, http.StatusBadRequest, "private_key is required")
 		return
 	}
-	if req.Selector == "" {
-		req.Selector = "default"
+
+	// Validate and sanitize domain and selector for file path safety
+	safeDomain := sanitizeDomainForPath(req.Domain)
+	if safeDomain == "" {
+		sendError(w, http.StatusBadRequest, "invalid domain format")
+		return
 	}
+
+	safeSelector := sanitizeSelectorForPath(req.Selector)
+	if safeSelector == "" {
+		sendError(w, http.StatusBadRequest, "invalid selector format")
+		return
+	}
+	req.Selector = safeSelector
 
 	// Validate the private key by trying to parse it
 	privateKey, err := dkim.ParsePrivateKey([]byte(req.PrivateKey))
 	if err != nil {
-		sendError(w, http.StatusBadRequest, "Invalid private key: "+err.Error())
+		sendError(w, http.StatusBadRequest, "invalid private key format")
 		return
 	}
 
-	// Create domain directory
-	domainDir := filepath.Join(m.dkimKeysDir, req.Domain)
+	// Create domain directory (use sanitized values for path)
+	domainDir := filepath.Join(m.dkimKeysDir, safeDomain)
 	if err := os.MkdirAll(domainDir, 0755); err != nil {
 		sendError(w, http.StatusInternalServerError, "Failed to create DKIM directory")
 		return
@@ -228,6 +251,13 @@ func (m *ManagementServer) handleDKIMGet(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Validate domain for path safety
+	safeDomain := sanitizeDomainForPath(domainName)
+	if safeDomain == "" {
+		sendError(w, http.StatusBadRequest, "invalid domain format")
+		return
+	}
+
 	response := DKIMInfoResponse{
 		Domain:  domainName,
 		Enabled: false,
@@ -252,8 +282,8 @@ func (m *ManagementServer) handleDKIMGet(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	// List available selectors from keys directory
-	domainDir := filepath.Join(m.dkimKeysDir, domainName)
+	// List available selectors from keys directory (use sanitized domain)
+	domainDir := filepath.Join(m.dkimKeysDir, safeDomain)
 	if entries, err := os.ReadDir(domainDir); err == nil {
 		for _, entry := range entries {
 			if !entry.IsDir() && filepath.Ext(entry.Name()) == ".key" {
@@ -283,6 +313,13 @@ func (m *ManagementServer) handleDKIMVerify(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Validate domain for path safety
+	safeDomain := sanitizeDomainForPath(domainName)
+	if safeDomain == "" {
+		sendError(w, http.StatusBadRequest, "invalid domain format")
+		return
+	}
+
 	selector := r.URL.Query().Get("selector")
 	if selector == "" {
 		// Try to get from config
@@ -294,6 +331,14 @@ func (m *ManagementServer) handleDKIMVerify(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
+	// Validate selector for path safety
+	safeSelector := sanitizeSelectorForPath(selector)
+	if safeSelector == "" {
+		sendError(w, http.StatusBadRequest, "invalid selector format")
+		return
+	}
+	selector = safeSelector
+
 	response := DKIMVerifyResponse{
 		Domain:   domainName,
 		Selector: selector,
@@ -301,10 +346,10 @@ func (m *ManagementServer) handleDKIMVerify(w http.ResponseWriter, r *http.Reque
 		Valid:    false,
 	}
 
-	// Check if key file exists
+	// Check if key file exists (use sanitized values for path)
 	enabled, _, keyFile := m.config.GetDKIMConfig(domainName)
 	if !enabled {
-		keyFile = filepath.Join(m.dkimKeysDir, domainName, selector+".key")
+		keyFile = filepath.Join(m.dkimKeysDir, safeDomain, safeSelector+".key")
 	}
 
 	if _, err := os.Stat(keyFile); os.IsNotExist(err) {
@@ -315,7 +360,7 @@ func (m *ManagementServer) handleDKIMVerify(w http.ResponseWriter, r *http.Reque
 
 	// Load and validate the key
 	if _, err := dkim.LoadPrivateKey(keyFile); err != nil {
-		response.Error = "Invalid DKIM key: " + err.Error()
+		response.Error = "invalid DKIM key format"
 		sendJSON(w, http.StatusOK, response)
 		return
 	}
@@ -334,7 +379,20 @@ func (m *ManagementServer) handleDKIMDelete(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	keyFile := filepath.Join(m.dkimKeysDir, domainName, selector+".key")
+	// Validate domain and selector for path safety
+	safeDomain := sanitizeDomainForPath(domainName)
+	if safeDomain == "" {
+		sendError(w, http.StatusBadRequest, "invalid domain format")
+		return
+	}
+
+	safeSelector := sanitizeSelectorForPath(selector)
+	if safeSelector == "" {
+		sendError(w, http.StatusBadRequest, "invalid selector format")
+		return
+	}
+
+	keyFile := filepath.Join(m.dkimKeysDir, safeDomain, safeSelector+".key")
 	if err := os.Remove(keyFile); err != nil {
 		if os.IsNotExist(err) {
 			sendError(w, http.StatusNotFound, "DKIM key not found")
@@ -436,8 +494,15 @@ func (m *ManagementServer) handleTLSUpload(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Create domain directory
-	domainDir := filepath.Join(m.tlsCertsDir, req.Domain)
+	// Validate domain for path safety
+	safeDomain := sanitizeDomainForPath(req.Domain)
+	if safeDomain == "" {
+		sendError(w, http.StatusBadRequest, "invalid domain format")
+		return
+	}
+
+	// Create domain directory (use sanitized domain)
+	domainDir := filepath.Join(m.tlsCertsDir, safeDomain)
 	if err := os.MkdirAll(domainDir, 0755); err != nil {
 		sendError(w, http.StatusInternalServerError, "Failed to create certificate directory")
 		return
@@ -873,6 +938,48 @@ func sendJSON(w http.ResponseWriter, status int, v interface{}) {
 
 func sendError(w http.ResponseWriter, status int, message string) {
 	sendJSON(w, status, map[string]string{"error": message})
+}
+
+// sanitizeDomainForPath validates and sanitizes a domain name for safe use in file paths.
+// Returns empty string if the domain is invalid or contains path traversal attempts.
+func sanitizeDomainForPath(domain string) string {
+	// Check for path traversal patterns
+	if strings.Contains(domain, "..") ||
+		strings.Contains(domain, "/") ||
+		strings.Contains(domain, "\\") ||
+		strings.Contains(domain, "\x00") {
+		return ""
+	}
+
+	// Validate using dnscheck validation
+	if err := dnscheck.ValidateDomain(domain); err != nil {
+		return ""
+	}
+
+	return domain
+}
+
+// sanitizeSelectorForPath validates and sanitizes a selector for safe use in file paths.
+// Returns empty string if the selector is invalid.
+func sanitizeSelectorForPath(selector string) string {
+	if selector == "" {
+		return "default"
+	}
+
+	// Check for path traversal patterns
+	if strings.Contains(selector, "..") ||
+		strings.Contains(selector, "/") ||
+		strings.Contains(selector, "\\") ||
+		strings.Contains(selector, "\x00") {
+		return ""
+	}
+
+	// Validate using dnscheck validation
+	if err := dnscheck.ValidateSelector(selector); err != nil {
+		return ""
+	}
+
+	return selector
 }
 
 // DNS Check Handlers

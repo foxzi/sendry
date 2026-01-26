@@ -28,7 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Security: Input validation for domain names and DKIM selectors in DNS check API
 - Security: Sanitized error messages in IP check API (no internal details exposure)
-- Optimization: Rate limiter now cleans up expired counters hourly (prevents memory leak)
+- Security: Path traversal protection in DKIM and TLS API handlers
+- Optimization: Pre-compiled regex for DKIM selector validation
+- Optimization: Rate limiter cleans up expired counters from BoltDB (prevents db growth)
 
 ## [0.4.2] - 2026-01-26
 
