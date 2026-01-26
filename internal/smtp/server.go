@@ -24,14 +24,15 @@ type Server struct {
 
 // ServerOptions contains options for creating SMTP server
 type ServerOptions struct {
-	Config      *config.SMTPConfig
-	Queue       queue.Queue
-	Logger      *slog.Logger
-	TLSConfig   *tls.Config
-	Implicit    bool   // true for SMTPS (implicit TLS)
-	Addr        string
-	RateLimiter *ratelimit.Limiter
-	ServerType  string // smtp, submission, smtps - for metrics
+	Config         *config.SMTPConfig
+	Queue          queue.Queue
+	Logger         *slog.Logger
+	TLSConfig      *tls.Config
+	Implicit       bool     // true for SMTPS (implicit TLS)
+	Addr           string
+	RateLimiter    *ratelimit.Limiter
+	ServerType     string   // smtp, submission, smtps - for metrics
+	AllowedDomains []string // Domains allowed for sending (anti-relay protection)
 }
 
 // NewServer creates a new SMTP server
@@ -49,6 +50,9 @@ func NewServerWithOptions(opts ServerOptions) *Server {
 	backend := NewBackend(opts.Queue, &opts.Config.Auth, opts.Logger)
 	if opts.RateLimiter != nil {
 		backend.SetRateLimiter(opts.RateLimiter)
+	}
+	if len(opts.AllowedDomains) > 0 {
+		backend.SetAllowedDomains(opts.AllowedDomains)
 	}
 
 	// Set server type for metrics

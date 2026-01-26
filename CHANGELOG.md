@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Security: Sanitized error messages in IP check API (no internal details exposure)
 - Security: Path traversal protection in DKIM and TLS API handlers
 - Security: Max limit (1000) for pagination in sandbox and templates API (prevents DoS)
+- Security: Anti-relay protection - only configured domains allowed for sending
 - Optimization: Pre-compiled regex for DKIM selector validation
 - Optimization: Rate limiter cleans up expired counters from BoltDB (prevents db growth)
 - Optimization: SMTP backend cleans up expired auth failure records (prevents memory leak)

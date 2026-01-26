@@ -255,43 +255,49 @@ func New(cfg *config.Config) (*App, error) {
 		logger.Info("TLS enabled with manual certificates")
 	}
 
+	// Get allowed domains for anti-relay protection
+	allowedDomains := cfg.GetAllDomains()
+
 	// Create SMTP server (port 25) with STARTTLS
 	smtpServer := smtp.NewServerWithOptions(smtp.ServerOptions{
-		Config:      &cfg.SMTP,
-		Queue:       storage,
-		Logger:      logger.With("component", "smtp_server"),
-		TLSConfig:   tlsConfig,
-		Implicit:    false,
-		Addr:        cfg.SMTP.ListenAddr,
-		RateLimiter: rateLimiter,
-		ServerType:  "smtp",
+		Config:         &cfg.SMTP,
+		Queue:          storage,
+		Logger:         logger.With("component", "smtp_server"),
+		TLSConfig:      tlsConfig,
+		Implicit:       false,
+		Addr:           cfg.SMTP.ListenAddr,
+		RateLimiter:    rateLimiter,
+		ServerType:     "smtp",
+		AllowedDomains: allowedDomains,
 	})
 
 	// Create SMTP submission server (port 587) with STARTTLS
 	submissionCfg := cfg.SMTP
 	smtpSubmission := smtp.NewServerWithOptions(smtp.ServerOptions{
-		Config:      &submissionCfg,
-		Queue:       storage,
-		Logger:      logger.With("component", "smtp_submission"),
-		TLSConfig:   tlsConfig,
-		Implicit:    false,
-		Addr:        cfg.SMTP.SubmissionAddr,
-		RateLimiter: rateLimiter,
-		ServerType:  "submission",
+		Config:         &submissionCfg,
+		Queue:          storage,
+		Logger:         logger.With("component", "smtp_submission"),
+		TLSConfig:      tlsConfig,
+		Implicit:       false,
+		Addr:           cfg.SMTP.SubmissionAddr,
+		RateLimiter:    rateLimiter,
+		ServerType:     "submission",
+		AllowedDomains: allowedDomains,
 	})
 
 	// Create SMTPS server (port 465) with implicit TLS
 	var smtpsServer *smtp.Server
 	if tlsConfig != nil {
 		smtpsServer = smtp.NewServerWithOptions(smtp.ServerOptions{
-			Config:      &cfg.SMTP,
-			Queue:       storage,
-			Logger:      logger.With("component", "smtps_server"),
-			TLSConfig:   tlsConfig,
-			Implicit:    true,
-			Addr:        cfg.SMTP.SMTPSAddr,
-			RateLimiter: rateLimiter,
-			ServerType:  "smtps",
+			Config:         &cfg.SMTP,
+			Queue:          storage,
+			Logger:         logger.With("component", "smtps_server"),
+			TLSConfig:      tlsConfig,
+			Implicit:       true,
+			Addr:           cfg.SMTP.SMTPSAddr,
+			RateLimiter:    rateLimiter,
+			ServerType:     "smtps",
+			AllowedDomains: allowedDomains,
 		})
 	}
 

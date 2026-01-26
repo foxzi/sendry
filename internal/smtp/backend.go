@@ -39,6 +39,9 @@ type Backend struct {
 
 	// Cleanup goroutine control
 	cleanupStopCh chan struct{}
+
+	// Anti-relay protection: only allow sending from configured domains
+	allowedDomains map[string]bool
 }
 
 // NewBackend creates a new SMTP backend
@@ -122,6 +125,24 @@ func (b *Backend) SetServerType(serverType string) {
 // SetRateLimiter sets the rate limiter for the backend
 func (b *Backend) SetRateLimiter(rl *ratelimit.Limiter) {
 	b.rateLimiter = rl
+}
+
+// SetAllowedDomains sets the list of domains allowed for sending (anti-relay protection)
+func (b *Backend) SetAllowedDomains(domains []string) {
+	b.allowedDomains = make(map[string]bool, len(domains))
+	for _, d := range domains {
+		b.allowedDomains[d] = true
+	}
+	b.logger.Info("allowed domains configured", "count", len(domains), "domains", domains)
+}
+
+// IsDomainAllowed checks if the sender domain is allowed
+func (b *Backend) IsDomainAllowed(domain string) bool {
+	// If no allowed domains configured, allow all (backwards compatibility)
+	if len(b.allowedDomains) == 0 {
+		return true
+	}
+	return b.allowedDomains[domain]
 }
 
 // CheckRateLimit checks if the request is within rate limits

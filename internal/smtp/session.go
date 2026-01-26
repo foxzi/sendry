@@ -106,6 +106,17 @@ func (s *Session) Mail(from string, opts *smtp.MailOptions) error {
 		}
 	}
 
+	// Check if sender domain is allowed (anti-relay protection)
+	senderDomain := email.ExtractDomain(from)
+	if senderDomain != "" && !s.backend.IsDomainAllowed(senderDomain) {
+		s.logger.Warn("sender domain not allowed", "from", from, "domain", senderDomain)
+		return &smtp.SMTPError{
+			Code:         550,
+			EnhancedCode: smtp.EnhancedCode{5, 7, 1},
+			Message:      "Sender domain not allowed",
+		}
+	}
+
 	s.from = from
 	s.logger.Debug("MAIL FROM", "from", from)
 	return nil
