@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-01-27
+
 ### Fixed
 - Security: HTTP header injection via Content-Disposition filename in template export, recipient export, and sandbox message download
 - Security: Unbounded memory consumption in recipient CSV export (now uses streaming)
@@ -218,6 +220,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DEB/RPM/APK packaging
 - Docker images
 
+[0.4.4]: https://github.com/foxzi/sendry/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/foxzi/sendry/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/foxzi/sendry/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/foxzi/sendry/compare/v0.4.0...v0.4.1
