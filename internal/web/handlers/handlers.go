@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/foxzi/sendry/internal/web/auth"
 	"github.com/foxzi/sendry/internal/web/config"
@@ -121,6 +122,17 @@ func (h *Handlers) getServersStatus() []map[string]any {
 		})
 	}
 	return servers
+}
+
+// sanitizeFilename removes dangerous characters from filename for Content-Disposition header.
+// Prevents HTTP header injection via CRLF and quote characters.
+func sanitizeFilename(s string) string {
+	s = strings.ReplaceAll(s, "\r", "")
+	s = strings.ReplaceAll(s, "\n", "")
+	s = strings.ReplaceAll(s, "\"", "")
+	s = strings.ReplaceAll(s, "\\", "")
+	s = strings.ReplaceAll(s, "/", "")
+	return strings.TrimSpace(s)
 }
 
 // Get servers status with actual health checks (slow, makes API calls)

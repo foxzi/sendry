@@ -386,7 +386,7 @@ func (h *Handlers) RecipientListExport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Set headers for CSV download
-	filename := fmt.Sprintf("%s-recipients.csv", list.Name)
+	filename := fmt.Sprintf("%s-recipients.csv", sanitizeFilename(list.Name))
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
 

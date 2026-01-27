@@ -203,7 +203,7 @@ func (s *SandboxServer) handleGetRaw(w http.ResponseWriter, r *http.Request) {
 
 	// Return raw email data
 	w.Header().Set("Content-Type", "message/rfc822")
-	w.Header().Set("Content-Disposition", "attachment; filename=\""+id+".eml\"")
+	w.Header().Set("Content-Disposition", "attachment; filename=\""+sanitizeFilename(id)+".eml\"")
 	w.WriteHeader(http.StatusOK)
 	w.Write(msg.Data)
 }

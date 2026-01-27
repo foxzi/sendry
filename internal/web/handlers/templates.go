@@ -476,7 +476,7 @@ func (h *Handlers) TemplateExport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Content-Disposition", "attachment; filename=\""+t.Name+".json\"")
+	w.Header().Set("Content-Disposition", "attachment; filename=\""+sanitizeFilename(t.Name)+".json\"")
 
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")

@@ -317,6 +317,17 @@ func sanitizeHeaderValue(s string) string {
 	return strings.TrimSpace(s)
 }
 
+// sanitizeFilename removes dangerous characters from filename for Content-Disposition header.
+// Prevents HTTP header injection via CRLF and quote characters.
+func sanitizeFilename(s string) string {
+	s = strings.ReplaceAll(s, "\r", "")
+	s = strings.ReplaceAll(s, "\n", "")
+	s = strings.ReplaceAll(s, "\"", "")
+	s = strings.ReplaceAll(s, "\\", "")
+	s = strings.ReplaceAll(s, "/", "")
+	return strings.TrimSpace(s)
+}
+
 // sendError sends an error response
 func (s *Server) sendError(w http.ResponseWriter, status int, message string) {
 	s.sendJSON(w, status, ErrorResponse{Error: message})
