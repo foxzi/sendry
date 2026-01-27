@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Security: HTTP header injection via Content-Disposition filename in template export, recipient export, and sandbox message download
+- Security: Unbounded memory consumption in recipient CSV export (now uses streaming)
 
 ## [0.4.3] - 2026-01-27
 

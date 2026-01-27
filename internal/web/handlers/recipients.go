@@ -361,7 +361,7 @@ func (h *Handlers) RecipientDelete(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/recipients/"+listID, http.StatusSeeOther)
 }
 
-// RecipientListExport exports recipients to CSV
+// RecipientListExport exports recipients to CSV using streaming to avoid memory issues
 func (h *Handlers) RecipientListExport(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
@@ -371,19 +371,14 @@ func (h *Handlers) RecipientListExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get all recipients (no pagination for export)
-	filter := models.RecipientFilter{
-		ListID: id,
-		Limit:  100000, // reasonable max
-		Offset: 0,
-	}
-
-	recipients, _, err := h.recipients.ListRecipients(filter)
+	// Stream recipients directly from database to avoid loading all into memory
+	rows, err := h.recipients.StreamRecipients(id)
 	if err != nil {
-		h.logger.Error("failed to list recipients for export", "error", err)
+		h.logger.Error("failed to stream recipients for export", "error", err)
 		h.error(w, http.StatusInternalServerError, "Failed to export recipients")
 		return
 	}
+	defer rows.Close()
 
 	// Set headers for CSV download
 	filename := fmt.Sprintf("%s-recipients.csv", sanitizeFilename(list.Name))
@@ -400,20 +395,32 @@ func (h *Handlers) RecipientListExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Write recipients
-	for _, r := range recipients {
+	// Stream and write recipients one by one
+	count := 0
+	for rows.Next() {
+		rec, err := h.recipients.ScanRecipient(rows)
+		if err != nil {
+			h.logger.Error("failed to scan recipient", "error", err)
+			continue
+		}
+
 		row := []string{
-			r.Email,
-			r.Name,
-			r.Status,
-			r.Variables,
-			r.Tags,
+			rec.Email,
+			rec.Name,
+			rec.Status,
+			rec.Variables,
+			rec.Tags,
 		}
 		if err := writer.Write(row); err != nil {
 			h.logger.Error("failed to write CSV row", "error", err)
 			return
 		}
+		count++
 	}
 
-	h.logger.Info("recipients exported", "list_id", id, "count", len(recipients))
+	if err := rows.Err(); err != nil {
+		h.logger.Error("error iterating recipients", "error", err)
+	}
+
+	h.logger.Info("recipients exported", "list_id", id, "count", count)
 }

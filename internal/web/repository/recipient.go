@@ -359,6 +359,24 @@ func (r *RecipientRepository) ImportCSV(listID string, reader io.Reader) (*model
 	return result, nil
 }
 
+// StreamRecipients returns an iterator for recipients to avoid loading all into memory.
+// Caller must call Close() on returned rows when done.
+func (r *RecipientRepository) StreamRecipients(listID string) (*sql.Rows, error) {
+	return r.db.Query(`
+		SELECT id, list_id, email, name, variables, tags, status, created_at
+		FROM recipients WHERE list_id = ?
+		ORDER BY created_at DESC`, listID)
+}
+
+// ScanRecipient scans a single recipient from rows
+func (r *RecipientRepository) ScanRecipient(rows *sql.Rows) (*models.Recipient, error) {
+	rec := &models.Recipient{}
+	if err := rows.Scan(&rec.ID, &rec.ListID, &rec.Email, &rec.Name, &rec.Variables, &rec.Tags, &rec.Status, &rec.CreatedAt); err != nil {
+		return nil, err
+	}
+	return rec, nil
+}
+
 // GetTags returns all unique tags from a list
 func (r *RecipientRepository) GetTags(listID string) ([]string, error) {
 	rows, err := r.db.Query(`
