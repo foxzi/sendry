@@ -38,7 +38,7 @@ provisioner:
     group_vars:
       all:
         sendry_install_method: binary
-        sendry_version: "0.4.2"
+        sendry_version: "0.4.4"
         sendry_api_key: "test-api-key-12345"
         sendry_smtp_auth_users:
           admin: "test-password"

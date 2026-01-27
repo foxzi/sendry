@@ -36,6 +36,7 @@ smtp:
         - "{{ domain }}"
 {% endfor %}
       cache_dir: "{{ sendry_acme_cache_dir }}"
+      on_demand: {{ sendry_acme_on_demand | lower }}
 {% endif %}
 
 {% if sendry_domains %}
@@ -88,6 +89,19 @@ rate_limit:
   default_api_key:
     messages_per_hour: {{ sendry_rate_limit_default_api_key.messages_per_hour }}
     messages_per_day: {{ sendry_rate_limit_default_api_key.messages_per_day }}
+{% if sendry_rate_limit_default_recipient_domain %}
+  default_recipient_domain:
+    messages_per_hour: {{ sendry_rate_limit_default_recipient_domain.messages_per_hour }}
+    messages_per_day: {{ sendry_rate_limit_default_recipient_domain.messages_per_day }}
+{% endif %}
+{% if sendry_rate_limit_recipient_domains %}
+  recipient_domains:
+{% for domain, limits in sendry_rate_limit_recipient_domains.items() %}
+    {{ domain }}:
+      messages_per_hour: {{ limits.messages_per_hour }}
+      messages_per_day: {{ limits.messages_per_day }}
+{% endfor %}
+{% endif %}
 
 api:
   listen_addr: "{{ sendry_api_listen }}"

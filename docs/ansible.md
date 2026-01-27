@@ -146,6 +146,29 @@ sendry_acme_enabled: true
 sendry_acme_email: admin@example.com
 sendry_acme_domains:
   - mail.example.com
+# On-demand mode: port 80 is not opened permanently
+# Use 'sendry tls renew' to obtain/renew certificates via cron
+sendry_acme_on_demand: true  # default: true
+```
+
+## Recipient Domain Rate Limiting
+
+Limit how many emails can be sent TO specific mail providers (gmail.com, mail.ru, etc.):
+
+```yaml
+# Default limits for all recipient domains
+sendry_rate_limit_default_recipient_domain:
+  messages_per_hour: 5000
+  messages_per_day: 50000
+
+# Override for specific domains
+sendry_rate_limit_recipient_domains:
+  gmail.com:
+    messages_per_hour: 1000
+    messages_per_day: 10000
+  mail.ru:
+    messages_per_hour: 1000
+    messages_per_day: 10000
 ```
 
 ## Tags

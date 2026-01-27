@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Ansible: added ACME on_demand option support (v0.3.4 feature)
+- Ansible: added recipient domain rate limiting support (v0.4.3 feature)
+- Ansible: updated Molecule test version to 0.4.4
+
 ## [0.4.4] - 2026-01-27
 
 ### Fixed

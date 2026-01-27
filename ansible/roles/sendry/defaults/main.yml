@@ -51,6 +51,9 @@ sendry_acme_enabled: false
 sendry_acme_email: ""
 sendry_acme_domains: []
 sendry_acme_cache_dir: "{{ sendry_data_dir }}/certs"
+# On-demand mode: port 80 is not opened automatically
+# Use 'sendry tls renew' to obtain/renew certificates manually or via cron
+sendry_acme_on_demand: true
 
 # Domain configuration
 sendry_domains: {}
@@ -104,6 +107,22 @@ sendry_rate_limit_default_ip:
 sendry_rate_limit_default_api_key:
   messages_per_hour: 1000
   messages_per_day: 10000
+
+# Per-recipient-domain limits (limit emails TO specific mail providers)
+# Checked at send time - if exceeded, message is deferred (not rejected)
+sendry_rate_limit_default_recipient_domain: {}
+#  messages_per_hour: 5000
+#  messages_per_day: 50000
+
+# Override limits for specific recipient domains
+sendry_rate_limit_recipient_domains: {}
+# Example:
+#   gmail.com:
+#     messages_per_hour: 1000
+#     messages_per_day: 10000
+#   mail.ru:
+#     messages_per_hour: 1000
+#     messages_per_day: 10000
 
 # API settings
 sendry_api_listen: ":8080"
