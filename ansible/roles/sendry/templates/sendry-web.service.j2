@@ -1,9 +1,12 @@
 [Unit]
 Description=Sendry Web - Web Interface for Sendry
 Documentation=https://github.com/foxzi/sendry
-After=network-online.target sendry.service
+After=network-online.target{% if sendry_mta_enabled %} sendry.service{% endif %}
+
 Wants=network-online.target
+{% if sendry_mta_enabled %}
 Requires=sendry.service
+{% endif %}
 
 [Service]
 Type=simple

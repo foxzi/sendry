@@ -1,4 +1,7 @@
 ---
+# Enable MTA installation (set to false for web-only deployment)
+sendry_mta_enabled: true
+
 # Sendry installation method: 'binary' or 'package'
 sendry_install_method: binary
 

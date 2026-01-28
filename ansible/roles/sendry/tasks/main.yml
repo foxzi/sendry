@@ -1,17 +1,20 @@
 ---
-- name: Validate required variables
+# Validate MTA variables (only when MTA is enabled)
+- name: Validate MTA required variables
   ansible.builtin.assert:
     that:
       - sendry_api_key | length > 0
       - sendry_smtp_auth_users | length > 0
     fail_msg: "Required variables sendry_api_key and sendry_smtp_auth_users must be set"
+  when: sendry_mta_enabled | bool
   tags: [always]
 
 - name: Validate web variables
   ansible.builtin.assert:
     that:
       - sendry_web_session_secret | length >= 32
-    fail_msg: "sendry_web_session_secret must be at least 32 characters"
+      - sendry_web_servers | length > 0 or sendry_mta_enabled | bool
+    fail_msg: "sendry_web_session_secret must be at least 32 characters and sendry_web_servers must be set when MTA is disabled"
   when: sendry_web_enabled | bool
   tags: [always]
 
@@ -23,17 +26,21 @@
   when: sendry_caddy_enabled | bool
   tags: [always]
 
+# MTA installation and configuration
 - name: Include installation tasks
   ansible.builtin.include_tasks: install.yml
-  tags: [install]
+  when: sendry_mta_enabled | bool
+  tags: [install, mta]
 
 - name: Include DKIM tasks
   ansible.builtin.include_tasks: dkim.yml
-  tags: [dkim]
+  when: sendry_mta_enabled | bool
+  tags: [dkim, mta]
 
 - name: Include configuration tasks
   ansible.builtin.include_tasks: configure.yml
-  tags: [configure]
+  when: sendry_mta_enabled | bool
+  tags: [configure, mta]
 
 - name: Include firewall tasks
   ansible.builtin.include_tasks: firewall.yml

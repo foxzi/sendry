@@ -1,6 +1,40 @@
 ---
 # Install sendry-web binary
 
+- name: Create sendry group (web-only mode)
+  ansible.builtin.group:
+    name: "{{ sendry_group }}"
+    system: true
+  when: not sendry_mta_enabled | bool
+
+- name: Create sendry user (web-only mode)
+  ansible.builtin.user:
+    name: "{{ sendry_user }}"
+    group: "{{ sendry_group }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: "{{ sendry_web_data_dir }}"
+    create_home: false
+  when: not sendry_mta_enabled | bool
+
+- name: Create config directory (web-only mode)
+  ansible.builtin.file:
+    path: "{{ sendry_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: not sendry_mta_enabled | bool
+
+- name: Create log directory (web-only mode)
+  ansible.builtin.file:
+    path: "{{ sendry_log_dir }}"
+    state: directory
+    owner: "{{ sendry_user }}"
+    group: "{{ sendry_group }}"
+    mode: "0750"
+  when: not sendry_mta_enabled | bool
+
 - name: Create sendry-web data directory
   ansible.builtin.file:
     path: "{{ sendry_web_data_dir }}"

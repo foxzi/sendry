@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Ansible: sendry-web installation and configuration support
 - Ansible: Caddy reverse proxy with automatic Let's Encrypt certificates
+- Ansible: web-only deployment mode (sendry_mta_enabled: false)
 
 ### Changed
 - Ansible: added ACME on_demand option support (v0.3.4 feature)

@@ -155,6 +155,35 @@ sendry_web_oidc_allowed_groups:
   - "sendry-admins"
 ```
 
+### Web Panel Only (separate server)
+
+Install only the web panel without MTA:
+
+```yaml
+# Disable MTA installation
+sendry_mta_enabled: false
+
+# Enable web panel
+sendry_web_enabled: true
+sendry_web_session_secret: "your-secret-at-least-32-characters-long"
+
+# Required: specify MTA servers to connect to
+sendry_web_servers:
+  - name: "mta-1"
+    base_url: "http://192.168.1.10:8080"
+    api_key: "mta-1-api-key"
+    env: "prod"
+  - name: "mta-2"
+    base_url: "http://192.168.1.11:8080"
+    api_key: "mta-2-api-key"
+    env: "prod"
+
+# Caddy for HTTPS
+sendry_caddy_enabled: true
+sendry_caddy_domain: panel.example.com
+sendry_caddy_email: admin@example.com
+```
+
 ## Tags
 
 Run specific parts of the playbook:
@@ -361,6 +390,35 @@ sendry_web_oidc_client_id: "sendry-web"
 sendry_web_oidc_client_secret: "{{ vault_oidc_secret }}"
 sendry_web_oidc_issuer_url: "https://auth.example.com/application/o/sendry-web/"
 sendry_web_oidc_redirect_url: "https://panel.example.com/auth/callback"
+```
+
+### Только Web панель (отдельный сервер)
+
+Установка только web панели без MTA:
+
+```yaml
+# Отключить установку MTA
+sendry_mta_enabled: false
+
+# Включить web панель
+sendry_web_enabled: true
+sendry_web_session_secret: "ваш-секрет-минимум-32-символа"
+
+# Обязательно: указать MTA серверы для подключения
+sendry_web_servers:
+  - name: "mta-1"
+    base_url: "http://192.168.1.10:8080"
+    api_key: "mta-1-api-key"
+    env: "prod"
+  - name: "mta-2"
+    base_url: "http://192.168.1.11:8080"
+    api_key: "mta-2-api-key"
+    env: "prod"
+
+# Caddy для HTTPS
+sendry_caddy_enabled: true
+sendry_caddy_domain: panel.example.com
+sendry_caddy_email: admin@example.com
 ```
 
 ## Теги
