@@ -8,10 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Sendry MTA: IP filtering for API and SMTP (allowed_ips config option)
 - Ansible: sendry-web installation and configuration support
 - Ansible: Caddy reverse proxy with automatic Let's Encrypt certificates
 - Ansible: web-only deployment mode (sendry_mta_enabled: false)
 - Ansible: API load balancer with health checks and IP whitelist
+- Ansible: allowed_ips support for SMTP and API
 
 ### Changed
 - Ansible: added ACME on_demand option support (v0.3.4 feature)

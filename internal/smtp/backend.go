@@ -8,6 +8,7 @@ import (
 
 	"github.com/emersion/go-smtp"
 	"github.com/foxzi/sendry/internal/config"
+	"github.com/foxzi/sendry/internal/ipfilter"
 	"github.com/foxzi/sendry/internal/metrics"
 	"github.com/foxzi/sendry/internal/queue"
 	"github.com/foxzi/sendry/internal/ratelimit"
@@ -42,6 +43,9 @@ type Backend struct {
 
 	// Anti-relay protection: only allow sending from configured domains
 	allowedDomains map[string]bool
+
+	// IP filtering
+	ipFilter *ipfilter.Filter
 }
 
 // NewBackend creates a new SMTP backend
@@ -145,6 +149,11 @@ func (b *Backend) IsDomainAllowed(domain string) bool {
 	return b.allowedDomains[domain]
 }
 
+// SetIPFilter sets the IP filter for connection filtering
+func (b *Backend) SetIPFilter(filter *ipfilter.Filter) {
+	b.ipFilter = filter
+}
+
 // CheckRateLimit checks if the request is within rate limits
 func (b *Backend) CheckRateLimit(ctx context.Context, req *ratelimit.Request) error {
 	if b.rateLimiter == nil {
@@ -232,5 +241,19 @@ func (b *Backend) ClearAuthFailure(ip string) {
 
 // NewSession is called when a new SMTP connection is established
 func (b *Backend) NewSession(c *smtp.Conn) (smtp.Session, error) {
+	// Check IP filter if configured
+	if b.ipFilter != nil && b.ipFilter.Enabled() {
+		if !b.ipFilter.IsAllowedAddr(c.Conn().RemoteAddr().String()) {
+			b.logger.Warn("SMTP connection rejected by IP filter",
+				"remote_addr", c.Conn().RemoteAddr().String(),
+			)
+			return nil, &smtp.SMTPError{
+				Code:         554,
+				EnhancedCode: smtp.EnhancedCode{5, 7, 1},
+				Message:      "Connection refused",
+			}
+		}
+	}
+
 	return NewSession(b, c), nil
 }

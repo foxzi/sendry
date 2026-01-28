@@ -12,6 +12,7 @@ import (
 
 	"github.com/foxzi/sendry/internal/config"
 	"github.com/foxzi/sendry/internal/domain"
+	"github.com/foxzi/sendry/internal/ipfilter"
 	"github.com/foxzi/sendry/internal/metrics"
 	"github.com/foxzi/sendry/internal/queue"
 	"github.com/foxzi/sendry/internal/ratelimit"
@@ -36,6 +37,7 @@ type Server struct {
 	sandboxStorage   *sandbox.Storage
 	tlsConfig        *tls.Config
 	templateServer   *TemplateServer
+	ipFilter         *ipfilter.Filter
 }
 
 // ServerOptions contains options for creating an API server
@@ -75,6 +77,12 @@ func NewServerWithOptions(opts ServerOptions) *Server {
 		rateLimiter:    opts.RateLimiter,
 		sandboxStorage: opts.SandboxStorage,
 		tlsConfig:      opts.TLSConfig,
+	}
+
+	// Create IP filter if allowed_ips is configured
+	if opts.Config != nil && len(opts.Config.AllowedIPs) > 0 {
+		s.ipFilter = ipfilter.New(opts.Config.AllowedIPs, opts.Logger.With("component", "api-ipfilter"))
+		opts.Logger.Info("API IP filtering enabled", "allowed_networks", s.ipFilter.Count())
 	}
 
 	// Store typed reference for DLQ operations
@@ -124,11 +132,15 @@ func (s *Server) setupRoutes() {
 	s.router.Use(s.loggingMiddleware)
 	s.router.Use(middleware.Recoverer)
 
-	// Health check (no auth required)
+	// Health check (no auth or IP filter required - for load balancers)
 	s.router.Get("/health", s.handleHealth)
 
-	// API v1 routes (auth required)
+	// API v1 routes (auth and IP filter required)
 	s.router.Route("/api/v1", func(r chi.Router) {
+		// Apply IP filter first (before auth)
+		if s.ipFilter != nil {
+			r.Use(s.ipFilter.HTTPMiddleware)
+		}
 		r.Use(s.authMiddleware)
 
 		r.Post("/send", s.handleSend)

@@ -8,6 +8,7 @@ import (
 	"github.com/emersion/go-smtp"
 
 	"github.com/foxzi/sendry/internal/config"
+	"github.com/foxzi/sendry/internal/ipfilter"
 	"github.com/foxzi/sendry/internal/queue"
 	"github.com/foxzi/sendry/internal/ratelimit"
 )
@@ -33,6 +34,7 @@ type ServerOptions struct {
 	RateLimiter    *ratelimit.Limiter
 	ServerType     string   // smtp, submission, smtps - for metrics
 	AllowedDomains []string // Domains allowed for sending (anti-relay protection)
+	AllowedIPs     []string // IPs/CIDRs allowed to connect
 }
 
 // NewServer creates a new SMTP server
@@ -53,6 +55,11 @@ func NewServerWithOptions(opts ServerOptions) *Server {
 	}
 	if len(opts.AllowedDomains) > 0 {
 		backend.SetAllowedDomains(opts.AllowedDomains)
+	}
+	if len(opts.AllowedIPs) > 0 {
+		filter := ipfilter.New(opts.AllowedIPs, opts.Logger.With("component", "smtp-ipfilter"))
+		backend.SetIPFilter(filter)
+		opts.Logger.Info("SMTP IP filtering enabled", "allowed_networks", filter.Count())
 	}
 
 	// Set server type for metrics

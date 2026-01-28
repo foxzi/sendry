@@ -120,6 +120,23 @@ sendry_rate_limit_recipient_domains:
     messages_per_day: 10000
 ```
 
+## IP Filtering
+
+Restrict access to SMTP and API ports by IP address or CIDR:
+
+```yaml
+# SMTP: allow only specific IPs to connect
+sendry_smtp_allowed_ips:
+  - "10.0.0.0/8"
+  - "192.168.1.0/24"
+  - "203.0.113.50"
+
+# API: allow only specific IPs (excludes /health endpoint)
+sendry_api_allowed_ips:
+  - "10.0.0.0/8"
+  - "192.168.1.0/24"
+```
+
 ## Sendry Web Panel
 
 Install web panel with Caddy reverse proxy (automatic HTTPS):
@@ -387,6 +404,23 @@ sendry_rate_limit_recipient_domains:
   mail.ru:
     messages_per_hour: 1000
     messages_per_day: 10000
+```
+
+## Фильтрация по IP
+
+Ограничение доступа к SMTP и API портам по IP адресу или CIDR:
+
+```yaml
+# SMTP: разрешить подключение только с определённых IP
+sendry_smtp_allowed_ips:
+  - "10.0.0.0/8"
+  - "192.168.1.0/24"
+  - "203.0.113.50"
+
+# API: разрешить доступ только с определённых IP (кроме /health)
+sendry_api_allowed_ips:
+  - "10.0.0.0/8"
+  - "192.168.1.0/24"
 ```
 
 ## DKIM ключи

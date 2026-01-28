@@ -135,6 +135,7 @@ type SMTPConfig struct {
 	WriteTimeout    time.Duration `yaml:"write_timeout"`
 	Auth            AuthConfig    `yaml:"auth"`
 	TLS             TLSConfig     `yaml:"tls"`
+	AllowedIPs      []string      `yaml:"allowed_ips"` // IP addresses/CIDRs allowed to connect (empty = allow all)
 }
 
 // TLSConfig contains TLS certificate settings
@@ -180,6 +181,7 @@ type APIConfig struct {
 	ReadTimeout    time.Duration `yaml:"read_timeout"`     // HTTP read timeout (default: 30s)
 	WriteTimeout   time.Duration `yaml:"write_timeout"`    // HTTP write timeout (default: 30s)
 	IdleTimeout    time.Duration `yaml:"idle_timeout"`     // HTTP idle timeout (default: 60s)
+	AllowedIPs     []string      `yaml:"allowed_ips"`      // IP addresses/CIDRs allowed to access API (empty = allow all)
 }
 
 // QueueConfig contains queue processor settings

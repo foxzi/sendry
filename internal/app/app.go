@@ -269,6 +269,7 @@ func New(cfg *config.Config) (*App, error) {
 		RateLimiter:    rateLimiter,
 		ServerType:     "smtp",
 		AllowedDomains: allowedDomains,
+		AllowedIPs:     cfg.SMTP.AllowedIPs,
 	})
 
 	// Create SMTP submission server (port 587) with STARTTLS
@@ -283,6 +284,7 @@ func New(cfg *config.Config) (*App, error) {
 		RateLimiter:    rateLimiter,
 		ServerType:     "submission",
 		AllowedDomains: allowedDomains,
+		AllowedIPs:     cfg.SMTP.AllowedIPs,
 	})
 
 	// Create SMTPS server (port 465) with implicit TLS
@@ -298,6 +300,7 @@ func New(cfg *config.Config) (*App, error) {
 			RateLimiter:    rateLimiter,
 			ServerType:     "smtps",
 			AllowedDomains: allowedDomains,
+			AllowedIPs:     cfg.SMTP.AllowedIPs,
 		})
 	}
 

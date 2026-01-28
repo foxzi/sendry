@@ -13,6 +13,12 @@ smtp:
   max_recipients: {{ sendry_smtp_max_recipients }}
   read_timeout: {{ sendry_smtp_read_timeout }}
   write_timeout: {{ sendry_smtp_write_timeout }}
+{% if sendry_smtp_allowed_ips %}
+  allowed_ips:
+{% for ip in sendry_smtp_allowed_ips %}
+    - "{{ ip }}"
+{% endfor %}
+{% endif %}
   auth:
     required: {{ sendry_smtp_auth_required | lower }}
     users:
@@ -110,6 +116,12 @@ api:
   read_timeout: {{ sendry_api_read_timeout }}
   write_timeout: {{ sendry_api_write_timeout }}
   idle_timeout: {{ sendry_api_idle_timeout }}
+{% if sendry_api_allowed_ips %}
+  allowed_ips:
+{% for ip in sendry_api_allowed_ips %}
+    - "{{ ip }}"
+{% endfor %}
+{% endif %}
 
 queue:
   workers: {{ sendry_queue_workers }}
