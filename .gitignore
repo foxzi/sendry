@@ -34,6 +34,13 @@ tz-web.md
 configs/test.yaml
 configs/web-test.yaml
 
+# Local configs (not examples)
+configs/sendry.yaml
+configs/web.yaml
+
+# Playwright MCP
+.playwright-mcp/
+
 # Scripts (local)
 /scripts/
 
