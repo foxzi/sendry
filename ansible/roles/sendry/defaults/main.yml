@@ -177,3 +177,65 @@ sendry_firewall_allowed_ports:
   - 587
   - 465
   - 8080
+
+# =============================================================================
+# Sendry Web Panel
+# =============================================================================
+
+sendry_web_enabled: false
+sendry_web_data_dir: /var/lib/sendry-web
+sendry_web_listen: "127.0.0.1:8088"  # localhost only, Caddy will proxy
+
+# Session settings
+sendry_web_session_secret: ""  # Required if web enabled! Use ansible-vault
+sendry_web_session_ttl: 24h
+
+# Local authentication
+sendry_web_local_auth_enabled: true
+
+# OIDC authentication (optional)
+sendry_web_oidc_enabled: false
+sendry_web_oidc_provider: authentik  # authentik, keycloak, generic
+sendry_web_oidc_client_id: ""
+sendry_web_oidc_client_secret: ""
+sendry_web_oidc_issuer_url: ""
+sendry_web_oidc_redirect_url: ""
+sendry_web_oidc_scopes:
+  - openid
+  - profile
+  - email
+sendry_web_oidc_allowed_groups: []
+
+# MTA servers to connect to
+# If empty, will auto-configure to connect to local MTA
+sendry_web_servers: []
+# Example:
+#   - name: "mta-1"
+#     base_url: "http://localhost:8080"
+#     api_key: "{{ sendry_api_key }}"
+#     env: "prod"
+
+# Multi-send strategy
+sendry_web_multi_send_strategy: round_robin  # round_robin, weighted_round_robin, domain_affinity
+sendry_web_multi_send_weights: {}
+sendry_web_multi_send_domain_affinity: {}
+sendry_web_multi_send_failover_enabled: true
+sendry_web_multi_send_failover_max_retries: 2
+
+# Web service management
+sendry_web_service_enabled: true
+sendry_web_service_state: started
+
+# =============================================================================
+# Caddy Reverse Proxy (for sendry-web HTTPS)
+# =============================================================================
+
+sendry_caddy_enabled: false
+sendry_caddy_domain: ""  # Required if caddy enabled! e.g., panel.example.com
+sendry_caddy_email: ""   # ACME email for Let's Encrypt
+
+# Additional Caddy global options
+sendry_caddy_extra_global: ""
+
+# Additional Caddy site options (inside the site block)
+sendry_caddy_extra_site: ""

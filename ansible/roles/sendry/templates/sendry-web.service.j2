@@ -1,0 +1,43 @@
+[Unit]
+Description=Sendry Web - Web Interface for Sendry
+Documentation=https://github.com/foxzi/sendry
+After=network-online.target sendry.service
+Wants=network-online.target
+Requires=sendry.service
+
+[Service]
+Type=simple
+User={{ sendry_user }}
+Group={{ sendry_group }}
+ExecStart=/usr/bin/sendry-web serve --config {{ sendry_config_dir }}/web.yaml
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+
+# Allow write access to data directories
+ReadWritePaths={{ sendry_web_data_dir }} {{ sendry_log_dir }}
+
+# Resource limits
+LimitNOFILE=65535
+LimitNPROC=4096
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sendry-web
+
+[Install]
+WantedBy=multi-user.target

@@ -8,3 +8,15 @@
     name: sendry
     state: restarted
   when: sendry_service_state == 'started'
+
+- name: Restart sendry-web
+  ansible.builtin.systemd:
+    name: sendry-web
+    state: restarted
+  when: sendry_web_enabled | bool and sendry_web_service_state == 'started'
+
+- name: Reload caddy
+  ansible.builtin.systemd:
+    name: caddy
+    state: reloaded
+  when: sendry_caddy_enabled | bool

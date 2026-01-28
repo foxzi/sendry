@@ -120,6 +120,41 @@ sendry_rate_limit_recipient_domains:
     messages_per_day: 10000
 ```
 
+## Sendry Web Panel
+
+Install web panel with Caddy reverse proxy (automatic HTTPS):
+
+```yaml
+sendry_web_enabled: true
+sendry_web_session_secret: "your-secret-at-least-32-characters-long"
+
+# Caddy for automatic HTTPS
+sendry_caddy_enabled: true
+sendry_caddy_domain: panel.example.com
+sendry_caddy_email: admin@example.com
+
+# Optional: connect to multiple MTA servers
+sendry_web_servers:
+  - name: "mta-1"
+    base_url: "http://localhost:8080"
+    api_key: "{{ sendry_api_key }}"
+    env: "prod"
+  - name: "mta-2"
+    base_url: "http://192.168.1.11:8080"
+    api_key: "other-api-key"
+    env: "prod"
+
+# Optional: OIDC authentication
+sendry_web_oidc_enabled: true
+sendry_web_oidc_provider: authentik
+sendry_web_oidc_client_id: "sendry-web"
+sendry_web_oidc_client_secret: "{{ vault_oidc_secret }}"
+sendry_web_oidc_issuer_url: "https://auth.example.com/application/o/sendry-web/"
+sendry_web_oidc_redirect_url: "https://panel.example.com/auth/callback"
+sendry_web_oidc_allowed_groups:
+  - "sendry-admins"
+```
+
 ## Tags
 
 Run specific parts of the playbook:
@@ -133,6 +168,12 @@ ansible-playbook -i inventory/hosts.yml playbooks/sendry.yml --tags configure
 
 # Only DKIM
 ansible-playbook -i inventory/hosts.yml playbooks/sendry.yml --tags dkim
+
+# Only web panel
+ansible-playbook -i inventory/hosts.yml playbooks/sendry.yml --tags web
+
+# Only Caddy
+ansible-playbook -i inventory/hosts.yml playbooks/sendry.yml --tags caddy
 ```
 
 ## Example Inventory
@@ -293,6 +334,35 @@ sendry_rate_limit_recipient_domains:
 
 DKIM ключи генерируются автоматически. После развертывания будут показаны DNS-записи для добавления.
 
+## Sendry Web панель
+
+Установка web панели с Caddy reverse proxy (автоматический HTTPS):
+
+```yaml
+sendry_web_enabled: true
+sendry_web_session_secret: "ваш-секрет-минимум-32-символа"
+
+# Caddy для автоматического HTTPS
+sendry_caddy_enabled: true
+sendry_caddy_domain: panel.example.com
+sendry_caddy_email: admin@example.com
+
+# Опционально: подключение к нескольким MTA серверам
+sendry_web_servers:
+  - name: "mta-1"
+    base_url: "http://localhost:8080"
+    api_key: "{{ sendry_api_key }}"
+    env: "prod"
+
+# Опционально: OIDC аутентификация
+sendry_web_oidc_enabled: true
+sendry_web_oidc_provider: authentik
+sendry_web_oidc_client_id: "sendry-web"
+sendry_web_oidc_client_secret: "{{ vault_oidc_secret }}"
+sendry_web_oidc_issuer_url: "https://auth.example.com/application/o/sendry-web/"
+sendry_web_oidc_redirect_url: "https://panel.example.com/auth/callback"
+```
+
 ## Теги
 
 ```bash
@@ -301,6 +371,12 @@ ansible-playbook -i inventory/hosts.yml playbooks/sendry.yml --tags install
 
 # Только настройка
 ansible-playbook -i inventory/hosts.yml playbooks/sendry.yml --tags configure
+
+# Только web панель
+ansible-playbook -i inventory/hosts.yml playbooks/sendry.yml --tags web
+
+# Только Caddy
+ansible-playbook -i inventory/hosts.yml playbooks/sendry.yml --tags caddy
 ```
 
 ## Несколько серверов с общими DKIM ключами

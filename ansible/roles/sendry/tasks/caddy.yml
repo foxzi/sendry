@@ -1,0 +1,49 @@
+---
+# Install and configure Caddy as reverse proxy for sendry-web
+
+- name: Install Caddy (Debian/Ubuntu)
+  ansible.builtin.apt:
+    name: caddy
+    state: present
+    update_cache: true
+  when: ansible_os_family == "Debian"
+
+- name: Install Caddy (RHEL/CentOS)
+  block:
+    - name: Add Caddy COPR repository
+      ansible.builtin.yum_repository:
+        name: caddy
+        description: Caddy Web Server
+        baseurl: https://download.copr.fedorainfracloud.org/results/@caddy/caddy/epel-$releasever-$basearch/
+        gpgcheck: false
+        enabled: true
+
+    - name: Install Caddy package
+      ansible.builtin.yum:
+        name: caddy
+        state: present
+  when: ansible_os_family == "RedHat"
+
+- name: Create Caddy log directory
+  ansible.builtin.file:
+    path: /var/log/caddy
+    state: directory
+    owner: caddy
+    group: caddy
+    mode: "0755"
+
+- name: Generate Caddyfile
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: /etc/caddy/Caddyfile
+    owner: root
+    group: root
+    mode: "0644"
+    validate: "caddy validate --config %s"
+  notify: Reload caddy
+
+- name: Enable Caddy service
+  ansible.builtin.systemd:
+    name: caddy
+    enabled: true
+    state: started

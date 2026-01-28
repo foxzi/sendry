@@ -1,4 +1,8 @@
 ---
+- name: Set firewall ports list
+  ansible.builtin.set_fact:
+    _firewall_ports: "{{ sendry_firewall_allowed_ports + ([80, 443] if sendry_caddy_enabled else []) }}"
+
 - name: Check if UFW is installed
   ansible.builtin.command: which ufw
   register: ufw_installed
@@ -13,7 +17,7 @@
         rule: allow
         port: "{{ item }}"
         proto: tcp
-      loop: "{{ sendry_firewall_allowed_ports }}"
+      loop: "{{ _firewall_ports }}"
 
 - name: Check if firewalld is installed
   ansible.builtin.command: which firewall-cmd
@@ -32,4 +36,4 @@
         permanent: true
         immediate: true
         state: enabled
-      loop: "{{ sendry_firewall_allowed_ports }}"
+      loop: "{{ _firewall_ports }}"

@@ -1,0 +1,22 @@
+---
+# Configure sendry-web
+
+- name: Generate sendry-web configuration file
+  ansible.builtin.template:
+    src: web.yaml.j2
+    dest: "{{ sendry_config_dir }}/web.yaml"
+    owner: "{{ sendry_user }}"
+    group: "{{ sendry_group }}"
+    mode: "0640"
+  notify: Restart sendry-web
+
+- name: Enable sendry-web service
+  ansible.builtin.systemd:
+    name: sendry-web
+    enabled: "{{ sendry_web_service_enabled }}"
+    daemon_reload: true
+
+- name: Manage sendry-web service state
+  ansible.builtin.systemd:
+    name: sendry-web
+    state: "{{ sendry_web_service_state }}"

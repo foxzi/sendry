@@ -1,0 +1,36 @@
+---
+# Install sendry-web binary
+
+- name: Create sendry-web data directory
+  ansible.builtin.file:
+    path: "{{ sendry_web_data_dir }}"
+    state: directory
+    owner: "{{ sendry_user }}"
+    group: "{{ sendry_group }}"
+    mode: "0750"
+
+- name: Set web binary architecture
+  ansible.builtin.set_fact:
+    _sendry_web_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+
+- name: Set web binary URL
+  ansible.builtin.set_fact:
+    _sendry_web_binary_url: "https://github.com/foxzi/sendry/releases/download/v{{ _sendry_version }}/sendry-web-linux-{{ _sendry_web_arch }}"
+  when: sendry_binary_url | length == 0
+
+- name: Download sendry-web binary
+  ansible.builtin.get_url:
+    url: "{{ _sendry_web_binary_url }}"
+    dest: /usr/bin/sendry-web
+    mode: "0755"
+    checksum: "{{ sendry_binary_checksum | default(omit) }}"
+  notify: Restart sendry-web
+
+- name: Install sendry-web systemd service
+  ansible.builtin.template:
+    src: sendry-web.service.j2
+    dest: /etc/systemd/system/sendry-web.service
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart sendry-web

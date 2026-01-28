@@ -7,6 +7,22 @@
     fail_msg: "Required variables sendry_api_key and sendry_smtp_auth_users must be set"
   tags: [always]
 
+- name: Validate web variables
+  ansible.builtin.assert:
+    that:
+      - sendry_web_session_secret | length >= 32
+    fail_msg: "sendry_web_session_secret must be at least 32 characters"
+  when: sendry_web_enabled | bool
+  tags: [always]
+
+- name: Validate caddy variables
+  ansible.builtin.assert:
+    that:
+      - sendry_caddy_domain | length > 0
+    fail_msg: "sendry_caddy_domain must be set when caddy is enabled"
+  when: sendry_caddy_enabled | bool
+  tags: [always]
+
 - name: Include installation tasks
   ansible.builtin.include_tasks: install.yml
   tags: [install]
@@ -23,3 +39,20 @@
   ansible.builtin.include_tasks: firewall.yml
   when: sendry_configure_firewall | bool
   tags: [firewall]
+
+# Sendry Web Panel
+- name: Include web installation tasks
+  ansible.builtin.include_tasks: install-web.yml
+  when: sendry_web_enabled | bool
+  tags: [install, web]
+
+- name: Include web configuration tasks
+  ansible.builtin.include_tasks: configure-web.yml
+  when: sendry_web_enabled | bool
+  tags: [configure, web]
+
+# Caddy reverse proxy
+- name: Include Caddy tasks
+  ansible.builtin.include_tasks: caddy.yml
+  when: sendry_caddy_enabled | bool
+  tags: [caddy, web]
