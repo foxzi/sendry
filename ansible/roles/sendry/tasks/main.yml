@@ -26,6 +26,15 @@
   when: sendry_caddy_enabled | bool
   tags: [always]
 
+- name: Validate caddy API variables
+  ansible.builtin.assert:
+    that:
+      - sendry_caddy_api_domain | length > 0
+      - sendry_caddy_api_backends | length > 0
+    fail_msg: "sendry_caddy_api_domain and sendry_caddy_api_backends must be set when API balancer is enabled"
+  when: sendry_caddy_api_enabled | bool
+  tags: [always]
+
 # MTA installation and configuration
 - name: Include installation tasks
   ansible.builtin.include_tasks: install.yml

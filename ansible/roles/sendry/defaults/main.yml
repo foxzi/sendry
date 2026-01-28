@@ -242,3 +242,38 @@ sendry_caddy_extra_global: ""
 
 # Additional Caddy site options (inside the site block)
 sendry_caddy_extra_site: ""
+
+# =============================================================================
+# Caddy API Load Balancer (for MTA cluster)
+# =============================================================================
+
+sendry_caddy_api_enabled: false
+sendry_caddy_api_domain: ""  # e.g., api.example.com
+
+# Backend MTA servers (ip:port or hostname:port)
+sendry_caddy_api_backends: []
+# Example:
+#   - "192.168.1.10:8080"
+#   - "192.168.1.11:8080"
+#   - "192.168.1.12:8080"
+
+# Load balancing policy: round_robin, least_conn, first, random, ip_hash
+sendry_caddy_api_lb_policy: round_robin
+
+# Health check
+sendry_caddy_api_health_check: true
+sendry_caddy_api_health_uri: /health
+sendry_caddy_api_health_interval: 10s
+
+# IP whitelist (empty = allow all)
+sendry_caddy_api_allowed_ips: []
+# Example:
+#   - "10.0.0.0/8"
+#   - "192.168.0.0/16"
+#   - "203.0.113.50"
+
+# Optional: restrict specific paths only (empty = all paths)
+sendry_caddy_api_allowed_paths: []
+# Example:
+#   - "/api/v1/send"
+#   - "/api/v1/templates/*"

@@ -184,6 +184,36 @@ sendry_caddy_domain: panel.example.com
 sendry_caddy_email: admin@example.com
 ```
 
+## API Load Balancer
+
+Load balance API requests across multiple MTA servers with IP whitelist:
+
+```yaml
+sendry_caddy_api_enabled: true
+sendry_caddy_api_domain: api.example.com
+sendry_caddy_api_backends:
+  - "192.168.1.10:8080"
+  - "192.168.1.11:8080"
+  - "192.168.1.12:8080"
+sendry_caddy_api_lb_policy: round_robin  # round_robin, least_conn, ip_hash, random
+
+# Health checks
+sendry_caddy_api_health_check: true
+sendry_caddy_api_health_uri: /health
+sendry_caddy_api_health_interval: 10s
+
+# IP whitelist (empty = allow all)
+sendry_caddy_api_allowed_ips:
+  - "10.0.0.0/8"
+  - "192.168.0.0/16"
+  - "203.0.113.50"
+
+# Optional: restrict to specific paths only
+sendry_caddy_api_allowed_paths:
+  - "/api/v1/send"
+  - "/api/v1/templates/*"
+```
+
 ## Tags
 
 Run specific parts of the playbook:
@@ -419,6 +449,36 @@ sendry_web_servers:
 sendry_caddy_enabled: true
 sendry_caddy_domain: panel.example.com
 sendry_caddy_email: admin@example.com
+```
+
+## API балансировщик
+
+Балансировка API запросов между несколькими MTA серверами с ограничением по IP:
+
+```yaml
+sendry_caddy_api_enabled: true
+sendry_caddy_api_domain: api.example.com
+sendry_caddy_api_backends:
+  - "192.168.1.10:8080"
+  - "192.168.1.11:8080"
+  - "192.168.1.12:8080"
+sendry_caddy_api_lb_policy: round_robin  # round_robin, least_conn, ip_hash, random
+
+# Проверка здоровья
+sendry_caddy_api_health_check: true
+sendry_caddy_api_health_uri: /health
+sendry_caddy_api_health_interval: 10s
+
+# Белый список IP (пусто = разрешить всем)
+sendry_caddy_api_allowed_ips:
+  - "10.0.0.0/8"
+  - "192.168.0.0/16"
+  - "203.0.113.50"
+
+# Опционально: ограничить только определённые пути
+sendry_caddy_api_allowed_paths:
+  - "/api/v1/send"
+  - "/api/v1/templates/*"
 ```
 
 ## Теги
