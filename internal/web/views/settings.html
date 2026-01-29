@@ -30,21 +30,52 @@
     </div>
 </div>
 
-<div class="settings-grid">
-    <a href="/settings/variables" class="settings-card">
-        <h3 data-i18n="global_variables">Global Variables</h3>
-        <p data-i18n="global_variables_desc">Manage template variables available across all campaigns</p>
-    </a>
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-header">
+        <h2 data-i18n="infrastructure">Infrastructure</h2>
+    </div>
+    <div class="card-body">
+        <div class="settings-grid">
+            <a href="/servers" class="settings-card">
+                <h3 data-i18n="servers">Servers</h3>
+                <p data-i18n="servers_desc">Manage Sendry MTA servers, queues and sandbox</p>
+            </a>
 
-    <a href="/settings/users" class="settings-card">
-        <h3 data-i18n="users">Users</h3>
-        <p data-i18n="users_desc">Manage user accounts and permissions</p>
-    </a>
+            <a href="/domains" class="settings-card">
+                <h3 data-i18n="domains">Domains</h3>
+                <p data-i18n="domains_desc">Configure sending domains with DKIM, rate limits and modes</p>
+            </a>
 
-    <a href="/settings/audit" class="settings-card">
-        <h3 data-i18n="audit_log">Audit Log</h3>
-        <p data-i18n="audit_log_desc">View activity history and changes</p>
-    </a>
+            <a href="/dkim" class="settings-card">
+                <h3 data-i18n="dkim_keys">DKIM Keys</h3>
+                <p data-i18n="dkim_keys_desc">Generate and deploy DKIM signing keys to servers</p>
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-header">
+        <h2 data-i18n="system">System</h2>
+    </div>
+    <div class="card-body">
+        <div class="settings-grid">
+            <a href="/settings/variables" class="settings-card">
+                <h3 data-i18n="global_variables">Global Variables</h3>
+                <p data-i18n="global_variables_desc">Manage template variables available across all campaigns</p>
+            </a>
+
+            <a href="/settings/users" class="settings-card">
+                <h3 data-i18n="users">Users</h3>
+                <p data-i18n="users_desc">Manage user accounts and permissions</p>
+            </a>
+
+            <a href="/settings/audit" class="settings-card">
+                <h3 data-i18n="audit_log">Audit Log</h3>
+                <p data-i18n="audit_log_desc">View activity history and changes</p>
+            </a>
+        </div>
+    </div>
 </div>
 
 <script>

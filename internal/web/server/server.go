@@ -163,6 +163,27 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("POST /jobs/{id}/cancel", h.JobCancel)
 	protected.HandleFunc("POST /jobs/{id}/retry", h.JobRetry)
 
+	// Central DKIM Management
+	protected.HandleFunc("GET /dkim", h.CentralDKIMList)
+	protected.HandleFunc("GET /dkim/new", h.CentralDKIMNew)
+	protected.HandleFunc("POST /dkim", h.CentralDKIMCreate)
+	protected.HandleFunc("GET /dkim/{id}", h.CentralDKIMView)
+	protected.HandleFunc("DELETE /dkim/{id}", h.CentralDKIMDelete)
+	protected.HandleFunc("POST /dkim/{id}/deploy", h.CentralDKIMDeploy)
+	protected.HandleFunc("DELETE /dkim/{id}/deployments/{server}", h.CentralDKIMDeploymentDelete)
+
+	// Central Domain Management
+	protected.HandleFunc("GET /domains", h.CentralDomainsList)
+	protected.HandleFunc("GET /domains/new", h.CentralDomainsNew)
+	protected.HandleFunc("POST /domains", h.CentralDomainsCreate)
+	protected.HandleFunc("POST /domains/import", h.CentralDomainsImport)
+	protected.HandleFunc("GET /domains/{id}", h.CentralDomainsView)
+	protected.HandleFunc("GET /domains/{id}/edit", h.CentralDomainsEdit)
+	protected.HandleFunc("PUT /domains/{id}", h.CentralDomainsUpdate)
+	protected.HandleFunc("DELETE /domains/{id}", h.CentralDomainsDelete)
+	protected.HandleFunc("POST /domains/{id}/deploy", h.CentralDomainsDeploy)
+	protected.HandleFunc("POST /domains/{id}/sync", h.CentralDomainsSync)
+
 	// Servers
 	protected.HandleFunc("GET /servers", h.ServerList)
 	protected.HandleFunc("GET /servers/{name}", h.ServerView)

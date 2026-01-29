@@ -157,6 +157,51 @@ func setupTestDB(t *testing.T) *sql.DB {
 			value TEXT NOT NULL,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)`,
+		`CREATE TABLE IF NOT EXISTS dkim_keys (
+			id TEXT PRIMARY KEY,
+			domain TEXT NOT NULL,
+			selector TEXT NOT NULL,
+			private_key TEXT NOT NULL,
+			dns_record TEXT NOT NULL,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(domain, selector)
+		)`,
+		`CREATE TABLE IF NOT EXISTS dkim_deployments (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			dkim_key_id TEXT NOT NULL REFERENCES dkim_keys(id) ON DELETE CASCADE,
+			server_name TEXT NOT NULL,
+			deployed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			status TEXT DEFAULT 'deployed',
+			error TEXT,
+			UNIQUE(dkim_key_id, server_name)
+		)`,
+		`CREATE TABLE IF NOT EXISTS domains (
+			id TEXT PRIMARY KEY,
+			domain TEXT UNIQUE NOT NULL,
+			mode TEXT DEFAULT 'production',
+			default_from TEXT,
+			dkim_enabled INTEGER DEFAULT 0,
+			dkim_selector TEXT,
+			dkim_key_id TEXT REFERENCES dkim_keys(id) ON DELETE SET NULL,
+			rate_limit_hour INTEGER DEFAULT 0,
+			rate_limit_day INTEGER DEFAULT 0,
+			rate_limit_recipients INTEGER DEFAULT 0,
+			redirect_to TEXT,
+			bcc_to TEXT,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS domain_deployments (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			domain_id TEXT NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
+			server_name TEXT NOT NULL,
+			deployed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			status TEXT DEFAULT 'deployed',
+			error TEXT,
+			config_hash TEXT,
+			UNIQUE(domain_id, server_name)
+		)`,
 	}
 
 	for _, m := range migrations {

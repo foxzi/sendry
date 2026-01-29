@@ -1,0 +1,62 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>New DKIM Key</h1>
+    <div class="header-actions">
+        <a href="/dkim" class="btn btn-secondary">Cancel</a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" action="/dkim">
+            <div class="form-group">
+                <label for="domain">Domain</label>
+                <input type="text" id="domain" name="domain" class="form-control"
+                       placeholder="example.com" required>
+                <small class="text-muted">The domain this DKIM key will sign emails for</small>
+            </div>
+
+            <div class="form-group">
+                <label for="selector">Selector</label>
+                <input type="text" id="selector" name="selector" class="form-control"
+                       placeholder="sendry" value="sendry" required>
+                <small class="text-muted">The DKIM selector (DNS record will be selector._domainkey.domain)</small>
+            </div>
+
+            {{if .Servers}}
+            <h3>Deploy After Creation</h3>
+            <div class="form-group">
+                <label>Select servers to deploy this DKIM key:</label>
+                {{range .Servers}}
+                <div class="checkbox">
+                    <label>
+                        <input type="checkbox" name="servers" value="{{.Name}}">
+                        {{.Name}} ({{.Env}})
+                    </label>
+                </div>
+                {{end}}
+            </div>
+            {{end}}
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Generate Key</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>About DKIM</h3>
+    </div>
+    <div class="card-body">
+        <p>DKIM (DomainKeys Identified Mail) allows you to cryptographically sign emails to prove they came from your domain.</p>
+        <p>After generating a key, you will need to:</p>
+        <ol>
+            <li>Add a TXT DNS record with the public key</li>
+            <li>Deploy the key to your Sendry servers</li>
+            <li>Enable DKIM signing in domain configuration</li>
+        </ol>
+    </div>
+</div>
+{{end}}

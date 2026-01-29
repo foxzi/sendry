@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Sendry MTA: IP filtering for API and SMTP (allowed_ips config option)
+- Sendry Web: Central DKIM management at /dkim (list, create, view, delete, deploy)
+- Sendry Web: Central Domain management at /domains (list, create, edit, view, delete)
+- Sendry Web: Domain deployment tracking with config hash for change detection
+- Sendry Web: Domain sync functionality to update outdated deployments
+- Sendry Web: Domain import from server to central configuration
+- Sendry Web: Navigation updated with Domains and DKIM menu items
 - Ansible: sendry-web installation and configuration support
 - Ansible: Caddy reverse proxy with automatic Let's Encrypt certificates
 - Ansible: web-only deployment mode (sendry_mta_enabled: false)
@@ -16,6 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ansible: allowed_ips support for SMTP and API
 
 ### Changed
+- Sendry Web: DKIM keys can now be managed centrally at /dkim
+- Sendry Web: Domains can now be managed centrally at /domains
+- Sendry Web: Per-server DKIM and domain pages remain for server-specific views
+- Sendry Web: Moved Servers, Domains, DKIM to Settings page (Infrastructure section)
+- Sendry Web: Simplified main navigation menu
+- Sendry Web: Added unit tests for DomainRepository (23 tests)
+- Sendry Web: Added unit tests for DKIMRepository (11 tests)
+- Sendry Web: Added unit tests for Domain model (6 tests)
 - Ansible: added ACME on_demand option support (v0.3.4 feature)
 - Ansible: added recipient domain rate limiting support (v0.4.3 feature)
 - Ansible: updated Molecule test version to 0.4.4

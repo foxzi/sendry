@@ -1,0 +1,241 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>Domain: {{.Domain.Domain}}</h1>
+    <div class="header-actions">
+        {{if .OutdatedCount}}
+        <form method="POST" action="/domains/{{.Domain.ID}}/sync" style="display:inline;">
+            <button type="submit" class="btn btn-warning">Sync {{.OutdatedCount}} Outdated</button>
+        </form>
+        {{end}}
+        <a href="/domains/{{.Domain.ID}}/edit" class="btn btn-primary">Edit</a>
+        <a href="/domains" class="btn btn-secondary">Back to Domains</a>
+    </div>
+</div>
+
+<div class="grid grid-2">
+    <div class="card">
+        <div class="card-header">
+            <h3>General Settings</h3>
+        </div>
+        <div class="card-body">
+            <table class="table table-details">
+                <tr>
+                    <th>Domain</th>
+                    <td>{{.Domain.Domain}}</td>
+                </tr>
+                <tr>
+                    <th>Mode</th>
+                    <td>
+                        <span class="badge badge-{{if eq .Domain.Mode "production"}}running{{else if eq .Domain.Mode "sandbox"}}draft{{else if eq .Domain.Mode "redirect"}}warning{{else}}info{{end}}">
+                            {{if .Domain.Mode}}{{.Domain.Mode}}{{else}}production{{end}}
+                        </span>
+                    </td>
+                </tr>
+                {{if .Domain.DefaultFrom}}
+                <tr>
+                    <th>Default From</th>
+                    <td>{{.Domain.DefaultFrom}}</td>
+                </tr>
+                {{end}}
+                {{if .Domain.RedirectTo}}
+                <tr>
+                    <th>Redirect To</th>
+                    <td>
+                        {{range .Domain.RedirectTo}}
+                        <span class="badge badge-info">{{.}}</span>
+                        {{end}}
+                    </td>
+                </tr>
+                {{end}}
+                {{if .Domain.BCCTo}}
+                <tr>
+                    <th>BCC To</th>
+                    <td>
+                        {{range .Domain.BCCTo}}
+                        <span class="badge badge-info">{{.}}</span>
+                        {{end}}
+                    </td>
+                </tr>
+                {{end}}
+                <tr>
+                    <th>Config Hash</th>
+                    <td><code>{{.ConfigHash}}</code></td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3>DKIM Settings</h3>
+        </div>
+        <div class="card-body">
+            {{if .Domain.DKIMEnabled}}
+            <table class="table table-details">
+                <tr>
+                    <th>Status</th>
+                    <td><span class="badge badge-running">Enabled</span></td>
+                </tr>
+                <tr>
+                    <th>Selector</th>
+                    <td>{{.Domain.DKIMSelector}}</td>
+                </tr>
+                {{if .Domain.DKIMKey}}
+                <tr>
+                    <th>DKIM Key</th>
+                    <td><a href="/dkim/{{.Domain.DKIMKey.ID}}">{{.Domain.DKIMKey.Domain}} ({{.Domain.DKIMKey.Selector}})</a></td>
+                </tr>
+                {{end}}
+                <tr>
+                    <th>DNS Name</th>
+                    <td><code>{{.Domain.DKIMSelector}}._domainkey.{{.Domain.Domain}}</code></td>
+                </tr>
+            </table>
+            {{else}}
+            <p class="text-muted">DKIM signing is disabled for this domain</p>
+            {{end}}
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Rate Limits</h3>
+    </div>
+    <div class="card-body">
+        {{if or .Domain.RateLimitHour .Domain.RateLimitDay .Domain.RateLimitRecipients}}
+        <table class="table table-details">
+            <tr>
+                <th>Messages per Hour</th>
+                <td>{{if .Domain.RateLimitHour}}{{.Domain.RateLimitHour}}{{else}}Unlimited{{end}}</td>
+            </tr>
+            <tr>
+                <th>Messages per Day</th>
+                <td>{{if .Domain.RateLimitDay}}{{.Domain.RateLimitDay}}{{else}}Unlimited{{end}}</td>
+            </tr>
+            <tr>
+                <th>Recipients per Message</th>
+                <td>{{if .Domain.RateLimitRecipients}}{{.Domain.RateLimitRecipients}}{{else}}Unlimited{{end}}</td>
+            </tr>
+        </table>
+        {{else}}
+        <p class="text-muted">Using server default rate limits</p>
+        {{end}}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Server Deployments</h3>
+    </div>
+    <div class="card-body">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Server</th>
+                    <th>Environment</th>
+                    <th>Status</th>
+                    <th>Config Hash</th>
+                    <th>Deployed At</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Servers}}
+                {{$deployment := index $.DeployedMap .Name}}
+                <tr>
+                    <td><a href="/servers/{{.Name}}">{{.Name}}</a></td>
+                    <td>{{.Env}}</td>
+                    <td>
+                        {{if $deployment.ServerName}}
+                            {{if eq $deployment.Status "deployed"}}
+                                {{if ne $deployment.ConfigHash $.ConfigHash}}
+                                <span class="badge badge-warning">Outdated</span>
+                                {{else}}
+                                <span class="badge badge-running">Deployed</span>
+                                {{end}}
+                            {{else if eq $deployment.Status "failed"}}
+                            <span class="badge badge-failed">Failed</span>
+                            {{else if eq $deployment.Status "outdated"}}
+                            <span class="badge badge-warning">Outdated</span>
+                            {{end}}
+                        {{else}}
+                        <span class="badge badge-draft">Not deployed</span>
+                        {{end}}
+                    </td>
+                    <td>
+                        {{if $deployment.ServerName}}
+                        <code>{{$deployment.ConfigHash}}</code>
+                        {{else}}
+                        -
+                        {{end}}
+                    </td>
+                    <td>
+                        {{if $deployment.ServerName}}
+                        {{$deployment.DeployedAt.Format "2006-01-02 15:04"}}
+                        {{else}}
+                        -
+                        {{end}}
+                    </td>
+                    <td>
+                        <form method="POST" action="/domains/{{$.Domain.ID}}/deploy" style="display:inline;">
+                            <input type="hidden" name="servers" value="{{.Name}}">
+                            {{if $deployment.ServerName}}
+                            <button type="submit" class="btn btn-sm btn-primary">Redeploy</button>
+                            {{else}}
+                            <button type="submit" class="btn btn-sm btn-primary">Deploy</button>
+                            {{end}}
+                        </form>
+                    </td>
+                </tr>
+                {{if and $deployment.ServerName $deployment.Error}}
+                <tr>
+                    <td colspan="6" class="text-danger">Error: {{$deployment.Error}}</td>
+                </tr>
+                {{end}}
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Deploy to Multiple Servers</h3>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="/domains/{{.Domain.ID}}/deploy">
+            <div class="form-group">
+                <label>Select servers to deploy this domain:</label>
+                {{range .Servers}}
+                {{$deployment := index $.DeployedMap .Name}}
+                {{if not $deployment.ServerName}}
+                <div class="checkbox">
+                    <label>
+                        <input type="checkbox" name="servers" value="{{.Name}}">
+                        {{.Name}} ({{.Env}})
+                    </label>
+                </div>
+                {{end}}
+                {{end}}
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Deploy to Selected</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Danger Zone</h3>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="/domains/{{.Domain.ID}}" style="display:inline;">
+            <input type="hidden" name="_method" value="DELETE">
+            <p class="text-muted">Deleting a domain will remove it from the local database and attempt to remove it from all deployed servers.</p>
+            <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete this domain? This action cannot be undone.')">Delete Domain</button>
+        </form>
+    </div>
+</div>
+{{end}}
