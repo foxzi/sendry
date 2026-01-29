@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-01-29
+
 ### Added
 - Sendry MTA: IP filtering for API and SMTP (allowed_ips config option)
 - Sendry Web: Central DKIM management at /dkim (list, create, view, delete, deploy)
@@ -32,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sendry Web: Added unit tests for Domain model (6 tests)
 - Ansible: added ACME on_demand option support (v0.3.4 feature)
 - Ansible: added recipient domain rate limiting support (v0.4.3 feature)
-- Ansible: updated Molecule test version to 0.4.4
+- Ansible: updated Molecule test version to 0.4.5
 
 ## [0.4.4] - 2026-01-27
 
@@ -247,6 +249,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DEB/RPM/APK packaging
 - Docker images
 
+[0.4.5]: https://github.com/foxzi/sendry/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/foxzi/sendry/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/foxzi/sendry/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/foxzi/sendry/compare/v0.4.1...v0.4.2
