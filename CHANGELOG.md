@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sendry Web: API key rate limiting (per minute and per hour)
 - Sendry Web: API key activation/deactivation toggle
 - Sendry Web: IP filtering for entire panel (allowed_ips config option)
+- Ansible: Add sendry_web_allowed_ips variable for web panel IP filtering
 
 ## [0.4.5] - 2026-01-29
 

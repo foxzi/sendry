@@ -5,6 +5,12 @@ server:
   listen_addr: "{{ sendry_web_listen }}"
   tls:
     enabled: false
+{% if sendry_web_allowed_ips %}
+  allowed_ips:
+{% for ip in sendry_web_allowed_ips %}
+    - "{{ ip }}"
+{% endfor %}
+{% endif %}
 
 database:
   path: "{{ sendry_web_data_dir }}/app.db"

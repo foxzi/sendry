@@ -204,6 +204,13 @@ sendry_web_enabled: false
 sendry_web_data_dir: /var/lib/sendry-web
 sendry_web_listen: "127.0.0.1:8088"  # localhost only, Caddy will proxy
 
+# IP addresses/CIDRs allowed to access web panel (empty = allow all)
+sendry_web_allowed_ips: []
+# Example:
+#   - "10.0.0.0/8"
+#   - "192.168.1.0/24"
+#   - "203.0.113.50"
+
 # Session settings
 sendry_web_session_secret: ""  # Required if web enabled! Use ansible-vault
 sendry_web_session_ttl: 24h
