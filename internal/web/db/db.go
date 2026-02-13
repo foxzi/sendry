@@ -53,6 +53,8 @@ func (db *DB) Migrate() error {
 		migrationDKIMDeployments,
 		migrationDomains,
 		migrationDomainDeployments,
+		migrationAPIKeys,
+		migrationSends,
 	}
 
 	for _, m := range migrations {
@@ -65,6 +67,8 @@ func (db *DB) Migrate() error {
 	alterMigrations := []string{
 		"ALTER TABLE send_jobs ADD COLUMN dry_run INTEGER DEFAULT 0",
 		"ALTER TABLE send_jobs ADD COLUMN dry_run_limit INTEGER DEFAULT 0",
+		"ALTER TABLE api_keys ADD COLUMN rate_limit_minute INTEGER DEFAULT 0",
+		"ALTER TABLE api_keys ADD COLUMN rate_limit_hour INTEGER DEFAULT 0",
 	}
 	for _, m := range alterMigrations {
 		db.Exec(m) // Ignore errors (column may already exist)
@@ -325,5 +329,48 @@ CREATE TABLE IF NOT EXISTS domain_deployments (
     UNIQUE(domain_id, server_name)
 );
 CREATE INDEX IF NOT EXISTS idx_domain_deployments_domain ON domain_deployments(domain_id);
+`
+
+const migrationAPIKeys = `
+CREATE TABLE IF NOT EXISTS api_keys (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    key_hash TEXT UNIQUE NOT NULL,
+    key_prefix TEXT NOT NULL,
+    permissions TEXT DEFAULT '["send"]',
+    created_by TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_used_at TIMESTAMP,
+    expires_at TIMESTAMP,
+    active INTEGER DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
+CREATE INDEX IF NOT EXISTS idx_api_keys_active ON api_keys(active);
+`
+
+const migrationSends = `
+CREATE TABLE IF NOT EXISTS sends (
+    id TEXT PRIMARY KEY,
+    api_key_id TEXT REFERENCES api_keys(id) ON DELETE SET NULL,
+    from_address TEXT NOT NULL,
+    to_addresses TEXT NOT NULL,
+    cc_addresses TEXT,
+    bcc_addresses TEXT,
+    subject TEXT,
+    template_id TEXT REFERENCES templates(id) ON DELETE SET NULL,
+    sender_domain TEXT NOT NULL,
+    server_name TEXT NOT NULL,
+    server_msg_id TEXT,
+    status TEXT DEFAULT 'pending',
+    error_message TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    sent_at TIMESTAMP,
+    client_ip TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_sends_api_key ON sends(api_key_id);
+CREATE INDEX IF NOT EXISTS idx_sends_status ON sends(status);
+CREATE INDEX IF NOT EXISTS idx_sends_domain ON sends(sender_domain);
+CREATE INDEX IF NOT EXISTS idx_sends_server ON sends(server_name);
+CREATE INDEX IF NOT EXISTS idx_sends_created ON sends(created_at);
 `
 
