@@ -43,6 +43,17 @@
     group: "{{ sendry_group }}"
     mode: "0750"
 
+- name: Get latest release version from GitHub
+  ansible.builtin.uri:
+    url: https://api.github.com/repos/foxzi/sendry/releases/latest
+    return_content: true
+  register: github_release
+  when: sendry_version == 'latest'
+
+- name: Set version fact
+  ansible.builtin.set_fact:
+    _sendry_version: "{{ sendry_version if sendry_version != 'latest' else (github_release.json.tag_name | regex_replace('^v', '')) }}"
+
 - name: Set web binary architecture
   ansible.builtin.set_fact:
     _sendry_web_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
