@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ansible: Add sendry_web_allowed_ips variable for web panel IP filtering
 - Ansible: Add example inventory for panel + MTA cluster deployment
 - Ansible: Add inventory README with deployment examples
+- Ansible: Add documentation for managing many domains via web panel
 
 ## [0.4.5] - 2026-01-29
 
