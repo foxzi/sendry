@@ -19,6 +19,7 @@ type Config struct {
 type ServerConfig struct {
 	ListenAddr string    `yaml:"listen_addr"`
 	TLS        TLSConfig `yaml:"tls"`
+	AllowedIPs []string  `yaml:"allowed_ips"` // Empty = allow all
 }
 
 type TLSConfig struct {
