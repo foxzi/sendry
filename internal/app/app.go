@@ -162,9 +162,10 @@ func New(cfg *config.Config) (*App, error) {
 	// Create SMTP client
 	smtpClient := smtp.NewClient(resolver, cfg.Server.Hostname, 30*time.Second, logger.With("component", "smtp_client"))
 
-	// Setup DKIM provider for multi-domain signing
+	// Setup DKIM provider for multi-domain signing (always set, even if no keys yet)
+	// This allows keys added via API to be used without restart
+	smtpClient.SetDKIMProvider(domainMgr)
 	if domainMgr.HasDKIM() {
-		smtpClient.SetDKIMProvider(domainMgr)
 		logger.Info("DKIM signing enabled", "domains", domainMgr.ListDomains())
 	}
 

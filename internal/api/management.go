@@ -645,7 +645,7 @@ func (m *ManagementServer) handleDomainsCreate(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Add domain to config (in memory only - need config persistence for production)
+	// Add domain to config
 	if m.config.Domains == nil {
 		m.config.Domains = make(map[string]config.DomainConfig)
 	}
@@ -658,6 +658,17 @@ func (m *ManagementServer) handleDomainsCreate(w http.ResponseWriter, r *http.Re
 		DefaultFrom: req.DefaultFrom,
 		RedirectTo:  req.RedirectTo,
 		BCCTo:       req.BCCTo,
+	}
+
+	// Persist domain config to file
+	if err := m.config.SaveDomains(); err != nil {
+		sendError(w, http.StatusInternalServerError, "Failed to save domain config")
+		return
+	}
+
+	// Load DKIM signer if DKIM config provided
+	if req.DKIM != nil && req.DKIM.Enabled {
+		_ = m.domainManager.ReloadSigner(req.Domain)
 	}
 
 	sendJSON(w, http.StatusCreated, DomainResponse{
@@ -728,6 +739,20 @@ func (m *ManagementServer) handleDomainsUpdate(w http.ResponseWriter, r *http.Re
 		BCCTo:       req.BCCTo,
 	}
 
+	// Persist domain config to file
+	if err := m.config.SaveDomains(); err != nil {
+		sendError(w, http.StatusInternalServerError, "Failed to save domain config")
+		return
+	}
+
+	// Reload DKIM signer if DKIM config changed
+	if req.DKIM != nil {
+		if err := m.domainManager.ReloadSigner(domainName); err != nil {
+			// Log error but don't fail the request - config is saved
+			// Signer will be loaded on next restart
+		}
+	}
+
 	sendJSON(w, http.StatusOK, DomainResponse{
 		Domain:      domainName,
 		DKIM:        req.DKIM,
@@ -765,6 +790,16 @@ func (m *ManagementServer) handleDomainsDelete(w http.ResponseWriter, r *http.Re
 	}
 
 	delete(m.config.Domains, domainName)
+
+	// Persist domain config to file
+	if err := m.config.SaveDomains(); err != nil {
+		sendError(w, http.StatusInternalServerError, "Failed to save domain config")
+		return
+	}
+
+	// Remove DKIM signer
+	_ = m.domainManager.ReloadSigner(domainName)
+
 	w.WriteHeader(http.StatusNoContent)
 }
 

@@ -32,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ansible: Fix package download URL for DEB and RPM packages
 - Sendry Web: Fix sandbox POST handler not registered
 - Sendry Web: Fix DKIM deploy not updating domain configuration with KeyFile path
+- Sendry MTA: Fix DKIM signer not reloading when domain config updated via API
+- Sendry MTA: Fix DKIM provider not available for domains added via API after startup
+- Sendry MTA: Add persistence for domain configurations (domains.yaml)
 
 ## [0.4.5] - 2026-01-29
 

@@ -23,6 +23,9 @@ type Config struct {
 	HeaderRules *headers.Config         `yaml:"header_rules"` // Header manipulation rules
 	Metrics     MetricsConfig           `yaml:"metrics"`      // Prometheus metrics configuration
 	DLQ         DLQConfig               `yaml:"dlq"`          // Dead Letter Queue configuration
+
+	// Internal: path to dynamic domains config file (not in YAML)
+	domainsFile string `yaml:"-"`
 }
 
 // MetricsConfig contains Prometheus metrics settings
@@ -530,4 +533,58 @@ func (c *Config) validateDomains() error {
 	}
 
 	return nil
+}
+
+// LoadDynamicDomains loads domain configs from the dynamic domains file
+// This merges API-created domains with static config file domains
+func (c *Config) LoadDynamicDomains() error {
+	if c.domainsFile == "" {
+		return nil
+	}
+
+	data, err := os.ReadFile(c.domainsFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // File doesn't exist yet, that's OK
+		}
+		return fmt.Errorf("failed to read domains file: %w", err)
+	}
+
+	var dynamicDomains map[string]DomainConfig
+	if err := yaml.Unmarshal(data, &dynamicDomains); err != nil {
+		return fmt.Errorf("failed to parse domains file: %w", err)
+	}
+
+	// Merge dynamic domains into config (dynamic domains override static)
+	if c.Domains == nil {
+		c.Domains = make(map[string]DomainConfig)
+	}
+	for domain, dc := range dynamicDomains {
+		c.Domains[domain] = dc
+	}
+
+	return nil
+}
+
+// SaveDomains saves the current domain configuration to the dynamic domains file
+func (c *Config) SaveDomains() error {
+	if c.domainsFile == "" {
+		return nil
+	}
+
+	data, err := yaml.Marshal(c.Domains)
+	if err != nil {
+		return fmt.Errorf("failed to marshal domains: %w", err)
+	}
+
+	if err := os.WriteFile(c.domainsFile, data, 0600); err != nil {
+		return fmt.Errorf("failed to write domains file: %w", err)
+	}
+
+	return nil
+}
+
+// SetDomainsFile sets the path for dynamic domains persistence
+func (c *Config) SetDomainsFile(path string) {
+	c.domainsFile = path
 }

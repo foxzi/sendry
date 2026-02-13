@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -77,6 +78,16 @@ func runServe(cmd *cobra.Command, args []string) error {
 	cfg, err := config.Load(cfgFile)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Set up dynamic domains file path in data directory (writable by service)
+	dataDir := filepath.Dir(cfg.Storage.Path) // e.g., /var/lib/sendry
+	domainsFile := filepath.Join(dataDir, "domains.yaml")
+	cfg.SetDomainsFile(domainsFile)
+
+	// Load any previously saved domain configurations
+	if err := cfg.LoadDynamicDomains(); err != nil {
+		return fmt.Errorf("failed to load dynamic domains: %w", err)
 	}
 
 	application, err := app.New(cfg)

@@ -156,3 +156,39 @@ func (m *Manager) HasDKIM() bool {
 	defer m.mu.RUnlock()
 	return len(m.signers) > 0
 }
+
+// ReloadSigner reloads or creates a DKIM signer for a domain based on current config
+// This should be called after domain DKIM config is updated via API
+func (m *Manager) ReloadSigner(domain string) error {
+	dc := m.config.GetDomainConfig(domain)
+	if dc == nil || dc.DKIM == nil || !dc.DKIM.Enabled || dc.DKIM.KeyFile == "" {
+		// Remove signer if DKIM is disabled or not configured
+		m.mu.Lock()
+		delete(m.signers, domain)
+		m.mu.Unlock()
+		m.logger.Info("removed DKIM signer", "domain", domain)
+		return nil
+	}
+
+	// Load new signer
+	signer, err := dkim.NewSignerFromFile(
+		dc.DKIM.KeyFile,
+		domain,
+		dc.DKIM.Selector,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to load DKIM signer for %s: %w", domain, err)
+	}
+
+	m.mu.Lock()
+	m.signers[domain] = signer
+	m.mu.Unlock()
+
+	m.logger.Info("reloaded DKIM signer",
+		"domain", domain,
+		"selector", dc.DKIM.Selector,
+		"key_file", dc.DKIM.KeyFile,
+	)
+
+	return nil
+}
