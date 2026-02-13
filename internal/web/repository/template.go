@@ -70,6 +70,23 @@ func (r *TemplateRepository) GetByID(id string) (*models.Template, error) {
 	return t, nil
 }
 
+// GetByName returns a template by name
+func (r *TemplateRepository) GetByName(name string) (*models.Template, error) {
+	t := &models.Template{}
+	err := r.db.QueryRow(`
+		SELECT id, name, description, subject, html, text, variables, folder, current_version, created_at, updated_at
+		FROM templates WHERE name = ?`, name,
+	).Scan(&t.ID, &t.Name, &t.Description, &t.Subject, &t.HTML, &t.Text, &t.Variables, &t.Folder, &t.CurrentVersion, &t.CreatedAt, &t.UpdatedAt)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
 // List returns templates with optional filtering
 func (r *TemplateRepository) List(filter models.TemplateListFilter) ([]models.TemplateWithStatus, int, error) {
 	// Count total
