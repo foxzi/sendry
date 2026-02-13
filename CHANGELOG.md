@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ansible: Add documentation for managing many domains via web panel
 
 - Sendry Web: Add DNS Check section to domain view page
+- Sendry Web: Add MTA server selection to sandbox test email page
 
 ### Fixed
 - Ansible: Fix package download URL for DEB and RPM packages

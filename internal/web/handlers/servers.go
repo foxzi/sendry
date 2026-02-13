@@ -211,22 +211,34 @@ func (h *Handlers) ServerDomains(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) ServerSandbox(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 
-	client, err := h.sendry.GetClient(name)
-	if err != nil {
-		http.Error(w, "Server not found", http.StatusNotFound)
-		return
-	}
+	// Get all servers for selection
+	servers := h.getServersStatus()
 
 	data := map[string]any{
-		"Title":      name + " - Sandbox",
+		"Title":      "Send Test Email",
 		"Active":     "servers",
 		"User":       h.getUserFromContext(r),
 		"ServerName": name,
+		"Servers":    servers,
 	}
 
 	if r.Method == http.MethodPost {
 		if err := r.ParseForm(); err != nil {
 			data["Error"] = "Invalid form data"
+			h.render(w, "server_sandbox", data)
+			return
+		}
+
+		// Use selected server from form, fallback to URL param
+		selectedServer := r.FormValue("server")
+		if selectedServer == "" {
+			selectedServer = name
+		}
+		data["ServerName"] = selectedServer
+
+		client, err := h.sendry.GetClient(selectedServer)
+		if err != nil {
+			data["Error"] = "Server not found: " + selectedServer
 			h.render(w, "server_sandbox", data)
 			return
 		}
@@ -247,7 +259,13 @@ func (h *Handlers) ServerSandbox(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			data["Error"] = err.Error()
 		} else {
-			data["Success"] = "Email queued with ID: " + resp.ID
+			data["Success"] = "Email queued on " + selectedServer + " with ID: " + resp.ID
+		}
+	} else {
+		// Verify server exists for GET
+		if _, err := h.sendry.GetClient(name); err != nil {
+			http.Error(w, "Server not found", http.StatusNotFound)
+			return
 		}
 	}
 
