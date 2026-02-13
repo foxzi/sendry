@@ -499,6 +499,30 @@ func (h *Handlers) CentralDomainsView(w http.ResponseWriter, r *http.Request) {
 		"ConfigHash":    currentHash,
 	}
 
+	// Run DNS check if requested
+	if r.URL.Query().Get("check") == "true" {
+		selector := domain.DKIMSelector
+		if selector == "" {
+			selector = "mail"
+		}
+
+		// Try to get DNS check from any available server
+		for _, srv := range servers {
+			client, err := h.sendry.GetClient(srv["Name"].(string))
+			if err != nil {
+				continue
+			}
+			result, err := client.CheckDNS(r.Context(), domain.Domain, selector)
+			if err != nil {
+				data["DNSCheckError"] = err.Error()
+			} else {
+				data["DNSCheck"] = result
+			}
+			break
+		}
+		data["DNSCheckRan"] = true
+	}
+
 	h.render(w, "central_domain_view", data)
 }
 

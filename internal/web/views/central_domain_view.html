@@ -228,6 +228,54 @@
 
 <div class="card">
     <div class="card-header">
+        <h3>DNS Check</h3>
+        <a href="/domains/{{.Domain.ID}}?check=true" class="btn btn-sm btn-primary">Run Check</a>
+    </div>
+    <div class="card-body">
+        {{if .DNSCheckRan}}
+            {{if .DNSCheckError}}
+            <div class="alert alert-danger">Error: {{.DNSCheckError}}</div>
+            {{else if .DNSCheck}}
+            <div class="dns-check-summary" style="margin-bottom: 1rem;">
+                <span class="badge badge-running">OK: {{.DNSCheck.Summary.OK}}</span>
+                {{if .DNSCheck.Summary.Warnings}}<span class="badge badge-warning">Warnings: {{.DNSCheck.Summary.Warnings}}</span>{{end}}
+                {{if .DNSCheck.Summary.Errors}}<span class="badge badge-failed">Errors: {{.DNSCheck.Summary.Errors}}</span>{{end}}
+                {{if .DNSCheck.Summary.NotFound}}<span class="badge badge-draft">Not Found: {{.DNSCheck.Summary.NotFound}}</span>{{end}}
+            </div>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Value</th>
+                        <th>Message</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .DNSCheck.Results}}
+                    <tr>
+                        <td><strong>{{.Type}}</strong></td>
+                        <td>
+                            {{if eq .Status "ok"}}<span class="badge badge-running">OK</span>
+                            {{else if eq .Status "warning"}}<span class="badge badge-warning">Warning</span>
+                            {{else if eq .Status "error"}}<span class="badge badge-failed">Error</span>
+                            {{else}}<span class="badge badge-draft">Not Found</span>{{end}}
+                        </td>
+                        <td><code style="word-break: break-all; font-size: 0.85em;">{{if .Value}}{{.Value}}{{else}}-{{end}}</code></td>
+                        <td>{{.Message}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+            {{end}}
+        {{else}}
+        <p class="text-muted">Click "Run Check" to verify SPF, DKIM, DMARC and MX records for this domain.</p>
+        {{end}}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
         <h3>Danger Zone</h3>
     </div>
     <div class="card-body">
