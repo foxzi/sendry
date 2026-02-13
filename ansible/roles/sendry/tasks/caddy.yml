@@ -39,7 +39,7 @@
     owner: root
     group: root
     mode: "0644"
-    validate: "caddy validate --config %s"
+    validate: "caddy validate --adapter caddyfile --config %s"
   notify: Reload caddy
 
 - name: Enable Caddy service
