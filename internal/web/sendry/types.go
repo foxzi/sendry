@@ -113,8 +113,9 @@ type Domain struct {
 
 // DKIMConfig represents DKIM configuration
 type DKIMConfig struct {
-	Enabled  bool   `json:"enabled"`
-	Selector string `json:"selector"`
+	Enabled  bool   `json:"Enabled"`
+	Selector string `json:"Selector"`
+	KeyFile  string `json:"KeyFile,omitempty"`
 }
 
 // TLSConfig represents TLS configuration

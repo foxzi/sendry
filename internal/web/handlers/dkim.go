@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -10,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/foxzi/sendry/internal/web/models"
+	"github.com/foxzi/sendry/internal/web/sendry"
 )
 
 // DKIMList shows all DKIM keys for a server
@@ -146,10 +148,12 @@ func (h *Handlers) DKIMCreate(w http.ResponseWriter, r *http.Request) {
 	if autoDeploy {
 		client, err := h.sendry.GetClient(serverName)
 		if err == nil {
-			_, err = client.UploadDKIM(r.Context(), key.Domain, key.Selector, key.PrivateKey)
+			resp, err := client.UploadDKIM(r.Context(), key.Domain, key.Selector, key.PrivateKey)
 			if err != nil {
 				h.dkim.CreateDeployment(key.ID, serverName, "failed", err.Error())
 			} else {
+				// Update domain config with DKIM settings
+				h.updateDomainDKIM(r.Context(), client, key.Domain, key.Selector, resp.KeyFile)
 				h.dkim.CreateDeployment(key.ID, serverName, "deployed", "")
 			}
 		}
@@ -260,11 +264,13 @@ func (h *Handlers) DKIMDeploy(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		_, err = client.UploadDKIM(r.Context(), key.Domain, key.Selector, key.PrivateKey)
+		resp, err := client.UploadDKIM(r.Context(), key.Domain, key.Selector, key.PrivateKey)
 		if err != nil {
 			deployErrors = append(deployErrors, fmt.Sprintf("%s: %v", srvName, err))
 			h.dkim.CreateDeployment(key.ID, srvName, "failed", err.Error())
 		} else {
+			// Update domain config with DKIM settings
+			h.updateDomainDKIM(r.Context(), client, key.Domain, key.Selector, resp.KeyFile)
 			h.dkim.CreateDeployment(key.ID, srvName, "deployed", "")
 		}
 	}
@@ -420,10 +426,12 @@ func (h *Handlers) CentralDKIMCreate(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		_, err = client.UploadDKIM(r.Context(), key.Domain, key.Selector, key.PrivateKey)
+		resp, err := client.UploadDKIM(r.Context(), key.Domain, key.Selector, key.PrivateKey)
 		if err != nil {
 			h.dkim.CreateDeployment(key.ID, srvName, "failed", err.Error())
 		} else {
+			// Update domain config with DKIM settings
+			h.updateDomainDKIM(r.Context(), client, key.Domain, key.Selector, resp.KeyFile)
 			h.dkim.CreateDeployment(key.ID, srvName, "deployed", "")
 		}
 	}
@@ -525,11 +533,13 @@ func (h *Handlers) CentralDKIMDeploy(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		_, err = client.UploadDKIM(r.Context(), key.Domain, key.Selector, key.PrivateKey)
+		resp, err := client.UploadDKIM(r.Context(), key.Domain, key.Selector, key.PrivateKey)
 		if err != nil {
 			deployErrors = append(deployErrors, fmt.Sprintf("%s: %v", srvName, err))
 			h.dkim.CreateDeployment(key.ID, srvName, "failed", err.Error())
 		} else {
+			// Update domain config with DKIM settings
+			h.updateDomainDKIM(r.Context(), client, key.Domain, key.Selector, resp.KeyFile)
 			h.dkim.CreateDeployment(key.ID, srvName, "deployed", "")
 		}
 	}
@@ -564,4 +574,31 @@ func (h *Handlers) CentralDKIMDeploymentDelete(w http.ResponseWriter, r *http.Re
 	}
 
 	http.Redirect(w, r, fmt.Sprintf("/dkim/%s", id), http.StatusSeeOther)
+}
+
+// updateDomainDKIM updates domain configuration with DKIM settings after key upload
+func (h *Handlers) updateDomainDKIM(ctx context.Context, client *sendry.Client, domain, selector, keyFile string) {
+	// Get current domain config or create new
+	existingDomain, err := client.GetDomain(ctx, domain)
+
+	var mode string
+	if err == nil && existingDomain != nil {
+		mode = existingDomain.Mode
+	}
+	if mode == "" {
+		mode = "production"
+	}
+
+	// Update domain with DKIM config
+	_, err = client.UpdateDomain(ctx, domain, &sendry.DomainUpdateRequest{
+		Mode: mode,
+		DKIM: &sendry.DKIMConfig{
+			Enabled:  true,
+			Selector: selector,
+			KeyFile:  keyFile,
+		},
+	})
+	if err != nil {
+		h.logger.Error("failed to update domain DKIM config", "domain", domain, "error", err)
+	}
 }
