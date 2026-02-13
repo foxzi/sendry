@@ -1,0 +1,209 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>API Keys</h1>
+    <div class="header-actions">
+        <button onclick="document.getElementById('create-modal').style.display='flex'" class="btn btn-primary">New API Key</button>
+    </div>
+</div>
+
+{{if .NewKey}}
+<div class="alert alert-success">
+    <strong>API Key Created!</strong>
+    <p>Copy this key now. It won't be shown again:</p>
+    <code class="api-key-display">{{.NewKey}}</code>
+    <button onclick="navigator.clipboard.writeText('{{.NewKey}}'); this.textContent='Copied!'" class="btn btn-sm">Copy</button>
+</div>
+{{end}}
+
+<div class="card">
+    <div class="card-header">
+        <form class="filter-form" method="get" action="/settings/api-keys">
+            <input type="text" name="search" value="{{.Search}}" placeholder="Search..." class="input">
+            <button type="submit" class="btn">Search</button>
+        </form>
+    </div>
+    <div class="card-body">
+        {{if .APIKeys}}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Key Prefix</th>
+                    <th>Sends</th>
+                    <th>Rate Limits</th>
+                    <th>Created</th>
+                    <th>Last Used</th>
+                    <th>Expires</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .APIKeys}}
+                <tr>
+                    <td>{{.Name}}</td>
+                    <td><code>{{.KeyPrefix}}...</code></td>
+                    <td>{{.SendCount}}</td>
+                    <td>
+                        {{if or .RateLimitMinute .RateLimitHour}}
+                        <span class="rate-limits">
+                            {{if .RateLimitMinute}}{{.RateLimitMinute}}/min{{end}}
+                            {{if and .RateLimitMinute .RateLimitHour}} | {{end}}
+                            {{if .RateLimitHour}}{{.RateLimitHour}}/hr{{end}}
+                        </span>
+                        {{else}}
+                        <em>Unlimited</em>
+                        {{end}}
+                    </td>
+                    <td>{{.CreatedAt.Format "2006-01-02"}}</td>
+                    <td>{{if .LastUsedAt}}{{.LastUsedAt.Format "2006-01-02 15:04"}}{{else}}<em>Never</em>{{end}}</td>
+                    <td>{{if .ExpiresAt}}{{.ExpiresAt.Format "2006-01-02"}}{{else}}<em>Never</em>{{end}}</td>
+                    <td>
+                        {{if .Active}}
+                        <span class="badge badge-completed">Active</span>
+                        {{else}}
+                        <span class="badge badge-failed">Inactive</span>
+                        {{end}}
+                    </td>
+                    <td class="actions">
+                        <form method="post" action="/settings/api-keys/{{.ID}}/toggle" style="display: inline;">
+                            {{if .Active}}
+                            <button type="submit" class="btn btn-sm btn-warning">Deactivate</button>
+                            {{else}}
+                            <button type="submit" class="btn btn-sm btn-success">Activate</button>
+                            {{end}}
+                        </form>
+                        <form method="post" action="/settings/api-keys/{{.ID}}" style="display: inline;">
+                            <input type="hidden" name="_method" value="DELETE">
+                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this API key?')">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+
+        {{if gt .TotalPages 1}}
+        <div class="pagination">
+            {{if gt .Page 1}}
+            <a href="/settings/api-keys?page={{sub .Page 1}}{{if .Search}}&search={{.Search}}{{end}}" class="btn btn-sm">&laquo; Prev</a>
+            {{end}}
+            <span class="pagination-info">Page {{.Page}} of {{.TotalPages}} ({{.Total}} total)</span>
+            {{if lt .Page .TotalPages}}
+            <a href="/settings/api-keys?page={{add .Page 1}}{{if .Search}}&search={{.Search}}{{end}}" class="btn btn-sm">Next &raquo;</a>
+            {{end}}
+        </div>
+        {{end}}
+        {{else}}
+        <div class="empty-state">
+            <p>No API keys found</p>
+            <p class="text-muted">Create an API key to start sending emails via the API</p>
+        </div>
+        {{end}}
+    </div>
+</div>
+
+<!-- Create Modal -->
+<div id="create-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Create API Key</h2>
+            <button type="button" onclick="document.getElementById('create-modal').style.display='none'" class="close">&times;</button>
+        </div>
+        <form method="post" action="/settings/api-keys">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="name">Name</label>
+                    <input type="text" id="name" name="name" class="input" required placeholder="e.g. Production App">
+                </div>
+                <div class="form-group">
+                    <label for="expires_at">Expires (optional)</label>
+                    <input type="date" id="expires_at" name="expires_at" class="input">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="rate_limit_minute">Rate Limit / Minute</label>
+                        <input type="number" id="rate_limit_minute" name="rate_limit_minute" class="input" min="0" placeholder="0 = unlimited">
+                    </div>
+                    <div class="form-group">
+                        <label for="rate_limit_hour">Rate Limit / Hour</label>
+                        <input type="number" id="rate_limit_hour" name="rate_limit_hour" class="input" min="0" placeholder="0 = unlimited">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" onclick="document.getElementById('create-modal').style.display='none'" class="btn btn-secondary">Cancel</button>
+                <button type="submit" class="btn btn-primary">Create</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.api-key-display {
+    display: block;
+    background: var(--bg-secondary);
+    padding: 1rem;
+    margin: 0.5rem 0;
+    font-size: 0.9rem;
+    word-break: break-all;
+}
+.form-row {
+    display: flex;
+    gap: 1rem;
+}
+.form-row .form-group {
+    flex: 1;
+}
+.rate-limits {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+.modal-content {
+    background: var(--bg-primary);
+    border-radius: 8px;
+    width: 100%;
+    max-width: 500px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+}
+.modal-header h2 {
+    margin: 0;
+}
+.modal-body {
+    padding: 1.5rem;
+}
+.modal-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+.close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--text-muted);
+}
+</style>
+{{end}}
