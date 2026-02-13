@@ -24,6 +24,7 @@
             <a href="/recipients" {{if eq .Active "recipients"}}class="active"{{end}} data-i18n="nav.recipients">Recipients</a>
             <a href="/campaigns" {{if eq .Active "campaigns"}}class="active"{{end}} data-i18n="nav.campaigns">Campaigns</a>
             <a href="/jobs" {{if eq .Active "jobs"}}class="active"{{end}} data-i18n="nav.jobs">Jobs</a>
+            <a href="/sends" {{if eq .Active "sends"}}class="active"{{end}} data-i18n="nav.sends">Sends</a>
             <a href="/monitoring" {{if eq .Active "monitoring"}}class="active"{{end}} data-i18n="nav.monitoring">Monitoring</a>
             <a href="/settings" {{if or (eq .Active "settings") (eq .Active "servers") (eq .Active "domains") (eq .Active "dkim")}}class="active"{{end}} data-i18n="nav.settings">Settings</a>
         </div>

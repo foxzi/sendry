@@ -1,0 +1,115 @@
+{{define "content"}}
+<div class="page-header">
+    <div class="page-header-left">
+        <a href="/sends" class="btn btn-secondary">&larr; Back</a>
+        <h1>Send Details</h1>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>
+            {{if eq .Send.Status "sent"}}
+            <span class="badge badge-completed">Sent</span>
+            {{else if eq .Send.Status "failed"}}
+            <span class="badge badge-failed">Failed</span>
+            {{else}}
+            <span class="badge badge-scheduled">{{.Send.Status}}</span>
+            {{end}}
+            {{.Send.Subject}}
+        </h2>
+    </div>
+    <div class="card-body">
+        <table class="details-table">
+            <tr>
+                <th>ID</th>
+                <td><code>{{.Send.ID}}</code></td>
+            </tr>
+            <tr>
+                <th>From</th>
+                <td>{{.Send.FromAddress}}</td>
+            </tr>
+            <tr>
+                <th>To</th>
+                <td>
+                    {{range .ToAddresses}}
+                    <span class="badge">{{.}}</span>
+                    {{end}}
+                </td>
+            </tr>
+            {{if .CCAddresses}}
+            <tr>
+                <th>CC</th>
+                <td>
+                    {{range .CCAddresses}}
+                    <span class="badge">{{.}}</span>
+                    {{end}}
+                </td>
+            </tr>
+            {{end}}
+            {{if .BCCAddresses}}
+            <tr>
+                <th>BCC</th>
+                <td>
+                    {{range .BCCAddresses}}
+                    <span class="badge">{{.}}</span>
+                    {{end}}
+                </td>
+            </tr>
+            {{end}}
+            <tr>
+                <th>Subject</th>
+                <td>{{.Send.Subject}}</td>
+            </tr>
+            {{if .TemplateName}}
+            <tr>
+                <th>Template</th>
+                <td><a href="/templates/{{.Send.TemplateID}}">{{.TemplateName}}</a></td>
+            </tr>
+            {{end}}
+            <tr>
+                <th>Domain</th>
+                <td>{{.Send.SenderDomain}}</td>
+            </tr>
+            <tr>
+                <th>Server</th>
+                <td>{{.Send.ServerName}}</td>
+            </tr>
+            {{if .Send.ServerMsgID}}
+            <tr>
+                <th>Server Message ID</th>
+                <td><code>{{.Send.ServerMsgID}}</code></td>
+            </tr>
+            {{end}}
+            {{if .APIKeyName}}
+            <tr>
+                <th>API Key</th>
+                <td>{{.APIKeyName}}</td>
+            </tr>
+            {{end}}
+            {{if .Send.ClientIP}}
+            <tr>
+                <th>Client IP</th>
+                <td>{{.Send.ClientIP}}</td>
+            </tr>
+            {{end}}
+            <tr>
+                <th>Created</th>
+                <td>{{.Send.CreatedAt.Format "2006-01-02 15:04:05"}}</td>
+            </tr>
+            {{if .Send.SentAt}}
+            <tr>
+                <th>Sent</th>
+                <td>{{.Send.SentAt.Format "2006-01-02 15:04:05"}}</td>
+            </tr>
+            {{end}}
+            {{if .Send.ErrorMessage}}
+            <tr>
+                <th>Error</th>
+                <td class="text-danger">{{.Send.ErrorMessage}}</td>
+            </tr>
+            {{end}}
+        </table>
+    </div>
+</div>
+{{end}}

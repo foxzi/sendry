@@ -1,0 +1,111 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>Send History</h1>
+</div>
+
+{{if .Stats}}
+<div class="stats-row" style="margin-bottom: 1rem; display: flex; gap: 1rem;">
+    <div class="stat-card">
+        <div class="stat-value">{{.Stats.Total}}</div>
+        <div class="stat-label">Total</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: var(--success)">{{.Stats.Sent}}</div>
+        <div class="stat-label">Sent</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: var(--danger)">{{.Stats.Failed}}</div>
+        <div class="stat-label">Failed</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: var(--warning)">{{.Stats.Pending}}</div>
+        <div class="stat-label">Pending</div>
+    </div>
+</div>
+{{end}}
+
+<div class="card">
+    <div class="card-header">
+        <form class="filter-form" method="get" action="/sends">
+            <input type="text" name="search" value="{{.Search}}" placeholder="Search..." class="input">
+            <select name="status" class="input">
+                <option value="">All Status</option>
+                <option value="pending" {{if eq .Status "pending"}}selected{{end}}>Pending</option>
+                <option value="sent" {{if eq .Status "sent"}}selected{{end}}>Sent</option>
+                <option value="failed" {{if eq .Status "failed"}}selected{{end}}>Failed</option>
+            </select>
+            <select name="domain" class="input">
+                <option value="">All Domains</option>
+                {{range .Domains}}
+                <option value="{{.}}" {{if eq $.Domain .}}selected{{end}}>{{.}}</option>
+                {{end}}
+            </select>
+            <select name="server" class="input">
+                <option value="">All Servers</option>
+                {{range .Servers}}
+                <option value="{{.}}" {{if eq $.Server .}}selected{{end}}>{{.}}</option>
+                {{end}}
+            </select>
+            <button type="submit" class="btn">Filter</button>
+            {{if or .Search .Status .Domain .Server}}
+            <a href="/sends" class="btn btn-secondary">Clear</a>
+            {{end}}
+        </form>
+    </div>
+    <div class="card-body">
+        {{if .Sends}}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>From</th>
+                    <th>To</th>
+                    <th>Subject</th>
+                    <th>Server</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Sends}}
+                <tr>
+                    <td><a href="/sends/{{.ID}}">{{slice .ID 0 8}}...</a></td>
+                    <td>{{.FromAddress}}</td>
+                    <td>{{.ToAddresses}}</td>
+                    <td>{{if .Subject}}{{if gt (len .Subject) 40}}{{slice .Subject 0 40}}...{{else}}{{.Subject}}{{end}}{{else}}<em>No subject</em>{{end}}</td>
+                    <td>{{.ServerName}}</td>
+                    <td>
+                        {{if eq .Status "sent"}}
+                        <span class="badge badge-completed">sent</span>
+                        {{else if eq .Status "failed"}}
+                        <span class="badge badge-failed">failed</span>
+                        {{else}}
+                        <span class="badge badge-scheduled">{{.Status}}</span>
+                        {{end}}
+                    </td>
+                    <td>{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+
+        {{if gt .TotalPages 1}}
+        <div class="pagination">
+            {{if gt .Page 1}}
+            <a href="/sends?page={{sub .Page 1}}{{if .Search}}&search={{.Search}}{{end}}{{if .Status}}&status={{.Status}}{{end}}{{if .Domain}}&domain={{.Domain}}{{end}}{{if .Server}}&server={{.Server}}{{end}}" class="btn btn-sm">&laquo; Prev</a>
+            {{end}}
+            <span class="pagination-info">Page {{.Page}} of {{.TotalPages}} ({{.Total}} total)</span>
+            {{if lt .Page .TotalPages}}
+            <a href="/sends?page={{add .Page 1}}{{if .Search}}&search={{.Search}}{{end}}{{if .Status}}&status={{.Status}}{{end}}{{if .Domain}}&domain={{.Domain}}{{end}}{{if .Server}}&server={{.Server}}{{end}}" class="btn btn-sm">Next &raquo;</a>
+            {{end}}
+        </div>
+        {{end}}
+        {{else}}
+        <div class="empty-state">
+            <p>No sends found</p>
+            <p class="text-muted">Sends appear here when emails are sent via the API</p>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}
