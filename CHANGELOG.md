@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Ansible: Fix package download URL for DEB and RPM packages
+- Sendry Web: Fix sandbox POST handler not registered
 
 ## [0.4.5] - 2026-01-29
 
