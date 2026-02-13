@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Sendry Web: Public API for email sending (POST /api/v1/send, POST /api/v1/send/template)
+- Sendry Web: API key authentication system for public API
+- Sendry Web: Email routing by sender domain with server selection
+- Sendry Web: Round-robin and weighted load balancing between MTA servers
+- Sendry Web: Failover support when primary server fails
+- Sendry Web: Template integration for API sends
+- Sendry Web: Send history with UI at /sends
+- Sendry Web: API keys management at /settings/api-keys
+- Sendry Web: GET /api/v1/send/{id}/status endpoint for tracking
+- Sendry Web: API key rate limiting (per minute and per hour)
+- Sendry Web: API key activation/deactivation toggle
+- Sendry Web: IP filtering for entire panel (allowed_ips config option)
+
 ## [0.4.5] - 2026-01-29
 
 ### Added

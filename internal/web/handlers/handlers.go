@@ -10,6 +10,7 @@ import (
 	"github.com/foxzi/sendry/internal/web/config"
 	"github.com/foxzi/sendry/internal/web/db"
 	"github.com/foxzi/sendry/internal/web/repository"
+	"github.com/foxzi/sendry/internal/web/router"
 	"github.com/foxzi/sendry/internal/web/sendry"
 	"github.com/foxzi/sendry/internal/web/views"
 )
@@ -28,23 +29,46 @@ type Handlers struct {
 	settings   *repository.SettingsRepository
 	dkim       *repository.DKIMRepository
 	domains    *repository.DomainRepository
+	sends      *repository.SendRepository
+	apiKeys    *repository.APIKeyRepository
+	router     *router.EmailRouter
 }
 
 func New(cfg *config.Config, db *db.DB, logger *slog.Logger, v *views.Engine, oidcProvider *auth.OIDCProvider) *Handlers {
+	sendryMgr := sendry.NewManager(cfg.Sendry.Servers)
+	templates := repository.NewTemplateRepository(db.DB)
+	settings := repository.NewSettingsRepository(db.DB)
+	domains := repository.NewDomainRepository(db.DB)
+	sends := repository.NewSendRepository(db.DB)
+	apiKeys := repository.NewAPIKeyRepository(db.DB)
+
+	emailRouter := router.NewEmailRouter(router.RouterConfig{
+		Domains:   domains,
+		Templates: templates,
+		Sends:     sends,
+		Settings:  settings,
+		Sendry:    sendryMgr,
+		MultiSend: &cfg.Sendry.MultiSend,
+		Logger:    logger.With("component", "router"),
+	})
+
 	return &Handlers{
 		cfg:        cfg,
 		db:         db,
 		logger:     logger,
 		views:      v,
-		sendry:     sendry.NewManager(cfg.Sendry.Servers),
+		sendry:     sendryMgr,
 		oidc:       oidcProvider,
-		templates:  repository.NewTemplateRepository(db.DB),
+		templates:  templates,
 		recipients: repository.NewRecipientRepository(db.DB),
 		campaigns:  repository.NewCampaignRepository(db.DB),
 		jobs:       repository.NewJobRepository(db.DB),
-		settings:   repository.NewSettingsRepository(db.DB),
+		settings:   settings,
 		dkim:       repository.NewDKIMRepository(db.DB),
-		domains:    repository.NewDomainRepository(db.DB),
+		domains:    domains,
+		sends:      sends,
+		apiKeys:    apiKeys,
+		router:     emailRouter,
 	}
 }
 

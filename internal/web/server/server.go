@@ -12,6 +12,7 @@ import (
 	"github.com/foxzi/sendry/internal/web/db"
 	"github.com/foxzi/sendry/internal/web/handlers"
 	"github.com/foxzi/sendry/internal/web/middleware"
+	"github.com/foxzi/sendry/internal/web/repository"
 	"github.com/foxzi/sendry/internal/web/static"
 	"github.com/foxzi/sendry/internal/web/views"
 	"github.com/foxzi/sendry/internal/web/worker"
@@ -97,6 +98,16 @@ func (s *Server) setupRoutes() http.Handler {
 	mux.HandleFunc("GET /auth/logout", h.Logout)
 	mux.HandleFunc("GET /auth/oidc/login", h.OIDCLogin)
 	mux.HandleFunc("GET /auth/callback", h.OIDCCallback)
+
+	// Public API routes (API key auth)
+	apiMux := http.NewServeMux()
+	apiMux.HandleFunc("POST /api/v1/send", h.APISend)
+	apiMux.HandleFunc("POST /api/v1/send/template", h.APISendTemplate)
+	apiMux.HandleFunc("GET /api/v1/send/{id}/status", h.APIGetStatus)
+
+	apiKeysRepo := repository.NewAPIKeyRepository(s.db.DB)
+	apiAuth := middleware.APIAuth(apiKeysRepo, s.logger)
+	mux.Handle("/api/", apiAuth(apiMux))
 
 	// Protected routes
 	protected := http.NewServeMux()
@@ -200,6 +211,10 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("POST /servers/{server}/domains/{domain}", h.DomainsUpdate)
 	protected.HandleFunc("POST /servers/{server}/domains/{domain}/delete", h.DomainsDelete)
 
+	// Send History
+	protected.HandleFunc("GET /sends", h.SendsList)
+	protected.HandleFunc("GET /sends/{id}", h.SendView)
+
 	// Monitoring
 	protected.HandleFunc("GET /monitoring", h.Monitoring)
 
@@ -209,6 +224,10 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("PUT /settings/variables", h.GlobalVariablesUpdate)
 	protected.HandleFunc("GET /settings/users", h.UserList)
 	protected.HandleFunc("GET /settings/audit", h.AuditLog)
+	protected.HandleFunc("GET /settings/api-keys", h.APIKeysList)
+	protected.HandleFunc("POST /settings/api-keys", h.APIKeyCreate)
+	protected.HandleFunc("POST /settings/api-keys/{id}/toggle", h.APIKeyToggle)
+	protected.HandleFunc("DELETE /settings/api-keys/{id}", h.APIKeyDelete)
 
 	// DKIM (per server)
 	protected.HandleFunc("GET /servers/{server}/dkim", h.DKIMList)
@@ -231,6 +250,11 @@ func (s *Server) setupRoutes() http.Handler {
 	handler := middleware.MethodOverride(mux)
 	handler = middleware.Logger(s.logger)(handler)
 	handler = middleware.Recovery(s.logger)(handler)
+
+	// Apply IP filter if configured
+	if len(s.cfg.Server.AllowedIPs) > 0 {
+		handler = middleware.IPFilter(s.cfg.Server.AllowedIPs, s.logger)(handler)
+	}
 
 	return handler
 }
