@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ansible: Add inventory README with deployment examples
 - Ansible: Add documentation for managing many domains via web panel
 
+### Fixed
+- Ansible: Fix package download URL for DEB and RPM packages
+
 ## [0.4.5] - 2026-01-29
 
 ### Added

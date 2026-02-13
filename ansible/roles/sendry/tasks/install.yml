@@ -46,11 +46,18 @@
     - name: Determine package type
       ansible.builtin.set_fact:
         sendry_package_type: "{{ (ansible_os_family == 'Debian') | ternary('deb', 'rpm') }}"
-        sendry_arch: "{{ (ansible_architecture == 'x86_64') | ternary('amd64', 'arm64') }}"
 
-    - name: Set package URL
+    - name: Set package URL for DEB
       ansible.builtin.set_fact:
-        sendry_package_url: "https://github.com/foxzi/sendry/releases/download/v{{ sendry_actual_version }}/sendry_{{ sendry_actual_version }}_{{ sendry_arch }}.{{ sendry_package_type }}"
+        sendry_arch: "{{ (ansible_architecture == 'x86_64') | ternary('amd64', 'arm64') }}"
+        sendry_package_url: "https://github.com/foxzi/sendry/releases/download/v{{ sendry_actual_version }}/sendry_{{ sendry_actual_version }}-1_{{ (ansible_architecture == 'x86_64') | ternary('amd64', 'arm64') }}.deb"
+      when: ansible_os_family == 'Debian'
+
+    - name: Set package URL for RPM
+      ansible.builtin.set_fact:
+        sendry_arch: "{{ (ansible_architecture == 'x86_64') | ternary('x86_64', 'aarch64') }}"
+        sendry_package_url: "https://github.com/foxzi/sendry/releases/download/v{{ sendry_actual_version }}/sendry-{{ sendry_actual_version }}-1.{{ (ansible_architecture == 'x86_64') | ternary('x86_64', 'aarch64') }}.rpm"
+      when: ansible_os_family == 'RedHat'
 
     - name: Download package
       ansible.builtin.get_url:
