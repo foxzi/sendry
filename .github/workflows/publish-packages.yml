@@ -95,16 +95,16 @@ jobs:
 
           # Generate Release file
           cd dists/stable
-          cat > Release << 'RELEASE'
-Origin: Sendry
-Label: Sendry
-Suite: stable
-Codename: stable
-Architectures: amd64 arm64
-Components: main
-Description: Sendry MTA packages
-RELEASE
-          echo "Date: $(date -Ru)" >> Release
+          {
+            echo "Origin: Sendry"
+            echo "Label: Sendry"
+            echo "Suite: stable"
+            echo "Codename: stable"
+            echo "Architectures: amd64 arm64"
+            echo "Components: main"
+            echo "Description: Sendry MTA packages"
+            echo "Date: $(date -Ru)"
+          } > Release
 
           # Add checksums to Release (format: hash size path)
           {
