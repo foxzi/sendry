@@ -143,7 +143,28 @@ var I18n = (function() {
             'just_now': 'Just now',
             'minutes_ago': '{n} min ago',
             'hours_ago': '{n} hours ago',
-            'days_ago': '{n} days ago'
+            'days_ago': '{n} days ago',
+
+            // Monitoring
+            'monitoring.title': 'Monitoring',
+            'monitoring.refresh': 'Refresh',
+            'monitoring.period.24h': 'Last 24 hours',
+            'monitoring.period.7d': 'Last 7 days',
+            'monitoring.period.30d': 'Last 30 days',
+            'monitoring.domain.all': 'All Domains',
+            'monitoring.stats.sent': 'Sent',
+            'monitoring.stats.failed': 'Failed',
+            'monitoring.stats.queue': 'In Queue',
+            'monitoring.stats.dlq': 'DLQ',
+            'monitoring.chart.activity': 'Send Activity',
+            'monitoring.chart.domains': 'By Domain',
+            'monitoring.servers.title': 'Server Status',
+            'monitoring.servers.name': 'Server',
+            'monitoring.servers.env': 'Environment',
+            'monitoring.servers.status': 'Status',
+            'monitoring.servers.queue': 'Queue',
+            'monitoring.servers.dlq': 'DLQ',
+            'monitoring.servers.empty': 'No servers configured'
         },
         ru: {
             // Navigation
@@ -287,7 +308,28 @@ var I18n = (function() {
             'just_now': 'Только что',
             'minutes_ago': '{n} мин. назад',
             'hours_ago': '{n} ч. назад',
-            'days_ago': '{n} дн. назад'
+            'days_ago': '{n} дн. назад',
+
+            // Monitoring
+            'monitoring.title': 'Мониторинг',
+            'monitoring.refresh': 'Обновить',
+            'monitoring.period.24h': 'За 24 часа',
+            'monitoring.period.7d': 'За 7 дней',
+            'monitoring.period.30d': 'За 30 дней',
+            'monitoring.domain.all': 'Все домены',
+            'monitoring.stats.sent': 'Отправлено',
+            'monitoring.stats.failed': 'Ошибки',
+            'monitoring.stats.queue': 'В очереди',
+            'monitoring.stats.dlq': 'DLQ',
+            'monitoring.chart.activity': 'Активность отправок',
+            'monitoring.chart.domains': 'По доменам',
+            'monitoring.servers.title': 'Статус серверов',
+            'monitoring.servers.name': 'Сервер',
+            'monitoring.servers.env': 'Окружение',
+            'monitoring.servers.status': 'Статус',
+            'monitoring.servers.queue': 'Очередь',
+            'monitoring.servers.dlq': 'DLQ',
+            'monitoring.servers.empty': 'Серверы не настроены'
         }
     };
 
