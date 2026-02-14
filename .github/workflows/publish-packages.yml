@@ -1,0 +1,227 @@
+name: Publish Packages
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., 0.4.6)'
+        required: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  publish-repo:
+    name: Publish Package Repository
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p downloads
+          VERSION=${{ steps.version.outputs.version }}
+
+          # Download DEB packages
+          gh release download "v${VERSION}" --pattern "*.deb" --dir downloads/ || true
+
+          # Download RPM packages
+          gh release download "v${VERSION}" --pattern "*.rpm" --dir downloads/ || true
+
+          # Download APK packages
+          gh release download "v${VERSION}" --pattern "*.apk" --dir downloads/ || true
+
+          ls -la downloads/
+
+      - name: Setup GPG
+        if: env.GPG_PRIVATE_KEY != ''
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          echo "GPG_AVAILABLE=true" >> $GITHUB_ENV
+
+      - name: Build APT repository
+        run: |
+          mkdir -p repo/apt/pool/main/s/sendry
+          mkdir -p repo/apt/dists/stable/main/binary-amd64
+          mkdir -p repo/apt/dists/stable/main/binary-arm64
+
+          # Copy DEB packages to pool
+          cp downloads/*.deb repo/apt/pool/main/s/sendry/ 2>/dev/null || true
+
+          cd repo/apt
+
+          # Generate Packages files for amd64
+          dpkg-scanpackages --arch amd64 pool/ > dists/stable/main/binary-amd64/Packages
+          gzip -k -f dists/stable/main/binary-amd64/Packages
+
+          # Generate Packages files for arm64
+          dpkg-scanpackages --arch arm64 pool/ > dists/stable/main/binary-arm64/Packages
+          gzip -k -f dists/stable/main/binary-arm64/Packages
+
+          # Generate Release file
+          cat > dists/stable/Release << EOF
+          Origin: Sendry
+          Label: Sendry
+          Suite: stable
+          Codename: stable
+          Architectures: amd64 arm64
+          Components: main
+          Description: Sendry MTA packages
+          Date: $(date -Ru)
+          EOF
+
+          # Add checksums to Release
+          cd dists/stable
+          {
+            echo "MD5Sum:"
+            find main -type f -exec md5sum {} \; | sed 's|main/| |'
+            echo "SHA256:"
+            find main -type f -exec sha256sum {} \; | sed 's|main/| |'
+          } >> Release
+
+      - name: Sign APT repository
+        if: env.GPG_AVAILABLE == 'true'
+        run: |
+          cd repo/apt/dists/stable
+          gpg --batch --yes --armor --detach-sign -o Release.gpg Release
+          gpg --batch --yes --armor --clearsign -o InRelease Release
+
+      - name: Build YUM repository
+        run: |
+          mkdir -p repo/rpm/stable/x86_64
+          mkdir -p repo/rpm/stable/aarch64
+
+          # Copy RPM packages
+          for rpm in downloads/*amd64*.rpm downloads/*x86_64*.rpm; do
+            [ -f "$rpm" ] && cp "$rpm" repo/rpm/stable/x86_64/
+          done
+          for rpm in downloads/*arm64*.rpm downloads/*aarch64*.rpm; do
+            [ -f "$rpm" ] && cp "$rpm" repo/rpm/stable/aarch64/
+          done
+
+          # Generate repodata
+          sudo apt-get update && sudo apt-get install -y createrepo-c
+          createrepo_c repo/rpm/stable/x86_64/ || true
+          createrepo_c repo/rpm/stable/aarch64/ || true
+
+      - name: Build APK repository
+        run: |
+          mkdir -p repo/apk/stable/x86_64
+          mkdir -p repo/apk/stable/aarch64
+
+          # Copy APK packages
+          for apk in downloads/*amd64*.apk downloads/*x86_64*.apk; do
+            [ -f "$apk" ] && cp "$apk" repo/apk/stable/x86_64/
+          done
+          for apk in downloads/*arm64*.apk downloads/*aarch64*.apk; do
+            [ -f "$apk" ] && cp "$apk" repo/apk/stable/aarch64/
+          done
+
+          # Generate APKINDEX (requires abuild)
+          # For now just list packages
+          cd repo/apk/stable
+          for arch in x86_64 aarch64; do
+            if [ -d "$arch" ] && ls "$arch"/*.apk 1>/dev/null 2>&1; then
+              (cd "$arch" && ls -1 *.apk > PACKAGES.txt)
+            fi
+          done
+
+      - name: Create index page
+        run: |
+          cat > repo/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Sendry Package Repository</title>
+            <style>
+              body { font-family: system-ui, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+              h1 { color: #333; }
+              pre { background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto; }
+              code { background: #e8e8e8; padding: 2px 6px; border-radius: 3px; }
+              .section { margin: 30px 0; }
+            </style>
+          </head>
+          <body>
+            <h1>Sendry Package Repository</h1>
+
+            <div class="section">
+              <h2>Debian/Ubuntu (APT)</h2>
+              <pre>
+          # Add repository
+          echo "deb [trusted=yes] https://foxzi.github.io/sendry/apt stable main" | sudo tee /etc/apt/sources.list.d/sendry.list
+
+          # Install
+          sudo apt update
+          sudo apt install sendry</pre>
+            </div>
+
+            <div class="section">
+              <h2>RHEL/CentOS/Fedora (YUM/DNF)</h2>
+              <pre>
+          # Add repository
+          sudo tee /etc/yum.repos.d/sendry.repo << 'REPO'
+          [sendry]
+          name=Sendry Repository
+          baseurl=https://foxzi.github.io/sendry/rpm/stable/$basearch/
+          enabled=1
+          gpgcheck=0
+          REPO
+
+          # Install
+          sudo dnf install sendry</pre>
+            </div>
+
+            <div class="section">
+              <h2>Alpine (APK)</h2>
+              <pre>
+          # Download directly from releases
+          wget https://github.com/foxzi/sendry/releases/latest/download/sendry_*_x86_64.apk
+          apk add --allow-untrusted sendry_*.apk</pre>
+            </div>
+
+            <div class="section">
+              <h2>Direct Download</h2>
+              <p>Visit <a href="https://github.com/foxzi/sendry/releases">GitHub Releases</a> for all packages.</p>
+            </div>
+          </body>
+          </html>
+          EOF
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: repo/
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
