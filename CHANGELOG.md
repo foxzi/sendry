@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Sendry MTA: Nil pointer dereference in domain API handlers when domainManager not initialized
+- CI: Fix APT Release file format (missing file sizes, wrong paths)
 
 ## [0.4.6] - 2026-02-14
 

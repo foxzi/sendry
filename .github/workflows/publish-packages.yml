@@ -86,24 +86,32 @@ jobs:
           gzip -k -f dists/stable/main/binary-arm64/Packages
 
           # Generate Release file
-          cat > dists/stable/Release << EOF
-          Origin: Sendry
-          Label: Sendry
-          Suite: stable
-          Codename: stable
-          Architectures: amd64 arm64
-          Components: main
-          Description: Sendry MTA packages
-          Date: $(date -Ru)
-          EOF
-
-          # Add checksums to Release
           cd dists/stable
+          cat > Release << 'RELEASE'
+Origin: Sendry
+Label: Sendry
+Suite: stable
+Codename: stable
+Architectures: amd64 arm64
+Components: main
+Description: Sendry MTA packages
+RELEASE
+          echo "Date: $(date -Ru)" >> Release
+
+          # Add checksums to Release (format: hash size path)
           {
             echo "MD5Sum:"
-            find main -type f -exec md5sum {} \; | sed 's|main/| |'
+            find main -type f | while read f; do
+              hash=$(md5sum "$f" | cut -d' ' -f1)
+              size=$(stat -c%s "$f")
+              printf " %s %16d %s\n" "$hash" "$size" "$f"
+            done
             echo "SHA256:"
-            find main -type f -exec sha256sum {} \; | sed 's|main/| |'
+            find main -type f | while read f; do
+              hash=$(sha256sum "$f" | cut -d' ' -f1)
+              size=$(stat -c%s "$f")
+              printf " %s %16d %s\n" "$hash" "$size" "$f"
+            done
           } >> Release
 
       - name: Sign APT repository
