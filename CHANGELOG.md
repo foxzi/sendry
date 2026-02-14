@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub Pages package repository (APT, YUM, APK) with automatic CI deployment
 - Documentation: Package repository installation instructions (EN/RU)
 
+### Fixed
+- Sendry MTA: Nil pointer dereference in domain API handlers when domainManager not initialized
+
 ## [0.4.6] - 2026-02-14
 
 ### Added

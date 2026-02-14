@@ -667,7 +667,7 @@ func (m *ManagementServer) handleDomainsCreate(w http.ResponseWriter, r *http.Re
 	}
 
 	// Load DKIM signer if DKIM config provided
-	if req.DKIM != nil && req.DKIM.Enabled {
+	if req.DKIM != nil && req.DKIM.Enabled && m.domainManager != nil {
 		_ = m.domainManager.ReloadSigner(req.Domain)
 	}
 
@@ -746,7 +746,7 @@ func (m *ManagementServer) handleDomainsUpdate(w http.ResponseWriter, r *http.Re
 	}
 
 	// Reload DKIM signer if DKIM config changed
-	if req.DKIM != nil {
+	if req.DKIM != nil && m.domainManager != nil {
 		if err := m.domainManager.ReloadSigner(domainName); err != nil {
 			// Log error but don't fail the request - config is saved
 			// Signer will be loaded on next restart
@@ -798,7 +798,9 @@ func (m *ManagementServer) handleDomainsDelete(w http.ResponseWriter, r *http.Re
 	}
 
 	// Remove DKIM signer
-	_ = m.domainManager.ReloadSigner(domainName)
+	if m.domainManager != nil {
+		_ = m.domainManager.ReloadSigner(domainName)
+	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
