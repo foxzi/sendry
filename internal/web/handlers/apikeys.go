@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/foxzi/sendry/internal/web/models"
@@ -38,6 +39,9 @@ func (h *Handlers) APIKeysList(w http.ResponseWriter, r *http.Request) {
 	// Check for newly created key in query params
 	newKey := r.URL.Query().Get("new_key")
 
+	// Get available domains for selection
+	domains, _ := h.domains.List(models.DomainFilter{})
+
 	data := map[string]any{
 		"Title":      "API Keys",
 		"Active":     "settings",
@@ -48,6 +52,7 @@ func (h *Handlers) APIKeysList(w http.ResponseWriter, r *http.Request) {
 		"TotalPages": totalPages,
 		"Search":     search,
 		"NewKey":     newKey,
+		"Domains":    domains,
 	}
 
 	h.render(w, "apikeys_list", data)
@@ -79,11 +84,23 @@ func (h *Handlers) APIKeyCreate(w http.ResponseWriter, r *http.Request) {
 	rateLimitMinute, _ := strconv.Atoi(r.FormValue("rate_limit_minute"))
 	rateLimitHour, _ := strconv.Atoi(r.FormValue("rate_limit_hour"))
 
+	// Parse allowed domains (multi-value form field)
+	var allowedDomains []string
+	if domains := r.Form["allowed_domains"]; len(domains) > 0 {
+		for _, d := range domains {
+			d = strings.TrimSpace(d)
+			if d != "" {
+				allowedDomains = append(allowedDomains, d)
+			}
+		}
+	}
+
 	user := h.getUserFromContext(r)
 	opts := repository.APIKeyCreateOptions{
 		Name:            name,
 		CreatedBy:       user["Email"],
 		Permissions:     []string{"send"},
+		AllowedDomains:  allowedDomains,
 		ExpiresAt:       expiresAt,
 		RateLimitMinute: rateLimitMinute,
 		RateLimitHour:   rateLimitHour,
@@ -145,4 +162,73 @@ func (h *Handlers) APIKeyToggle(w http.ResponseWriter, r *http.Request) {
 	h.logger.Info("API key "+action, "id", id, "user", user["Email"])
 
 	http.Redirect(w, r, "/settings/api-keys", http.StatusSeeOther)
+}
+
+// APIKeyEdit updates an API key
+func (h *Handlers) APIKeyEdit(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		h.error(w, http.StatusBadRequest, "API key ID is required")
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		h.error(w, http.StatusBadRequest, "Invalid form data")
+		return
+	}
+
+	name := r.FormValue("name")
+	if name == "" {
+		h.error(w, http.StatusBadRequest, "Name is required")
+		return
+	}
+
+	// Parse rate limits
+	rateLimitMinute, _ := strconv.Atoi(r.FormValue("rate_limit_minute"))
+	rateLimitHour, _ := strconv.Atoi(r.FormValue("rate_limit_hour"))
+
+	// Parse allowed domains (multi-value form field)
+	var allowedDomains []string
+	if domains := r.Form["allowed_domains"]; len(domains) > 0 {
+		for _, d := range domains {
+			d = strings.TrimSpace(d)
+			if d != "" {
+				allowedDomains = append(allowedDomains, d)
+			}
+		}
+	}
+
+	if err := h.apiKeys.Update(id, name, allowedDomains, rateLimitMinute, rateLimitHour); err != nil {
+		h.logger.Error("failed to update API key", "id", id, "error", err)
+		h.error(w, http.StatusInternalServerError, "Failed to update API key")
+		return
+	}
+
+	user := h.getUserFromContext(r)
+	h.logger.Info("API key updated", "id", id, "user", user["Email"])
+
+	http.Redirect(w, r, "/settings/api-keys", http.StatusSeeOther)
+}
+
+// APIKeyGet returns a single API key for editing
+func (h *Handlers) APIKeyGet(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		h.apiError(w, http.StatusBadRequest, "API key ID is required", "MISSING_ID")
+		return
+	}
+
+	apiKey, err := h.apiKeys.GetByID(id)
+	if err != nil {
+		h.logger.Error("failed to get API key", "id", id, "error", err)
+		h.apiError(w, http.StatusInternalServerError, "Failed to get API key", "INTERNAL_ERROR")
+		return
+	}
+
+	if apiKey == nil {
+		h.apiError(w, http.StatusNotFound, "API key not found", "NOT_FOUND")
+		return
+	}
+
+	h.apiJSON(w, http.StatusOK, apiKey)
 }

@@ -29,6 +29,7 @@
                 <tr>
                     <th>Name</th>
                     <th>Key Prefix</th>
+                    <th>Allowed Domains</th>
                     <th>Sends</th>
                     <th>Rate Limits</th>
                     <th>Created</th>
@@ -42,22 +43,29 @@
                 {{range .APIKeys}}
                 <tr>
                     <td>{{.Name}}</td>
-                    <td><code>{{.KeyPrefix}}...</code></td>
+                    <td class="key-prefix">{{.KeyPrefix}}...</td>
+                    <td>
+                        {{if .AllowedDomains}}
+                        <span class="domain-badges">
+                            {{range .AllowedDomains}}<span class="badge badge-info">{{.}}</span> {{end}}
+                        </span>
+                        {{else}}
+                        <span class="text-secondary">All</span>
+                        {{end}}
+                    </td>
                     <td>{{.SendCount}}</td>
                     <td>
                         {{if or .RateLimitMinute .RateLimitHour}}
-                        <span class="rate-limits">
                             {{if .RateLimitMinute}}{{.RateLimitMinute}}/min{{end}}
                             {{if and .RateLimitMinute .RateLimitHour}} | {{end}}
                             {{if .RateLimitHour}}{{.RateLimitHour}}/hr{{end}}
-                        </span>
                         {{else}}
-                        <em>Unlimited</em>
+                        <span class="text-secondary">-</span>
                         {{end}}
                     </td>
                     <td>{{.CreatedAt.Format "2006-01-02"}}</td>
-                    <td>{{if .LastUsedAt}}{{.LastUsedAt.Format "2006-01-02 15:04"}}{{else}}<em>Never</em>{{end}}</td>
-                    <td>{{if .ExpiresAt}}{{.ExpiresAt.Format "2006-01-02"}}{{else}}<em>Never</em>{{end}}</td>
+                    <td>{{if .LastUsedAt}}{{.LastUsedAt.Format "2006-01-02 15:04"}}{{else}}<span class="text-secondary">-</span>{{end}}</td>
+                    <td>{{if .ExpiresAt}}{{.ExpiresAt.Format "2006-01-02"}}{{else}}<span class="text-secondary">-</span>{{end}}</td>
                     <td>
                         {{if .Active}}
                         <span class="badge badge-completed">Active</span>
@@ -66,6 +74,7 @@
                         {{end}}
                     </td>
                     <td class="actions">
+                        <button onclick="editKey('{{.ID}}', '{{.Name}}', [{{range $i, $d := .AllowedDomains}}{{if $i}},{{end}}'{{$d}}'{{end}}], {{.RateLimitMinute}}, {{.RateLimitHour}})" class="btn btn-sm">Edit</button>
                         <form method="post" action="/settings/api-keys/{{.ID}}/toggle" style="display: inline;">
                             {{if .Active}}
                             <button type="submit" class="btn btn-sm btn-warning">Deactivate</button>
@@ -130,6 +139,19 @@
                         <input type="number" id="rate_limit_hour" name="rate_limit_hour" class="input" min="0" placeholder="0 = unlimited">
                     </div>
                 </div>
+                <div class="form-group">
+                    <label>Allowed Domains <small class="text-muted">(leave empty for all domains)</small></label>
+                    <div class="checkbox-list">
+                        {{range $.Domains}}
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="allowed_domains" value="{{.Domain}}">
+                            <span>{{.Domain}}</span>
+                        </label>
+                        {{else}}
+                        <p class="text-muted">No domains configured. <a href="/settings/domains">Add domains</a></p>
+                        {{end}}
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" onclick="document.getElementById('create-modal').style.display='none'" class="btn btn-secondary">Cancel</button>
@@ -138,6 +160,67 @@
         </form>
     </div>
 </div>
+
+<!-- Edit Modal -->
+<div id="edit-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Edit API Key</h2>
+            <button type="button" onclick="document.getElementById('edit-modal').style.display='none'" class="close">&times;</button>
+        </div>
+        <form method="post" action="" id="edit-form">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="edit_name">Name</label>
+                    <input type="text" id="edit_name" name="name" class="input" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="edit_rate_limit_minute">Rate Limit / Minute</label>
+                        <input type="number" id="edit_rate_limit_minute" name="rate_limit_minute" class="input" min="0" placeholder="0 = unlimited">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit_rate_limit_hour">Rate Limit / Hour</label>
+                        <input type="number" id="edit_rate_limit_hour" name="rate_limit_hour" class="input" min="0" placeholder="0 = unlimited">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Allowed Domains <small class="text-muted">(leave empty for all domains)</small></label>
+                    <div class="checkbox-list" id="edit-domains-list">
+                        {{range $.Domains}}
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="allowed_domains" value="{{.Domain}}" class="edit-domain-checkbox">
+                            <span>{{.Domain}}</span>
+                        </label>
+                        {{else}}
+                        <p class="text-muted">No domains configured. <a href="/settings/domains">Add domains</a></p>
+                        {{end}}
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" onclick="document.getElementById('edit-modal').style.display='none'" class="btn btn-secondary">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function editKey(id, name, allowedDomains, rateLimitMinute, rateLimitHour) {
+    document.getElementById('edit-form').action = '/settings/api-keys/' + id + '/edit';
+    document.getElementById('edit_name').value = name;
+    document.getElementById('edit_rate_limit_minute').value = rateLimitMinute || '';
+    document.getElementById('edit_rate_limit_hour').value = rateLimitHour || '';
+
+    // Reset all checkboxes
+    document.querySelectorAll('.edit-domain-checkbox').forEach(cb => {
+        cb.checked = allowedDomains.includes(cb.value);
+    });
+
+    document.getElementById('edit-modal').style.display = 'flex';
+}
+</script>
 
 <style>
 .api-key-display {
@@ -165,38 +248,45 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0,0,0,0.5);
+    background: rgba(0,0,0,0.6);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 1000;
+    backdrop-filter: blur(4px);
 }
 .modal-content {
-    background: var(--bg-primary);
+    background: #ffffff;
     border-radius: 8px;
     width: 100%;
     max-width: 500px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+[data-theme="dark"] .modal-content {
+    background: #1e1e2e;
 }
 .modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 1rem 1.5rem;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--border, #e0e0e0);
+    background: inherit;
 }
 .modal-header h2 {
     margin: 0;
 }
 .modal-body {
     padding: 1.5rem;
+    background: inherit;
 }
 .modal-footer {
     padding: 1rem 1.5rem;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--border, #e0e0e0);
     display: flex;
     justify-content: flex-end;
     gap: 0.5rem;
+    background: inherit;
 }
 .close {
     background: none;
@@ -204,6 +294,58 @@
     font-size: 1.5rem;
     cursor: pointer;
     color: var(--text-muted);
+}
+.checkbox-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+}
+.checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
+.checkbox-item input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+}
+.domain-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+.badge-info {
+    background: var(--accent);
+    color: white;
+    font-size: 0.75rem;
+}
+.key-prefix {
+    font-family: inherit;
+    color: var(--text-secondary, #666);
+}
+.table .btn {
+    font-family: inherit;
+}
+.table .actions {
+    white-space: nowrap;
+}
+.table .actions form {
+    display: inline-block;
+}
+.table .actions .btn {
+    margin: 2px;
+}
+.table td {
+    white-space: nowrap;
+}
+.table .domain-badges {
+    white-space: normal;
 }
 </style>
 {{end}}

@@ -69,6 +69,7 @@ func (db *DB) Migrate() error {
 		"ALTER TABLE send_jobs ADD COLUMN dry_run_limit INTEGER DEFAULT 0",
 		"ALTER TABLE api_keys ADD COLUMN rate_limit_minute INTEGER DEFAULT 0",
 		"ALTER TABLE api_keys ADD COLUMN rate_limit_hour INTEGER DEFAULT 0",
+		"ALTER TABLE api_keys ADD COLUMN allowed_domains TEXT DEFAULT '[]'",
 	}
 	for _, m := range alterMigrations {
 		db.Exec(m) // Ignore errors (column may already exist)

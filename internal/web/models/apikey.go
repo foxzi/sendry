@@ -9,6 +9,7 @@ type APIKey struct {
 	KeyHash         string     `json:"-"`                       // SHA256 hash, never expose
 	KeyPrefix       string     `json:"key_prefix"`              // First 8 chars for display
 	Permissions     string     `json:"permissions"`             // JSON array of permissions
+	AllowedDomains  []string   `json:"allowed_domains"`         // Domains allowed to send from (empty = all)
 	RateLimitMinute int        `json:"rate_limit_minute"`       // Max requests per minute (0 = unlimited)
 	RateLimitHour   int        `json:"rate_limit_hour"`         // Max requests per hour (0 = unlimited)
 	CreatedBy       string     `json:"created_by,omitempty"`
@@ -16,6 +17,19 @@ type APIKey struct {
 	LastUsedAt      *time.Time `json:"last_used_at,omitempty"`
 	ExpiresAt       *time.Time `json:"expires_at,omitempty"`
 	Active          bool       `json:"active"`
+}
+
+// CanSendFromDomain checks if the API key is allowed to send from the given domain
+func (k *APIKey) CanSendFromDomain(domain string) bool {
+	if len(k.AllowedDomains) == 0 {
+		return true // No restrictions
+	}
+	for _, d := range k.AllowedDomains {
+		if d == domain {
+			return true
+		}
+	}
+	return false
 }
 
 // APIKeyPermission constants

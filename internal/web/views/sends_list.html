@@ -4,20 +4,20 @@
 </div>
 
 {{if .Stats}}
-<div class="stats-row" style="margin-bottom: 1rem; display: flex; gap: 1rem;">
-    <div class="stat-card">
+<div class="stats-row" style="margin-bottom: 1rem; display: flex; gap: 1rem; justify-content: space-between;">
+    <div class="stat-card" style="flex: 1;">
         <div class="stat-value">{{.Stats.Total}}</div>
         <div class="stat-label">Total</div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" style="flex: 1;">
         <div class="stat-value" style="color: var(--success)">{{.Stats.Sent}}</div>
         <div class="stat-label">Sent</div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" style="flex: 1;">
         <div class="stat-value" style="color: var(--danger)">{{.Stats.Failed}}</div>
         <div class="stat-label">Failed</div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" style="flex: 1;">
         <div class="stat-value" style="color: var(--warning)">{{.Stats.Pending}}</div>
         <div class="stat-label">Pending</div>
     </div>

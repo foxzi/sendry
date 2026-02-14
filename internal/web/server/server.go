@@ -227,6 +227,8 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("GET /settings/audit", h.AuditLog)
 	protected.HandleFunc("GET /settings/api-keys", h.APIKeysList)
 	protected.HandleFunc("POST /settings/api-keys", h.APIKeyCreate)
+	protected.HandleFunc("GET /settings/api-keys/{id}", h.APIKeyGet)
+	protected.HandleFunc("POST /settings/api-keys/{id}/edit", h.APIKeyEdit)
 	protected.HandleFunc("POST /settings/api-keys/{id}/toggle", h.APIKeyToggle)
 	protected.HandleFunc("DELETE /settings/api-keys/{id}", h.APIKeyDelete)
 	protected.HandleFunc("GET /settings/test-email", h.SettingsTestEmail)

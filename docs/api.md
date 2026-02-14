@@ -10,6 +10,23 @@ All API endpoints (except `/health`) require authentication via API key:
 curl -H "Authorization: Bearer YOUR_API_KEY" http://localhost:8080/api/v1/...
 ```
 
+### API Key Management
+
+API keys can be created and managed through the web interface at `/settings/api-keys`.
+
+**Features:**
+- **Domain Restrictions**: Limit API keys to send only from specific domains. If no domains are specified, the key can send from any configured domain.
+- **Rate Limits**: Set per-minute and per-hour rate limits for each key.
+- **Expiration**: Optionally set an expiration date for keys.
+- **Activity Tracking**: View last used timestamp and total send count.
+
+**Error Responses:**
+| Code | Error | Description |
+|------|-------|-------------|
+| `DOMAIN_NOT_ALLOWED` | 403 | API key is not allowed to send from the specified domain |
+| `UNAUTHORIZED` | 401 | Invalid or missing API key |
+| `RATE_LIMITED` | 429 | Rate limit exceeded for this API key |
+
 ## Base URL
 
 Default: `http://localhost:8080`

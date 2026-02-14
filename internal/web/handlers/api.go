@@ -29,6 +29,15 @@ func (h *Handlers) APISend(w http.ResponseWriter, r *http.Request) {
 	apiKeyID := ""
 	if apiKey != nil {
 		apiKeyID = apiKey.ID
+
+		// Check domain permissions
+		if len(apiKey.AllowedDomains) > 0 && req.From != "" {
+			senderDomain := extractDomainFromEmail(req.From)
+			if !apiKey.CanSendFromDomain(senderDomain) {
+				h.apiError(w, http.StatusForbidden, "Domain not allowed for this API key", "DOMAIN_NOT_ALLOWED")
+				return
+			}
+		}
 	}
 
 	// Get client IP
@@ -121,4 +130,13 @@ func (h *Handlers) apiError(w http.ResponseWriter, status int, message, code str
 // GetAPIKeysRepository returns the API keys repository for middleware
 func (h *Handlers) GetAPIKeysRepository() interface{} {
 	return h.apiKeys
+}
+
+// extractDomainFromEmail extracts domain from email address
+func extractDomainFromEmail(email string) string {
+	parts := strings.Split(email, "@")
+	if len(parts) != 2 {
+		return ""
+	}
+	return strings.ToLower(parts[1])
 }

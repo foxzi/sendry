@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -25,6 +26,7 @@ type APIKeyCreateOptions struct {
 	Name            string
 	CreatedBy       string
 	Permissions     []string
+	AllowedDomains  []string
 	ExpiresAt       *time.Time
 	RateLimitMinute int
 	RateLimitHour   int
@@ -55,12 +57,20 @@ func (r *APIKeyRepository) Create(opts APIKeyCreateOptions) (*models.APIKeyCreat
 		}
 	}
 
+	// Serialize allowed domains
+	domainsJSON := "[]"
+	if len(opts.AllowedDomains) > 0 {
+		domainsBytes, _ := json.Marshal(opts.AllowedDomains)
+		domainsJSON = string(domainsBytes)
+	}
+
 	apiKey := &models.APIKey{
 		ID:              uuid.New().String(),
 		Name:            opts.Name,
 		KeyHash:         keyHash,
 		KeyPrefix:       keyPrefix,
 		Permissions:     permJSON,
+		AllowedDomains:  opts.AllowedDomains,
 		RateLimitMinute: opts.RateLimitMinute,
 		RateLimitHour:   opts.RateLimitHour,
 		CreatedBy:       opts.CreatedBy,
@@ -70,9 +80,9 @@ func (r *APIKeyRepository) Create(opts APIKeyCreateOptions) (*models.APIKeyCreat
 	}
 
 	_, err := r.db.Exec(`
-		INSERT INTO api_keys (id, name, key_hash, key_prefix, permissions, rate_limit_minute, rate_limit_hour, created_by, created_at, expires_at, active)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		apiKey.ID, apiKey.Name, apiKey.KeyHash, apiKey.KeyPrefix, apiKey.Permissions,
+		INSERT INTO api_keys (id, name, key_hash, key_prefix, permissions, allowed_domains, rate_limit_minute, rate_limit_hour, created_by, created_at, expires_at, active)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		apiKey.ID, apiKey.Name, apiKey.KeyHash, apiKey.KeyPrefix, apiKey.Permissions, domainsJSON,
 		apiKey.RateLimitMinute, apiKey.RateLimitHour,
 		apiKey.CreatedBy, apiKey.CreatedAt, apiKey.ExpiresAt, 1,
 	)
@@ -91,13 +101,14 @@ func (r *APIKeyRepository) GetByID(id string) (*models.APIKey, error) {
 	k := &models.APIKey{}
 	var expiresAt, lastUsedAt sql.NullTime
 	var rateLimitMinute, rateLimitHour sql.NullInt64
+	var domainsJSON sql.NullString
 
 	err := r.db.QueryRow(`
-		SELECT id, name, key_hash, key_prefix, permissions,
+		SELECT id, name, key_hash, key_prefix, permissions, COALESCE(allowed_domains, '[]'),
 		       COALESCE(rate_limit_minute, 0), COALESCE(rate_limit_hour, 0),
 		       created_by, created_at, last_used_at, expires_at, active
 		FROM api_keys WHERE id = ?`, id,
-	).Scan(&k.ID, &k.Name, &k.KeyHash, &k.KeyPrefix, &k.Permissions,
+	).Scan(&k.ID, &k.Name, &k.KeyHash, &k.KeyPrefix, &k.Permissions, &domainsJSON,
 		&rateLimitMinute, &rateLimitHour,
 		&k.CreatedBy, &k.CreatedAt, &lastUsedAt, &expiresAt, &k.Active)
 
@@ -110,6 +121,10 @@ func (r *APIKeyRepository) GetByID(id string) (*models.APIKey, error) {
 
 	k.RateLimitMinute = int(rateLimitMinute.Int64)
 	k.RateLimitHour = int(rateLimitHour.Int64)
+
+	if domainsJSON.Valid && domainsJSON.String != "" && domainsJSON.String != "[]" {
+		json.Unmarshal([]byte(domainsJSON.String), &k.AllowedDomains)
+	}
 
 	if expiresAt.Valid {
 		k.ExpiresAt = &expiresAt.Time
@@ -126,13 +141,14 @@ func (r *APIKeyRepository) GetByHash(keyHash string) (*models.APIKey, error) {
 	k := &models.APIKey{}
 	var expiresAt, lastUsedAt sql.NullTime
 	var rateLimitMinute, rateLimitHour sql.NullInt64
+	var domainsJSON sql.NullString
 
 	err := r.db.QueryRow(`
-		SELECT id, name, key_hash, key_prefix, permissions,
+		SELECT id, name, key_hash, key_prefix, permissions, COALESCE(allowed_domains, '[]'),
 		       COALESCE(rate_limit_minute, 0), COALESCE(rate_limit_hour, 0),
 		       created_by, created_at, last_used_at, expires_at, active
 		FROM api_keys WHERE key_hash = ?`, keyHash,
-	).Scan(&k.ID, &k.Name, &k.KeyHash, &k.KeyPrefix, &k.Permissions,
+	).Scan(&k.ID, &k.Name, &k.KeyHash, &k.KeyPrefix, &k.Permissions, &domainsJSON,
 		&rateLimitMinute, &rateLimitHour,
 		&k.CreatedBy, &k.CreatedAt, &lastUsedAt, &expiresAt, &k.Active)
 
@@ -145,6 +161,10 @@ func (r *APIKeyRepository) GetByHash(keyHash string) (*models.APIKey, error) {
 
 	k.RateLimitMinute = int(rateLimitMinute.Int64)
 	k.RateLimitHour = int(rateLimitHour.Int64)
+
+	if domainsJSON.Valid && domainsJSON.String != "" && domainsJSON.String != "[]" {
+		json.Unmarshal([]byte(domainsJSON.String), &k.AllowedDomains)
+	}
 
 	if expiresAt.Valid {
 		k.ExpiresAt = &expiresAt.Time
@@ -172,7 +192,7 @@ func (r *APIKeyRepository) List(filter models.APIKeyFilter) ([]models.APIKeyWith
 	}
 
 	query := `
-		SELECT k.id, k.name, k.key_hash, k.key_prefix, k.permissions,
+		SELECT k.id, k.name, k.key_hash, k.key_prefix, k.permissions, COALESCE(k.allowed_domains, '[]'),
 		       COALESCE(k.rate_limit_minute, 0), COALESCE(k.rate_limit_hour, 0),
 		       k.created_by, k.created_at, k.last_used_at, k.expires_at, k.active,
 		       COALESCE(s.send_count, 0) as send_count
@@ -207,11 +227,16 @@ func (r *APIKeyRepository) List(filter models.APIKeyFilter) ([]models.APIKeyWith
 	for rows.Next() {
 		var k models.APIKeyWithStats
 		var expiresAt, lastUsedAt sql.NullTime
+		var domainsJSON string
 
-		if err := rows.Scan(&k.ID, &k.Name, &k.KeyHash, &k.KeyPrefix, &k.Permissions,
+		if err := rows.Scan(&k.ID, &k.Name, &k.KeyHash, &k.KeyPrefix, &k.Permissions, &domainsJSON,
 			&k.RateLimitMinute, &k.RateLimitHour,
 			&k.CreatedBy, &k.CreatedAt, &lastUsedAt, &expiresAt, &k.Active, &k.SendCount); err != nil {
 			return nil, 0, err
+		}
+
+		if domainsJSON != "" && domainsJSON != "[]" {
+			json.Unmarshal([]byte(domainsJSON), &k.AllowedDomains)
 		}
 
 		if expiresAt.Valid {
@@ -284,6 +309,28 @@ func (r *APIKeyRepository) Delete(id string) error {
 	if err != nil {
 		return err
 	}
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		return fmt.Errorf("API key not found")
+	}
+	return nil
+}
+
+// Update updates an API key's settings
+func (r *APIKeyRepository) Update(id string, name string, allowedDomains []string, rateLimitMinute, rateLimitHour int) error {
+	domainsJSON := "[]"
+	if len(allowedDomains) > 0 {
+		domainsBytes, _ := json.Marshal(allowedDomains)
+		domainsJSON = string(domainsBytes)
+	}
+
+	result, err := r.db.Exec(`
+		UPDATE api_keys SET name = ?, allowed_domains = ?, rate_limit_minute = ?, rate_limit_hour = ?
+		WHERE id = ?`, name, domainsJSON, rateLimitMinute, rateLimitHour, id)
+	if err != nil {
+		return err
+	}
+
 	affected, _ := result.RowsAffected()
 	if affected == 0 {
 		return fmt.Errorf("API key not found")

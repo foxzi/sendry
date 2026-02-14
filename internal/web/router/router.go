@@ -18,6 +18,7 @@ import (
 
 var (
 	ErrDomainNotFound     = errors.New("domain not configured")
+	ErrDomainNotAllowed   = errors.New("domain not allowed for this API key")
 	ErrNoServersAvailable = errors.New("no healthy servers available for domain")
 	ErrAllServersFailed   = errors.New("all servers failed to send")
 	ErrTemplateNotFound   = errors.New("template not found")

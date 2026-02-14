@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub Pages package repository (APT, YUM, APK) with automatic CI deployment
 - Documentation: Package repository installation instructions (EN/RU)
 - Ansible: Repository installation method (sendry_install_method: repository)
+- Sendry Web: API key domain restrictions (limit which domains each key can send from)
+- Sendry Web: API key editing (update name, domains, rate limits)
+- Sendry Web: Domain selection UI in API key create/edit forms
+- Scripts: test-api.sh for testing Sendry Web API (send, template, status commands)
 
 ### Changed
 - Ansible: Default install method changed from binary to repository
@@ -18,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Sendry MTA: Nil pointer dereference in domain API handlers when domainManager not initialized
 - CI: Fix APT Release file format (missing file sizes, wrong paths)
+- Sendry Web: Fix transparent modal background in API keys create/edit dialogs
+- Sendry Web: Fix inconsistent fonts and row heights in API keys table
+- Sendry Web: Fix stats widgets alignment on Send History page (now full width)
 
 ## [0.4.6] - 2026-02-14
 

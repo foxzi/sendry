@@ -202,6 +202,39 @@ func setupTestDB(t *testing.T) *sql.DB {
 			config_hash TEXT,
 			UNIQUE(domain_id, server_name)
 		)`,
+		`CREATE TABLE IF NOT EXISTS api_keys (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			key_hash TEXT UNIQUE NOT NULL,
+			key_prefix TEXT NOT NULL,
+			permissions TEXT DEFAULT '["send"]',
+			allowed_domains TEXT DEFAULT '[]',
+			rate_limit_minute INTEGER DEFAULT 0,
+			rate_limit_hour INTEGER DEFAULT 0,
+			created_by TEXT,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			last_used_at TIMESTAMP,
+			expires_at TIMESTAMP,
+			active INTEGER DEFAULT 1
+		)`,
+		`CREATE TABLE IF NOT EXISTS sends (
+			id TEXT PRIMARY KEY,
+			api_key_id TEXT REFERENCES api_keys(id) ON DELETE SET NULL,
+			from_address TEXT NOT NULL,
+			to_addresses TEXT NOT NULL,
+			cc_addresses TEXT,
+			bcc_addresses TEXT,
+			subject TEXT,
+			template_id TEXT REFERENCES templates(id) ON DELETE SET NULL,
+			sender_domain TEXT NOT NULL,
+			server_name TEXT NOT NULL,
+			server_msg_id TEXT,
+			status TEXT DEFAULT 'pending',
+			error_message TEXT,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			sent_at TIMESTAMP,
+			client_ip TEXT
+		)`,
 	}
 
 	for _, m := range migrations {
