@@ -8,6 +8,9 @@ on:
       version:
         description: 'Version to publish (e.g., 0.4.6)'
         required: true
+  push:
+    paths:
+      - '.github/workflows/publish-packages.yml'
 
 permissions:
   contents: read
@@ -31,12 +34,17 @@ jobs:
 
       - name: Determine version
         id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           if [ "${{ github.event_name }}" = "release" ]; then
             VERSION="${{ github.event.release.tag_name }}"
             VERSION="${VERSION#v}"
-          else
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="${{ github.event.inputs.version }}"
+          else
+            # For push events, get latest release version
+            VERSION=$(gh release view --json tagName -q '.tagName' | sed 's/^v//')
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
