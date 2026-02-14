@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - GitHub Pages package repository (APT, YUM, APK) with automatic CI deployment
 - Documentation: Package repository installation instructions (EN/RU)
+- Ansible: Repository installation method (sendry_install_method: repository)
+
+### Changed
+- Ansible: Default install method changed from binary to repository
 
 ### Fixed
 - Sendry MTA: Nil pointer dereference in domain API handlers when domainManager not initialized

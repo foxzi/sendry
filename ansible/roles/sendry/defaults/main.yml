@@ -2,8 +2,11 @@
 # Enable MTA installation (set to false for web-only deployment)
 sendry_mta_enabled: true
 
-# Sendry installation method: 'binary' or 'package'
-sendry_install_method: binary
+# Sendry installation method: 'repository', 'package', or 'binary'
+# - repository: Use APT/YUM repository (recommended)
+# - package: Download package from GitHub releases
+# - binary: Download binary from GitHub releases
+sendry_install_method: repository
 
 # Binary installation settings
 sendry_version: latest

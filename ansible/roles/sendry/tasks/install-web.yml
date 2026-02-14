@@ -43,39 +43,89 @@
     group: "{{ sendry_group }}"
     mode: "0750"
 
-- name: Get latest release version from GitHub
-  ansible.builtin.uri:
-    url: https://api.github.com/repos/foxzi/sendry/releases/latest
-    return_content: true
-  register: github_release
-  when: sendry_version == 'latest'
+# Install via repository (sendry-web is included in sendry package)
+- name: Install from repository
+  when: sendry_install_method == 'repository' and not sendry_mta_enabled | bool
+  block:
+    - name: Add APT repository
+      when: ansible_os_family == 'Debian'
+      block:
+        - name: Add Sendry APT repository
+          ansible.builtin.apt_repository:
+            repo: "deb [trusted=yes] https://foxzi.github.io/sendry/apt stable main"
+            filename: sendry
+            state: present
 
-- name: Set version fact
-  ansible.builtin.set_fact:
-    _sendry_version: "{{ sendry_version if sendry_version != 'latest' else (github_release.json.tag_name | regex_replace('^v', '')) }}"
+        - name: Install sendry package via APT
+          ansible.builtin.apt:
+            name: sendry
+            state: "{{ (sendry_version == 'latest') | ternary('latest', 'present') }}"
+            update_cache: true
 
-- name: Set web binary architecture
-  ansible.builtin.set_fact:
-    _sendry_web_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+    - name: Add YUM repository
+      when: ansible_os_family == 'RedHat'
+      block:
+        - name: Add Sendry YUM repository
+          ansible.builtin.yum_repository:
+            name: sendry
+            description: Sendry Repository
+            baseurl: https://foxzi.github.io/sendry/rpm/stable/$basearch/
+            enabled: true
+            gpgcheck: false
 
-- name: Set web binary URL
-  ansible.builtin.set_fact:
-    _sendry_web_binary_url: "https://github.com/foxzi/sendry/releases/download/v{{ _sendry_version }}/sendry-web-linux-{{ _sendry_web_arch }}"
-  when: sendry_binary_url | length == 0
+        - name: Install sendry package via YUM
+          ansible.builtin.yum:
+            name: sendry
+            state: "{{ (sendry_version == 'latest') | ternary('latest', 'present') }}"
 
-- name: Download sendry-web binary
-  ansible.builtin.get_url:
-    url: "{{ _sendry_web_binary_url }}"
-    dest: /usr/bin/sendry-web
-    mode: "0755"
-    checksum: "{{ sendry_binary_checksum | default(omit) }}"
-  notify: Restart sendry-web
+# Install via binary download (web-only mode or non-repository method)
+- name: Install sendry-web binary
+  when: sendry_install_method != 'repository'
+  block:
+    - name: Get latest release version from GitHub
+      ansible.builtin.uri:
+        url: https://api.github.com/repos/foxzi/sendry/releases/latest
+        return_content: true
+      register: github_release
+      when: sendry_version == 'latest'
 
-- name: Install sendry-web systemd service
+    - name: Set version fact
+      ansible.builtin.set_fact:
+        _sendry_version: "{{ sendry_version if sendry_version != 'latest' else (github_release.json.tag_name | regex_replace('^v', '')) }}"
+
+    - name: Set web binary architecture
+      ansible.builtin.set_fact:
+        _sendry_web_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+
+    - name: Set web binary URL
+      ansible.builtin.set_fact:
+        _sendry_web_binary_url: "https://github.com/foxzi/sendry/releases/download/v{{ _sendry_version }}/sendry-web-linux-{{ _sendry_web_arch }}"
+      when: sendry_binary_url | length == 0
+
+    - name: Download sendry-web binary
+      ansible.builtin.get_url:
+        url: "{{ _sendry_web_binary_url }}"
+        dest: /usr/bin/sendry-web
+        mode: "0755"
+        checksum: "{{ sendry_binary_checksum | default(omit) }}"
+      notify: Restart sendry-web
+
+    - name: Install sendry-web systemd service
+      ansible.builtin.template:
+        src: sendry-web.service.j2
+        dest: /etc/systemd/system/sendry-web.service
+        mode: "0644"
+      notify:
+        - Reload systemd
+        - Restart sendry-web
+
+# Ensure systemd service is present for all install methods
+- name: Install sendry-web systemd service (repository method)
   ansible.builtin.template:
     src: sendry-web.service.j2
     dest: /etc/systemd/system/sendry-web.service
     mode: "0644"
+  when: sendry_install_method == 'repository'
   notify:
     - Reload systemd
     - Restart sendry-web

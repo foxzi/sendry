@@ -29,6 +29,40 @@
     - { path: "{{ sendry_dkim_dir }}", mode: "0700" }
     - { path: "{{ sendry_acme_cache_dir }}", mode: "0700" }
 
+- name: Install from repository (recommended)
+  when: sendry_install_method == 'repository'
+  block:
+    - name: Add APT repository
+      when: ansible_os_family == 'Debian'
+      block:
+        - name: Add Sendry APT repository
+          ansible.builtin.apt_repository:
+            repo: "deb [trusted=yes] https://foxzi.github.io/sendry/apt stable main"
+            filename: sendry
+            state: present
+
+        - name: Install sendry package via APT
+          ansible.builtin.apt:
+            name: sendry
+            state: "{{ (sendry_version == 'latest') | ternary('latest', 'present') }}"
+            update_cache: true
+
+    - name: Add YUM repository
+      when: ansible_os_family == 'RedHat'
+      block:
+        - name: Add Sendry YUM repository
+          ansible.builtin.yum_repository:
+            name: sendry
+            description: Sendry Repository
+            baseurl: https://foxzi.github.io/sendry/rpm/stable/$basearch/
+            enabled: true
+            gpgcheck: false
+
+        - name: Install sendry package via YUM
+          ansible.builtin.yum:
+            name: sendry
+            state: "{{ (sendry_version == 'latest') | ternary('latest', 'present') }}"
+
 - name: Install from GitHub package
   when: sendry_install_method == 'package'
   block:

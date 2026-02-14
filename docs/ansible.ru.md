@@ -55,20 +55,27 @@ ansible-playbook -i inventory/hosts.yml playbooks/sendry.yml
 
 ## Способы установки
 
-### Из GitHub Release (рекомендуется)
+### Из репозитория пакетов (рекомендуется)
 
-Скачивает последний релиз с GitHub:
+Использует APT/YUM репозиторий для автоматических обновлений:
 
 ```yaml
-sendry_install_method: package  # DEB/RPM в зависимости от ОС
+sendry_install_method: repository  # По умолчанию
 sendry_version: latest
 ```
 
-Или конкретная версия:
+Этот метод:
+- Автоматически настраивает репозиторий пакетов
+- Позволяет легко обновлять через `apt upgrade` или `yum update`
+- Рекомендуется для продакшена
+
+### Из GitHub Release
+
+Скачивает конкретную версию с GitHub releases:
 
 ```yaml
-sendry_install_method: binary
-sendry_version: "0.3.3"
+sendry_install_method: package  # DEB/RPM в зависимости от ОС
+sendry_version: "0.4.6"
 ```
 
 ### Из бинарного файла
