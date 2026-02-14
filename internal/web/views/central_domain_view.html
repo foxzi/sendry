@@ -201,33 +201,6 @@
 
 <div class="card">
     <div class="card-header">
-        <h3>Deploy to Multiple Servers</h3>
-    </div>
-    <div class="card-body">
-        <form method="POST" action="/domains/{{.Domain.ID}}/deploy">
-            <div class="form-group">
-                <label>Select servers to deploy this domain:</label>
-                {{range .Servers}}
-                {{$deployment := index $.DeployedMap .Name}}
-                {{if not $deployment.ServerName}}
-                <div class="checkbox">
-                    <label>
-                        <input type="checkbox" name="servers" value="{{.Name}}">
-                        {{.Name}} ({{.Env}})
-                    </label>
-                </div>
-                {{end}}
-                {{end}}
-            </div>
-            <div class="form-actions">
-                <button type="submit" class="btn btn-primary">Deploy to Selected</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<div class="card">
-    <div class="card-header">
         <h3>DNS Check</h3>
         <a href="/domains/{{.Domain.ID}}?check=true" class="btn btn-sm btn-primary">Run Check</a>
     </div>
