@@ -2,6 +2,41 @@
 
 ## Установка
 
+### Debian/Ubuntu (APT)
+
+```bash
+# Добавить репозиторий
+echo "deb [trusted=yes] https://foxzi.github.io/sendry/apt stable main" | sudo tee /etc/apt/sources.list.d/sendry.list
+
+# Установить
+sudo apt update
+sudo apt install sendry
+```
+
+### RHEL/CentOS/Fedora (YUM/DNF)
+
+```bash
+# Добавить репозиторий
+sudo tee /etc/yum.repos.d/sendry.repo << 'EOF'
+[sendry]
+name=Sendry Repository
+baseurl=https://foxzi.github.io/sendry/rpm/stable/$basearch/
+enabled=1
+gpgcheck=0
+EOF
+
+# Установить
+sudo dnf install sendry
+```
+
+### Alpine (APK)
+
+```bash
+# Скачать и установить
+wget https://github.com/foxzi/sendry/releases/latest/download/sendry_0.4.6-r1_x86_64.apk
+apk add --allow-untrusted sendry_*.apk
+```
+
 ### Из бинарника
 
 ```bash

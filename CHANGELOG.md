@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- GitHub Pages package repository (APT, YUM, APK) with automatic CI deployment
+- Documentation: Package repository installation instructions (EN/RU)
+
 ## [0.4.6] - 2026-02-14
 
 ### Added

@@ -57,22 +57,26 @@ A complete email sending solution you can run on your own servers:
 
 ## Installation
 
-### From Package (recommended)
-
-Download from [GitHub Releases](https://github.com/foxzi/sendry/releases):
+### Package Repository (recommended)
 
 ```bash
 # Debian/Ubuntu
-wget https://github.com/foxzi/sendry/releases/latest/download/sendry_0.3.3-1_amd64.deb
-sudo dpkg -i sendry_0.3.3-1_amd64.deb
+echo "deb [trusted=yes] https://foxzi.github.io/sendry/apt stable main" | sudo tee /etc/apt/sources.list.d/sendry.list
+sudo apt update && sudo apt install sendry
 
-# RHEL/CentOS
-wget https://github.com/foxzi/sendry/releases/latest/download/sendry-0.3.3-1.x86_64.rpm
-sudo rpm -i sendry-0.3.3-1.x86_64.rpm
+# RHEL/CentOS/Fedora
+sudo tee /etc/yum.repos.d/sendry.repo << 'EOF'
+[sendry]
+name=Sendry Repository
+baseurl=https://foxzi.github.io/sendry/rpm/stable/$basearch/
+enabled=1
+gpgcheck=0
+EOF
+sudo dnf install sendry
 
 # Alpine
-wget https://github.com/foxzi/sendry/releases/latest/download/sendry_0.3.3-r1_x86_64.apk
-sudo apk add --allow-untrusted sendry_0.3.3-r1_x86_64.apk
+wget https://github.com/foxzi/sendry/releases/latest/download/sendry_0.4.6-r1_x86_64.apk
+apk add --allow-untrusted sendry_*.apk
 ```
 
 ### From Binary
