@@ -1,0 +1,70 @@
+{{define "content"}}
+<div class="page-header">
+    <h1 data-i18n="send_test_email">Send Test Email</h1>
+    <div class="header-actions">
+        <a href="/settings" class="btn btn-secondary" data-i18n="back_to_settings">Back to Settings</a>
+    </div>
+</div>
+
+{{if .Success}}
+<div class="alert alert-success">
+    {{.Success}}
+</div>
+{{end}}
+
+{{if .Error}}
+<div class="alert alert-danger">
+    {{.Error}}
+</div>
+{{end}}
+
+<div class="card">
+    <div class="card-header">
+        <h3 data-i18n="send_test_email">Send Test Email</h3>
+    </div>
+    <div class="card-body">
+        <form method="post" action="/settings/test-email">
+            <div class="form-group">
+                <label for="server" data-i18n="mta_server">MTA Server</label>
+                <select id="server" name="server" class="input" required>
+                    <option value="">-- Select Server --</option>
+                    {{range .Servers}}
+                    <option value="{{.Name}}">{{.Name}} ({{.Env}})</option>
+                    {{end}}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="from" data-i18n="from">From</label>
+                <input type="email" id="from" name="from" class="input" required placeholder="sender@example.com">
+            </div>
+
+            <div class="form-group">
+                <label for="to" data-i18n="to">To</label>
+                <input type="email" id="to" name="to" class="input" required placeholder="recipient@example.com">
+            </div>
+
+            <div class="form-group">
+                <label for="subject" data-i18n="subject">Subject</label>
+                <input type="text" id="subject" name="subject" class="input" required placeholder="Test email">
+            </div>
+
+            <div class="form-group">
+                <label for="body" data-i18n="body">Body</label>
+                <textarea id="body" name="body" class="input" rows="6" required placeholder="This is a test email from Sendry Web."></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="html" value="1">
+                    <span data-i18n="send_as_html">Send as HTML</span>
+                </label>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary" data-i18n="send_test_email">Send Test Email</button>
+            </div>
+        </form>
+    </div>
+</div>
+{{end}}

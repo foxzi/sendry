@@ -780,11 +780,13 @@ func (h *Handlers) deployDomainToServer(r *http.Request, domain *models.Domain, 
 		if domain.DKIMKeyID != "" {
 			key, _ := h.dkim.GetByID(domain.DKIMKeyID)
 			if key != nil && key.Domain == domain.Domain {
-				_, err := client.UploadDKIM(r.Context(), key.Domain, key.Selector, key.PrivateKey)
+				dkimResp, err := client.UploadDKIM(r.Context(), key.Domain, key.Selector, key.PrivateKey)
 				if err != nil {
 					h.logger.Error("failed to deploy DKIM key", "error", err)
 				} else {
 					h.dkim.CreateDeployment(key.ID, serverName, "deployed", "")
+					// Set KeyFile from upload response
+					req.DKIM.KeyFile = dkimResp.KeyFile
 				}
 			}
 		}

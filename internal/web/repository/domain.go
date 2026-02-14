@@ -118,6 +118,13 @@ func (r *DomainRepository) GetByDomain(domainName string) (*models.Domain, error
 		json.Unmarshal([]byte(bccJSON.String), &domain.BCCTo)
 	}
 
+	// Load deployments
+	deployments, err := r.GetDeployments(domain.ID)
+	if err != nil {
+		return nil, err
+	}
+	domain.Deployments = deployments
+
 	return domain, nil
 }
 

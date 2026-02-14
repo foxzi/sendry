@@ -229,6 +229,8 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("POST /settings/api-keys", h.APIKeyCreate)
 	protected.HandleFunc("POST /settings/api-keys/{id}/toggle", h.APIKeyToggle)
 	protected.HandleFunc("DELETE /settings/api-keys/{id}", h.APIKeyDelete)
+	protected.HandleFunc("GET /settings/test-email", h.SettingsTestEmail)
+	protected.HandleFunc("POST /settings/test-email", h.SettingsTestEmail)
 
 	// DKIM (per server)
 	protected.HandleFunc("GET /servers/{server}/dkim", h.DKIMList)

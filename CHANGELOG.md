@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.6] - 2026-02-14
+
 ### Added
 - Sendry Web: Public API for email sending (POST /api/v1/send, POST /api/v1/send/template)
 - Sendry Web: API key authentication system for public API
@@ -20,18 +22,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sendry Web: API key rate limiting (per minute and per hour)
 - Sendry Web: API key activation/deactivation toggle
 - Sendry Web: IP filtering for entire panel (allowed_ips config option)
+- Sendry Web: Add DNS Check section to domain view page
+- Sendry Web: Add MTA server selection to sandbox test email page
+- Sendry Web: Add test email sending to Settings page (/settings/test-email)
 - Ansible: Add sendry_web_allowed_ips variable for web panel IP filtering
 - Ansible: Add example inventory for panel + MTA cluster deployment
 - Ansible: Add inventory README with deployment examples
 - Ansible: Add documentation for managing many domains via web panel
 
-- Sendry Web: Add DNS Check section to domain view page
-- Sendry Web: Add MTA server selection to sandbox test email page
-
 ### Fixed
 - Ansible: Fix package download URL for DEB and RPM packages
 - Sendry Web: Fix sandbox POST handler not registered
 - Sendry Web: Fix DKIM deploy not updating domain configuration with KeyFile path
+- Sendry Web: Fix domain deploy overwriting DKIM KeyFile with empty value
+- Sendry Web: Fix Public API not finding servers (GetByDomain missing deployments)
 - Sendry MTA: Fix DKIM signer not reloading when domain config updated via API
 - Sendry MTA: Fix DKIM provider not available for domains added via API after startup
 - Sendry MTA: Add persistence for domain configurations (domains.yaml)
@@ -278,6 +282,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DEB/RPM/APK packaging
 - Docker images
 
+[0.4.6]: https://github.com/foxzi/sendry/compare/v0.4.5...v0.4.6
 [0.4.5]: https://github.com/foxzi/sendry/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/foxzi/sendry/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/foxzi/sendry/compare/v0.4.2...v0.4.3

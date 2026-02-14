@@ -578,6 +578,8 @@ func (h *Handlers) CentralDKIMDeploymentDelete(w http.ResponseWriter, r *http.Re
 
 // updateDomainDKIM updates domain configuration with DKIM settings after key upload
 func (h *Handlers) updateDomainDKIM(ctx context.Context, client *sendry.Client, domain, selector, keyFile string) {
+	h.logger.Info("updateDomainDKIM called", "domain", domain, "selector", selector, "keyFile", keyFile)
+
 	// Get current domain config or create new
 	existingDomain, err := client.GetDomain(ctx, domain)
 
@@ -590,7 +592,7 @@ func (h *Handlers) updateDomainDKIM(ctx context.Context, client *sendry.Client, 
 	}
 
 	// Update domain with DKIM config
-	_, err = client.UpdateDomain(ctx, domain, &sendry.DomainUpdateRequest{
+	resp, err := client.UpdateDomain(ctx, domain, &sendry.DomainUpdateRequest{
 		Mode: mode,
 		DKIM: &sendry.DKIMConfig{
 			Enabled:  true,
@@ -600,5 +602,7 @@ func (h *Handlers) updateDomainDKIM(ctx context.Context, client *sendry.Client, 
 	})
 	if err != nil {
 		h.logger.Error("failed to update domain DKIM config", "domain", domain, "error", err)
+	} else {
+		h.logger.Info("domain DKIM config updated", "domain", domain, "response_dkim", resp.DKIM)
 	}
 }

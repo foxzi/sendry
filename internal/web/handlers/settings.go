@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/foxzi/sendry/internal/web/models"
+	"github.com/foxzi/sendry/internal/web/sendry"
 )
 
 // Settings shows settings overview
@@ -123,6 +124,61 @@ func (h *Handlers) AuditLog(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.render(w, "settings_audit", data)
+}
+
+// SettingsTestEmail provides test email sending interface
+func (h *Handlers) SettingsTestEmail(w http.ResponseWriter, r *http.Request) {
+	servers := h.getServersStatus()
+
+	data := map[string]any{
+		"Title":   "Send Test Email",
+		"Active":  "settings",
+		"User":    h.getUserFromContext(r),
+		"Servers": servers,
+	}
+
+	if r.Method == http.MethodPost {
+		if err := r.ParseForm(); err != nil {
+			data["Error"] = "Invalid form data"
+			h.render(w, "settings_test_email", data)
+			return
+		}
+
+		selectedServer := r.FormValue("server")
+		if selectedServer == "" {
+			data["Error"] = "Server is required"
+			h.render(w, "settings_test_email", data)
+			return
+		}
+
+		client, err := h.sendry.GetClient(selectedServer)
+		if err != nil {
+			data["Error"] = "Server not found: " + selectedServer
+			h.render(w, "settings_test_email", data)
+			return
+		}
+
+		req := &sendry.SendRequest{
+			From:    r.FormValue("from"),
+			To:      []string{r.FormValue("to")},
+			Subject: r.FormValue("subject"),
+		}
+
+		if r.FormValue("html") == "1" {
+			req.HTML = r.FormValue("body")
+		} else {
+			req.Body = r.FormValue("body")
+		}
+
+		resp, err := client.Send(r.Context(), req)
+		if err != nil {
+			data["Error"] = err.Error()
+		} else {
+			data["Success"] = "Email queued on " + selectedServer + " with ID: " + resp.ID
+		}
+	}
+
+	h.render(w, "settings_test_email", data)
 }
 
 // Monitoring shows system monitoring overview
