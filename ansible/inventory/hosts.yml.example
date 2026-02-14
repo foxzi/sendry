@@ -32,8 +32,8 @@ all:
 
       vars:
         ansible_user: root
-        sendry_install_method: package
-        sendry_version: latest
+        # Install method: repository (default), package, or binary
+        sendry_install_method: repository
 
         sendry_api_key: "shared-api-key-for-cluster"
         sendry_smtp_auth_users:
