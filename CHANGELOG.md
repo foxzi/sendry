@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sendry Web: API key editing (update name, domains, rate limits)
 - Sendry Web: Domain selection UI in API key create/edit forms
 - Scripts: test-api.sh for testing Sendry Web API (send, template, status commands)
+- Sendry Web: Monitoring page with interactive charts (Chart.js)
+- Sendry Web: Time series chart showing sent/failed/pending emails over time
+- Sendry Web: Domain breakdown chart (top 10 sender domains by volume)
+- Sendry Web: Period filter (24h, 7d, 30d) and domain filter for monitoring
+- Sendry Web: API endpoints /monitoring/api/stats and /monitoring/api/servers
 
 ### Changed
 - Ansible: Default install method changed from binary to repository

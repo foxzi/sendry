@@ -912,6 +912,56 @@ code {
     }
 }
 
+/* Monitoring Charts */
+.chart-container {
+    position: relative;
+    width: 100%;
+    height: 300px;
+}
+
+.chart-container-small {
+    height: 250px;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.stat-failed {
+    color: var(--error);
+}
+
+.stat-warning {
+    color: var(--warning);
+}
+
+.stat-muted {
+    color: var(--text-muted);
+}
+
+.header-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.header-actions .input {
+    min-width: 120px;
+}
+
+@media (max-width: 768px) {
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .header-actions {
+        flex-wrap: wrap;
+    }
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .navbar {

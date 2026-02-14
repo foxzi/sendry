@@ -293,6 +293,111 @@ func (r *SendRepository) GetServers() ([]string, error) {
 	return servers, rows.Err()
 }
 
+// GetTimeSeries returns time series data for monitoring charts
+func (r *SendRepository) GetTimeSeries(filter models.MonitoringFilter) ([]models.TimeSeriesPoint, error) {
+	var interval string
+	var groupBy string
+
+	switch filter.Period {
+	case "24h":
+		interval = "-24 hours"
+		groupBy = "%Y-%m-%d %H:00:00"
+	case "7d":
+		interval = "-7 days"
+		groupBy = "%Y-%m-%d"
+	default: // 30d
+		interval = "-30 days"
+		groupBy = "%Y-%m-%d"
+	}
+
+	query := `
+		SELECT
+			strftime(?, created_at) as timestamp,
+			SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) as sent,
+			SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
+			SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending
+		FROM sends
+		WHERE created_at >= datetime('now', ?)`
+
+	args := []any{groupBy, interval}
+
+	if filter.Domain != "" {
+		query += " AND sender_domain = ?"
+		args = append(args, filter.Domain)
+	}
+
+	query += ` GROUP BY strftime(?, created_at) ORDER BY timestamp`
+	args = append(args, groupBy)
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var points []models.TimeSeriesPoint
+	for rows.Next() {
+		var p models.TimeSeriesPoint
+		var ts string
+		if err := rows.Scan(&ts, &p.Sent, &p.Failed, &p.Pending); err != nil {
+			return nil, err
+		}
+		// Parse timestamp
+		if filter.Period == "24h" {
+			p.Timestamp, _ = time.Parse("2006-01-02 15:04:05", ts)
+		} else {
+			p.Timestamp, _ = time.Parse("2006-01-02", ts)
+		}
+		points = append(points, p)
+	}
+
+	return points, rows.Err()
+}
+
+// GetDomainStats returns statistics grouped by sender domain
+func (r *SendRepository) GetDomainStats(filter models.MonitoringFilter) ([]models.DomainStats, error) {
+	var interval string
+
+	switch filter.Period {
+	case "24h":
+		interval = "-24 hours"
+	case "7d":
+		interval = "-7 days"
+	default: // 30d
+		interval = "-30 days"
+	}
+
+	query := `
+		SELECT
+			sender_domain,
+			SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) as sent,
+			SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
+			SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+			COUNT(*) as total
+		FROM sends
+		WHERE created_at >= datetime('now', ?)
+		GROUP BY sender_domain
+		ORDER BY total DESC
+		LIMIT 10`
+
+	rows, err := r.db.Query(query, interval)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stats []models.DomainStats
+	for rows.Next() {
+		var s models.DomainStats
+		if err := rows.Scan(&s.Domain, &s.Sent, &s.Failed, &s.Pending, &s.Total); err != nil {
+			return nil, err
+		}
+		stats = append(stats, s)
+	}
+
+	return stats, rows.Err()
+}
+
 // helper to convert []string to JSON string
 func ToJSON(v any) string {
 	data, _ := json.Marshal(v)

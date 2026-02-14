@@ -218,6 +218,8 @@ func (s *Server) setupRoutes() http.Handler {
 
 	// Monitoring
 	protected.HandleFunc("GET /monitoring", h.Monitoring)
+	protected.HandleFunc("GET /monitoring/api/stats", h.MonitoringAPIStats)
+	protected.HandleFunc("GET /monitoring/api/servers", h.MonitoringAPIServers)
 
 	// Settings
 	protected.HandleFunc("GET /settings", h.Settings)

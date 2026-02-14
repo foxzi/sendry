@@ -1,58 +1,107 @@
 {{define "content"}}
 <div class="page-header">
-    <h1>Monitoring</h1>
-</div>
-
-<div class="stats-overview">
-    <div class="stat-card">
-        <div class="stat-value">{{.ActiveJobs}}</div>
-        <div class="stat-label">Active Jobs</div>
+    <h1 data-i18n="monitoring.title">Monitoring</h1>
+    <div class="header-actions">
+        <select id="period-selector" class="input" style="width: auto;">
+            <option value="24h" data-i18n="monitoring.period.24h">Last 24 hours</option>
+            <option value="7d" data-i18n="monitoring.period.7d">Last 7 days</option>
+            <option value="30d" selected data-i18n="monitoring.period.30d">Last 30 days</option>
+        </select>
+        <select id="domain-filter" class="input" style="width: auto;">
+            <option value="" data-i18n="monitoring.domain.all">All Domains</option>
+            {{range .Domains}}
+            <option value="{{.}}">{{.}}</option>
+            {{end}}
+        </select>
+        <button id="refresh-btn" class="btn btn-secondary">
+            <span data-i18n="monitoring.refresh">Refresh</span>
+        </button>
     </div>
 </div>
 
-<div class="card">
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value" id="total-sent">0</div>
+        <div class="stat-label" data-i18n="monitoring.stats.sent">Sent</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value stat-failed" id="total-failed">0</div>
+        <div class="stat-label" data-i18n="monitoring.stats.failed">Failed</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value stat-warning" id="total-queue">0</div>
+        <div class="stat-label" data-i18n="monitoring.stats.queue">In Queue</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value stat-muted" id="total-dlq">0</div>
+        <div class="stat-label" data-i18n="monitoring.stats.dlq">DLQ</div>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 1.5rem;">
     <div class="card-header">
-        <h3>Server Status</h3>
+        <h3 data-i18n="monitoring.chart.activity">Send Activity</h3>
     </div>
     <div class="card-body">
-        {{if .Servers}}
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Server</th>
-                    <th>Environment</th>
-                    <th>Status</th>
-                    <th>Queue</th>
-                    <th>DLQ</th>
-                    <th>Delivered (24h)</th>
-                    <th>Failed (24h)</th>
-                </tr>
-            </thead>
-            <tbody>
-                {{range .Servers}}
-                <tr>
-                    <td><a href="/servers/{{.Name}}">{{.Name}}</a></td>
-                    <td><span class="badge badge-{{.Env}}">{{.Env}}</span></td>
-                    <td>
-                        {{if .Online}}
-                        <span class="badge badge-running">Online</span>
-                        {{else}}
-                        <span class="badge badge-failed">Offline</span>
-                        {{end}}
-                    </td>
-                    <td>{{.QueueSize}}</td>
-                    <td>{{.DLQSize}}</td>
-                    <td>{{.Delivered}}</td>
-                    <td>{{.Failed}}</td>
-                </tr>
-                {{end}}
-            </tbody>
-        </table>
-        {{else}}
-        <div class="empty-state">
-            <p>No servers configured</p>
+        <div class="chart-container">
+            <canvas id="timeseries-chart"></canvas>
         </div>
-        {{end}}
     </div>
 </div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">
+            <h3 data-i18n="monitoring.chart.domains">By Domain</h3>
+        </div>
+        <div class="card-body">
+            <div class="chart-container chart-container-small">
+                <canvas id="domain-chart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3 data-i18n="monitoring.servers.title">Server Status</h3>
+        </div>
+        <div class="card-body">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th data-i18n="monitoring.servers.name">Server</th>
+                        <th data-i18n="monitoring.servers.env">Environment</th>
+                        <th data-i18n="monitoring.servers.status">Status</th>
+                        <th data-i18n="monitoring.servers.queue">Queue</th>
+                        <th data-i18n="monitoring.servers.dlq">DLQ</th>
+                    </tr>
+                </thead>
+                <tbody id="servers-tbody">
+                    {{range .Servers}}
+                    <tr>
+                        <td><a href="/servers/{{.Name}}">{{.Name}}</a></td>
+                        <td><span class="badge badge-{{.Env}}">{{.Env}}</span></td>
+                        <td>
+                            {{if .Online}}
+                            <span class="badge badge-running">Online</span>
+                            {{else}}
+                            <span class="badge badge-failed">Offline</span>
+                            {{end}}
+                        </td>
+                        <td>{{.QueueSize}}</td>
+                        <td>{{.DLQSize}}</td>
+                    </tr>
+                    {{else}}
+                    <tr>
+                        <td colspan="5" class="empty-state" data-i18n="monitoring.servers.empty">No servers configured</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="/static/js/monitoring.js"></script>
 {{end}}

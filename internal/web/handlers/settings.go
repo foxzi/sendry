@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -214,13 +215,101 @@ func (h *Handlers) Monitoring(w http.ResponseWriter, r *http.Request) {
 	var activeJobs int
 	h.db.QueryRow("SELECT COUNT(*) FROM send_jobs WHERE status = 'running'").Scan(&activeJobs)
 
+	// Get list of domains for filter dropdown
+	domains, _ := h.sends.GetDomains()
+
 	data := map[string]any{
 		"Title":      "Monitoring",
 		"Active":     "monitoring",
 		"User":       h.getUserFromContext(r),
 		"Servers":    servers,
 		"ActiveJobs": activeJobs,
+		"Domains":    domains,
 	}
 
 	h.render(w, "monitoring", data)
+}
+
+// MonitoringAPIStats returns JSON data for monitoring charts
+func (h *Handlers) MonitoringAPIStats(w http.ResponseWriter, r *http.Request) {
+	period := r.URL.Query().Get("period")
+	if period == "" {
+		period = "30d"
+	}
+
+	domain := r.URL.Query().Get("domain")
+
+	filter := models.MonitoringFilter{
+		Period: period,
+		Domain: domain,
+	}
+
+	// Get time series data
+	timeSeries, err := h.sends.GetTimeSeries(filter)
+	if err != nil {
+		h.jsonError(w, "Failed to get time series", http.StatusInternalServerError)
+		return
+	}
+
+	// Get domain stats
+	domainStats, err := h.sends.GetDomainStats(filter)
+	if err != nil {
+		h.jsonError(w, "Failed to get domain stats", http.StatusInternalServerError)
+		return
+	}
+
+	// Calculate totals
+	var totalSent, totalFailed int
+	for _, ds := range domainStats {
+		totalSent += ds.Sent
+		totalFailed += ds.Failed
+	}
+
+	data := models.MonitoringData{
+		TimeSeries:  timeSeries,
+		DomainStats: domainStats,
+		Period:      period,
+		TotalSent:   totalSent,
+		TotalFailed: totalFailed,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(data)
+}
+
+// MonitoringAPIServers returns JSON data for server status
+func (h *Handlers) MonitoringAPIServers(w http.ResponseWriter, r *http.Request) {
+	statuses := h.sendry.GetAllStatus(r.Context())
+	servers := make([]models.ServerStats, 0, len(statuses))
+
+	for _, s := range statuses {
+		serverData := models.ServerStats{
+			Name:      s.Name,
+			Env:       s.Env,
+			Online:    s.Online,
+			QueueSize: s.QueueSize,
+			Error:     s.Error,
+		}
+
+		// Get DLQ size if server is online
+		if s.Online {
+			if client, err := h.sendry.GetClient(s.Name); err == nil {
+				if dlq, err := client.GetDLQ(r.Context()); err == nil && dlq.Stats != nil {
+					serverData.DLQSize = dlq.Stats.Total
+				}
+			}
+		}
+
+		servers = append(servers, serverData)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(servers)
+}
+
+// jsonError writes a JSON error response
+func (h *Handlers) jsonError(w http.ResponseWriter, message string, status int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]string{"error": message})
 }
