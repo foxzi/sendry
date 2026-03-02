@@ -283,6 +283,25 @@ a:hover {
     font-size: 0.875rem;
 }
 
+.table th.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.table th.sortable:hover {
+    color: var(--text);
+}
+
+.table th.sort-asc::after {
+    content: " \25B2";
+    font-size: 0.7rem;
+}
+
+.table th.sort-desc::after {
+    content: " \25BC";
+    font-size: 0.7rem;
+}
+
 .table tbody tr:hover {
     background: var(--bg);
 }

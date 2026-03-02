@@ -122,6 +122,21 @@ func (c *Client) DeleteFromQueue(ctx context.Context, id string) error {
 	return c.request(ctx, http.MethodDelete, "/api/v1/queue/"+id, nil, nil)
 }
 
+// PurgeQueue deletes all messages from queue
+func (c *Client) PurgeQueue(ctx context.Context) (int, error) {
+	queue, err := c.GetQueue(ctx)
+	if err != nil {
+		return 0, err
+	}
+	deleted := 0
+	for _, m := range queue.Messages {
+		if err := c.DeleteFromQueue(ctx, m.ID); err == nil {
+			deleted++
+		}
+	}
+	return deleted, nil
+}
+
 // GetDLQ gets dead letter queue
 func (c *Client) GetDLQ(ctx context.Context) (*DLQResponse, error) {
 	var resp DLQResponse
@@ -139,6 +154,21 @@ func (c *Client) RetryDLQ(ctx context.Context, id string) error {
 // DeleteFromDLQ deletes a message from DLQ
 func (c *Client) DeleteFromDLQ(ctx context.Context, id string) error {
 	return c.request(ctx, http.MethodDelete, "/api/v1/dlq/"+id, nil, nil)
+}
+
+// PurgeDLQ deletes all messages from DLQ
+func (c *Client) PurgeDLQ(ctx context.Context) (int, error) {
+	dlq, err := c.GetDLQ(ctx)
+	if err != nil {
+		return 0, err
+	}
+	deleted := 0
+	for _, m := range dlq.Messages {
+		if err := c.DeleteFromDLQ(ctx, m.ID); err == nil {
+			deleted++
+		}
+	}
+	return deleted, nil
 }
 
 // ListDomains lists all domains

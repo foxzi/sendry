@@ -2,6 +2,11 @@
 <div class="page-header">
     <h1>{{.ServerName}} - Queue</h1>
     <div class="header-actions">
+        {{if .Messages}}
+        <form method="post" action="/servers/{{.ServerName}}/queue/purge" style="display: inline;">
+            <button type="submit" class="btn btn-danger" onclick="return confirm('Delete ALL messages from queue? This cannot be undone.')">Clear Queue</button>
+        </form>
+        {{end}}
         <a href="/servers/{{.ServerName}}" class="btn btn-secondary">Back to Server</a>
     </div>
 </div>
@@ -9,33 +14,39 @@
 <div class="card">
     <div class="card-header">
         <span>{{.Total}} messages in queue</span>
+        {{if .Messages}}
+        <input type="text" id="queue-search" class="form-control" placeholder="Search by ID, From, To, Subject..."
+               style="max-width: 300px; display: inline-block; margin-left: 1rem;">
+        {{end}}
     </div>
     <div class="card-body">
         {{if .Messages}}
-        <table class="table">
+        <table class="table" id="queue-table">
             <thead>
                 <tr>
-                    <th>ID</th>
-                    <th>From</th>
-                    <th>To</th>
-                    <th>Subject</th>
-                    <th>Retry</th>
-                    <th>Created</th>
+                    <th class="sortable" data-col="0">ID</th>
+                    <th class="sortable" data-col="1">From</th>
+                    <th class="sortable" data-col="2">To</th>
+                    <th class="sortable" data-col="3">Subject</th>
+                    <th class="sortable" data-col="4">Status</th>
+                    <th class="sortable" data-col="5">Created</th>
                     <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
                 {{range .Messages}}
                 <tr>
-                    <td>{{slice .ID 0 8}}...</td>
+                    <td><a href="/servers/{{$.ServerName}}/queue/{{.ID}}">{{slice .ID 0 8}}...</a></td>
                     <td>{{.From}}</td>
                     <td>{{.To}}</td>
                     <td>{{.Subject}}</td>
-                    <td>{{.RetryCount}}</td>
+                    <td>{{.Status}}</td>
                     <td>{{.CreatedAt}}</td>
                     <td class="actions">
-                        <button class="btn btn-sm">View</button>
-                        <button class="btn btn-sm btn-danger">Delete</button>
+                        <a href="/servers/{{$.ServerName}}/queue/{{.ID}}" class="btn btn-sm">View</a>
+                        <form method="post" action="/servers/{{$.ServerName}}/queue/{{.ID}}/delete" style="display: inline;">
+                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this message from queue?')">Delete</button>
+                        </form>
                     </td>
                 </tr>
                 {{end}}
@@ -49,4 +60,47 @@
         {{end}}
     </div>
 </div>
+
+{{if .Messages}}
+<script>
+(function() {
+    var search = document.getElementById('queue-search');
+    var table = document.getElementById('queue-table');
+    var tbody = table.querySelector('tbody');
+    var rows = Array.from(tbody.querySelectorAll('tr'));
+
+    // Search
+    search.addEventListener('input', function() {
+        var q = this.value.toLowerCase();
+        rows.forEach(function(row) {
+            var text = row.textContent.toLowerCase();
+            row.style.display = text.indexOf(q) !== -1 ? '' : 'none';
+        });
+    });
+
+    // Sort
+    var headers = table.querySelectorAll('th.sortable');
+    var sortDir = {};
+    headers.forEach(function(th) {
+        th.style.cursor = 'pointer';
+        th.addEventListener('click', function() {
+            var col = parseInt(th.dataset.col);
+            var dir = sortDir[col] === 'asc' ? 'desc' : 'asc';
+            sortDir[col] = dir;
+
+            headers.forEach(function(h) { h.classList.remove('sort-asc', 'sort-desc'); });
+            th.classList.add(dir === 'asc' ? 'sort-asc' : 'sort-desc');
+
+            rows.sort(function(a, b) {
+                var aVal = a.cells[col].textContent.trim();
+                var bVal = b.cells[col].textContent.trim();
+                var cmp = aVal.localeCompare(bVal);
+                return dir === 'asc' ? cmp : -cmp;
+            });
+            rows.forEach(function(row) { tbody.appendChild(row); });
+        });
+    });
+})();
+</script>
+{{end}}
 {{end}}

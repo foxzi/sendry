@@ -199,7 +199,13 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("GET /servers", h.ServerList)
 	protected.HandleFunc("GET /servers/{name}", h.ServerView)
 	protected.HandleFunc("GET /servers/{name}/queue", h.ServerQueue)
+	protected.HandleFunc("POST /servers/{name}/queue/purge", h.QueuePurge)
+	protected.HandleFunc("GET /servers/{name}/queue/{id}", h.QueueMessageView)
+	protected.HandleFunc("POST /servers/{name}/queue/{id}/delete", h.QueueMessageDelete)
 	protected.HandleFunc("GET /servers/{name}/dlq", h.ServerDLQ)
+	protected.HandleFunc("POST /servers/{name}/dlq/purge", h.DLQPurge)
+	protected.HandleFunc("POST /servers/{name}/dlq/{id}/retry", h.DLQMessageRetry)
+	protected.HandleFunc("POST /servers/{name}/dlq/{id}/delete", h.DLQMessageDelete)
 	protected.HandleFunc("GET /servers/{name}/sandbox", h.ServerSandbox)
 	protected.HandleFunc("POST /servers/{name}/sandbox", h.ServerSandbox)
 

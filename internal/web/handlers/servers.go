@@ -163,6 +163,128 @@ func (h *Handlers) ServerDLQ(w http.ResponseWriter, r *http.Request) {
 	h.render(w, "server_dlq", data)
 }
 
+// QueueMessageView shows details of a single queue message
+func (h *Handlers) QueueMessageView(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	id := r.PathValue("id")
+
+	client, err := h.sendry.GetClient(name)
+	if err != nil {
+		http.Error(w, "Server not found", http.StatusNotFound)
+		return
+	}
+
+	status, err := client.GetStatus(r.Context(), id)
+	if err != nil {
+		http.Error(w, "Message not found: "+err.Error(), http.StatusNotFound)
+		return
+	}
+
+	data := map[string]any{
+		"Title":      "Message " + id[:8] + "...",
+		"Active":     "servers",
+		"User":       h.getUserFromContext(r),
+		"ServerName": name,
+		"Message":    status,
+	}
+
+	h.render(w, "server_queue_view", data)
+}
+
+// QueueMessageDelete deletes a message from queue
+func (h *Handlers) QueueMessageDelete(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	id := r.PathValue("id")
+
+	client, err := h.sendry.GetClient(name)
+	if err != nil {
+		http.Error(w, "Server not found", http.StatusNotFound)
+		return
+	}
+
+	if err := client.DeleteFromQueue(r.Context(), id); err != nil {
+		h.logger.Error("failed to delete queue message", "server", name, "id", id, "error", err)
+	}
+
+	http.Redirect(w, r, "/servers/"+name+"/queue", http.StatusSeeOther)
+}
+
+// DLQMessageRetry retries a message from DLQ
+func (h *Handlers) DLQMessageRetry(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	id := r.PathValue("id")
+
+	client, err := h.sendry.GetClient(name)
+	if err != nil {
+		http.Error(w, "Server not found", http.StatusNotFound)
+		return
+	}
+
+	if err := client.RetryDLQ(r.Context(), id); err != nil {
+		h.logger.Error("failed to retry DLQ message", "server", name, "id", id, "error", err)
+	}
+
+	http.Redirect(w, r, "/servers/"+name+"/dlq", http.StatusSeeOther)
+}
+
+// DLQMessageDelete deletes a message from DLQ
+func (h *Handlers) DLQMessageDelete(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	id := r.PathValue("id")
+
+	client, err := h.sendry.GetClient(name)
+	if err != nil {
+		http.Error(w, "Server not found", http.StatusNotFound)
+		return
+	}
+
+	if err := client.DeleteFromDLQ(r.Context(), id); err != nil {
+		h.logger.Error("failed to delete DLQ message", "server", name, "id", id, "error", err)
+	}
+
+	http.Redirect(w, r, "/servers/"+name+"/dlq", http.StatusSeeOther)
+}
+
+// QueuePurge deletes all messages from queue
+func (h *Handlers) QueuePurge(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+
+	client, err := h.sendry.GetClient(name)
+	if err != nil {
+		http.Error(w, "Server not found", http.StatusNotFound)
+		return
+	}
+
+	deleted, err := client.PurgeQueue(r.Context())
+	if err != nil {
+		h.logger.Error("failed to purge queue", "server", name, "error", err)
+	} else {
+		h.logger.Info("queue purged", "server", name, "deleted", deleted)
+	}
+
+	http.Redirect(w, r, "/servers/"+name+"/queue", http.StatusSeeOther)
+}
+
+// DLQPurge deletes all messages from DLQ
+func (h *Handlers) DLQPurge(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+
+	client, err := h.sendry.GetClient(name)
+	if err != nil {
+		http.Error(w, "Server not found", http.StatusNotFound)
+		return
+	}
+
+	deleted, err := client.PurgeDLQ(r.Context())
+	if err != nil {
+		h.logger.Error("failed to purge DLQ", "server", name, "error", err)
+	} else {
+		h.logger.Info("DLQ purged", "server", name, "deleted", deleted)
+	}
+
+	http.Redirect(w, r, "/servers/"+name+"/dlq", http.StatusSeeOther)
+}
+
 // ServerDomains shows domains configured on a server
 func (h *Handlers) ServerDomains(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")

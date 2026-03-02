@@ -7,9 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- Sendry Web: Swap DKIM fields order in domain forms (Key selector first, then Selector input)
-- Sendry Web: Auto-select DKIM key when domain name matches existing key in new domain forms
+## [0.4.8] - 2026-03-02
+
+### Added
+- Sendry Web: Working View/Delete buttons for queue messages
+- Sendry Web: Working Retry/Delete buttons for DLQ messages
+- Sendry Web: Queue message detail page with full message info
+- Sendry Web: Search/filter for queue and DLQ tables
+- Sendry Web: Column sorting for queue and DLQ tables
+- Sendry Web: Clear Queue / Clear DLQ buttons to purge all messages
 
 ### Fixed
 - Sendry Web: Checkbox alignment - checkboxes now left-aligned instead of centered
