@@ -770,23 +770,20 @@ func (h *Handlers) deployDomainToServer(r *http.Request, domain *models.Domain, 
 		DefaultFrom: domain.DefaultFrom,
 	}
 
-	if domain.DKIMEnabled {
-		req.DKIM = &sendry.DKIMConfig{
-			Enabled:  true,
-			Selector: domain.DKIMSelector,
-		}
-
-		// Deploy DKIM key if linked
-		if domain.DKIMKeyID != "" {
-			key, _ := h.dkim.GetByID(domain.DKIMKeyID)
-			if key != nil && key.Domain == domain.Domain {
-				dkimResp, err := client.UploadDKIM(r.Context(), key.Domain, key.Selector, key.PrivateKey)
-				if err != nil {
-					h.logger.Error("failed to deploy DKIM key", "error", err)
-				} else {
-					h.dkim.CreateDeployment(key.ID, serverName, "deployed", "")
-					// Set KeyFile from upload response
-					req.DKIM.KeyFile = dkimResp.KeyFile
+	if domain.DKIMEnabled && domain.DKIMKeyID != "" {
+		key, _ := h.dkim.GetByID(domain.DKIMKeyID)
+		if key == nil {
+			h.logger.Error("DKIM key not found, skipping DKIM for domain", "domain", domain.Domain, "key_id", domain.DKIMKeyID)
+		} else {
+			dkimResp, err := client.UploadDKIM(r.Context(), key.Domain, key.Selector, key.PrivateKey)
+			if err != nil {
+				h.logger.Error("failed to deploy DKIM key", "domain", domain.Domain, "error", err)
+			} else {
+				h.dkim.CreateDeployment(key.ID, serverName, "deployed", "")
+				req.DKIM = &sendry.DKIMConfig{
+					Enabled:  true,
+					Selector: key.Selector,
+					KeyFile:  dkimResp.KeyFile,
 				}
 			}
 		}

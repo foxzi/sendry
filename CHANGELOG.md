@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests: Middleware unit tests (GetUserEmail, GetAPIKeyFromContext, MethodOverride)
 - Tests: Sendry client unit tests (Queue, DLQ, Purge operations, auth, errors)
 
+### Fixed
+- Sendry Web: Deploy sends DKIM enabled with empty key_file when DKIM key is missing or unlinked
+- Sendry MTA: Validate DKIM key_file is not empty when DKIM is enabled in domain create/update API
+
 ## [0.4.8] - 2026-03-02
 
 ### Added

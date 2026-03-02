@@ -639,6 +639,12 @@ func (m *ManagementServer) handleDomainsCreate(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Validate DKIM config
+	if req.DKIM != nil && req.DKIM.Enabled && req.DKIM.KeyFile == "" {
+		sendError(w, http.StatusBadRequest, "DKIM enabled but key_file is empty")
+		return
+	}
+
 	// Check if domain already exists
 	if m.config.GetDomainConfig(req.Domain) != nil {
 		sendError(w, http.StatusConflict, "Domain already exists")
@@ -720,6 +726,12 @@ func (m *ManagementServer) handleDomainsUpdate(w http.ResponseWriter, r *http.Re
 	var req DomainCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		sendError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Validate DKIM config
+	if req.DKIM != nil && req.DKIM.Enabled && req.DKIM.KeyFile == "" {
+		sendError(w, http.StatusBadRequest, "DKIM enabled but key_file is empty")
 		return
 	}
 
