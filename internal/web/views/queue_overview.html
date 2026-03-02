@@ -1,0 +1,107 @@
+{{define "content"}}
+<div class="page-header">
+    <h1 data-i18n="queue.title">Queue</h1>
+</div>
+
+<div class="stats-row" style="margin-bottom: 1.5rem;">
+    {{range .Servers}}
+    <div class="stat-card">
+        <div class="stat-value">{{.Total}}</div>
+        <div class="stat-label">{{.Name}}</div>
+        {{if .Error}}<div class="text-muted" style="font-size: 0.8rem; color: var(--danger);">offline</div>{{end}}
+    </div>
+    {{end}}
+    <div class="stat-card">
+        <div class="stat-value">{{.Total}}</div>
+        <div class="stat-label" data-i18n="queue.total">Total</div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <span>{{.Total}} <span data-i18n="queue.messages_in_queue">messages in queue</span></span>
+        {{if .Messages}}
+        <input type="text" id="queue-search" class="form-control" placeholder="Search..."
+               style="max-width: 300px; display: inline-block; margin-left: 1rem;">
+        {{end}}
+    </div>
+    <div class="card-body">
+        {{if .Messages}}
+        <table class="table" id="queue-table">
+            <thead>
+                <tr>
+                    <th class="sortable" data-col="0">ID</th>
+                    <th class="sortable" data-col="1">Server</th>
+                    <th class="sortable" data-col="2">From</th>
+                    <th class="sortable" data-col="3">To</th>
+                    <th class="sortable" data-col="4">Subject</th>
+                    <th class="sortable" data-col="5">Status</th>
+                    <th class="sortable" data-col="6">Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Messages}}
+                <tr>
+                    <td><a href="/servers/{{.Server}}/queue/{{.ID}}">{{slice .ID 0 8}}...</a></td>
+                    <td>{{.Server}}</td>
+                    <td>{{.From}}</td>
+                    <td>{{.To}}</td>
+                    <td>{{.Subject}}</td>
+                    <td>{{.Status}}</td>
+                    <td>{{.CreatedAt}}</td>
+                    <td class="actions">
+                        <a href="/servers/{{.Server}}/queue/{{.ID}}" class="btn btn-sm">View</a>
+                        <form method="post" action="/servers/{{.Server}}/queue/{{.ID}}/delete" style="display: inline;">
+                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this message?')">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <div class="empty-state">
+            <p data-i18n="queue.empty">Queue is empty</p>
+            <p class="text-muted" data-i18n="queue.empty_hint">Messages waiting to be sent will appear here</p>
+        </div>
+        {{end}}
+    </div>
+</div>
+
+{{if .Messages}}
+<script>
+(function() {
+    var search = document.getElementById('queue-search');
+    var table = document.getElementById('queue-table');
+    var tbody = table.querySelector('tbody');
+    var rows = Array.from(tbody.querySelectorAll('tr'));
+
+    search.addEventListener('input', function() {
+        var q = this.value.toLowerCase();
+        rows.forEach(function(row) {
+            row.style.display = row.textContent.toLowerCase().indexOf(q) !== -1 ? '' : 'none';
+        });
+    });
+
+    var headers = table.querySelectorAll('th.sortable');
+    var sortDir = {};
+    headers.forEach(function(th) {
+        th.style.cursor = 'pointer';
+        th.addEventListener('click', function() {
+            var col = parseInt(th.dataset.col);
+            var dir = sortDir[col] === 'asc' ? 'desc' : 'asc';
+            sortDir[col] = dir;
+            headers.forEach(function(h) { h.classList.remove('sort-asc', 'sort-desc'); });
+            th.classList.add(dir === 'asc' ? 'sort-asc' : 'sort-desc');
+            rows.sort(function(a, b) {
+                var cmp = a.cells[col].textContent.trim().localeCompare(b.cells[col].textContent.trim());
+                return dir === 'asc' ? cmp : -cmp;
+            });
+            rows.forEach(function(row) { tbody.appendChild(row); });
+        });
+    });
+})();
+</script>
+{{end}}
+{{end}}

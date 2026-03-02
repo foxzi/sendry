@@ -165,7 +165,14 @@ var I18n = (function() {
             'monitoring.servers.status': 'Status',
             'monitoring.servers.queue': 'Queue',
             'monitoring.servers.dlq': 'DLQ',
-            'monitoring.servers.empty': 'No servers configured'
+            'monitoring.servers.empty': 'No servers configured',
+
+            // Queue overview
+            'queue.title': 'Queue',
+            'queue.total': 'Total',
+            'queue.messages_in_queue': 'messages in queue',
+            'queue.empty': 'Queue is empty',
+            'queue.empty_hint': 'Messages waiting to be sent will appear here'
         },
         ru: {
             // Navigation
@@ -331,7 +338,14 @@ var I18n = (function() {
             'monitoring.servers.status': 'Статус',
             'monitoring.servers.queue': 'Очередь',
             'monitoring.servers.dlq': 'DLQ',
-            'monitoring.servers.empty': 'Серверы не настроены'
+            'monitoring.servers.empty': 'Серверы не настроены',
+
+            // Queue overview
+            'queue.title': 'Очередь',
+            'queue.total': 'Всего',
+            'queue.messages_in_queue': 'сообщений в очереди',
+            'queue.empty': 'Очередь пуста',
+            'queue.empty_hint': 'Сообщения, ожидающие отправки, появятся здесь'
         }
     };
 

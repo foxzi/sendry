@@ -195,6 +195,9 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("POST /domains/{id}/deploy", h.CentralDomainsDeploy)
 	protected.HandleFunc("POST /domains/{id}/sync", h.CentralDomainsSync)
 
+	// Queue overview (all servers)
+	protected.HandleFunc("GET /queue", h.QueueOverview)
+
 	// Servers
 	protected.HandleFunc("GET /servers", h.ServerList)
 	protected.HandleFunc("GET /servers/{name}", h.ServerView)

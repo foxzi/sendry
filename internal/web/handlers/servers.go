@@ -2,9 +2,86 @@ package handlers
 
 import (
 	"net/http"
+	"sync"
 
 	"github.com/foxzi/sendry/internal/web/sendry"
 )
+
+// QueueOverview shows combined queue from all servers
+func (h *Handlers) QueueOverview(w http.ResponseWriter, r *http.Request) {
+	servers := h.sendry.GetServers()
+
+	type serverQueue struct {
+		Name     string
+		Messages []map[string]any
+		Total    int
+		Error    string
+	}
+
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	results := make([]serverQueue, 0, len(servers))
+	allMessages := make([]map[string]any, 0)
+	totalAll := 0
+
+	for _, srv := range servers {
+		wg.Add(1)
+		go func(name string) {
+			defer wg.Done()
+			client, err := h.sendry.GetClient(name)
+			if err != nil {
+				mu.Lock()
+				results = append(results, serverQueue{Name: name, Error: err.Error()})
+				mu.Unlock()
+				return
+			}
+
+			queue, err := client.GetQueue(r.Context())
+			if err != nil {
+				mu.Lock()
+				results = append(results, serverQueue{Name: name, Error: err.Error()})
+				mu.Unlock()
+				return
+			}
+
+			var msgs []map[string]any
+			for _, m := range queue.Messages {
+				msgs = append(msgs, map[string]any{
+					"ID":        m.ID,
+					"From":      m.From,
+					"To":        m.To,
+					"Subject":   m.Subject,
+					"Status":    m.Status,
+					"CreatedAt": m.CreatedAt,
+					"Server":    name,
+				})
+			}
+
+			total := 0
+			if queue.Stats != nil {
+				total = queue.Stats.Pending
+			}
+
+			mu.Lock()
+			results = append(results, serverQueue{Name: name, Total: total})
+			allMessages = append(allMessages, msgs...)
+			totalAll += total
+			mu.Unlock()
+		}(srv.Name)
+	}
+	wg.Wait()
+
+	data := map[string]any{
+		"Title":    "Queue",
+		"Active":   "queue",
+		"User":     h.getUserFromContext(r),
+		"Messages": allMessages,
+		"Total":    totalAll,
+		"Servers":  results,
+	}
+
+	h.render(w, "queue_overview", data)
+}
 
 // ServerList shows all configured Sendry servers
 func (h *Handlers) ServerList(w http.ResponseWriter, r *http.Request) {

@@ -27,7 +27,7 @@
             <a href="/sends" {{if eq .Active "sends"}}class="active"{{end}} data-i18n="nav.sends">Sends</a>
             <a href="/monitoring" {{if eq .Active "monitoring"}}class="active"{{end}} data-i18n="nav.monitoring">Monitoring</a>
             <a href="/settings" {{if or (eq .Active "settings") (eq .Active "servers") (eq .Active "domains") (eq .Active "dkim")}}class="active"{{end}} data-i18n="nav.settings">Settings</a>
-            <a href="/servers" class="nav-queue" id="nav-queue" style="display:none;">
+            <a href="/queue" class="nav-queue{{if eq .Active "queue"}} active{{end}}" id="nav-queue" style="display:none;">
                 <span data-i18n="nav.queue">Queue</span>
                 <span class="nav-badge" id="nav-queue-badge">0</span>
             </a>
