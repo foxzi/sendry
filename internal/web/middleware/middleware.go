@@ -103,6 +103,15 @@ var globalRateLimiter = NewRateLimiter()
 type ctxKey string
 
 const ctxKeyAPIKey ctxKey = "api_key"
+const ctxKeyUserEmail ctxKey = "user_email"
+
+// GetUserEmail returns the authenticated user's email from request context
+func GetUserEmail(r *http.Request) string {
+	if email, ok := r.Context().Value(ctxKeyUserEmail).(string); ok {
+		return email
+	}
+	return ""
+}
 
 // Logger middleware logs HTTP requests
 func Logger(logger *slog.Logger) func(http.Handler) http.Handler {
@@ -159,12 +168,12 @@ func Auth(cfg *config.Config, database *db.DB, logger *slog.Logger) func(http.Ha
 				return
 			}
 
-			// Validate session
-			var userID string
+			// Validate session and get user email
+			var userID, email string
 			err = database.QueryRow(
-				"SELECT user_id FROM sessions WHERE id = ? AND expires_at > datetime('now')",
+				"SELECT s.user_id, u.email FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.id = ? AND s.expires_at > datetime('now')",
 				cookie.Value,
-			).Scan(&userID)
+			).Scan(&userID, &email)
 
 			if err != nil {
 				// Invalid session, redirect to login
@@ -172,8 +181,9 @@ func Auth(cfg *config.Config, database *db.DB, logger *slog.Logger) func(http.Ha
 				return
 			}
 
-			// Session valid, continue
-			next.ServeHTTP(w, r)
+			// Session valid, add user email to context
+			ctx := context.WithValue(r.Context(), ctxKeyUserEmail, email)
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Sendry Web: Checkbox alignment - checkboxes now left-aligned instead of centered
+- Sendry Web: Display actual user email in navbar instead of hardcoded value
 
 ## [0.4.7] - 2026-02-14
 

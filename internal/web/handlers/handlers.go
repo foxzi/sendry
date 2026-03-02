@@ -9,6 +9,7 @@ import (
 	"github.com/foxzi/sendry/internal/web/auth"
 	"github.com/foxzi/sendry/internal/web/config"
 	"github.com/foxzi/sendry/internal/web/db"
+	"github.com/foxzi/sendry/internal/web/middleware"
 	"github.com/foxzi/sendry/internal/web/repository"
 	"github.com/foxzi/sendry/internal/web/router"
 	"github.com/foxzi/sendry/internal/web/sendry"
@@ -130,9 +131,12 @@ func (h *Handlers) error(w http.ResponseWriter, status int, message string) {
 
 // Get user from request context
 func (h *Handlers) getUserFromContext(r *http.Request) map[string]string {
-	// TODO: implement proper user context
+	email := middleware.GetUserEmail(r)
+	if email == "" {
+		email = "unknown"
+	}
 	return map[string]string{
-		"Email": "admin@example.com",
+		"Email": email,
 	}
 }
 
