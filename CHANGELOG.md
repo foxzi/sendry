@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Sendry Web: Swap DKIM fields order in domain forms (Key selector first, then Selector input)
+- Sendry Web: Auto-select DKIM key when domain name matches existing key in new domain forms
+
+### Fixed
+- Sendry Web: Checkbox alignment - checkboxes now left-aligned instead of centered
+
 ## [0.4.7] - 2026-02-14
 
 ### Added

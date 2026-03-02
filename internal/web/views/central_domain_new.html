@@ -62,12 +62,6 @@
 
             <div id="dkim-fields" style="display: none;">
                 <div class="form-group">
-                    <label for="dkim_selector">DKIM Selector</label>
-                    <input type="text" id="dkim_selector" name="dkim_selector" class="form-control"
-                           value="mail" placeholder="mail">
-                </div>
-
-                <div class="form-group">
                     <label for="dkim_key_id">DKIM Key</label>
                     <select id="dkim_key_id" name="dkim_key_id" class="form-control">
                         <option value="">-- Select existing key --</option>
@@ -80,6 +74,12 @@
                     <small class="text-muted">
                         Select a DKIM key that matches the domain, or <a href="/dkim/new" target="_blank">create new key</a>
                     </small>
+                </div>
+
+                <div class="form-group">
+                    <label for="dkim_selector">DKIM Selector</label>
+                    <input type="text" id="dkim_selector" name="dkim_selector" class="form-control"
+                           value="mail" placeholder="mail">
                 </div>
             </div>
 
@@ -143,5 +143,26 @@ document.getElementById('dkim_key_id').addEventListener('change', function() {
         document.getElementById('dkim_selector').value = option.dataset.selector || 'mail';
     }
 });
+
+function autoSelectDKIMKey() {
+    var domain = document.getElementById('domain').value.trim().toLowerCase();
+    var select = document.getElementById('dkim_key_id');
+    var found = false;
+    for (var i = 1; i < select.options.length; i++) {
+        if (select.options[i].dataset.domain === domain) {
+            select.selectedIndex = i;
+            document.getElementById('dkim_selector').value = select.options[i].dataset.selector || 'mail';
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        select.selectedIndex = 0;
+        document.getElementById('dkim_selector').value = 'mail';
+    }
+}
+
+document.getElementById('domain').addEventListener('input', autoSelectDKIMKey);
+document.getElementById('domain').addEventListener('change', autoSelectDKIMKey);
 </script>
 {{end}}
