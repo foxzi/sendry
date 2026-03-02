@@ -27,6 +27,10 @@
             <a href="/sends" {{if eq .Active "sends"}}class="active"{{end}} data-i18n="nav.sends">Sends</a>
             <a href="/monitoring" {{if eq .Active "monitoring"}}class="active"{{end}} data-i18n="nav.monitoring">Monitoring</a>
             <a href="/settings" {{if or (eq .Active "settings") (eq .Active "servers") (eq .Active "domains") (eq .Active "dkim")}}class="active"{{end}} data-i18n="nav.settings">Settings</a>
+            <a href="/servers" class="nav-queue" id="nav-queue" style="display:none;">
+                <span data-i18n="nav.queue">Queue</span>
+                <span class="nav-badge" id="nav-queue-badge">0</span>
+            </a>
         </div>
         <div class="navbar-end">
             <button id="theme-toggle" class="btn btn-icon" title="Toggle theme" aria-label="Toggle theme">
@@ -59,5 +63,29 @@
 
     <script src="/static/js/i18n.js"></script>
     <script src="/static/js/app.js"></script>
+    <script>
+    (function() {
+        function updateNavStats() {
+            fetch('/nav-stats')
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    var el = document.getElementById('nav-queue');
+                    var badge = document.getElementById('nav-queue-badge');
+                    if (!el || !badge) return;
+                    var total = data.queue || 0;
+                    badge.textContent = total;
+                    el.style.display = '';
+                    if (total > 0) {
+                        badge.classList.add('nav-badge-active');
+                    } else {
+                        badge.classList.remove('nav-badge-active');
+                    }
+                })
+                .catch(function() {});
+        }
+        updateNavStats();
+        setInterval(updateNavStats, 30000);
+    })();
+    </script>
 </body>
 </html>

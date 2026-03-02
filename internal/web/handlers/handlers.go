@@ -165,6 +165,18 @@ func sanitizeFilename(s string) string {
 	return strings.TrimSpace(s)
 }
 
+// NavStats returns queue stats for the navbar badge
+func (h *Handlers) NavStats(w http.ResponseWriter, r *http.Request) {
+	statuses := h.sendry.GetAllStatus(r.Context())
+	totalQueue := 0
+	for _, s := range statuses {
+		totalQueue += s.QueueSize
+	}
+	h.json(w, 200, map[string]any{
+		"queue": totalQueue,
+	})
+}
+
 // Get servers status with actual health checks (slow, makes API calls)
 func (h *Handlers) getServersStatusLive(r *http.Request) []map[string]any {
 	statuses := h.sendry.GetAllStatus(r.Context())

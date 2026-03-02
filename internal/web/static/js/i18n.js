@@ -11,6 +11,7 @@ var I18n = (function() {
             'nav.servers': 'Servers',
             'nav.monitoring': 'Monitoring',
             'nav.settings': 'Settings',
+            'nav.queue': 'Queue',
             'logout': 'Logout',
 
             // Common
@@ -176,6 +177,7 @@ var I18n = (function() {
             'nav.servers': 'Серверы',
             'nav.monitoring': 'Мониторинг',
             'nav.settings': 'Настройки',
+            'nav.queue': 'Очередь',
             'logout': 'Выход',
 
             // Common

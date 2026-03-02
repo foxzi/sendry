@@ -222,6 +222,9 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("GET /sends", h.SendsList)
 	protected.HandleFunc("GET /sends/{id}", h.SendView)
 
+	// Internal endpoints
+	protected.HandleFunc("GET /nav-stats", h.NavStats)
+
 	// Monitoring
 	protected.HandleFunc("GET /monitoring", h.Monitoring)
 	protected.HandleFunc("GET /monitoring/api/stats", h.MonitoringAPIStats)

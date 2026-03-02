@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Sendry Web: Queue size badge in navbar with auto-refresh (polls every 30s)
+- Sendry Web: NavStats API endpoint for navbar queue counter
+- Sendry Web: i18n translations for queue badge (EN/RU)
+- Tests: Middleware unit tests (GetUserEmail, GetAPIKeyFromContext, MethodOverride)
+- Tests: Sendry client unit tests (Queue, DLQ, Purge operations, auth, errors)
+
 ## [0.4.8] - 2026-03-02
 
 ### Added
