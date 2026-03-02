@@ -7,22 +7,24 @@ import (
 	"github.com/foxzi/sendry/internal/web/sendry"
 )
 
-// QueueOverview shows combined queue from all servers
+// QueueOverview shows combined queue and DLQ from all servers
 func (h *Handlers) QueueOverview(w http.ResponseWriter, r *http.Request) {
 	servers := h.sendry.GetServers()
 
-	type serverQueue struct {
-		Name     string
-		Messages []map[string]any
-		Total    int
-		Error    string
+	type serverStats struct {
+		Name      string
+		QueueSize int
+		DLQSize   int
+		Error     string
 	}
 
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-	results := make([]serverQueue, 0, len(servers))
-	allMessages := make([]map[string]any, 0)
-	totalAll := 0
+	stats := make([]serverStats, 0, len(servers))
+	queueMessages := make([]map[string]any, 0)
+	dlqMessages := make([]map[string]any, 0)
+	totalQueue := 0
+	totalDLQ := 0
 
 	for _, srv := range servers {
 		wg.Add(1)
@@ -31,53 +33,79 @@ func (h *Handlers) QueueOverview(w http.ResponseWriter, r *http.Request) {
 			client, err := h.sendry.GetClient(name)
 			if err != nil {
 				mu.Lock()
-				results = append(results, serverQueue{Name: name, Error: err.Error()})
+				stats = append(stats, serverStats{Name: name, Error: err.Error()})
 				mu.Unlock()
 				return
 			}
 
+			st := serverStats{Name: name}
+
+			// Fetch queue
 			queue, err := client.GetQueue(r.Context())
 			if err != nil {
+				st.Error = err.Error()
+			} else {
+				if queue.Stats != nil {
+					st.QueueSize = queue.Stats.Pending
+				}
+				var msgs []map[string]any
+				for _, m := range queue.Messages {
+					msgs = append(msgs, map[string]any{
+						"ID":        m.ID,
+						"From":      m.From,
+						"To":        m.To,
+						"Subject":   m.Subject,
+						"Status":    m.Status,
+						"CreatedAt": m.CreatedAt,
+						"Server":    name,
+					})
+				}
 				mu.Lock()
-				results = append(results, serverQueue{Name: name, Error: err.Error()})
+				queueMessages = append(queueMessages, msgs...)
+				totalQueue += st.QueueSize
 				mu.Unlock()
-				return
 			}
 
-			var msgs []map[string]any
-			for _, m := range queue.Messages {
-				msgs = append(msgs, map[string]any{
-					"ID":        m.ID,
-					"From":      m.From,
-					"To":        m.To,
-					"Subject":   m.Subject,
-					"Status":    m.Status,
-					"CreatedAt": m.CreatedAt,
-					"Server":    name,
-				})
-			}
-
-			total := 0
-			if queue.Stats != nil {
-				total = queue.Stats.Pending
+			// Fetch DLQ
+			dlq, err := client.GetDLQ(r.Context())
+			if err == nil {
+				if dlq.Stats != nil {
+					st.DLQSize = dlq.Stats.Total
+				}
+				var msgs []map[string]any
+				for _, m := range dlq.Messages {
+					msgs = append(msgs, map[string]any{
+						"ID":        m.ID,
+						"From":      m.From,
+						"To":        m.To,
+						"Subject":   m.Subject,
+						"Status":    m.Status,
+						"CreatedAt": m.CreatedAt,
+						"Server":    name,
+					})
+				}
+				mu.Lock()
+				dlqMessages = append(dlqMessages, msgs...)
+				totalDLQ += st.DLQSize
+				mu.Unlock()
 			}
 
 			mu.Lock()
-			results = append(results, serverQueue{Name: name, Total: total})
-			allMessages = append(allMessages, msgs...)
-			totalAll += total
+			stats = append(stats, st)
 			mu.Unlock()
 		}(srv.Name)
 	}
 	wg.Wait()
 
 	data := map[string]any{
-		"Title":    "Queue",
-		"Active":   "queue",
-		"User":     h.getUserFromContext(r),
-		"Messages": allMessages,
-		"Total":    totalAll,
-		"Servers":  results,
+		"Title":         "Queue",
+		"Active":        "queue",
+		"User":          h.getUserFromContext(r),
+		"QueueMessages": queueMessages,
+		"DLQMessages":   dlqMessages,
+		"TotalQueue":    totalQueue,
+		"TotalDLQ":      totalDLQ,
+		"Servers":       stats,
 	}
 
 	h.render(w, "queue_overview", data)

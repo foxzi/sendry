@@ -13,7 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sendry Web: i18n translations for queue badge (EN/RU)
 - Tests: Middleware unit tests (GetUserEmail, GetAPIKeyFromContext, MethodOverride)
 - Tests: Sendry client unit tests (Queue, DLQ, Purge operations, auth, errors)
-- Sendry Web: Combined queue overview page at /queue showing messages from all servers
+- Sendry Web: Combined queue overview page at /queue with Queue and DLQ tabs
+- Sendry Web: Queue overview fetches data from all servers in parallel
+- Sendry Web: Per-server stats cards showing queue/DLQ counts
+- Sendry Web: Search and column sorting on both Queue and DLQ tables
+- Sendry Web: DLQ actions (Retry/Delete) directly from overview page
 
 ### Changed
 - Sendry Web: Queue badge in navbar now links to /queue overview page instead of /servers

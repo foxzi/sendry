@@ -6,28 +6,42 @@
 <div class="stats-row" style="margin-bottom: 1.5rem;">
     {{range .Servers}}
     <div class="stat-card">
-        <div class="stat-value">{{.Total}}</div>
+        <div class="stat-value">{{.QueueSize}} / {{.DLQSize}}</div>
         <div class="stat-label">{{.Name}}</div>
-        {{if .Error}}<div class="text-muted" style="font-size: 0.8rem; color: var(--danger);">offline</div>{{end}}
+        {{if .Error}}<div style="font-size: 0.8rem; color: var(--danger);">offline</div>{{end}}
     </div>
     {{end}}
     <div class="stat-card">
-        <div class="stat-value">{{.Total}}</div>
+        <div class="stat-value">{{.TotalQueue}} / {{.TotalDLQ}}</div>
         <div class="stat-label" data-i18n="queue.total">Total</div>
     </div>
 </div>
 
+<!-- Tabs -->
+<div class="tabs" style="margin-bottom: 1rem;">
+    <button class="tab active" data-tab="queue" id="tab-queue">
+        <span data-i18n="queue.tab_queue">Queue</span>
+        <span class="nav-badge{{if gt .TotalQueue 0}} nav-badge-active{{end}}">{{.TotalQueue}}</span>
+    </button>
+    <button class="tab" data-tab="dlq" id="tab-dlq">
+        <span data-i18n="queue.tab_dlq">DLQ</span>
+        <span class="nav-badge{{if gt .TotalDLQ 0}} nav-badge-active{{end}}">{{.TotalDLQ}}</span>
+    </button>
+</div>
+
+<!-- Queue Tab -->
+<div class="tab-content" id="content-queue">
 <div class="card">
     <div class="card-header">
-        <span>{{.Total}} <span data-i18n="queue.messages_in_queue">messages in queue</span></span>
-        {{if .Messages}}
-        <input type="text" id="queue-search" class="form-control" placeholder="Search..."
+        <span>{{.TotalQueue}} <span data-i18n="queue.messages_in_queue">messages in queue</span></span>
+        {{if .QueueMessages}}
+        <input type="text" class="form-control tab-search" data-table="queue-table" placeholder="Search..."
                style="max-width: 300px; display: inline-block; margin-left: 1rem;">
         {{end}}
     </div>
     <div class="card-body">
-        {{if .Messages}}
-        <table class="table" id="queue-table">
+        {{if .QueueMessages}}
+        <table class="table sortable-table" id="queue-table">
             <thead>
                 <tr>
                     <th class="sortable" data-col="0">ID</th>
@@ -41,7 +55,7 @@
                 </tr>
             </thead>
             <tbody>
-                {{range .Messages}}
+                {{range .QueueMessages}}
                 <tr>
                     <td><a href="/servers/{{.Server}}/queue/{{.ID}}">{{slice .ID 0 8}}...</a></td>
                     <td>{{.Server}}</td>
@@ -68,40 +82,114 @@
         {{end}}
     </div>
 </div>
+</div>
 
-{{if .Messages}}
+<!-- DLQ Tab -->
+<div class="tab-content" id="content-dlq" style="display: none;">
+<div class="card">
+    <div class="card-header">
+        <span>{{.TotalDLQ}} <span data-i18n="queue.messages_in_dlq">messages in DLQ</span></span>
+        {{if .DLQMessages}}
+        <input type="text" class="form-control tab-search" data-table="dlq-table" placeholder="Search..."
+               style="max-width: 300px; display: inline-block; margin-left: 1rem;">
+        {{end}}
+    </div>
+    <div class="card-body">
+        {{if .DLQMessages}}
+        <table class="table sortable-table" id="dlq-table">
+            <thead>
+                <tr>
+                    <th class="sortable" data-col="0">ID</th>
+                    <th class="sortable" data-col="1">Server</th>
+                    <th class="sortable" data-col="2">From</th>
+                    <th class="sortable" data-col="3">To</th>
+                    <th class="sortable" data-col="4">Subject</th>
+                    <th class="sortable" data-col="5">Status</th>
+                    <th class="sortable" data-col="6">Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .DLQMessages}}
+                <tr>
+                    <td><a href="/servers/{{.Server}}/queue/{{.ID}}">{{slice .ID 0 8}}...</a></td>
+                    <td>{{.Server}}</td>
+                    <td>{{.From}}</td>
+                    <td>{{.To}}</td>
+                    <td>{{.Subject}}</td>
+                    <td>{{.Status}}</td>
+                    <td>{{.CreatedAt}}</td>
+                    <td class="actions">
+                        <form method="post" action="/servers/{{.Server}}/dlq/{{.ID}}/retry" style="display: inline;">
+                            <button type="submit" class="btn btn-sm" onclick="return confirm('Retry this message?')">Retry</button>
+                        </form>
+                        <form method="post" action="/servers/{{.Server}}/dlq/{{.ID}}/delete" style="display: inline;">
+                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this message?')">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <div class="empty-state">
+            <p data-i18n="queue.dlq_empty">DLQ is empty</p>
+            <p class="text-muted" data-i18n="queue.dlq_empty_hint">Failed messages will appear here</p>
+        </div>
+        {{end}}
+    </div>
+</div>
+</div>
+
 <script>
 (function() {
-    var search = document.getElementById('queue-search');
-    var table = document.getElementById('queue-table');
-    var tbody = table.querySelector('tbody');
-    var rows = Array.from(tbody.querySelectorAll('tr'));
-
-    search.addEventListener('input', function() {
-        var q = this.value.toLowerCase();
-        rows.forEach(function(row) {
-            row.style.display = row.textContent.toLowerCase().indexOf(q) !== -1 ? '' : 'none';
+    // Tab switching
+    var tabs = document.querySelectorAll('.tab[data-tab]');
+    tabs.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            tabs.forEach(function(b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            document.querySelectorAll('.tab-content').forEach(function(c) { c.style.display = 'none'; });
+            document.getElementById('content-' + btn.dataset.tab).style.display = '';
         });
     });
 
-    var headers = table.querySelectorAll('th.sortable');
-    var sortDir = {};
-    headers.forEach(function(th) {
-        th.style.cursor = 'pointer';
-        th.addEventListener('click', function() {
-            var col = parseInt(th.dataset.col);
-            var dir = sortDir[col] === 'asc' ? 'desc' : 'asc';
-            sortDir[col] = dir;
-            headers.forEach(function(h) { h.classList.remove('sort-asc', 'sort-desc'); });
-            th.classList.add(dir === 'asc' ? 'sort-asc' : 'sort-desc');
-            rows.sort(function(a, b) {
-                var cmp = a.cells[col].textContent.trim().localeCompare(b.cells[col].textContent.trim());
-                return dir === 'asc' ? cmp : -cmp;
+    // Search for each table
+    document.querySelectorAll('.tab-search').forEach(function(search) {
+        var table = document.getElementById(search.dataset.table);
+        if (!table) return;
+        var rows = Array.from(table.querySelector('tbody').querySelectorAll('tr'));
+        search.addEventListener('input', function() {
+            var q = this.value.toLowerCase();
+            rows.forEach(function(row) {
+                row.style.display = row.textContent.toLowerCase().indexOf(q) !== -1 ? '' : 'none';
             });
-            rows.forEach(function(row) { tbody.appendChild(row); });
+        });
+    });
+
+    // Sortable tables
+    document.querySelectorAll('.sortable-table').forEach(function(table) {
+        var tbody = table.querySelector('tbody');
+        var rows = Array.from(tbody.querySelectorAll('tr'));
+        var headers = table.querySelectorAll('th.sortable');
+        var sortDir = {};
+
+        headers.forEach(function(th) {
+            th.style.cursor = 'pointer';
+            th.addEventListener('click', function() {
+                var col = parseInt(th.dataset.col);
+                var dir = sortDir[col] === 'asc' ? 'desc' : 'asc';
+                sortDir[col] = dir;
+                headers.forEach(function(h) { h.classList.remove('sort-asc', 'sort-desc'); });
+                th.classList.add(dir === 'asc' ? 'sort-asc' : 'sort-desc');
+                rows.sort(function(a, b) {
+                    var cmp = a.cells[col].textContent.trim().localeCompare(b.cells[col].textContent.trim());
+                    return dir === 'asc' ? cmp : -cmp;
+                });
+                rows.forEach(function(row) { tbody.appendChild(row); });
+            });
         });
     });
 })();
 </script>
-{{end}}
 {{end}}

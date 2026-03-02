@@ -170,9 +170,14 @@ var I18n = (function() {
             // Queue overview
             'queue.title': 'Queue',
             'queue.total': 'Total',
+            'queue.tab_queue': 'Queue',
+            'queue.tab_dlq': 'DLQ',
             'queue.messages_in_queue': 'messages in queue',
+            'queue.messages_in_dlq': 'messages in DLQ',
             'queue.empty': 'Queue is empty',
-            'queue.empty_hint': 'Messages waiting to be sent will appear here'
+            'queue.empty_hint': 'Messages waiting to be sent will appear here',
+            'queue.dlq_empty': 'DLQ is empty',
+            'queue.dlq_empty_hint': 'Failed messages will appear here'
         },
         ru: {
             // Navigation
@@ -343,9 +348,14 @@ var I18n = (function() {
             // Queue overview
             'queue.title': 'Очередь',
             'queue.total': 'Всего',
+            'queue.tab_queue': 'Очередь',
+            'queue.tab_dlq': 'DLQ',
             'queue.messages_in_queue': 'сообщений в очереди',
+            'queue.messages_in_dlq': 'сообщений в DLQ',
             'queue.empty': 'Очередь пуста',
-            'queue.empty_hint': 'Сообщения, ожидающие отправки, появятся здесь'
+            'queue.empty_hint': 'Сообщения, ожидающие отправки, появятся здесь',
+            'queue.dlq_empty': 'DLQ пуст',
+            'queue.dlq_empty_hint': 'Неотправленные сообщения появятся здесь'
         }
     };
 
