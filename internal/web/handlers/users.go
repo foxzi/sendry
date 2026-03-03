@@ -61,7 +61,7 @@ func (h *Handlers) UserCreate(w http.ResponseWriter, r *http.Request) {
 		role = models.RoleUser
 	}
 
-	_, err := h.settings.CreateUser(email, name, password, role)
+	created, err := h.settings.CreateUser(email, name, password, role)
 	if err != nil {
 		data := map[string]any{
 			"Title":  "New User",
@@ -72,6 +72,11 @@ func (h *Handlers) UserCreate(w http.ResponseWriter, r *http.Request) {
 		h.render(w, "settings_user_form", data)
 		return
 	}
+
+	actorID := middleware.GetUserID(r)
+	actorEmail := middleware.GetUserEmail(r)
+	h.settings.LogAction(r, actorID, actorEmail, "create", "user", created.ID,
+		`{"email":"`+email+`","role":"`+string(role)+`"}`)
 
 	http.Redirect(w, r, "/settings/users", http.StatusSeeOther)
 }
@@ -132,6 +137,11 @@ func (h *Handlers) UserUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	actorID := middleware.GetUserID(r)
+	actorEmail := middleware.GetUserEmail(r)
+	h.settings.LogAction(r, actorID, actorEmail, "update", "user", id,
+		`{"name":"`+name+`","role":"`+string(role)+`"}`)
+
 	http.Redirect(w, r, "/settings/users", http.StatusSeeOther)
 }
 
@@ -164,6 +174,10 @@ func (h *Handlers) UserChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	actorID := middleware.GetUserID(r)
+	actorEmail := middleware.GetUserEmail(r)
+	h.settings.LogAction(r, actorID, actorEmail, "update", "user", id, `{"field":"password"}`)
+
 	http.Redirect(w, r, "/settings/users", http.StatusSeeOther)
 }
 
@@ -188,10 +202,20 @@ func (h *Handlers) UserDelete(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	targetEmail := ""
+	if target != nil {
+		targetEmail = target.Email
+	}
+
 	if err := h.settings.DeleteUser(id); err != nil {
 		h.error(w, http.StatusInternalServerError, "Failed to delete user")
 		return
 	}
+
+	actorID := middleware.GetUserID(r)
+	actorEmail := middleware.GetUserEmail(r)
+	h.settings.LogAction(r, actorID, actorEmail, "delete", "user", id,
+		`{"email":"`+targetEmail+`"}`)
 
 	http.Redirect(w, r, "/settings/users", http.StatusSeeOther)
 }

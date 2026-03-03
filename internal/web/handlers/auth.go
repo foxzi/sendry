@@ -6,14 +6,16 @@ import (
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/foxzi/sendry/internal/web/middleware"
 )
 
 // LoginPage renders the login page
 func (h *Handlers) LoginPage(w http.ResponseWriter, r *http.Request) {
 	data := map[string]any{
-		"LocalEnabled":  h.cfg.Auth.LocalEnabled,
-		"OIDCEnabled":   h.cfg.Auth.OIDC.Enabled,
-		"OIDCProvider":  h.cfg.Auth.OIDC.Provider,
+		"LocalEnabled": h.cfg.Auth.LocalEnabled,
+		"OIDCEnabled":  h.cfg.Auth.OIDC.Enabled,
+		"OIDCProvider": h.cfg.Auth.OIDC.Provider,
 	}
 	h.render(w, "login", data)
 }
@@ -48,6 +50,7 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 
 	// Create session
 	h.createSession(w, userID, email)
+	h.settings.LogAction(r, userID, email, "login", "user", userID, "")
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -58,6 +61,13 @@ func (h *Handlers) Logout(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		// Delete session from DB
 		h.db.Exec("DELETE FROM sessions WHERE id = ?", cookie.Value)
+	}
+
+	// Log before clearing cookie so we still have user context
+	userID := middleware.GetUserID(r)
+	userEmail := middleware.GetUserEmail(r)
+	if userEmail != "" {
+		h.settings.LogAction(r, userID, userEmail, "logout", "user", userID, "")
 	}
 
 	// Clear cookie
@@ -170,6 +180,7 @@ func (h *Handlers) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Create session
 	h.createSession(w, userID, userInfo.Email)
+	h.settings.LogAction(r, userID, userInfo.Email, "login", "user", userID, "oidc")
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -200,10 +211,10 @@ func (h *Handlers) createSession(w http.ResponseWriter, userID, email string) {
 
 func (h *Handlers) renderLoginError(w http.ResponseWriter, message string) {
 	data := map[string]any{
-		"LocalEnabled":  h.cfg.Auth.LocalEnabled,
-		"OIDCEnabled":   h.cfg.Auth.OIDC.Enabled,
-		"OIDCProvider":  h.cfg.Auth.OIDC.Provider,
-		"Error":         message,
+		"LocalEnabled": h.cfg.Auth.LocalEnabled,
+		"OIDCEnabled":  h.cfg.Auth.OIDC.Enabled,
+		"OIDCProvider": h.cfg.Auth.OIDC.Provider,
+		"Error":        message,
 	}
 	h.render(w, "login", data)
 }

@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/foxzi/sendry/internal/web/middleware"
 	"github.com/foxzi/sendry/internal/web/models"
 )
 
@@ -84,6 +85,8 @@ func (h *Handlers) CampaignCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.settings.LogAction(r, middleware.GetUserID(r), middleware.GetUserEmail(r),
+		"create", "campaign", c.ID, `{"name":"`+c.Name+`"}`)
 	http.Redirect(w, r, "/campaigns/"+c.ID, http.StatusSeeOther)
 }
 
@@ -173,6 +176,8 @@ func (h *Handlers) CampaignUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.settings.LogAction(r, middleware.GetUserID(r), middleware.GetUserEmail(r),
+		"update", "campaign", id, `{"name":"`+c.Name+`"}`)
 	http.Redirect(w, r, "/campaigns/"+id, http.StatusSeeOther)
 }
 
@@ -185,6 +190,8 @@ func (h *Handlers) CampaignDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.settings.LogAction(r, middleware.GetUserID(r), middleware.GetUserEmail(r),
+		"delete", "campaign", id, "")
 	http.Redirect(w, r, "/campaigns", http.StatusSeeOther)
 }
 
@@ -455,6 +462,8 @@ func (h *Handlers) CampaignSend(w http.ResponseWriter, r *http.Request) {
 		// TODO: Start background worker to process items
 	}
 
+	h.settings.LogAction(r, middleware.GetUserID(r), middleware.GetUserEmail(r),
+		"send", "campaign", id, `{"job_id":"`+job.ID+`","recipients":`+strconv.Itoa(len(recipients))+`}`)
 	http.Redirect(w, r, "/jobs/"+job.ID, http.StatusSeeOther)
 }
 

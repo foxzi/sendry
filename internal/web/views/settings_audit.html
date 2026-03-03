@@ -14,6 +14,8 @@
                 <option value="create" {{if eq .Filter.Action "create"}}selected{{end}}>Create</option>
                 <option value="update" {{if eq .Filter.Action "update"}}selected{{end}}>Update</option>
                 <option value="delete" {{if eq .Filter.Action "delete"}}selected{{end}}>Delete</option>
+                <option value="deploy" {{if eq .Filter.Action "deploy"}}selected{{end}}>Deploy</option>
+                <option value="send" {{if eq .Filter.Action "send"}}selected{{end}}>Send</option>
                 <option value="login" {{if eq .Filter.Action "login"}}selected{{end}}>Login</option>
                 <option value="logout" {{if eq .Filter.Action "logout"}}selected{{end}}>Logout</option>
             </select>
@@ -24,6 +26,7 @@
                 <option value="campaign" {{if eq .Filter.EntityType "campaign"}}selected{{end}}>Campaign</option>
                 <option value="job" {{if eq .Filter.EntityType "job"}}selected{{end}}>Job</option>
                 <option value="variable" {{if eq .Filter.EntityType "variable"}}selected{{end}}>Variable</option>
+                <option value="user" {{if eq .Filter.EntityType "user"}}selected{{end}}>User</option>
             </select>
             <button type="submit" class="btn">Filter</button>
             {{if or .Filter.Action .Filter.EntityType}}

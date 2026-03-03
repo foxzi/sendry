@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/foxzi/sendry/internal/web/middleware"
 	"github.com/foxzi/sendry/internal/web/models"
 	"github.com/foxzi/sendry/internal/web/sendry"
 )
@@ -50,12 +51,16 @@ func (h *Handlers) GlobalVariablesUpdate(w http.ResponseWriter, r *http.Request)
 	value := r.FormValue("value")
 	description := r.FormValue("description")
 
+	actorID := middleware.GetUserID(r)
+	actorEmail := middleware.GetUserEmail(r)
+
 	switch action {
 	case "delete":
 		if err := h.settings.DeleteVariable(key); err != nil {
 			h.error(w, http.StatusInternalServerError, "Failed to delete variable")
 			return
 		}
+		h.settings.LogAction(r, actorID, actorEmail, "delete", "variable", key, "")
 	default:
 		if key == "" {
 			h.error(w, http.StatusBadRequest, "Key is required")
@@ -65,6 +70,7 @@ func (h *Handlers) GlobalVariablesUpdate(w http.ResponseWriter, r *http.Request)
 			h.error(w, http.StatusInternalServerError, "Failed to save variable")
 			return
 		}
+		h.settings.LogAction(r, actorID, actorEmail, "update", "variable", key, "")
 	}
 
 	http.Redirect(w, r, "/settings/variables", http.StatusSeeOther)

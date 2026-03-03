@@ -2,6 +2,10 @@ package repository
 
 import (
 	"database/sql"
+	"fmt"
+	"net"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -182,6 +186,54 @@ func (r *SettingsRepository) CountAdmins() (int, error) {
 	var count int
 	err := r.db.QueryRow("SELECT COUNT(*) FROM users WHERE role = 'admin'").Scan(&count)
 	return count, err
+}
+
+// LogAction writes an audit log entry. userID and userEmail may be empty for
+// unauthenticated actions (e.g. failed login). details is optional free-form text.
+// The request is used only to extract the client IP address.
+func (r *SettingsRepository) LogAction(req *http.Request, userID, userEmail, action, entityType, entityID, details string) {
+	ip := extractIP(req)
+	_ = r.AddAuditLog(&models.AuditLogEntry{
+		UserID:     userID,
+		UserEmail:  userEmail,
+		Action:     action,
+		EntityType: entityType,
+		EntityID:   entityID,
+		Details:    details,
+		IPAddress:  ip,
+	})
+}
+
+// extractIP returns the best-effort client IP from a request.
+func extractIP(r *http.Request) string {
+	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+		// X-Forwarded-For may be a comma-separated list; take the first.
+		parts := strings.SplitN(fwd, ",", 2)
+		if ip := strings.TrimSpace(parts[0]); ip != "" {
+			return ip
+		}
+	}
+	if real := r.Header.Get("X-Real-IP"); real != "" {
+		return strings.TrimSpace(real)
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
+// detailsJSON returns a JSON-encoded details string for structured audit entries.
+// Example: detailsJSON("name", "foo", "role", "admin")
+func detailsJSON(pairs ...string) string {
+	if len(pairs)%2 != 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(pairs)/2)
+	for i := 0; i < len(pairs); i += 2 {
+		parts = append(parts, fmt.Sprintf("%q:%q", pairs[i], pairs[i+1]))
+	}
+	return "{" + strings.Join(parts, ",") + "}"
 }
 
 // AddAuditLog adds an audit log entry

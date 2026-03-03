@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Sendry Web: Audit log now records all mutating actions: login, logout, user create/update/delete/password-change, template create/update/delete/deploy/import, campaign create/update/delete/send, global variable set/delete
+- Sendry Web: LogAction helper in SettingsRepository extracts client IP automatically (X-Forwarded-For, X-Real-IP, RemoteAddr)
+- Sendry Web: Audit log filter extended with Deploy, Send actions and User entity type
 - Sendry Web: User management at /settings/users (create, edit, delete, change password)
 - Sendry Web: Two user roles: admin and user; admins manage other users
 - Sendry Web: AdminOnly middleware blocks non-admin access to /settings routes (returns 403)

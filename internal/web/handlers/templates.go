@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/foxzi/sendry/internal/web/middleware"
 	"github.com/foxzi/sendry/internal/web/models"
 	"github.com/foxzi/sendry/internal/web/sendry"
 )
@@ -100,6 +101,8 @@ func (h *Handlers) TemplateCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.settings.LogAction(r, middleware.GetUserID(r), user["Email"].(string),
+		"create", "template", t.ID, `{"name":"`+t.Name+`"}`)
 	http.Redirect(w, r, "/templates/"+t.ID, http.StatusSeeOther)
 }
 
@@ -216,6 +219,8 @@ func (h *Handlers) TemplateUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.settings.LogAction(r, middleware.GetUserID(r), user["Email"].(string),
+		"update", "template", id, `{"name":"`+t.Name+`"}`)
 	http.Redirect(w, r, "/templates/"+id, http.StatusSeeOther)
 }
 
@@ -228,6 +233,9 @@ func (h *Handlers) TemplateDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	user := h.getUserFromContext(r)
+	h.settings.LogAction(r, middleware.GetUserID(r), user["Email"].(string),
+		"delete", "template", id, "")
 	http.Redirect(w, r, "/templates", http.StatusSeeOther)
 }
 
@@ -336,6 +344,9 @@ func (h *Handlers) TemplateDeploy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.logger.Info("template deployed", "template_id", id, "server", serverName, "remote_id", remoteID, "version", t.CurrentVersion)
+	user := h.getUserFromContext(r)
+	h.settings.LogAction(r, middleware.GetUserID(r), user["Email"].(string),
+		"deploy", "template", id, `{"server":"`+serverName+`"}`)
 	http.Redirect(w, r, "/templates/"+id, http.StatusSeeOther)
 }
 
@@ -565,6 +576,8 @@ func (h *Handlers) TemplateImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.logger.Info("template imported", "id", t.ID, "name", t.Name, "user", user["Email"].(string))
+	h.settings.LogAction(r, middleware.GetUserID(r), user["Email"].(string),
+		"create", "template", t.ID, `{"name":"`+t.Name+`","source":"import"}`)
 	http.Redirect(w, r, "/templates/"+t.ID, http.StatusSeeOther)
 }
 
