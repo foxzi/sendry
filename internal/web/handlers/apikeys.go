@@ -98,7 +98,7 @@ func (h *Handlers) APIKeyCreate(w http.ResponseWriter, r *http.Request) {
 	user := h.getUserFromContext(r)
 	opts := repository.APIKeyCreateOptions{
 		Name:            name,
-		CreatedBy:       user["Email"],
+		CreatedBy:       user["Email"].(string),
 		Permissions:     []string{"send"},
 		AllowedDomains:  allowedDomains,
 		ExpiresAt:       expiresAt,
@@ -113,7 +113,7 @@ func (h *Handlers) APIKeyCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.logger.Info("API key created", "id", result.ID, "name", name, "user", user["Email"])
+	h.logger.Info("API key created", "id", result.ID, "name", name, "user", user["Email"].(string))
 
 	// Redirect with the new key shown (only time it's visible)
 	http.Redirect(w, r, "/settings/api-keys?new_key="+result.Key, http.StatusSeeOther)
@@ -134,7 +134,7 @@ func (h *Handlers) APIKeyDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := h.getUserFromContext(r)
-	h.logger.Info("API key deleted", "id", id, "user", user["Email"])
+	h.logger.Info("API key deleted", "id", id, "user", user["Email"].(string))
 
 	http.Redirect(w, r, "/settings/api-keys", http.StatusSeeOther)
 }
@@ -159,7 +159,7 @@ func (h *Handlers) APIKeyToggle(w http.ResponseWriter, r *http.Request) {
 	if newActive {
 		action = "activated"
 	}
-	h.logger.Info("API key "+action, "id", id, "user", user["Email"])
+	h.logger.Info("API key "+action, "id", id, "user", user["Email"].(string))
 
 	http.Redirect(w, r, "/settings/api-keys", http.StatusSeeOther)
 }
@@ -205,7 +205,7 @@ func (h *Handlers) APIKeyEdit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := h.getUserFromContext(r)
-	h.logger.Info("API key updated", "id", id, "user", user["Email"])
+	h.logger.Info("API key updated", "id", id, "user", user["Email"].(string))
 
 	http.Redirect(w, r, "/settings/api-keys", http.StatusSeeOther)
 }

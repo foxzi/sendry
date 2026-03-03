@@ -70,24 +70,6 @@ func (h *Handlers) GlobalVariablesUpdate(w http.ResponseWriter, r *http.Request)
 	http.Redirect(w, r, "/settings/variables", http.StatusSeeOther)
 }
 
-// UserList shows all users
-func (h *Handlers) UserList(w http.ResponseWriter, r *http.Request) {
-	users, err := h.settings.ListUsers()
-	if err != nil {
-		h.error(w, http.StatusInternalServerError, "Failed to load users")
-		return
-	}
-
-	data := map[string]any{
-		"Title":  "Users",
-		"Active": "settings",
-		"User":   h.getUserFromContext(r),
-		"Users":  users,
-	}
-
-	h.render(w, "settings_users", data)
-}
-
 // AuditLog shows audit log entries
 func (h *Handlers) AuditLog(w http.ResponseWriter, r *http.Request) {
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))

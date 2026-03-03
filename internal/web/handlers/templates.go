@@ -94,7 +94,7 @@ func (h *Handlers) TemplateCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := h.getUserFromContext(r)
-	if err := h.templates.Create(t, user["Email"]); err != nil {
+	if err := h.templates.Create(t, user["Email"].(string)); err != nil {
 		h.logger.Error("failed to create template", "error", err)
 		h.error(w, http.StatusInternalServerError, "Failed to create template")
 		return
@@ -210,7 +210,7 @@ func (h *Handlers) TemplateUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := h.getUserFromContext(r)
-	if err := h.templates.Update(t, changeNote, user["Email"]); err != nil {
+	if err := h.templates.Update(t, changeNote, user["Email"].(string)); err != nil {
 		h.logger.Error("failed to update template", "error", err)
 		h.error(w, http.StatusInternalServerError, "Failed to update template")
 		return
@@ -558,13 +558,13 @@ func (h *Handlers) TemplateImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := h.getUserFromContext(r)
-	if err := h.templates.Create(t, user["Email"]); err != nil {
+	if err := h.templates.Create(t, user["Email"].(string)); err != nil {
 		h.logger.Error("failed to import template", "error", err)
 		h.error(w, http.StatusInternalServerError, "Failed to import template")
 		return
 	}
 
-	h.logger.Info("template imported", "id", t.ID, "name", t.Name, "user", user["Email"])
+	h.logger.Info("template imported", "id", t.ID, "name", t.Name, "user", user["Email"].(string))
 	http.Redirect(w, r, "/templates/"+t.ID, http.StatusSeeOther)
 }
 
@@ -657,7 +657,7 @@ func (h *Handlers) TemplateTest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := h.getUserFromContext(r)
-	h.logger.Info("test email sent", "template_id", id, "server", serverName, "to", to, "message_id", resp.ID, "user", user["Email"])
+	h.logger.Info("test email sent", "template_id", id, "server", serverName, "to", to, "message_id", resp.ID, "user", user["Email"].(string))
 
 	// Redirect back to template with success message
 	http.Redirect(w, r, "/templates/"+id+"?test_sent=1", http.StatusSeeOther)

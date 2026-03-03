@@ -130,13 +130,16 @@ func (h *Handlers) error(w http.ResponseWriter, status int, message string) {
 }
 
 // Get user from request context
-func (h *Handlers) getUserFromContext(r *http.Request) map[string]string {
+func (h *Handlers) getUserFromContext(r *http.Request) map[string]any {
 	email := middleware.GetUserEmail(r)
 	if email == "" {
 		email = "unknown"
 	}
-	return map[string]string{
-		"Email": email,
+	role := middleware.GetUserRole(r)
+	return map[string]any{
+		"Email":   email,
+		"Role":    role,
+		"IsAdmin": role == "admin",
 	}
 }
 

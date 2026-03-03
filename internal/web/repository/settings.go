@@ -4,6 +4,9 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/foxzi/sendry/internal/web/models"
 )
 
@@ -92,7 +95,7 @@ func (r *SettingsRepository) DeleteVariable(key string) error {
 // ListUsers returns all users
 func (r *SettingsRepository) ListUsers() ([]models.User, error) {
 	rows, err := r.db.Query(`
-		SELECT id, email, COALESCE(name, '') as name, created_at, updated_at
+		SELECT id, email, COALESCE(name, '') as name, COALESCE(role, 'user') as role, created_at, updated_at
 		FROM users ORDER BY email`)
 	if err != nil {
 		return nil, err
@@ -102,7 +105,7 @@ func (r *SettingsRepository) ListUsers() ([]models.User, error) {
 	users := []models.User{}
 	for rows.Next() {
 		var u models.User
-		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Role, &u.CreatedAt, &u.UpdatedAt); err != nil {
 			return nil, err
 		}
 		users = append(users, u)
@@ -114,9 +117,9 @@ func (r *SettingsRepository) ListUsers() ([]models.User, error) {
 func (r *SettingsRepository) GetUserByID(id string) (*models.User, error) {
 	u := &models.User{}
 	err := r.db.QueryRow(`
-		SELECT id, email, COALESCE(name, '') as name, created_at, updated_at
+		SELECT id, email, COALESCE(name, '') as name, COALESCE(role, 'user') as role, created_at, updated_at
 		FROM users WHERE id = ?`, id,
-	).Scan(&u.ID, &u.Email, &u.Name, &u.CreatedAt, &u.UpdatedAt)
+	).Scan(&u.ID, &u.Email, &u.Name, &u.Role, &u.CreatedAt, &u.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -125,6 +128,60 @@ func (r *SettingsRepository) GetUserByID(id string) (*models.User, error) {
 		return nil, err
 	}
 	return u, nil
+}
+
+// CreateUser creates a new user
+func (r *SettingsRepository) CreateUser(email, name, password string, role models.UserRole) (*models.User, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, err
+	}
+	id := uuid.New().String()
+	now := time.Now()
+	_, err = r.db.Exec(`
+		INSERT INTO users (id, email, name, password_hash, role, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		id, email, name, string(hash), string(role), now, now,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &models.User{ID: id, Email: email, Name: name, Role: role, CreatedAt: now, UpdatedAt: now}, nil
+}
+
+// UpdateUser updates a user's name and role
+func (r *SettingsRepository) UpdateUser(id, name string, role models.UserRole) error {
+	_, err := r.db.Exec(`
+		UPDATE users SET name = ?, role = ?, updated_at = ? WHERE id = ?`,
+		name, string(role), time.Now(), id,
+	)
+	return err
+}
+
+// ChangePassword updates a user's password
+func (r *SettingsRepository) ChangePassword(id, newPassword string) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	_, err = r.db.Exec(`
+		UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?`,
+		string(hash), time.Now(), id,
+	)
+	return err
+}
+
+// DeleteUser deletes a user by ID
+func (r *SettingsRepository) DeleteUser(id string) error {
+	_, err := r.db.Exec("DELETE FROM users WHERE id = ?", id)
+	return err
+}
+
+// CountAdmins returns the number of admin users
+func (r *SettingsRepository) CountAdmins() (int, error) {
+	var count int
+	err := r.db.QueryRow("SELECT COUNT(*) FROM users WHERE role = 'admin'").Scan(&count)
+	return count, err
 }
 
 // AddAuditLog adds an audit log entry

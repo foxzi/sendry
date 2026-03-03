@@ -2,6 +2,14 @@ package models
 
 import "time"
 
+// UserRole represents a user role
+type UserRole string
+
+const (
+	RoleAdmin UserRole = "admin"
+	RoleUser  UserRole = "user"
+)
+
 // GlobalVariable represents a global template variable
 type GlobalVariable struct {
 	Key         string    `json:"key"`
@@ -29,8 +37,14 @@ type User struct {
 	Email        string    `json:"email"`
 	PasswordHash string    `json:"-"`
 	Name         string    `json:"name"`
+	Role         UserRole  `json:"role"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// IsAdmin returns true if the user has admin role
+func (u *User) IsAdmin() bool {
+	return u.Role == RoleAdmin
 }
 
 // AuditLogFilter for filtering audit log

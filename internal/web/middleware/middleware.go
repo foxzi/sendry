@@ -104,6 +104,8 @@ type ctxKey string
 
 const ctxKeyAPIKey ctxKey = "api_key"
 const ctxKeyUserEmail ctxKey = "user_email"
+const ctxKeyUserID ctxKey = "user_id"
+const ctxKeyUserRole ctxKey = "user_role"
 
 // GetUserEmail returns the authenticated user's email from request context
 func GetUserEmail(r *http.Request) string {
@@ -111,6 +113,27 @@ func GetUserEmail(r *http.Request) string {
 		return email
 	}
 	return ""
+}
+
+// GetUserID returns the authenticated user's ID from request context
+func GetUserID(r *http.Request) string {
+	if id, ok := r.Context().Value(ctxKeyUserID).(string); ok {
+		return id
+	}
+	return ""
+}
+
+// GetUserRole returns the authenticated user's role from request context
+func GetUserRole(r *http.Request) string {
+	if role, ok := r.Context().Value(ctxKeyUserRole).(string); ok {
+		return role
+	}
+	return ""
+}
+
+// IsAdmin returns true if the authenticated user has admin role
+func IsAdmin(r *http.Request) bool {
+	return GetUserRole(r) == "admin"
 }
 
 // Logger middleware logs HTTP requests
@@ -168,12 +191,12 @@ func Auth(cfg *config.Config, database *db.DB, logger *slog.Logger) func(http.Ha
 				return
 			}
 
-			// Validate session and get user email
-			var userID, email string
+			// Validate session and get user info
+			var userID, email, role string
 			err = database.QueryRow(
-				"SELECT s.user_id, u.email FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.id = ? AND s.expires_at > datetime('now')",
+				"SELECT s.user_id, u.email, COALESCE(u.role, 'user') FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.id = ? AND s.expires_at > datetime('now')",
 				cookie.Value,
-			).Scan(&userID, &email)
+			).Scan(&userID, &email, &role)
 
 			if err != nil {
 				// Invalid session, redirect to login
@@ -181,11 +204,24 @@ func Auth(cfg *config.Config, database *db.DB, logger *slog.Logger) func(http.Ha
 				return
 			}
 
-			// Session valid, add user email to context
+			// Session valid, add user info to context
 			ctx := context.WithValue(r.Context(), ctxKeyUserEmail, email)
+			ctx = context.WithValue(ctx, ctxKeyUserID, userID)
+			ctx = context.WithValue(ctx, ctxKeyUserRole, role)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// AdminOnly middleware restricts access to admin users only
+func AdminOnly(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !IsAdmin(r) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // MethodOverride middleware allows overriding HTTP method via _method form field

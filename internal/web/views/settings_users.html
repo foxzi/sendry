@@ -2,6 +2,7 @@
 <div class="page-header">
     <h1>Users</h1>
     <div class="header-actions">
+        <a href="/settings/users/new" class="btn btn-primary">+ New User</a>
         <a href="/settings" class="btn btn-secondary">Back to Settings</a>
     </div>
 </div>
@@ -14,8 +15,9 @@
                 <tr>
                     <th>Email</th>
                     <th>Name</th>
+                    <th>Role</th>
                     <th>Created</th>
-                    <th>Last Updated</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -23,8 +25,21 @@
                 <tr>
                     <td>{{.Email}}</td>
                     <td>{{if .Name}}{{.Name}}{{else}}<span class="text-muted">-</span>{{end}}</td>
+                    <td>
+                        {{if .IsAdmin}}
+                        <span class="badge badge-primary">admin</span>
+                        {{else}}
+                        <span class="badge">user</span>
+                        {{end}}
+                    </td>
                     <td>{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
-                    <td>{{.UpdatedAt.Format "2006-01-02 15:04"}}</td>
+                    <td>
+                        <a href="/settings/users/{{.ID}}/edit" class="btn btn-sm btn-secondary">Edit</a>
+                        <form method="post" action="/settings/users/{{.ID}}" style="display:inline;" onsubmit="return confirm('Delete this user?')">
+                            <input type="hidden" name="_method" value="DELETE">
+                            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                        </form>
+                    </td>
                 </tr>
                 {{end}}
             </tbody>
@@ -32,7 +47,6 @@
         {{else}}
         <div class="empty-state">
             <p>No users found</p>
-            <p class="text-muted">Users are created during initial setup or via OIDC login</p>
         </div>
         {{end}}
     </div>

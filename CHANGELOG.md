@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Sendry Web: User management at /settings/users (create, edit, delete, change password)
+- Sendry Web: Two user roles: admin and user; admins manage other users
+- Sendry Web: AdminOnly middleware blocks non-admin access to /settings routes (returns 403)
+- Sendry Web: Settings nav link hidden for non-admin users
+- Sendry Web: First registered user auto-promoted to admin via migration
+- Sendry Web: User role and ID stored in session context (extends Auth middleware)
 - Sendry Web: Queue size badge in navbar with auto-refresh (polls every 30s)
 - Sendry Web: NavStats API endpoint for navbar queue counter
 - Sendry Web: i18n translations for queue badge (EN/RU)

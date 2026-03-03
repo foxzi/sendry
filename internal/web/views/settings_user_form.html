@@ -1,0 +1,85 @@
+{{define "content"}}
+<div class="page-header">
+    <h1>{{if .EditUser}}Edit User{{else}}New User{{end}}</h1>
+    <div class="header-actions">
+        <a href="/settings/users" class="btn btn-secondary">Back to Users</a>
+    </div>
+</div>
+
+{{if .Error}}
+<div class="alert alert-danger">{{.Error}}</div>
+{{end}}
+
+<div class="card">
+    <div class="card-header">
+        <h2>{{if .EditUser}}User Details{{else}}Create User{{end}}</h2>
+    </div>
+    <div class="card-body">
+        {{if .EditUser}}
+        <form method="post" action="/settings/users/{{.EditUser.ID}}">
+        {{else}}
+        <form method="post" action="/settings/users">
+        {{end}}
+            {{if .EditUser}}
+            <div class="form-group">
+                <label>Email</label>
+                <input type="text" class="form-control" value="{{.EditUser.Email}}" disabled>
+            </div>
+            {{else}}
+            <div class="form-group">
+                <label for="email">Email *</label>
+                <input type="email" id="email" name="email" class="form-control" required>
+            </div>
+            {{end}}
+
+            <div class="form-group">
+                <label for="name">Name</label>
+                <input type="text" id="name" name="name" class="form-control" value="{{if .EditUser}}{{.EditUser.Name}}{{end}}">
+            </div>
+
+            <div class="form-group">
+                <label for="role">Role *</label>
+                <select id="role" name="role" class="form-control">
+                    <option value="user" {{if .EditUser}}{{if not .EditUser.IsAdmin}}selected{{end}}{{end}}>user</option>
+                    <option value="admin" {{if .EditUser}}{{if .EditUser.IsAdmin}}selected{{end}}{{end}}>admin</option>
+                </select>
+            </div>
+
+            {{if not .EditUser}}
+            <div class="form-group">
+                <label for="password">Password *</label>
+                <input type="password" id="password" name="password" class="form-control" required>
+            </div>
+            {{end}}
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">{{if .EditUser}}Save{{else}}Create{{end}}</button>
+                <a href="/settings/users" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{if .EditUser}}
+<div class="card" style="margin-top: 1.5rem;">
+    <div class="card-header">
+        <h2>Change Password</h2>
+    </div>
+    <div class="card-body">
+        <form method="post" action="/settings/users/{{.EditUser.ID}}/password">
+            <div class="form-group">
+                <label for="password">New Password *</label>
+                <input type="password" id="password" name="password" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="password_confirm">Confirm Password *</label>
+                <input type="password" id="password_confirm" name="password_confirm" class="form-control" required>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Change Password</button>
+            </div>
+        </form>
+    </div>
+</div>
+{{end}}
+{{end}}

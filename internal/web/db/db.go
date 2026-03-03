@@ -70,6 +70,9 @@ func (db *DB) Migrate() error {
 		"ALTER TABLE api_keys ADD COLUMN rate_limit_minute INTEGER DEFAULT 0",
 		"ALTER TABLE api_keys ADD COLUMN rate_limit_hour INTEGER DEFAULT 0",
 		"ALTER TABLE api_keys ADD COLUMN allowed_domains TEXT DEFAULT '[]'",
+		"ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'",
+		"ALTER TABLE users ADD COLUMN password_hash TEXT",
+		"UPDATE users SET role = 'admin' WHERE id = (SELECT id FROM users ORDER BY created_at ASC LIMIT 1)",
 	}
 	for _, m := range alterMigrations {
 		db.Exec(m) // Ignore errors (column may already exist)
@@ -374,4 +377,3 @@ CREATE INDEX IF NOT EXISTS idx_sends_domain ON sends(sender_domain);
 CREATE INDEX IF NOT EXISTS idx_sends_server ON sends(server_name);
 CREATE INDEX IF NOT EXISTS idx_sends_created ON sends(created_at);
 `
-
