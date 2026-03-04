@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.12] - 2026-03-04
+
 ### Added
 - Sendry Web: Audit log now records all mutating actions: login, logout, user create/update/delete/password-change, template create/update/delete/deploy/import, campaign create/update/delete/send, global variable set/delete
 - Sendry Web: LogAction helper in SettingsRepository extracts client IP automatically (X-Forwarded-For, X-Real-IP, RemoteAddr)
