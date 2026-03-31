@@ -1,5 +1,7 @@
 server:
   listen_addr: ":8088"
+  public_url: ""
+  upload_path: "/var/lib/sendry-web/uploads"
   tls:
     enabled: false
     cert_file: ""

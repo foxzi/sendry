@@ -1,0 +1,168 @@
+{{define "content"}}
+<style>
+.media-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 1rem;
+}
+.media-item {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--bg-card);
+    transition: box-shadow 0.2s;
+}
+.media-item:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+.media-thumb {
+    width: 100%;
+    height: 140px;
+    object-fit: contain;
+    background: #f5f5f5;
+    display: block;
+}
+.media-info {
+    padding: 0.5rem 0.75rem;
+}
+.media-name {
+    font-size: 0.75rem;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 0.25rem;
+}
+.media-meta {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+.media-actions {
+    padding: 0.25rem 0.75rem 0.5rem;
+    display: flex;
+    gap: 0.25rem;
+}
+.media-actions .btn { font-size: 0.7rem; padding: 0.15rem 0.5rem; }
+.upload-area {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 2rem;
+    text-align: center;
+    background: var(--bg);
+    cursor: pointer;
+    transition: border-color 0.2s;
+    margin-bottom: 1rem;
+}
+.upload-area:hover, .upload-area.dragover {
+    border-color: var(--primary);
+}
+.upload-area p { margin: 0.5rem 0 0; color: var(--text-muted); font-size: 0.875rem; }
+.copy-toast {
+    position: fixed;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    color: #fff;
+    padding: 0.5rem 1.5rem;
+    border-radius: var(--radius);
+    font-size: 0.875rem;
+    display: none;
+    z-index: 999;
+}
+</style>
+
+<div class="page-header">
+    <h1>Media</h1>
+    <div class="header-actions">
+        <form class="filter-form" method="get" action="/media" style="display:inline-flex; gap:0.5rem;">
+            <input type="text" name="search" placeholder="Search..." value="{{.Search}}" class="input" style="width:200px;">
+            <button type="submit" class="btn">Search</button>
+            {{if .Search}}<a href="/media" class="btn btn-secondary">Clear</a>{{end}}
+        </form>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom:1rem;">
+    <div class="card-body">
+        <form id="upload-form" method="post" action="/media/upload" enctype="multipart/form-data">
+            <div class="upload-area" id="upload-area" onclick="document.getElementById('file-input').click();">
+                <strong>Drop image here or click to upload</strong>
+                <p>PNG, JPEG, GIF, WebP, SVG — max 10 MB</p>
+            </div>
+            <input type="file" id="file-input" name="file" accept="image/*" style="display:none;" onchange="document.getElementById('upload-form').submit();">
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {{if .Files}}
+        <div class="media-grid">
+            {{range .Files}}
+            <div class="media-item">
+                <img src="{{.URL}}" alt="{{.OrigName}}" class="media-thumb" loading="lazy">
+                <div class="media-info">
+                    <div class="media-name" title="{{.OrigName}}">{{.OrigName}}</div>
+                    <div class="media-meta">{{.CreatedAt.Format "2006-01-02"}}</div>
+                </div>
+                <div class="media-actions">
+                    <button class="btn btn-sm" onclick="copyURL('{{.URL}}')">Copy URL</button>
+                    <form method="post" action="/media/{{.ID}}/delete" style="display:inline;" onsubmit="return confirm('Delete?')">
+                        <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                    </form>
+                </div>
+            </div>
+            {{end}}
+        </div>
+
+        {{if gt .TotalPages 1}}
+        <div class="pagination" style="margin-top:1rem;">
+            {{if gt .Page 1}}
+            <a href="/media?page={{sub .Page 1}}{{if .Search}}&search={{.Search}}{{end}}" class="btn btn-sm">&laquo; Prev</a>
+            {{end}}
+            <span class="pagination-info">Page {{.Page}} of {{.TotalPages}} ({{.Total}} files)</span>
+            {{if lt .Page .TotalPages}}
+            <a href="/media?page={{add .Page 1}}{{if .Search}}&search={{.Search}}{{end}}" class="btn btn-sm">Next &raquo;</a>
+            {{end}}
+        </div>
+        {{end}}
+        {{else}}
+        <div class="empty-state">
+            <p>No media files uploaded yet</p>
+        </div>
+        {{end}}
+    </div>
+</div>
+
+<div class="copy-toast" id="copy-toast">URL copied!</div>
+
+<script>
+function copyURL(url) {
+    var full = window.location.origin + url;
+    navigator.clipboard.writeText(full).then(function() {
+        var toast = document.getElementById('copy-toast');
+        toast.style.display = 'block';
+        setTimeout(function() { toast.style.display = 'none'; }, 1500);
+    });
+}
+
+// Drag and drop
+var area = document.getElementById('upload-area');
+['dragenter','dragover'].forEach(function(ev) {
+    area.addEventListener(ev, function(e) { e.preventDefault(); area.classList.add('dragover'); });
+});
+['dragleave','drop'].forEach(function(ev) {
+    area.addEventListener(ev, function(e) { e.preventDefault(); area.classList.remove('dragover'); });
+});
+area.addEventListener('drop', function(e) {
+    var dt = e.dataTransfer;
+    if (dt.files.length > 0) {
+        var fd = new FormData();
+        fd.append('file', dt.files[0]);
+        fetch('/media/upload', { method: 'POST', body: fd })
+            .then(function() { window.location.reload(); });
+    }
+});
+</script>
+{{end}}

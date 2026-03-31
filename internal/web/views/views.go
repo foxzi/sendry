@@ -2,10 +2,12 @@ package views
 
 import (
 	"embed"
+	"encoding/json"
 	"html/template"
 	"io"
 	"io/fs"
 	"path/filepath"
+	"strings"
 )
 
 //go:embed *.html
@@ -28,6 +30,14 @@ var funcs = template.FuncMap{
 			end = len(s)
 		}
 		return s[start:end]
+	},
+	"toJSON": func(v any) template.JS {
+		b, err := json.Marshal(v)
+		if err != nil {
+			return template.JS("null")
+		}
+		s := strings.ReplaceAll(string(b), "</", `<\/`)
+		return template.JS(s)
 	},
 }
 

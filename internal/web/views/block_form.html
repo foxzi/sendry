@@ -1,0 +1,512 @@
+{{define "content"}}
+<style>
+.html-toolbar {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+}
+.modal-overlay.active { display: flex; }
+.modal {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    width: 90%;
+    max-width: 800px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+}
+.modal-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.modal-header h3 { margin: 0; }
+.modal-close { cursor: pointer; font-size: 1.5rem; background: none; border: none; color: var(--text-muted); }
+.modal-body {
+    padding: 1rem 1.5rem;
+    overflow-y: auto;
+    flex: 1;
+}
+.media-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 0.75rem;
+}
+.media-picker-item {
+    cursor: pointer;
+    border: 2px solid transparent;
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    background: #f5f5f5;
+}
+.media-picker-item:hover {
+    border-color: var(--primary);
+    box-shadow: 0 2px 8px rgba(59,130,246,0.2);
+}
+.media-picker-item img {
+    width: 100%;
+    height: 100px;
+    object-fit: contain;
+    display: block;
+}
+.media-picker-name {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.7rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text-muted);
+}
+.modal-upload {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    text-align: center;
+    margin-bottom: 1rem;
+    cursor: pointer;
+    transition: border-color 0.15s;
+}
+.modal-upload:hover { border-color: var(--primary); }
+.modal-upload p { margin: 0.25rem 0 0; font-size: 0.8rem; color: var(--text-muted); }
+.var-list { list-style: none; padding: 0; margin: 0; }
+.var-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border);
+}
+.var-item:last-child { border-bottom: none; }
+.var-name { font-family: monospace; font-size: 0.9rem; font-weight: 500; }
+.var-value { font-size: 0.8rem; color: var(--text-muted); max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.var-actions { display: flex; gap: 0.25rem; }
+</style>
+
+<div class="page-header">
+    <h1>{{if .IsEdit}}Edit Block{{else}}New Block{{end}}</h1>
+    <div class="header-actions">
+        <a href="/blocks" class="btn btn-secondary">Back to Blocks</a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="post" action="{{if .IsEdit}}/blocks/{{.Block.ID}}{{else}}/blocks{{end}}">
+            <div class="form-group">
+                <label for="name">Name</label>
+                <input type="text" id="name" name="name" class="input" required
+                    value="{{if .Block}}{{.Block.Name}}{{end}}"
+                    placeholder="e.g. Header - Order Created">
+            </div>
+
+            <div class="form-group">
+                <label for="category">Category</label>
+                <input type="text" id="category" name="category" class="input" required list="category-list"
+                    value="{{if .Block}}{{.Block.Category}}{{end}}"
+                    placeholder="e.g. headers, footers, content">
+                <datalist id="category-list">
+                    {{range .Categories}}
+                    <option value="{{.}}">
+                    {{end}}
+                </datalist>
+            </div>
+
+            <div class="form-group">
+                <label for="preview_text">Description</label>
+                <input type="text" id="preview_text" name="preview_text" class="input"
+                    value="{{if .Block}}{{.Block.PreviewText}}{{end}}"
+                    placeholder="Short description of this block">
+            </div>
+
+            <div class="form-group">
+                <label for="html">HTML</label>
+                <div class="html-toolbar">
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="openImagePicker('insert')">Insert Image</button>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="openVariablesPanel()">Variables</button>
+                </div>
+                <textarea id="html" name="html" class="input" required rows="20"
+                    style="font-family:monospace; font-size:13px; tab-size:2;">{{if .Block}}{{.Block.HTML}}{{end}}</textarea>
+            </div>
+
+            <div id="block-preview" style="margin-bottom:1rem;">
+                <label>Preview</label>
+                <div style="border:1px solid var(--border); border-radius:var(--radius); padding:1rem; background:#fff; max-width:600px;">
+                    <iframe id="preview-frame" style="width:100%; height:300px; border:none;"></iframe>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">{{if .IsEdit}}Update Block{{else}}Create Block{{end}}</button>
+                <a href="/blocks" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal-overlay" id="image-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 id="image-modal-title">Select Image</h3>
+            <button class="modal-close" onclick="closeImagePicker()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="modal-upload" id="modal-upload-area">
+                <strong>Upload new image</strong>
+                <p>Drop here or click</p>
+                <input type="file" id="modal-file-input" accept="image/*" style="display:none;">
+            </div>
+            <div class="media-picker-grid" id="media-grid"></div>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="vars-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Template Variables</h3>
+            <button class="modal-close" onclick="document.getElementById('vars-modal').classList.remove('active')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size:0.85rem; color:var(--text-muted); margin-top:0;">
+                Variables found in HTML. Image variables (inside <code>src="..."</code>) can be replaced with uploaded images.
+            </p>
+            <ul class="var-list" id="vars-list"></ul>
+            <div id="vars-empty" style="text-align:center; color:var(--text-muted); padding:2rem; display:none;">
+                No variables found. Use <code>{{"{{"}}.VarName{{"}}"}}</code> syntax in your HTML.
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+var LP = '{{"{{"}}'; // left brace pair — workaround for Go template parser
+// Test values — persisted in localStorage so they work across all preview pages
+var testValues = JSON.parse(localStorage.getItem('sendry_test_values') || '{}');
+function saveTestValues() { localStorage.setItem('sendry_test_values', JSON.stringify(testValues)); }
+
+(function() {
+    var textarea = document.getElementById('html');
+    var frame = document.getElementById('preview-frame');
+
+    function applyTestValues(html) {
+        // Replace variables that have test values
+        for (var key in testValues) {
+            if (testValues[key]) {
+                var pattern = LP + '.' + key + '}}';
+                html = html.split(pattern).join(testValues[key]);
+            }
+        }
+        // Remaining variables — show as grey badges
+        html = html.replace(/\{\{\.(\w+)\}\}/g, function(match, name) {
+            return '<span style="background:#E4E4E4;color:#959595;padding:2px 6px;border-radius:3px;font-size:11px;font-family:monospace;">' + name + '</span>';
+        });
+        return html;
+    }
+
+    function updatePreview() {
+        var html = textarea.value;
+        if (!html.trim()) {
+            frame.srcdoc = '<p style="color:#999;font-family:sans-serif;text-align:center;padding:2rem;">Enter HTML to see preview</p>';
+            return;
+        }
+        var previewHtml = applyTestValues(html);
+        // Wrap in table if block contains <tr> (email blocks are table rows)
+        var stripped = previewHtml.replace(/<!--[\s\S]*?-->/g, '').trim().toLowerCase();
+        if (stripped.indexOf('<tr') === 0) {
+            previewHtml = '<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0">' + previewHtml + '</table>';
+        }
+        frame.srcdoc = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:0;}</style></head><body>' + previewHtml + '</body></html>';
+    }
+
+    textarea.addEventListener('input', updatePreview);
+    updatePreview();
+    window._updatePreview = updatePreview;
+})();
+
+// --- Image picker ---
+var _pickerMode = 'insert'; // 'insert', 'replace', or 'replaceImg'
+var _replaceVarName = '';
+var _replaceImgUrl = '';
+
+function openImagePicker(mode, varName) {
+    _pickerMode = mode || 'insert';
+    _replaceVarName = varName || '';
+    var title = document.getElementById('image-modal-title');
+    title.textContent = mode === 'replace' ? 'Replace ' + varName : 'Insert Image';
+    document.getElementById('image-modal').classList.add('active');
+    loadMediaFiles();
+}
+
+function closeImagePicker() {
+    document.getElementById('image-modal').classList.remove('active');
+}
+
+function loadMediaFiles() {
+    var grid = document.getElementById('media-grid');
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:2rem;">Loading...</div>';
+    fetch('/media/api')
+        .then(function(r) { return r.json(); })
+        .then(function(files) {
+            if (!files || files.length === 0) {
+                grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:2rem;">No images yet. Upload one above.</div>';
+                return;
+            }
+            grid.innerHTML = '';
+            files.forEach(function(f) {
+                var item = document.createElement('div');
+                item.className = 'media-picker-item';
+                var img = document.createElement('img');
+                img.src = f.url;
+                img.alt = f.orig_name;
+                img.loading = 'lazy';
+                item.appendChild(img);
+                var nameDiv = document.createElement('div');
+                nameDiv.className = 'media-picker-name';
+                nameDiv.textContent = f.orig_name;
+                item.appendChild(nameDiv);
+                item.onclick = function() { onImageSelected(f); };
+                grid.appendChild(item);
+            });
+        });
+}
+
+function onImageSelected(file) {
+    var textarea = document.getElementById('html');
+
+    if (_pickerMode === 'replace') {
+        // Replace variable with the actual URL
+        var varPattern = LP + '.' + _replaceVarName + '}}';
+        textarea.value = textarea.value.split(varPattern).join(file.url);
+        textarea.dispatchEvent(new Event('input'));
+        closeImagePicker();
+        if (document.getElementById('vars-modal').classList.contains('active')) {
+            openVariablesPanel();
+        }
+    } else if (_pickerMode === 'replaceImg') {
+        // Replace existing image URL with new one
+        textarea.value = textarea.value.split(_replaceImgUrl).join(file.url);
+        textarea.dispatchEvent(new Event('input'));
+        closeImagePicker();
+        _replaceImgUrl = '';
+    } else {
+        // Insert new <img> tag at cursor position
+        var tag = '<img src="' + file.url + '" width="200" alt="" style="display:block; border:0; outline:none; width:200px;" />';
+        var start = textarea.selectionStart;
+        var text = textarea.value;
+        textarea.value = text.substring(0, start) + tag + text.substring(textarea.selectionEnd);
+        textarea.selectionStart = textarea.selectionEnd = start + tag.length;
+        textarea.focus();
+        textarea.dispatchEvent(new Event('input'));
+        closeImagePicker();
+    }
+}
+
+// --- Variables panel ---
+function openVariablesPanel() {
+    var textarea = document.getElementById('html');
+    var html = textarea.value;
+    var modal = document.getElementById('vars-modal');
+    var list = document.getElementById('vars-list');
+    var empty = document.getElementById('vars-empty');
+
+    // Find all template variables
+    var vars = {};
+    var re = /\{\{\.(\w+)\}\}/g;
+    var m;
+    while ((m = re.exec(html)) !== null) {
+        var full = m[0];
+        var name = m[1];
+        if (!vars[name]) {
+            // Check if this var is inside a src="..." attribute
+            var before = html.substring(0, m.index);
+            var isSrc = /src=["'][^"']*$/.test(before);
+            vars[name] = { name: name, full: full, isSrc: isSrc };
+        }
+    }
+
+    // Also find existing images (already inserted, not variables)
+    var images = [];
+    var imgRe = /src="(\/uploads\/[^"]+)"/g;
+    var im;
+    while ((im = imgRe.exec(html)) !== null) {
+        images.push({ url: im[1], index: im.index });
+    }
+
+    var keys = Object.keys(vars);
+    var hasContent = keys.length > 0 || images.length > 0;
+    if (!hasContent) {
+        list.style.display = 'none';
+        empty.style.display = 'block';
+    } else {
+        list.style.display = 'block';
+        empty.style.display = 'none';
+        list.innerHTML = '';
+        keys.forEach(function(key) {
+            var v = vars[key];
+            var li = document.createElement('li');
+            li.className = 'var-item';
+
+            var left = document.createElement('div');
+            var nameSpan = document.createElement('span');
+            nameSpan.className = 'var-name';
+            nameSpan.textContent = LP + '.' + v.name + '}}';
+            left.appendChild(nameSpan);
+
+            if (v.isSrc) {
+                var badge = document.createElement('span');
+                badge.style.cssText = 'font-size:0.7rem; background:#e0f2fe; color:#0369a1; padding:1px 6px; border-radius:4px; margin-left:6px;';
+                badge.textContent = 'image';
+                left.appendChild(badge);
+            }
+
+            var actions = document.createElement('div');
+            actions.className = 'var-actions';
+
+            if (v.isSrc) {
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'btn btn-sm btn-primary';
+                btn.textContent = 'Choose image';
+                btn.onclick = (function(n) { return function() { pickImageForVar(n); }; })(v.name);
+                actions.appendChild(btn);
+            } else {
+                var input = document.createElement('input');
+                input.type = 'text';
+                input.placeholder = 'Test value...';
+                input.value = testValues[v.name] || '';
+                input.style.cssText = 'width:200px; padding:0.3rem 0.5rem; border:1px solid var(--border); border-radius:var(--radius); font-size:0.8rem;';
+                input.oninput = (function(n) { return function(e) {
+                    testValues[n] = e.target.value;
+                    saveTestValues();
+                    if (window._updatePreview) window._updatePreview();
+                }; })(v.name);
+                actions.appendChild(input);
+
+                var label = document.createElement('span');
+                label.style.cssText = 'font-size:0.7rem; color:var(--text-muted); margin-left:4px;';
+                label.textContent = 'preview only';
+                actions.appendChild(label);
+            }
+
+            li.appendChild(left);
+            li.appendChild(actions);
+            list.appendChild(li);
+        });
+
+        // Show existing images with replace button
+        if (images.length > 0) {
+            var divider = document.createElement('li');
+            divider.style.cssText = 'padding:0.75rem 0 0.25rem; font-size:0.8rem; font-weight:600; color:var(--text-muted); border-bottom:none;';
+            divider.textContent = 'Images in block';
+            list.appendChild(divider);
+
+            images.forEach(function(img, idx) {
+                var li2 = document.createElement('li');
+                li2.className = 'var-item';
+
+                var left2 = document.createElement('div');
+                left2.style.cssText = 'display:flex; align-items:center; gap:8px;';
+                var thumb = document.createElement('img');
+                thumb.src = img.url;
+                thumb.style.cssText = 'width:40px; height:30px; object-fit:contain; border-radius:4px; background:#f5f5f5;';
+                left2.appendChild(thumb);
+                var urlSpan = document.createElement('span');
+                urlSpan.style.cssText = 'font-size:0.75rem; color:var(--text-muted); max-width:250px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+                urlSpan.textContent = img.url;
+                left2.appendChild(urlSpan);
+
+                var actions2 = document.createElement('div');
+                actions2.className = 'var-actions';
+                var replBtn = document.createElement('button');
+                replBtn.type = 'button';
+                replBtn.className = 'btn btn-sm btn-secondary';
+                replBtn.textContent = 'Replace';
+                replBtn.onclick = (function(u) { return function() { replaceExistingImage(u); }; })(img.url);
+                actions2.appendChild(replBtn);
+
+                li2.appendChild(left2);
+                li2.appendChild(actions2);
+                list.appendChild(li2);
+            });
+        }
+    }
+
+    modal.classList.add('active');
+}
+
+function pickImageForVar(varName) {
+    document.getElementById('vars-modal').classList.remove('active');
+    openImagePicker('replace', varName);
+}
+
+function replaceExistingImage(oldUrl) {
+    _replaceImgUrl = oldUrl;
+    document.getElementById('vars-modal').classList.remove('active');
+    openImagePicker('replaceImg');
+}
+
+function promptReplaceVar(varName) {
+    var val = prompt('Enter value for ' + LP + '.' + varName + '}}:');
+    if (val === null) return;
+    var textarea = document.getElementById('html');
+    var pattern = LP + '.' + varName + '}}';
+    textarea.value = textarea.value.split(pattern).join(val);
+    textarea.dispatchEvent(new Event('input'));
+    openVariablesPanel(); // refresh
+}
+
+// --- Upload from modal ---
+var uploadArea = document.getElementById('modal-upload-area');
+var fileInput = document.getElementById('modal-file-input');
+
+uploadArea.addEventListener('click', function() { fileInput.click(); });
+fileInput.addEventListener('change', function() {
+    if (fileInput.files.length) uploadFile(fileInput.files[0]);
+});
+
+['dragenter','dragover'].forEach(function(ev) {
+    uploadArea.addEventListener(ev, function(e) { e.preventDefault(); uploadArea.style.borderColor = 'var(--primary)'; });
+});
+['dragleave','drop'].forEach(function(ev) {
+    uploadArea.addEventListener(ev, function(e) { e.preventDefault(); uploadArea.style.borderColor = ''; });
+});
+uploadArea.addEventListener('drop', function(e) {
+    if (e.dataTransfer.files.length) uploadFile(e.dataTransfer.files[0]);
+});
+
+function uploadFile(file) {
+    var fd = new FormData();
+    fd.append('file', file);
+    uploadArea.innerHTML = '<strong>Uploading...</strong>';
+
+    fetch('/media/upload', { method: 'POST', body: fd, headers: { 'Accept': 'application/json' } })
+        .then(function(r) { return r.json(); })
+        .then(function(media) {
+            uploadArea.innerHTML = '<strong>Upload new image</strong><p>Drop here or click</p>';
+            fileInput.value = '';
+            loadMediaFiles();
+            // Auto-select if in replace mode
+            if (_pickerMode === 'replace') {
+                onImageSelected(media);
+            }
+        })
+        .catch(function() {
+            uploadArea.innerHTML = '<strong>Upload failed</strong><p>Drop here or click</p>';
+            fileInput.value = '';
+        });
+}
+</script>
+{{end}}
