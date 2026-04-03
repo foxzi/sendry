@@ -2,13 +2,13 @@
 <div class="page-header">
     <h1>Blocks</h1>
     <div class="header-actions">
-        <a href="/blocks/new" class="btn btn-primary">New Block</a>
+        <a href="/templates" class="btn btn-secondary">Back to Templates</a>
     </div>
 </div>
 
 <div class="card">
-    <div class="card-header">
-        <form class="filter-form" method="get" action="/blocks">
+    <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
+        <form class="filter-form" method="get" action="/blocks" style="flex:1;">
             <input type="text" name="search" placeholder="Search blocks..." value="{{.Search}}" class="input">
             <select name="category" class="input">
                 <option value="">All Categories</option>
@@ -21,6 +21,7 @@
             <a href="/blocks" class="btn btn-secondary">Clear</a>
             {{end}}
         </form>
+        <a href="/blocks/new" class="btn btn-primary">New Block</a>
     </div>
     <div class="card-body">
         {{if .Blocks}}

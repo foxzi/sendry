@@ -75,11 +75,7 @@
 <div class="page-header">
     <h1>Media</h1>
     <div class="header-actions">
-        <form class="filter-form" method="get" action="/media" style="display:inline-flex; gap:0.5rem;">
-            <input type="text" name="search" placeholder="Search..." value="{{.Search}}" class="input" style="width:200px;">
-            <button type="submit" class="btn">Search</button>
-            {{if .Search}}<a href="/media" class="btn btn-secondary">Clear</a>{{end}}
-        </form>
+        <a href="/templates" class="btn btn-secondary">Back to Templates</a>
     </div>
 </div>
 
@@ -96,6 +92,13 @@
 </div>
 
 <div class="card">
+    <div class="card-header">
+        <form class="filter-form" method="get" action="/media">
+            <input type="text" name="search" placeholder="Search..." value="{{.Search}}" class="input">
+            <button type="submit" class="btn">Search</button>
+            {{if .Search}}<a href="/media" class="btn btn-secondary">Clear</a>{{end}}
+        </form>
+    </div>
     <div class="card-body">
         {{if .Files}}
         <div class="media-grid">
