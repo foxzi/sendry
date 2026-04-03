@@ -32,6 +32,8 @@ type Handlers struct {
 	domains    *repository.DomainRepository
 	sends      *repository.SendRepository
 	apiKeys    *repository.APIKeyRepository
+	blocks     *repository.BlockRepository
+	media      *repository.MediaRepository
 	router     *router.EmailRouter
 }
 
@@ -69,6 +71,8 @@ func New(cfg *config.Config, db *db.DB, logger *slog.Logger, v *views.Engine, oi
 		domains:    domains,
 		sends:      sends,
 		apiKeys:    apiKeys,
+		blocks:     repository.NewBlockRepository(db.DB),
+		media:      repository.NewMediaRepository(db.DB),
 		router:     emailRouter,
 	}
 }
@@ -155,6 +159,14 @@ func (h *Handlers) getServersStatus() []map[string]any {
 		})
 	}
 	return servers
+}
+
+func auditJSON(m map[string]any) string {
+	b, err := json.Marshal(m)
+	if err != nil {
+		return "{}"
+	}
+	return string(b)
 }
 
 // sanitizeFilename removes dangerous characters from filename for Content-Disposition header.

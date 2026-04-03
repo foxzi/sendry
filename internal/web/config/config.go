@@ -18,6 +18,8 @@ type Config struct {
 
 type ServerConfig struct {
 	ListenAddr string    `yaml:"listen_addr"`
+	PublicURL  string    `yaml:"public_url"`
+	UploadPath string    `yaml:"upload_path"`
 	TLS        TLSConfig `yaml:"tls"`
 	AllowedIPs []string  `yaml:"allowed_ips"` // Empty = allow all
 }
@@ -105,6 +107,9 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.Database.Path == "" {
 		cfg.Database.Path = "/var/lib/sendry-web/app.db"
+	}
+	if cfg.Server.UploadPath == "" {
+		cfg.Server.UploadPath = "/var/lib/sendry-web/uploads"
 	}
 	if cfg.Auth.SessionTTL == 0 {
 		cfg.Auth.SessionTTL = 24 * time.Hour

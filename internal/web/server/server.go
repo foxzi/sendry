@@ -92,6 +92,8 @@ func (s *Server) setupRoutes() http.Handler {
 	// Static files (embedded)
 	mux.Handle("GET /static/", http.StripPrefix("/static/", static.Handler()))
 
+	mux.Handle("GET /uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(s.cfg.Server.UploadPath))))
+
 	// Auth routes (public)
 	mux.HandleFunc("GET /auth/login", h.LoginPage)
 	mux.HandleFunc("POST /auth/login", h.Login)
@@ -118,6 +120,8 @@ func (s *Server) setupRoutes() http.Handler {
 	// Templates
 	protected.HandleFunc("GET /templates", h.TemplateList)
 	protected.HandleFunc("GET /templates/new", h.TemplateNew)
+	protected.HandleFunc("GET /templates/builder", h.BuilderPage)
+	protected.HandleFunc("POST /templates/builder", h.BuilderCreate)
 	protected.HandleFunc("GET /templates/import", h.TemplateImportPage)
 	protected.HandleFunc("POST /templates/import", h.TemplateImport)
 	protected.HandleFunc("POST /templates", h.TemplateCreate)
@@ -132,6 +136,21 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("POST /templates/{id}/test", h.TemplateTest)
 	protected.HandleFunc("POST /templates/{id}/deploy", h.TemplateDeploy)
 	protected.HandleFunc("GET /templates/{id}/preview", h.TemplatePreview)
+
+	// Media
+	protected.HandleFunc("GET /media", h.MediaList)
+	protected.HandleFunc("POST /media/upload", h.MediaUpload)
+	protected.HandleFunc("GET /media/api", h.MediaListJSON)
+	protected.HandleFunc("POST /media/{id}/delete", h.MediaDelete)
+
+	// Blocks
+	protected.HandleFunc("GET /blocks", h.BlockList)
+	protected.HandleFunc("GET /blocks/new", h.BlockNew)
+	protected.HandleFunc("POST /blocks", h.BlockCreate)
+	protected.HandleFunc("GET /blocks/{id}", h.BlockView)
+	protected.HandleFunc("GET /blocks/{id}/edit", h.BlockEdit)
+	protected.HandleFunc("POST /blocks/{id}", h.BlockUpdate)
+	protected.HandleFunc("POST /blocks/{id}/delete", h.BlockDelete)
 
 	// Recipients
 	protected.HandleFunc("GET /recipients", h.RecipientListList)

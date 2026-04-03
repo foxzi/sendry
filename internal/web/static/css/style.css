@@ -369,6 +369,11 @@ a:hover {
     color: white;
 }
 
+.btn-secondary:hover {
+    background: #5a6370;
+    color: white;
+}
+
 .btn-sm {
     padding: 0.25rem 0.75rem;
     font-size: 0.75rem;

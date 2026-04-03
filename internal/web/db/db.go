@@ -55,6 +55,8 @@ func (db *DB) Migrate() error {
 		migrationDomainDeployments,
 		migrationAPIKeys,
 		migrationSends,
+		migrationEmailBlocks,
+		migrationMediaFiles,
 	}
 
 	for _, m := range migrations {
@@ -376,4 +378,29 @@ CREATE INDEX IF NOT EXISTS idx_sends_status ON sends(status);
 CREATE INDEX IF NOT EXISTS idx_sends_domain ON sends(sender_domain);
 CREATE INDEX IF NOT EXISTS idx_sends_server ON sends(server_name);
 CREATE INDEX IF NOT EXISTS idx_sends_created ON sends(created_at);
+`
+
+const migrationEmailBlocks = `
+CREATE TABLE IF NOT EXISTS email_blocks (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'general',
+    html TEXT NOT NULL,
+    preview_text TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_email_blocks_category ON email_blocks(category);
+`
+
+const migrationMediaFiles = `
+CREATE TABLE IF NOT EXISTS media_files (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    orig_name TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    url TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 `
