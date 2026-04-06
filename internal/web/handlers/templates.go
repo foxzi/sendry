@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -645,6 +646,20 @@ func (h *Handlers) TemplateTest(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.Error("failed to get global variables", "error", err)
 		globalVars = make(map[string]string)
+	}
+
+	// Merge request variables (override global)
+	if varsJSON := r.FormValue("variables"); varsJSON != "" {
+		var reqVars map[string]any
+		if err := json.Unmarshal([]byte(varsJSON), &reqVars); err == nil {
+			for k, v := range reqVars {
+				if s, ok := v.(string); ok {
+					globalVars[k] = s
+				} else {
+					globalVars[k] = fmt.Sprintf("%v", v)
+				}
+			}
+		}
 	}
 
 	// Render template with variables

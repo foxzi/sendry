@@ -185,7 +185,7 @@
             </p>
             <ul class="var-list" id="vars-list"></ul>
             <div id="vars-empty" style="text-align:center; color:var(--text-muted); padding:2rem; display:none;">
-                No variables found. Use <code>{{"{{"}}.VarName{{"}}"}}</code> syntax in your HTML.
+                No variables found. Use <code>{{"{{"}}VarName{{"}}"}}</code> syntax in your HTML.
             </div>
         </div>
     </div>
@@ -205,12 +205,12 @@ function saveTestValues() { localStorage.setItem('sendry_test_values', JSON.stri
         // Replace variables that have test values
         for (var key in testValues) {
             if (testValues[key]) {
-                var pattern = LP + '.' + key + '}}';
+                var pattern = LP + key + '}}';
                 html = html.split(pattern).join(testValues[key]);
             }
         }
         // Remaining variables — show as grey badges
-        html = html.replace(/\{\{\.(\w+)\}\}/g, function(match, name) {
+        html = html.replace(/\{\{(\w+)\}\}/g, function(match, name) {
             return '<span style="background:#E4E4E4;color:#959595;padding:2px 6px;border-radius:3px;font-size:11px;font-family:monospace;">' + name + '</span>';
         });
         return html;
@@ -288,7 +288,7 @@ function onImageSelected(file) {
 
     if (_pickerMode === 'replace') {
         // Replace variable with the actual URL
-        var varPattern = LP + '.' + _replaceVarName + '}}';
+        var varPattern = LP + _replaceVarName + '}}';
         textarea.value = textarea.value.split(varPattern).join(file.url);
         textarea.dispatchEvent(new Event('input'));
         closeImagePicker();
@@ -324,7 +324,7 @@ function openVariablesPanel() {
 
     // Find all template variables
     var vars = {};
-    var re = /\{\{\.(\w+)\}\}/g;
+    var re = /\{\{(\w+)\}\}/g;
     var m;
     while ((m = re.exec(html)) !== null) {
         var full = m[0];
