@@ -52,6 +52,7 @@ func New(cfg *config.Config, db *db.DB, logger *slog.Logger, v *views.Engine, oi
 		Settings:  settings,
 		Sendry:    sendryMgr,
 		MultiSend: &cfg.Sendry.MultiSend,
+		PublicURL: cfg.Server.PublicURL,
 		Logger:    logger.With("component", "router"),
 	})
 

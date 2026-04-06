@@ -652,6 +652,8 @@ func (h *Handlers) TemplateTest(w http.ResponseWriter, r *http.Request) {
 	html := renderTemplateVars(t.HTML, globalVars)
 	text := renderTemplateVars(t.Text, globalVars)
 
+	html = makeAbsoluteURLs(html, h.cfg.Server.PublicURL)
+
 	// Send test email
 	req := &sendry.SendRequest{
 		From:    from,
