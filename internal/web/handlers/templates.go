@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -647,6 +648,20 @@ func (h *Handlers) TemplateTest(w http.ResponseWriter, r *http.Request) {
 		globalVars = make(map[string]string)
 	}
 
+	// Merge request variables (override global)
+	if varsJSON := r.FormValue("variables"); varsJSON != "" {
+		var reqVars map[string]any
+		if err := json.Unmarshal([]byte(varsJSON), &reqVars); err == nil {
+			for k, v := range reqVars {
+				if s, ok := v.(string); ok {
+					globalVars[k] = s
+				} else {
+					globalVars[k] = fmt.Sprintf("%v", v)
+				}
+			}
+		}
+	}
+
 	// Render template with variables
 	subject := renderTemplateVars(t.Subject, globalVars)
 	html := renderTemplateVars(t.HTML, globalVars)
@@ -687,9 +702,15 @@ func renderTemplateVars(template string, vars map[string]string) string {
 	return result
 }
 
-// replaceVar replaces {{key}} with value in template
+// replaceVar replaces {{key}} and {{.key}} with value in template
 func replaceVar(template, key, value string) string {
-	placeholder := "{{" + key + "}}"
+	// Replace both {{key}} and {{.key}} (Go-template style)
+	template = replaceVarPlaceholder(template, "{{"+key+"}}", value)
+	template = replaceVarPlaceholder(template, "{{."+key+"}}", value)
+	return template
+}
+
+func replaceVarPlaceholder(template, placeholder, value string) string {
 	for i := 0; i < len(template); {
 		idx := indexString(template[i:], placeholder)
 		if idx == -1 {

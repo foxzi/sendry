@@ -462,8 +462,9 @@ var varPattern = regexp.MustCompile(`\{\{([^}]+)\}\}`)
 // renderVars replaces {{variable}} placeholders with values
 func renderVars(template string, data map[string]any) string {
 	return varPattern.ReplaceAllStringFunc(template, func(match string) string {
-		// Extract variable name
+		// Extract variable name (strip leading dot for Go-template style {{.Var}})
 		varName := strings.TrimSpace(match[2 : len(match)-2])
+		varName = strings.TrimPrefix(varName, ".")
 
 		if val, ok := data[varName]; ok {
 			return fmt.Sprintf("%v", val)
