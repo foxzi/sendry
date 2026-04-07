@@ -46,7 +46,7 @@
             <tbody>
                 {{range .Variables}}
                 <tr>
-                    <td><code>{{`{{`}}.{{.Key}}{{`}}`}}</code></td>
+                    <td><code>{{`{{`}}{{.Key}}{{`}}`}}</code></td>
                     <td>{{.Value}}</td>
                     <td class="text-muted">{{.Description}}</td>
                     <td>{{.UpdatedAt.Format "2006-01-02 15:04"}}</td>

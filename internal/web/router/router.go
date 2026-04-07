@@ -65,6 +65,7 @@ type EmailRouter struct {
 	settings   *repository.SettingsRepository
 	sendry     *sendry.Manager
 	cfg        *config.MultiSendConfig
+	publicURL  string
 	logger     *slog.Logger
 
 	mu         sync.Mutex
@@ -79,6 +80,7 @@ type RouterConfig struct {
 	Settings   *repository.SettingsRepository
 	Sendry     *sendry.Manager
 	MultiSend  *config.MultiSendConfig
+	PublicURL  string
 	Logger     *slog.Logger
 }
 
@@ -91,6 +93,7 @@ func NewEmailRouter(cfg RouterConfig) *EmailRouter {
 		settings:   cfg.Settings,
 		sendry:     cfg.Sendry,
 		cfg:        cfg.MultiSend,
+		publicURL:  cfg.PublicURL,
 		logger:     cfg.Logger,
 		rrCounters: make(map[string]int),
 	}
@@ -293,6 +296,12 @@ func (r *EmailRouter) resolveTemplate(ctx context.Context, req *APISendRequest) 
 	subject := renderVars(tmpl.Subject, data)
 	html := renderVars(tmpl.HTML, data)
 	text := renderVars(tmpl.Text, data)
+
+	if r.publicURL != "" {
+		base := strings.TrimRight(r.publicURL, "/")
+		html = strings.ReplaceAll(html, `src="/uploads/`, `src="`+base+`/uploads/`)
+		html = strings.ReplaceAll(html, `src="/static/`, `src="`+base+`/static/`)
+	}
 
 	return &sendry.SendRequest{
 		From:    req.From,
