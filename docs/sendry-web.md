@@ -259,6 +259,35 @@ Common use cases:
 - Unsubscribe URLs
 - Legal disclaimers
 
+#### `spf_include`
+
+Special global variable used by **Domains → Recommended DNS Records** and by the [`dns-sync` command](dns-sync.md).
+
+- Key: `spf_include`
+- Value: SPF domain of your upstream provider without `include:` or `v=spf1`, for example `_spf.mailgun.org` or `spf.sendgrid.net`.
+
+When set, the recommended SPF value becomes `v=spf1 a mx include:<value> ~all`. When not set, it falls back to `v=spf1 a mx ~all`.
+
+## DNS Sync
+
+Sendry Web can compare a domain's current DNS records with the recommended SPF, DKIM and DMARC values and, if needed, create or update them through a DNS provider.
+
+Supported providers: Cloudflare.
+
+```bash
+# Plan only
+sendry-web dns-sync --config /etc/sendry/web.yaml \
+  --domain example.com \
+  --token "$CLOUDFLARE_API_TOKEN"
+
+# Apply changes
+sendry-web dns-sync --config /etc/sendry/web.yaml \
+  --domain example.com --apply \
+  --token "$CLOUDFLARE_API_TOKEN"
+```
+
+See the full [DNS Sync guide](dns-sync.md) for flags, output format, and token requirements.
+
 ## Security
 
 - Session-based authentication with configurable TTL

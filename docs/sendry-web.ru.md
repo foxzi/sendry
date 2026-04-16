@@ -259,6 +259,35 @@ HTML шаблона:
 - URL для отписки
 - Юридические оговорки
 
+#### `spf_include`
+
+Специальная глобальная переменная, которая используется в разделе **Domains → Recommended DNS Records** и командой [`dns-sync`](dns-sync.ru.md).
+
+- Ключ: `spf_include`
+- Значение: SPF-домен вашего провайдера без `include:` и без `v=spf1`, например `_spf.mailgun.org` или `spf.sendgrid.net`.
+
+Если переменная задана, рекомендуемое значение SPF становится `v=spf1 a mx include:<value> ~all`. Если не задана — используется `v=spf1 a mx ~all`.
+
+## Синхронизация DNS
+
+Sendry Web умеет сравнивать текущие DNS-записи домена с рекомендуемыми SPF, DKIM и DMARC и, при необходимости, создавать или обновлять их через API DNS-провайдера.
+
+Поддерживаемые провайдеры: Cloudflare.
+
+```bash
+# Только план
+sendry-web dns-sync --config /etc/sendry/web.yaml \
+  --domain example.com \
+  --token "$CLOUDFLARE_API_TOKEN"
+
+# Применить изменения
+sendry-web dns-sync --config /etc/sendry/web.yaml \
+  --domain example.com --apply \
+  --token "$CLOUDFLARE_API_TOKEN"
+```
+
+Полное руководство: [DNS Sync](dns-sync.ru.md).
+
 ## Безопасность
 
 - Авторизация на основе сессий с настраиваемым TTL

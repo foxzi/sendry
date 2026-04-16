@@ -299,6 +299,8 @@ curl -X DELETE http://localhost:8080/api/v1/queue/{message_id} \
 - [Хранение сообщений и DLQ](retention.ru.md)
 - [Rate limiting](ratelimit.ru.md)
 - [Prometheus метрики](metrics.ru.md)
+- [Веб-панель Sendry](sendry-web.ru.md)
+- [Синхронизация DNS (Cloudflare)](dns-sync.ru.md)
 - [Развертывание через Ansible](ansible.ru.md)
 
 ## Структура проекта

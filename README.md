@@ -312,6 +312,8 @@ See documentation:
 - [Message retention and DLQ](docs/retention.md)
 - [Rate limiting](docs/ratelimit.md)
 - [Prometheus metrics](docs/metrics.md)
+- [Sendry Web panel](docs/sendry-web.md)
+- [DNS sync (Cloudflare)](docs/dns-sync.md)
 - [Ansible deployment](docs/ansible.md)
 
 ## Project Structure

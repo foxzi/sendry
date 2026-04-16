@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests: DNS sync plan/apply logic and SPF include handling
 - Documentation: `docs/dns-sync.md` and `docs/dns-sync.ru.md`
 
+### Changed
+- Documentation: `sendry-web.md` and `sendry-web.ru.md` describe `spf_include` global variable and link to `dns-sync` guide
+- Documentation: `README.md` and `docs/README.ru.md` link to Sendry Web and DNS sync guides
+
 ## [0.4.15] - 2026-04-16
 
 ### Added
