@@ -202,7 +202,10 @@
 <div class="card">
     <div class="card-header">
         <h3>DNS Check</h3>
-        <a href="/domains/{{.Domain.ID}}?check=true" class="btn btn-sm btn-primary">Run Check</a>
+        <div style="display:flex; gap: 0.5rem; align-items:center;">
+            <a href="/domains/{{.Domain.ID}}?check=true" class="btn btn-sm btn-primary">Run Check</a>
+            <a href="#dns-recommended" class="btn btn-sm btn-secondary">DNS Setup</a>
+        </div>
     </div>
     <div class="card-body">
         {{if .DNSCheckRan}}
@@ -244,6 +247,57 @@
         {{else}}
         <p class="text-muted">Click "Run Check" to verify SPF, DKIM, DMARC and MX records for this domain.</p>
         {{end}}
+    </div>
+</div>
+
+<div class="card" id="dns-recommended">
+    <div class="card-header">
+        <h3>Recommended DNS Records</h3>
+    </div>
+    <div class="card-body">
+        {{$selector := .Domain.DKIMSelector}}
+        {{if not $selector}}{{$selector = "mail"}}{{end}}
+
+        <table class="table table-details">
+            <tr>
+                <th>SPF</th>
+                <td>
+                    <div><strong>Host:</strong> <code>{{.Domain.Domain}}</code></div>
+                    <div><strong>Type:</strong> TXT</div>
+                    <div><strong>Value:</strong> <code>{{.SPFValue}}</code></div>
+                    {{if .SPFInclude}}
+                    <div class="text-muted">Using global variable <code>spf_include={{.SPFInclude}}</code></div>
+                    {{end}}
+                </td>
+            </tr>
+            <tr>
+                <th>DKIM</th>
+                <td>
+                    <div><strong>Host:</strong> <code>{{$selector}}._domainkey.{{.Domain.Domain}}</code></div>
+                    <div><strong>Type:</strong> TXT</div>
+                    {{if and .Domain.DKIMEnabled .Domain.DKIMKey}}
+                    <div><strong>Value:</strong> <code style="word-break: break-all;">{{.Domain.DKIMKey.DNSRecord}}</code></div>
+                    {{else}}
+                    <div><strong>Value:</strong> <span class="text-muted">Enable DKIM and link a DKIM key to show exact value</span></div>
+                    <div><strong>Example:</strong> <code>v=DKIM1; k=rsa; p=YOUR_PUBLIC_KEY</code></div>
+                    {{end}}
+                </td>
+            </tr>
+            <tr>
+                <th>DMARC</th>
+                <td>
+                    <div><strong>Host:</strong> <code>_dmarc.{{.Domain.Domain}}</code></div>
+                    <div><strong>Type:</strong> TXT</div>
+                    <div><strong>Value:</strong> <code>v=DMARC1; p=quarantine; rua=mailto:dmarc@{{.Domain.Domain}}</code></div>
+                </td>
+            </tr>
+            <tr>
+                <th>MX</th>
+                <td>
+                    <div class="text-muted">Configure MX for your receiving server if you accept inbound mail for this domain.</div>
+                </td>
+            </tr>
+        </table>
     </div>
 </div>
 

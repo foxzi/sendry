@@ -479,6 +479,16 @@ func (h *Handlers) CentralDomainsView(w http.ResponseWriter, r *http.Request) {
 		deployedMap[d.ServerName] = d
 	}
 
+	globalVars, err := h.settings.GetGlobalVariablesMap()
+	if err != nil {
+		h.logger.Error("failed to load global variables", "error", err)
+	}
+	spfInclude := strings.TrimSpace(globalVars["spf_include"])
+	spfValue := "v=spf1 a mx ~all"
+	if spfInclude != "" {
+		spfValue = fmt.Sprintf("v=spf1 a mx include:%s ~all", spfInclude)
+	}
+
 	// Check for outdated deployments
 	currentHash := domain.ConfigHash()
 	outdatedCount := 0
@@ -497,6 +507,8 @@ func (h *Handlers) CentralDomainsView(w http.ResponseWriter, r *http.Request) {
 		"DeployedMap":   deployedMap,
 		"OutdatedCount": outdatedCount,
 		"ConfigHash":    currentHash,
+		"SPFValue":      spfValue,
+		"SPFInclude":    spfInclude,
 	}
 
 	// Run DNS check if requested

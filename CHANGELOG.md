@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Sendry Web: Recommended DNS SPF value in domain settings now supports global variable `spf_include` and renders `include:<value>` when configured
+- Tests: SPF recommended DNS records in CentralDomainsView for both base value and value with `spf_include`
+
 ### Fixed
 - Release workflow: add actions:write permission for workflow_dispatch trigger
 
