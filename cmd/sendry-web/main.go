@@ -33,6 +33,7 @@ func init() {
 	rootCmd.AddCommand(userCmd)
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(cleanupCmd)
+	rootCmd.AddCommand(dnsSyncCmd)
 }
 
 func main() {

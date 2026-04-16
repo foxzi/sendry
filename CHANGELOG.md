@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Sendry Web CLI: `sendry-web dns-sync` command to compare current DNS with recommended SPF/DKIM/DMARC records and create/update them via DNS provider API
+- DNS provider abstraction with Cloudflare implementation (token via `--token` or `CLOUDFLARE_API_TOKEN`)
+- Tests: DNS sync plan/apply logic and SPF include handling
+- Documentation: `docs/dns-sync.md` and `docs/dns-sync.ru.md`
+
 ## [0.4.15] - 2026-04-16
 
 ### Added
