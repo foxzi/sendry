@@ -167,7 +167,7 @@ docker compose start
 
 ```bash
 # .env
-VERSION=0.4.0
+VERSION=0.4.16
 TZ=Europe/Moscow
 ```
 

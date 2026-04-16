@@ -75,7 +75,7 @@ EOF
 sudo dnf install sendry
 
 # Alpine
-wget https://github.com/foxzi/sendry/releases/latest/download/sendry_0.4.6-r1_x86_64.apk
+wget https://github.com/foxzi/sendry/releases/latest/download/sendry_0.4.16-r1_x86_64.apk
 apk add --allow-untrusted sendry_*.apk
 ```
 
@@ -186,7 +186,7 @@ Response:
 ```json
 {
   "status": "ok",
-  "version": "0.3.3",
+  "version": "0.4.16",
   "uptime": "1h30m",
   "queue": {
     "pending": 5,
