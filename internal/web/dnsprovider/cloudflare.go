@@ -12,20 +12,50 @@ import (
 	"time"
 )
 
+// CloudflareAuthMode selects the authentication scheme for the Cloudflare API.
+type CloudflareAuthMode int
+
+const (
+	// CloudflareAuthToken uses a scoped API Token via the Authorization header.
+	// This is the recommended mode.
+	CloudflareAuthToken CloudflareAuthMode = iota
+	// CloudflareAuthGlobalKey uses the legacy Global API Key (email + key) via
+	// X-Auth-Email and X-Auth-Key headers.
+	CloudflareAuthGlobalKey
+)
+
 // CloudflareProvider implements Provider using the Cloudflare v4 API.
+// It supports both scoped API Tokens and legacy Global API Keys.
 type CloudflareProvider struct {
-	Token   string
-	BaseURL string
-	Client  *http.Client
+	AuthMode CloudflareAuthMode
+	Token    string // API Token (when AuthMode == CloudflareAuthToken)
+	Email    string // Account email (when AuthMode == CloudflareAuthGlobalKey)
+	APIKey   string // Global API Key (when AuthMode == CloudflareAuthGlobalKey)
+	BaseURL  string
+	Client   *http.Client
 }
 
-// NewCloudflare creates a new Cloudflare provider using the given API token.
+// NewCloudflare creates a provider using a scoped API Token.
 // Token must have permissions: Zone:Read, DNS:Edit for the target zones.
 func NewCloudflare(token string) *CloudflareProvider {
 	return &CloudflareProvider{
-		Token:   token,
-		BaseURL: "https://api.cloudflare.com/client/v4",
-		Client:  &http.Client{Timeout: 30 * time.Second},
+		AuthMode: CloudflareAuthToken,
+		Token:    token,
+		BaseURL:  "https://api.cloudflare.com/client/v4",
+		Client:   &http.Client{Timeout: 30 * time.Second},
+	}
+}
+
+// NewCloudflareGlobalKey creates a provider using the legacy Global API Key
+// (account email + global key). This key has full access to the whole
+// Cloudflare account, so API Tokens with scoped permissions are preferred.
+func NewCloudflareGlobalKey(email, apiKey string) *CloudflareProvider {
+	return &CloudflareProvider{
+		AuthMode: CloudflareAuthGlobalKey,
+		Email:    email,
+		APIKey:   apiKey,
+		BaseURL:  "https://api.cloudflare.com/client/v4",
+		Client:   &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
@@ -50,6 +80,16 @@ type cfRecord struct {
 	TTL     int    `json:"ttl"`
 }
 
+func (p *CloudflareProvider) setAuth(req *http.Request) {
+	switch p.AuthMode {
+	case CloudflareAuthGlobalKey:
+		req.Header.Set("X-Auth-Email", p.Email)
+		req.Header.Set("X-Auth-Key", p.APIKey)
+	default:
+		req.Header.Set("Authorization", "Bearer "+p.Token)
+	}
+}
+
 func (p *CloudflareProvider) do(ctx context.Context, method, path string, body any, out any) error {
 	var reader io.Reader
 	if body != nil {
@@ -64,7 +104,7 @@ func (p *CloudflareProvider) do(ctx context.Context, method, path string, body a
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+p.Token)
+	p.setAuth(req)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

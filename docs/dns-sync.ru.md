@@ -26,15 +26,33 @@
 
 DKIM проверяется только если на домене включён DKIM и ключ привязан.
 
-## Токен Cloudflare
+## Аутентификация Cloudflare
 
-Создайте API-токен с правами:
+Поддерживаются два режима:
+
+### API Token (рекомендуется)
+
+Создайте токен в панели Cloudflare с правами:
 
 - Zone → Zone → Read
 - Zone → DNS → Edit
+- Zone Resources: *Include → All zones from an account → ваш аккаунт* (или конкретные зоны)
 
-Передать токен можно через флаг `--token` или переменную окружения
-`CLOUDFLARE_API_TOKEN`.
+Передайте его через `--token` или `CLOUDFLARE_API_TOKEN`. Это предпочтительный
+вариант, одного токена достаточно на все домены аккаунта.
+
+### Legacy Global API Key
+
+Поддерживается для совместимости. Global API Key даёт полный доступ ко всему
+аккаунту, поэтому scoped API Token безопаснее.
+
+Укажите:
+
+- `--email <email-аккаунта>` или `CLOUDFLARE_API_EMAIL`
+- `--token <global-key>` или `CLOUDFLARE_API_KEY`
+
+Режим можно форсировать флагом `--auth global` (режим `auto` сам выберет его,
+если задан `--email`).
 
 ## Использование
 
@@ -46,13 +64,22 @@ sendry-web dns-sync --config /etc/sendry/web.yaml \
   --token "$CLOUDFLARE_API_TOKEN"
 ```
 
-Применить изменения:
+Применить изменения (API Token):
 
 ```bash
 sendry-web dns-sync --config /etc/sendry/web.yaml \
   --domain example.com \
   --apply \
   --token "$CLOUDFLARE_API_TOKEN"
+```
+
+Применить изменения через Global API Key:
+
+```bash
+sendry-web dns-sync --config /etc/sendry/web.yaml \
+  --domain example.com --apply \
+  --email "$CLOUDFLARE_API_EMAIL" \
+  --token "$CLOUDFLARE_API_KEY"
 ```
 
 Проверить все домены:

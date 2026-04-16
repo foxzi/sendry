@@ -22,6 +22,8 @@ var (
 	dnsSyncApply    bool
 	dnsSyncProvider string
 	dnsSyncToken    string
+	dnsSyncEmail    string
+	dnsSyncAuthMode string
 )
 
 var dnsSyncCmd = &cobra.Command{
@@ -32,8 +34,12 @@ var dnsSyncCmd = &cobra.Command{
 
 Currently supported provider: cloudflare.
 
-Cloudflare API token (Zone:Read, DNS:Edit) can be provided via --token flag
-or CLOUDFLARE_API_TOKEN environment variable.`,
+Cloudflare authentication (one of):
+  - API Token (recommended): --token or CLOUDFLARE_API_TOKEN.
+    Required permissions: Zone:Read, DNS:Edit.
+  - Global API Key (legacy): --email and --token (key) or
+    CLOUDFLARE_API_EMAIL + CLOUDFLARE_API_KEY. Use --auth global to force this
+    mode; otherwise it is selected automatically when email is provided.`,
 	RunE: runDNSSync,
 }
 
@@ -43,7 +49,9 @@ func init() {
 	dnsSyncCmd.Flags().BoolVar(&dnsSyncAll, "all", false, "Sync all domains")
 	dnsSyncCmd.Flags().BoolVar(&dnsSyncApply, "apply", false, "Apply changes (default is plan only)")
 	dnsSyncCmd.Flags().StringVar(&dnsSyncProvider, "provider", "cloudflare", "DNS provider (cloudflare)")
-	dnsSyncCmd.Flags().StringVar(&dnsSyncToken, "token", "", "Provider API token (overrides env)")
+	dnsSyncCmd.Flags().StringVar(&dnsSyncToken, "token", "", "Provider API token or global key (overrides env)")
+	dnsSyncCmd.Flags().StringVar(&dnsSyncEmail, "email", "", "Account email for legacy Cloudflare Global API Key (overrides env)")
+	dnsSyncCmd.Flags().StringVar(&dnsSyncAuthMode, "auth", "auto", "Cloudflare auth mode: auto, token, global")
 }
 
 func runDNSSync(cmd *cobra.Command, args []string) error {
@@ -126,16 +134,55 @@ func runDNSSync(cmd *cobra.Command, args []string) error {
 func buildProvider() (dnsprovider.Provider, error) {
 	switch strings.ToLower(dnsSyncProvider) {
 	case "cloudflare", "cf":
-		token := strings.TrimSpace(dnsSyncToken)
-		if token == "" {
-			token = strings.TrimSpace(os.Getenv("CLOUDFLARE_API_TOKEN"))
-		}
-		if token == "" {
-			return nil, fmt.Errorf("cloudflare token is required: use --token or CLOUDFLARE_API_TOKEN")
-		}
-		return dnsprovider.NewCloudflare(token), nil
+		return buildCloudflareProvider()
 	default:
 		return nil, fmt.Errorf("unsupported provider %q", dnsSyncProvider)
+	}
+}
+
+func buildCloudflareProvider() (dnsprovider.Provider, error) {
+	token := strings.TrimSpace(dnsSyncToken)
+	email := strings.TrimSpace(dnsSyncEmail)
+
+	if token == "" {
+		if v := strings.TrimSpace(os.Getenv("CLOUDFLARE_API_TOKEN")); v != "" {
+			token = v
+		} else if v := strings.TrimSpace(os.Getenv("CLOUDFLARE_API_KEY")); v != "" {
+			token = v
+		}
+	}
+	if email == "" {
+		email = strings.TrimSpace(os.Getenv("CLOUDFLARE_API_EMAIL"))
+	}
+
+	mode := strings.ToLower(strings.TrimSpace(dnsSyncAuthMode))
+	if mode == "" {
+		mode = "auto"
+	}
+	if mode == "auto" {
+		if email != "" {
+			mode = "global"
+		} else {
+			mode = "token"
+		}
+	}
+
+	switch mode {
+	case "token":
+		if token == "" {
+			return nil, fmt.Errorf("cloudflare API token is required: use --token or CLOUDFLARE_API_TOKEN")
+		}
+		return dnsprovider.NewCloudflare(token), nil
+	case "global", "global-key", "globalkey":
+		if email == "" {
+			return nil, fmt.Errorf("cloudflare global key requires --email or CLOUDFLARE_API_EMAIL")
+		}
+		if token == "" {
+			return nil, fmt.Errorf("cloudflare global key requires --token/CLOUDFLARE_API_KEY (the global key value)")
+		}
+		return dnsprovider.NewCloudflareGlobalKey(email, token), nil
+	default:
+		return nil, fmt.Errorf("unsupported cloudflare auth mode %q (use auto|token|global)", mode)
 	}
 }
 

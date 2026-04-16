@@ -27,15 +27,33 @@ The SPF `include:` part is driven by the `spf_include` global variable
 DKIM is checked only when DKIM is enabled on the domain **and** a DKIM key
 is linked.
 
-## Cloudflare token
+## Cloudflare authentication
 
-Create an API token with:
+Two modes are supported:
+
+### API Token (recommended)
+
+Create a token in Cloudflare dashboard with:
 
 - Zone → Zone → Read
 - Zone → DNS → Edit
+- Zone Resources: *Include → All zones from an account → your account* (or specific zones)
 
-Pass it via the `--token` flag or the `CLOUDFLARE_API_TOKEN` environment
-variable.
+Pass it via `--token` or `CLOUDFLARE_API_TOKEN`. This is the preferred option
+and covers multiple domains under one account.
+
+### Legacy Global API Key
+
+Supported for backward compatibility. Global API Key grants full access to the
+entire account, so an API Token with scoped permissions is safer.
+
+Set:
+
+- `--email <account-email>` or `CLOUDFLARE_API_EMAIL`
+- `--token <global-key>` or `CLOUDFLARE_API_KEY`
+
+You can force the mode with `--auth global` (auto mode selects it automatically
+when `--email` is provided).
 
 ## Usage
 
@@ -47,13 +65,22 @@ sendry-web dns-sync --config /etc/sendry/web.yaml \
   --token "$CLOUDFLARE_API_TOKEN"
 ```
 
-Apply changes:
+Apply changes (API Token):
 
 ```bash
 sendry-web dns-sync --config /etc/sendry/web.yaml \
   --domain example.com \
   --apply \
   --token "$CLOUDFLARE_API_TOKEN"
+```
+
+Apply changes with Global API Key:
+
+```bash
+sendry-web dns-sync --config /etc/sendry/web.yaml \
+  --domain example.com --apply \
+  --email "$CLOUDFLARE_API_EMAIL" \
+  --token "$CLOUDFLARE_API_KEY"
 ```
 
 Check all domains:
