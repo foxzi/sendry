@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.15] - 2026-04-16
+
 ### Added
 - Sendry Web: Recommended DNS SPF value in domain settings now supports global variable `spf_include` and renders `include:<value>` when configured
 - Tests: SPF recommended DNS records in CentralDomainsView for both base value and value with `spf_include`
@@ -371,8 +373,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DEB/RPM/APK packaging
 - Docker images
 
-[0.4.6]: https://github.com/foxzi/sendry/compare/v0.4.5...v0.4.6
-[0.4.5]: https://github.com/foxzi/sendry/compare/v0.4.4...v0.4.5
+[0.4.15]: https://github.com/foxzi/sendry/compare/v0.4.14...v0.4.15
+[0.4.14]: https://github.com/foxzi/sendry/compare/v0.4.13...v0.4.14
 [0.4.4]: https://github.com/foxzi/sendry/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/foxzi/sendry/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/foxzi/sendry/compare/v0.4.1...v0.4.2
