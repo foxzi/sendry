@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.14] - 2026-04-16
+
 ### Added
 - CC and BCC address validation in template send endpoint
 - Tests for CC/BCC functionality (envelope recipients, header presence, invalid addresses)
