@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/mail"
 	"strconv"
 	"strings"
 	"time"
@@ -384,6 +385,24 @@ func (s *TemplateServer) handleSendTemplate(w http.ResponseWriter, r *http.Reque
 		sendError(w, http.StatusBadRequest, "to is required")
 		return
 	}
+	for _, to := range req.To {
+		if _, err := mail.ParseAddress(to); err != nil {
+			sendError(w, http.StatusBadRequest, fmt.Sprintf("invalid to address: %s", to))
+			return
+		}
+	}
+	for _, cc := range req.CC {
+		if _, err := mail.ParseAddress(cc); err != nil {
+			sendError(w, http.StatusBadRequest, fmt.Sprintf("invalid cc address: %s", cc))
+			return
+		}
+	}
+	for _, bcc := range req.BCC {
+		if _, err := mail.ParseAddress(bcc); err != nil {
+			sendError(w, http.StatusBadRequest, fmt.Sprintf("invalid bcc address: %s", bcc))
+			return
+		}
+	}
 
 	// Get template
 	var tmpl *template.Template
@@ -459,9 +478,13 @@ func (s *TemplateServer) buildEmailData(from string, to []string, cc []string, s
 	buf.WriteString(fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z)))
 	buf.WriteString(fmt.Sprintf("Message-ID: <%s@%s>\r\n", uuid.New().String(), email.ExtractDomainOrDefault(from, "localhost")))
 
-	// Custom headers
+	// Custom headers (sanitize to prevent header injection)
 	for k, v := range headers {
-		buf.WriteString(fmt.Sprintf("%s: %s\r\n", k, v))
+		k = sanitizeHeaderValue(k)
+		v = sanitizeHeaderValue(v)
+		if k != "" {
+			buf.WriteString(fmt.Sprintf("%s: %s\r\n", k, v))
+		}
 	}
 
 	// MIME headers

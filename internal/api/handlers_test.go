@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/foxzi/sendry/internal/config"
@@ -329,5 +330,127 @@ func TestDeleteEndpoint(t *testing.T) {
 
 	if _, exists := q.messages["to-delete"]; exists {
 		t.Error("Message should be deleted")
+	}
+}
+
+func TestSendWithCCAndBCC(t *testing.T) {
+	server, q := setupTestServer("test-api-key")
+
+	body := `{
+		"from": "sender@example.com",
+		"to": ["to@example.com"],
+		"cc": ["cc1@example.com", "cc2@example.com"],
+		"bcc": ["bcc@example.com"],
+		"subject": "Test CC/BCC",
+		"body": "Hello"
+	}`
+
+	req := httptest.NewRequest("POST", "/api/v1/send", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer test-api-key")
+	w := httptest.NewRecorder()
+
+	server.router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("Status = %d, want %d. Body: %s", w.Code, http.StatusAccepted, w.Body.String())
+	}
+
+	// Verify envelope contains all recipients (To + CC + BCC)
+	if len(q.messages) != 1 {
+		t.Fatalf("Queue has %d messages, want 1", len(q.messages))
+	}
+	for _, msg := range q.messages {
+		if len(msg.To) != 4 {
+			t.Errorf("Envelope To has %d recipients, want 4 (1 to + 2 cc + 1 bcc)", len(msg.To))
+		}
+		// Verify BCC is not in email headers
+		data := string(msg.Data)
+		if strings.Contains(data, "bcc@example.com") {
+			t.Error("BCC address should not appear in email headers")
+		}
+		// Verify CC is in email headers
+		if !strings.Contains(data, "Cc: cc1@example.com, cc2@example.com") {
+			t.Error("Cc header should be present in email data")
+		}
+	}
+}
+
+func TestSendWithInvalidCC(t *testing.T) {
+	server, _ := setupTestServer("test-api-key")
+
+	body := `{
+		"from": "sender@example.com",
+		"to": ["to@example.com"],
+		"cc": ["not-an-email"],
+		"subject": "Test",
+		"body": "Hello"
+	}`
+
+	req := httptest.NewRequest("POST", "/api/v1/send", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer test-api-key")
+	w := httptest.NewRecorder()
+
+	server.router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestSendWithInvalidBCC(t *testing.T) {
+	server, _ := setupTestServer("test-api-key")
+
+	body := `{
+		"from": "sender@example.com",
+		"to": ["to@example.com"],
+		"bcc": ["not-an-email"],
+		"subject": "Test",
+		"body": "Hello"
+	}`
+
+	req := httptest.NewRequest("POST", "/api/v1/send", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer test-api-key")
+	w := httptest.NewRecorder()
+
+	server.router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestSendWithOnlyCCNoBCC(t *testing.T) {
+	server, q := setupTestServer("test-api-key")
+
+	body := `{
+		"from": "sender@example.com",
+		"to": ["to@example.com"],
+		"cc": ["cc@example.com"],
+		"subject": "Test CC only",
+		"body": "Hello"
+	}`
+
+	req := httptest.NewRequest("POST", "/api/v1/send", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer test-api-key")
+	w := httptest.NewRecorder()
+
+	server.router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("Status = %d, want %d. Body: %s", w.Code, http.StatusAccepted, w.Body.String())
+	}
+
+	for _, msg := range q.messages {
+		if len(msg.To) != 2 {
+			t.Errorf("Envelope To has %d recipients, want 2 (1 to + 1 cc)", len(msg.To))
+		}
+		data := string(msg.Data)
+		if !strings.Contains(data, "Cc: cc@example.com") {
+			t.Error("Cc header should be present")
+		}
 	}
 }
