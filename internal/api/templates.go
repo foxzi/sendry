@@ -413,13 +413,19 @@ func (s *TemplateServer) handleSendTemplate(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Build email data
-	data := s.buildEmailData(req.From, req.To, result.Subject, result.Text, result.HTML, req.Headers)
+	data := s.buildEmailData(req.From, req.To, req.CC, result.Subject, result.Text, result.HTML, req.Headers)
+
+	// Envelope recipients = To + CC + BCC
+	envelopeTo := make([]string, 0, len(req.To)+len(req.CC)+len(req.BCC))
+	envelopeTo = append(envelopeTo, req.To...)
+	envelopeTo = append(envelopeTo, req.CC...)
+	envelopeTo = append(envelopeTo, req.BCC...)
 
 	// Create message
 	msg := &queue.Message{
 		ID:        uuid.New().String(),
 		From:      req.From,
-		To:        req.To,
+		To:        envelopeTo,
 		Data:      data,
 		Status:    queue.StatusPending,
 		CreatedAt: time.Now(),
@@ -440,12 +446,15 @@ func (s *TemplateServer) handleSendTemplate(w http.ResponseWriter, r *http.Reque
 }
 
 // buildEmailData constructs RFC 5322 email data
-func (s *TemplateServer) buildEmailData(from string, to []string, subject, text, html string, headers map[string]string) []byte {
+func (s *TemplateServer) buildEmailData(from string, to []string, cc []string, subject, text, html string, headers map[string]string) []byte {
 	var buf bytes.Buffer
 
 	// Headers
 	buf.WriteString(fmt.Sprintf("From: %s\r\n", from))
 	buf.WriteString(fmt.Sprintf("To: %s\r\n", strings.Join(to, ", ")))
+	if len(cc) > 0 {
+		buf.WriteString(fmt.Sprintf("Cc: %s\r\n", strings.Join(cc, ", ")))
+	}
 	buf.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
 	buf.WriteString(fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z)))
 	buf.WriteString(fmt.Sprintf("Message-ID: <%s@%s>\r\n", uuid.New().String(), email.ExtractDomainOrDefault(from, "localhost")))
