@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sendry Web CLI: `sendry-web dns-sync` command to compare current DNS with recommended SPF/DKIM/DMARC records and create/update them via DNS provider API
 - DNS provider abstraction with Cloudflare implementation (token via `--token` or `CLOUDFLARE_API_TOKEN`)
 - Cloudflare legacy Global API Key support via `--email`/`--token` (or `CLOUDFLARE_API_EMAIL`/`CLOUDFLARE_API_KEY`) with `--auth auto|token|global`
-- Tests: DNS sync plan/apply logic, SPF include handling, Cloudflare auth headers
+- Namedot DNS provider (github.com/foxzi/namedot) via `--provider namedot`, `--namedot-url`/`NAMEDOT_API_URL`, `--token`/`NAMEDOT_API_TOKEN`
+- Tests: DNS sync plan/apply logic, SPF include handling, Cloudflare auth headers, Namedot zone/rrset operations
 - Documentation: `docs/dns-sync.md` and `docs/dns-sync.ru.md`
 
 ### Changed

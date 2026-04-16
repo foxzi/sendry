@@ -7,6 +7,7 @@
 Поддерживаемые провайдеры:
 
 - Cloudflare (`--provider cloudflare`)
+- Namedot (`--provider namedot`, см. [github.com/foxzi/namedot](https://github.com/foxzi/namedot))
 
 ## Рекомендуемые записи
 
@@ -53,6 +54,37 @@ DKIM проверяется только если на домене включё
 
 Режим можно форсировать флагом `--auth global` (режим `auto` сам выберет его,
 если задан `--email`).
+
+## Namedot
+
+Namedot — собственный DNS-сервер с REST API. Провайдер использует авторизацию
+по bearer-токену и REST-эндпоинты для зон и RRSet.
+
+Обязательные параметры:
+
+- `--namedot-url <base-url>` или `NAMEDOT_API_URL` (например, `https://dns.example.com`)
+- `--token <bearer-token>` или `NAMEDOT_API_TOKEN`
+
+Токен должен быть валидным для REST API namedot (`api_token` / `api_token_hash`
+в конфиге namedot).
+
+Пример:
+
+```bash
+sendry-web dns-sync --config /etc/sendry/web.yaml \
+  --provider namedot \
+  --namedot-url "$NAMEDOT_API_URL" \
+  --token "$NAMEDOT_API_TOKEN" \
+  --domain example.com
+```
+
+Замечания:
+
+- TXT-значения автоматически оборачиваются в кавычки при отправке в namedot и
+  разворачиваются при чтении, поэтому сравнения корректны между провайдерами.
+- Обновление заменяет соответствующий RRSet в namedot на одну запись — не
+  используйте команду с зонами, где на одном имени нужно хранить несколько TXT
+  для SPF/DMARC/DKIM.
 
 ## Использование
 

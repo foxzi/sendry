@@ -272,7 +272,7 @@ When set, the recommended SPF value becomes `v=spf1 a mx include:<value> ~all`. 
 
 Sendry Web can compare a domain's current DNS records with the recommended SPF, DKIM and DMARC values and, if needed, create or update them through a DNS provider.
 
-Supported providers: Cloudflare (API Token or legacy Global API Key).
+Supported providers: Cloudflare (API Token or legacy Global API Key), Namedot.
 
 ```bash
 # Plan only (API Token)

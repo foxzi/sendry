@@ -272,7 +272,7 @@ HTML шаблона:
 
 Sendry Web умеет сравнивать текущие DNS-записи домена с рекомендуемыми SPF, DKIM и DMARC и, при необходимости, создавать или обновлять их через API DNS-провайдера.
 
-Поддерживаемые провайдеры: Cloudflare (API Token или legacy Global API Key).
+Поддерживаемые провайдеры: Cloudflare (API Token или legacy Global API Key), Namedot.
 
 ```bash
 # Только план (API Token)

@@ -7,6 +7,7 @@ updates them through a DNS provider API.
 Supported providers:
 
 - Cloudflare (`--provider cloudflare`)
+- Namedot (`--provider namedot`, see [github.com/foxzi/namedot](https://github.com/foxzi/namedot))
 
 ## Recommended records
 
@@ -54,6 +55,37 @@ Set:
 
 You can force the mode with `--auth global` (auto mode selects it automatically
 when `--email` is provided).
+
+## Namedot
+
+Namedot is a lightweight self-hosted DNS server with a REST API. The provider
+uses bearer-token authentication and the zone/rrset REST endpoints.
+
+Required parameters:
+
+- `--namedot-url <base-url>` or `NAMEDOT_API_URL` (e.g. `https://dns.example.com`)
+- `--token <bearer-token>` or `NAMEDOT_API_TOKEN`
+
+The token must be valid for the namedot REST API (`api_token` / `api_token_hash`
+in namedot config).
+
+Example:
+
+```bash
+sendry-web dns-sync --config /etc/sendry/web.yaml \
+  --provider namedot \
+  --namedot-url "$NAMEDOT_API_URL" \
+  --token "$NAMEDOT_API_TOKEN" \
+  --domain example.com
+```
+
+Notes:
+
+- TXT values are automatically wrapped in quotes for namedot (and unwrapped on
+  read) so comparisons are consistent with other providers.
+- Updates replace the matching RRSet in namedot with a single record entry, so
+  do not point this command at namedot zones that require multiple TXT values
+  on the same name for SPF/DMARC/DKIM.
 
 ## Usage
 

@@ -17,13 +17,14 @@ import (
 )
 
 var (
-	dnsSyncDomain   string
-	dnsSyncAll      bool
-	dnsSyncApply    bool
-	dnsSyncProvider string
-	dnsSyncToken    string
-	dnsSyncEmail    string
-	dnsSyncAuthMode string
+	dnsSyncDomain      string
+	dnsSyncAll         bool
+	dnsSyncApply       bool
+	dnsSyncProvider    string
+	dnsSyncToken       string
+	dnsSyncEmail       string
+	dnsSyncAuthMode    string
+	dnsSyncNamedotURL  string
 )
 
 var dnsSyncCmd = &cobra.Command{
@@ -32,14 +33,20 @@ var dnsSyncCmd = &cobra.Command{
 	Long: `Compare current DNS records against Sendry recommendations for a domain
 (SPF, DKIM, DMARC) and, with --apply, create or update them via a DNS provider.
 
-Currently supported provider: cloudflare.
+Supported providers:
+  - cloudflare
+  - namedot (github.com/foxzi/namedot)
 
 Cloudflare authentication (one of):
   - API Token (recommended): --token or CLOUDFLARE_API_TOKEN.
     Required permissions: Zone:Read, DNS:Edit.
   - Global API Key (legacy): --email and --token (key) or
     CLOUDFLARE_API_EMAIL + CLOUDFLARE_API_KEY. Use --auth global to force this
-    mode; otherwise it is selected automatically when email is provided.`,
+    mode; otherwise it is selected automatically when email is provided.
+
+Namedot authentication:
+  - Bearer token: --token or NAMEDOT_API_TOKEN.
+  - Base URL: --namedot-url or NAMEDOT_API_URL (e.g. https://dns.example.com).`,
 	RunE: runDNSSync,
 }
 
@@ -48,10 +55,11 @@ func init() {
 	dnsSyncCmd.Flags().StringVarP(&dnsSyncDomain, "domain", "d", "", "Domain to sync (by domain name)")
 	dnsSyncCmd.Flags().BoolVar(&dnsSyncAll, "all", false, "Sync all domains")
 	dnsSyncCmd.Flags().BoolVar(&dnsSyncApply, "apply", false, "Apply changes (default is plan only)")
-	dnsSyncCmd.Flags().StringVar(&dnsSyncProvider, "provider", "cloudflare", "DNS provider (cloudflare)")
+	dnsSyncCmd.Flags().StringVar(&dnsSyncProvider, "provider", "cloudflare", "DNS provider (cloudflare, namedot)")
 	dnsSyncCmd.Flags().StringVar(&dnsSyncToken, "token", "", "Provider API token or global key (overrides env)")
 	dnsSyncCmd.Flags().StringVar(&dnsSyncEmail, "email", "", "Account email for legacy Cloudflare Global API Key (overrides env)")
 	dnsSyncCmd.Flags().StringVar(&dnsSyncAuthMode, "auth", "auto", "Cloudflare auth mode: auto, token, global")
+	dnsSyncCmd.Flags().StringVar(&dnsSyncNamedotURL, "namedot-url", "", "Namedot REST API base URL (e.g. https://dns.example.com)")
 }
 
 func runDNSSync(cmd *cobra.Command, args []string) error {
@@ -135,9 +143,30 @@ func buildProvider() (dnsprovider.Provider, error) {
 	switch strings.ToLower(dnsSyncProvider) {
 	case "cloudflare", "cf":
 		return buildCloudflareProvider()
+	case "namedot":
+		return buildNamedotProvider()
 	default:
 		return nil, fmt.Errorf("unsupported provider %q", dnsSyncProvider)
 	}
+}
+
+func buildNamedotProvider() (dnsprovider.Provider, error) {
+	baseURL := strings.TrimSpace(dnsSyncNamedotURL)
+	if baseURL == "" {
+		baseURL = strings.TrimSpace(os.Getenv("NAMEDOT_API_URL"))
+	}
+	if baseURL == "" {
+		return nil, fmt.Errorf("namedot base URL is required: use --namedot-url or NAMEDOT_API_URL")
+	}
+
+	token := strings.TrimSpace(dnsSyncToken)
+	if token == "" {
+		token = strings.TrimSpace(os.Getenv("NAMEDOT_API_TOKEN"))
+	}
+	if token == "" {
+		return nil, fmt.Errorf("namedot API token is required: use --token or NAMEDOT_API_TOKEN")
+	}
+	return dnsprovider.NewNamedot(baseURL, token), nil
 }
 
 func buildCloudflareProvider() (dnsprovider.Provider, error) {
