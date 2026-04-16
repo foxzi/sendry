@@ -272,18 +272,24 @@ HTML шаблона:
 
 Sendry Web умеет сравнивать текущие DNS-записи домена с рекомендуемыми SPF, DKIM и DMARC и, при необходимости, создавать или обновлять их через API DNS-провайдера.
 
-Поддерживаемые провайдеры: Cloudflare.
+Поддерживаемые провайдеры: Cloudflare (API Token или legacy Global API Key).
 
 ```bash
-# Только план
+# Только план (API Token)
 sendry-web dns-sync --config /etc/sendry/web.yaml \
   --domain example.com \
   --token "$CLOUDFLARE_API_TOKEN"
 
-# Применить изменения
+# Применить изменения (API Token)
 sendry-web dns-sync --config /etc/sendry/web.yaml \
   --domain example.com --apply \
   --token "$CLOUDFLARE_API_TOKEN"
+
+# Применить изменения через Global API Key
+sendry-web dns-sync --config /etc/sendry/web.yaml \
+  --domain example.com --apply \
+  --email "$CLOUDFLARE_API_EMAIL" \
+  --token "$CLOUDFLARE_API_KEY"
 ```
 
 Полное руководство: [DNS Sync](dns-sync.ru.md).
