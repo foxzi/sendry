@@ -20,6 +20,8 @@ import (
 type SendRequest struct {
 	From    string            `json:"from"`
 	To      []string          `json:"to"`
+	CC      []string          `json:"cc,omitempty"`
+	BCC     []string          `json:"bcc,omitempty"`
 	Subject string            `json:"subject"`
 	Body    string            `json:"body"`
 	HTML    string            `json:"html,omitempty"`
@@ -99,6 +101,18 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	for _, cc := range req.CC {
+		if _, err := mail.ParseAddress(cc); err != nil {
+			s.sendError(w, http.StatusBadRequest, fmt.Sprintf("invalid cc address: %s", cc))
+			return
+		}
+	}
+	for _, bcc := range req.BCC {
+		if _, err := mail.ParseAddress(bcc); err != nil {
+			s.sendError(w, http.StatusBadRequest, fmt.Sprintf("invalid bcc address: %s", bcc))
+			return
+		}
+	}
 	if req.Subject == "" && req.Body == "" && req.HTML == "" {
 		s.sendError(w, http.StatusBadRequest, "subject, body or html is required")
 		return
@@ -118,11 +132,17 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 	// Build email data (RFC 5322)
 	data := s.buildEmailData(&req)
 
+	// Envelope recipients = To + CC + BCC
+	envelopeTo := make([]string, 0, len(req.To)+len(req.CC)+len(req.BCC))
+	envelopeTo = append(envelopeTo, req.To...)
+	envelopeTo = append(envelopeTo, req.CC...)
+	envelopeTo = append(envelopeTo, req.BCC...)
+
 	// Create message
 	msg := &queue.Message{
 		ID:        uuid.New().String(),
 		From:      req.From,
-		To:        req.To,
+		To:        envelopeTo,
 		Data:      data,
 		Status:    queue.StatusPending,
 		CreatedAt: time.Now(),
@@ -254,6 +274,9 @@ func (s *Server) buildEmailData(req *SendRequest) []byte {
 	// Headers
 	buf.WriteString(fmt.Sprintf("From: %s\r\n", req.From))
 	buf.WriteString(fmt.Sprintf("To: %s\r\n", strings.Join(req.To, ", ")))
+	if len(req.CC) > 0 {
+		buf.WriteString(fmt.Sprintf("Cc: %s\r\n", strings.Join(req.CC, ", ")))
+	}
 	buf.WriteString(fmt.Sprintf("Subject: %s\r\n", req.Subject))
 	buf.WriteString(fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z)))
 	buf.WriteString(fmt.Sprintf("Message-ID: <%s@%s>\r\n", uuid.New().String(), email.ExtractDomainOrDefault(req.From, "localhost")))
