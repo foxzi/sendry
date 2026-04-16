@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Release workflow: add actions:write permission for workflow_dispatch trigger
+
 ## [0.4.14] - 2026-04-16
 
 ### Added

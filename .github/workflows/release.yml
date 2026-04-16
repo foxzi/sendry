@@ -230,6 +230,7 @@ jobs:
     needs: [build-binaries, build-web, build-packages, build-docker]
     permissions:
       contents: write
+      actions: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
