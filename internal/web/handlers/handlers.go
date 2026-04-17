@@ -46,14 +46,15 @@ func New(cfg *config.Config, db *db.DB, logger *slog.Logger, v *views.Engine, oi
 	apiKeys := repository.NewAPIKeyRepository(db.DB)
 
 	emailRouter := router.NewEmailRouter(router.RouterConfig{
-		Domains:   domains,
-		Templates: templates,
-		Sends:     sends,
-		Settings:  settings,
-		Sendry:    sendryMgr,
-		MultiSend: &cfg.Sendry.MultiSend,
-		PublicURL: cfg.Server.PublicURL,
-		Logger:    logger.With("component", "router"),
+		Domains:         domains,
+		Templates:       templates,
+		Sends:           sends,
+		Settings:        settings,
+		Sendry:          sendryMgr,
+		MultiSend:       &cfg.Sendry.MultiSend,
+		PublicURL:       cfg.Server.PublicURL,
+		PublicUploadURL: cfg.Server.PublicUploadURL,
+		Logger:          logger.With("component", "router"),
 	})
 
 	return &Handlers{

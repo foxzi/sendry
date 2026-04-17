@@ -43,9 +43,9 @@ type APISendRequest struct {
 
 // APISendResponse represents the API response
 type APISendResponse struct {
-	ID         string `json:"id"`
-	Status     string `json:"status"`
-	ServerName string `json:"server_name"`
+	ID          string `json:"id"`
+	Status      string `json:"status"`
+	ServerName  string `json:"server_name"`
 	ServerMsgID string `json:"server_msg_id,omitempty"`
 }
 
@@ -59,14 +59,15 @@ type ServerInfo struct {
 
 // EmailRouter routes emails to appropriate MTA servers
 type EmailRouter struct {
-	domains    *repository.DomainRepository
-	templates  *repository.TemplateRepository
-	sends      *repository.SendRepository
-	settings   *repository.SettingsRepository
-	sendry     *sendry.Manager
-	cfg        *config.MultiSendConfig
-	publicURL  string
-	logger     *slog.Logger
+	domains         *repository.DomainRepository
+	templates       *repository.TemplateRepository
+	sends           *repository.SendRepository
+	settings        *repository.SettingsRepository
+	sendry          *sendry.Manager
+	cfg             *config.MultiSendConfig
+	publicURL       string
+	publicUploadURL string
+	logger          *slog.Logger
 
 	mu         sync.Mutex
 	rrCounters map[string]int // Round-robin counters per domain
@@ -74,28 +75,30 @@ type EmailRouter struct {
 
 // RouterConfig contains configuration for the router
 type RouterConfig struct {
-	Domains    *repository.DomainRepository
-	Templates  *repository.TemplateRepository
-	Sends      *repository.SendRepository
-	Settings   *repository.SettingsRepository
-	Sendry     *sendry.Manager
-	MultiSend  *config.MultiSendConfig
-	PublicURL  string
-	Logger     *slog.Logger
+	Domains         *repository.DomainRepository
+	Templates       *repository.TemplateRepository
+	Sends           *repository.SendRepository
+	Settings        *repository.SettingsRepository
+	Sendry          *sendry.Manager
+	MultiSend       *config.MultiSendConfig
+	PublicURL       string
+	PublicUploadURL string
+	Logger          *slog.Logger
 }
 
 // NewEmailRouter creates a new email router
 func NewEmailRouter(cfg RouterConfig) *EmailRouter {
 	return &EmailRouter{
-		domains:    cfg.Domains,
-		templates:  cfg.Templates,
-		sends:      cfg.Sends,
-		settings:   cfg.Settings,
-		sendry:     cfg.Sendry,
-		cfg:        cfg.MultiSend,
-		publicURL:  cfg.PublicURL,
-		logger:     cfg.Logger,
-		rrCounters: make(map[string]int),
+		domains:         cfg.Domains,
+		templates:       cfg.Templates,
+		sends:           cfg.Sends,
+		settings:        cfg.Settings,
+		sendry:          cfg.Sendry,
+		cfg:             cfg.MultiSend,
+		publicURL:       cfg.PublicURL,
+		publicUploadURL: cfg.PublicUploadURL,
+		logger:          cfg.Logger,
+		rrCounters:      make(map[string]int),
 	}
 }
 
@@ -195,9 +198,9 @@ func (r *EmailRouter) Send(ctx context.Context, req *APISendRequest, apiKeyID, c
 	)
 
 	return &APISendResponse{
-		ID:         send.ID,
-		Status:     models.SendStatusSent,
-		ServerName: actualServer,
+		ID:          send.ID,
+		Status:      models.SendStatusSent,
+		ServerName:  actualServer,
 		ServerMsgID: resp.ID,
 	}, nil
 }
@@ -297,10 +300,8 @@ func (r *EmailRouter) resolveTemplate(ctx context.Context, req *APISendRequest) 
 	html := renderVars(tmpl.HTML, data)
 	text := renderVars(tmpl.Text, data)
 
-	if r.publicURL != "" {
-		base := strings.TrimRight(r.publicURL, "/")
-		html = strings.ReplaceAll(html, `src="/uploads/`, `src="`+base+`/uploads/`)
-		html = strings.ReplaceAll(html, `src="/static/`, `src="`+base+`/static/`)
+	if r.publicURL != "" || r.publicUploadURL != "" {
+		html = rewriteAssetURLs(html, r.publicURL, r.publicUploadURL)
 	}
 
 	return &sendry.SendRequest{
@@ -472,4 +473,22 @@ func renderVars(template string, data map[string]any) string {
 		// Keep original if variable not found
 		return match
 	})
+}
+
+// rewriteAssetURLs expands relative /uploads/ and /static/ src attributes in
+// rendered email HTML into absolute URLs. Uploads use publicUploadURL when
+// configured, falling back to publicURL; static assets always use publicURL.
+func rewriteAssetURLs(html, publicURL, publicUploadURL string) string {
+	uploadsBase := strings.TrimRight(publicUploadURL, "/")
+	if uploadsBase == "" {
+		uploadsBase = strings.TrimRight(publicURL, "/")
+	}
+	if uploadsBase != "" {
+		html = strings.ReplaceAll(html, `src="/uploads/`, `src="`+uploadsBase+`/uploads/`)
+	}
+	staticBase := strings.TrimRight(publicURL, "/")
+	if staticBase != "" {
+		html = strings.ReplaceAll(html, `src="/static/`, `src="`+staticBase+`/static/`)
+	}
+	return html
 }

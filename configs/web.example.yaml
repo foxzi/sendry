@@ -1,6 +1,12 @@
 server:
   listen_addr: ":8088"
   public_url: ""
+  # Optional: separate public URL used only for /uploads/ links in outgoing
+  # email HTML. When set, template images referenced as "/uploads/foo.png"
+  # are rewritten to "<public_upload_url>/uploads/foo.png" instead of
+  # "<public_url>/uploads/foo.png". Useful when uploads are served from a
+  # dedicated CDN/static host, e.g. https://cdn.example.com
+  public_upload_url: ""
   upload_path: "/var/lib/sendry-web/uploads"
   tls:
     enabled: false

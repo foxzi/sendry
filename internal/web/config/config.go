@@ -17,11 +17,12 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	ListenAddr string    `yaml:"listen_addr"`
-	PublicURL  string    `yaml:"public_url"`
-	UploadPath string    `yaml:"upload_path"`
-	TLS        TLSConfig `yaml:"tls"`
-	AllowedIPs []string  `yaml:"allowed_ips"` // Empty = allow all
+	ListenAddr      string    `yaml:"listen_addr"`
+	PublicURL       string    `yaml:"public_url"`
+	PublicUploadURL string    `yaml:"public_upload_url"`
+	UploadPath      string    `yaml:"upload_path"`
+	TLS             TLSConfig `yaml:"tls"`
+	AllowedIPs      []string  `yaml:"allowed_ips"` // Empty = allow all
 }
 
 type TLSConfig struct {

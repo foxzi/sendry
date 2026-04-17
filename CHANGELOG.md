@@ -12,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DNS provider abstraction with Cloudflare implementation (token via `--token` or `CLOUDFLARE_API_TOKEN`)
 - Cloudflare legacy Global API Key support via `--email`/`--token` (or `CLOUDFLARE_API_EMAIL`/`CLOUDFLARE_API_KEY`) with `--auth auto|token|global`
 - Namedot DNS provider (github.com/foxzi/namedot) via `--provider namedot`, `--namedot-url`/`NAMEDOT_API_URL`, `--token`/`NAMEDOT_API_TOKEN`
-- Tests: DNS sync plan/apply logic, SPF include handling, Cloudflare auth headers, Namedot zone/rrset operations
+- Sendry Web: `server.public_upload_url` config option to serve `/uploads/` links in outgoing email HTML from a dedicated host (e.g. CDN) separate from `public_url`; `/static/` continues to use `public_url`
+- Tests: DNS sync plan/apply logic, SPF include handling, Cloudflare auth headers, Namedot zone/rrset operations, asset URL rewriting with separate upload host
 - Documentation: `docs/dns-sync.md` and `docs/dns-sync.ru.md`
 
 ### Changed

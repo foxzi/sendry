@@ -61,7 +61,7 @@ func (h *Handlers) BuilderCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	html = makeAbsoluteURLs(html, h.cfg.Server.PublicURL)
+	html = makeAbsoluteURLs(html, h.cfg.Server.PublicURL, h.cfg.Server.PublicUploadURL)
 	text := stripHTMLTags(html)
 
 	t := &models.Template{
@@ -86,13 +86,21 @@ func (h *Handlers) BuilderCreate(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/templates/"+t.ID, http.StatusSeeOther)
 }
 
-func makeAbsoluteURLs(html, publicURL string) string {
-	if publicURL == "" {
+func makeAbsoluteURLs(html, publicURL, publicUploadURL string) string {
+	if publicURL == "" && publicUploadURL == "" {
 		return html
 	}
-	base := strings.TrimRight(publicURL, "/")
-	html = strings.ReplaceAll(html, `src="/uploads/`, `src="`+base+`/uploads/`)
-	html = strings.ReplaceAll(html, `src="/static/`, `src="`+base+`/static/`)
+	uploadsBase := strings.TrimRight(publicUploadURL, "/")
+	if uploadsBase == "" {
+		uploadsBase = strings.TrimRight(publicURL, "/")
+	}
+	if uploadsBase != "" {
+		html = strings.ReplaceAll(html, `src="/uploads/`, `src="`+uploadsBase+`/uploads/`)
+	}
+	staticBase := strings.TrimRight(publicURL, "/")
+	if staticBase != "" {
+		html = strings.ReplaceAll(html, `src="/static/`, `src="`+staticBase+`/static/`)
+	}
 	return html
 }
 
