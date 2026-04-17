@@ -33,7 +33,7 @@ sudo dnf install sendry
 
 ```bash
 # Download and install
-wget https://github.com/foxzi/sendry/releases/latest/download/sendry_0.4.16-r1_x86_64.apk
+wget https://github.com/foxzi/sendry/releases/latest/download/sendry_0.4.17-r1_x86_64.apk
 apk add --allow-untrusted sendry_*.apk
 ```
 

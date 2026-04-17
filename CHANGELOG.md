@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.17] - 2026-04-17
+
 ### Added
 - Sendry Web CLI: `sendry-web dns-sync` command to compare current DNS with recommended SPF/DKIM/DMARC records and create/update them via DNS provider API
 - DNS provider abstraction with Cloudflare implementation (token via `--token` or `CLOUDFLARE_API_TOKEN`)
@@ -20,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Documentation: `sendry-web.md` and `sendry-web.ru.md` describe `spf_include` global variable, link to `dns-sync` guide, and show both Cloudflare API Token and Global API Key examples
 - Documentation: `README.md` and `docs/README.ru.md` link to Sendry Web and DNS sync guides
-- Documentation: updated example versions to `0.4.16` in `README.md`, `docs/README.ru.md`, `docs/quickstart.md`, `docs/quickstart.ru.md`, `docs/docker.md`, and `docs/docker.ru.md`
+- Documentation: updated example versions to `0.4.17` in `README.md`, `docs/README.ru.md`, `docs/quickstart.md`, `docs/quickstart.ru.md`, `docs/docker.md`, and `docs/docker.ru.md`
 
 ## [0.4.15] - 2026-04-16
 
