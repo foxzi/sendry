@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sendry Web: `server.public_upload_url` config option to serve `/uploads/` links in outgoing email HTML from a dedicated host (e.g. CDN) separate from `public_url`; `/static/` continues to use `public_url`
 - Tests: DNS sync plan/apply logic, SPF include handling, Cloudflare auth headers, Namedot zone/rrset operations, asset URL rewriting with separate upload host
 - Documentation: `docs/dns-sync.md` and `docs/dns-sync.ru.md`
+- Documentation: `docs/nginx-sendry-web.md`, `docs/nginx-sendry-web.ru.md`, `docs/caddy-sendry-web.md`, `docs/caddy-sendry-web.ru.md` with examples for single and separate-upload-domain setups
 
 ### Changed
 - Documentation: `sendry-web.md` and `sendry-web.ru.md` describe `spf_include` global variable, link to `dns-sync` guide, and show both Cloudflare API Token and Global API Key examples
