@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Tests: additional `dnssync` plan cases — DKIM skipped on empty `DNSRecord`, default selector `mail`, and quoted/whitespace-equivalent values treated as noop
+
 ## [0.4.17] - 2026-04-17
 
 ### Added

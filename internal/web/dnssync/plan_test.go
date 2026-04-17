@@ -101,6 +101,43 @@ func TestDecideAction(t *testing.T) {
 	}
 }
 
+func TestBuildRecommended_DKIM_EnabledButEmptyRecord_Skipped(t *testing.T) {
+	d := &models.Domain{
+		Domain:       "example.com",
+		DKIMEnabled:  true,
+		DKIMSelector: "s1",
+		DKIMKey:      &models.DKIMKey{DNSRecord: "   "},
+	}
+	entries := BuildRecommended(d, "")
+	dkim := findByKind(t, entries, RecordDKIM)
+	if dkim.Action != ActionSkip {
+		t.Errorf("DKIM Action = %q, want Skip (empty DNSRecord)", dkim.Action)
+	}
+}
+
+func TestBuildRecommended_DKIM_DefaultSelector(t *testing.T) {
+	d := &models.Domain{
+		Domain:      "example.com",
+		DKIMEnabled: true,
+		DKIMKey:     &models.DKIMKey{DNSRecord: "v=DKIM1; k=rsa; p=XYZ"},
+	}
+	entries := BuildRecommended(d, "")
+	dkim := findByKind(t, entries, RecordDKIM)
+	if dkim.Name != "mail._domainkey.example.com" {
+		t.Errorf("DKIM Name = %q, want default selector 'mail'", dkim.Name)
+	}
+}
+
+func TestDecideAction_CaseInsensitiveNormalize(t *testing.T) {
+	// NormalizeTXT doesn't lowercase, but quoting and whitespace must be
+	// handled consistently so simple differences in spacing still noop.
+	got, _ := DecideAction("v=DMARC1; p=quarantine; rua=mailto:dmarc@example.com",
+		"\"v=DMARC1; p=quarantine; rua=mailto:dmarc@example.com\"")
+	if got != ActionNoop {
+		t.Errorf("DecideAction = %q, want noop for quoted identical value", got)
+	}
+}
+
 func findByKind(t *testing.T, entries []PlanEntry, kind RecordType) PlanEntry {
 	t.Helper()
 	for _, e := range entries {
