@@ -59,25 +59,47 @@ func NewBoltStorage(path string) (*BoltStorage, error) {
 // Enqueue adds a message to the queue
 func (s *BoltStorage) Enqueue(ctx context.Context, msg *Message) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
-		// Store message
-		msgBucket := tx.Bucket(bucketMessages)
-		data, err := json.Marshal(msg)
-		if err != nil {
-			return fmt.Errorf("failed to marshal message: %w", err)
-		}
-		if err := msgBucket.Put([]byte(msg.ID), data); err != nil {
-			return fmt.Errorf("failed to store message: %w", err)
-		}
+		return enqueueInTx(tx, msg)
+	})
+}
 
-		// Add to pending index
-		pendingBucket := tx.Bucket(bucketPending)
-		indexKey := makeIndexKey(msg.CreatedAt, msg.ID)
-		if err := pendingBucket.Put(indexKey, []byte(msg.ID)); err != nil {
-			return fmt.Errorf("failed to add to pending index: %w", err)
+// EnqueueBatch adds multiple messages to the queue in a single transaction.
+// All messages are written atomically, which is significantly faster for large
+// batches because BoltDB serializes write transactions.
+func (s *BoltStorage) EnqueueBatch(ctx context.Context, msgs []*Message) error {
+	if len(msgs) == 0 {
+		return nil
+	}
+	return s.db.Update(func(tx *bolt.Tx) error {
+		for _, msg := range msgs {
+			if msg == nil {
+				continue
+			}
+			if err := enqueueInTx(tx, msg); err != nil {
+				return err
+			}
 		}
-
 		return nil
 	})
+}
+
+// enqueueInTx writes a message and its pending index entry inside an existing tx.
+func enqueueInTx(tx *bolt.Tx, msg *Message) error {
+	msgBucket := tx.Bucket(bucketMessages)
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal message: %w", err)
+	}
+	if err := msgBucket.Put([]byte(msg.ID), data); err != nil {
+		return fmt.Errorf("failed to store message: %w", err)
+	}
+
+	pendingBucket := tx.Bucket(bucketPending)
+	indexKey := makeIndexKey(msg.CreatedAt, msg.ID)
+	if err := pendingBucket.Put(indexKey, []byte(msg.ID)); err != nil {
+		return fmt.Errorf("failed to add to pending index: %w", err)
+	}
+	return nil
 }
 
 // Dequeue gets the next message for processing

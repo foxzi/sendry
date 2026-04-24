@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Queue: `BoltStorage.EnqueueBatch` atomically enqueues a slice of messages in one transaction
+- Tests: `EnqueueBatch` happy/empty paths
 - Ansible: `sendry_web_public_upload_url` renders `server.public_upload_url` in generated `web.yaml`
 - Ansible: `sendry_caddy_uploads_enabled` adds a `/uploads/*` file server to the main panel site
 - Ansible: `sendry_caddy_uploads_hosts` adds dedicated Caddy sites that serve `/uploads/*` only (supports custom scheme/port via verbatim address)
