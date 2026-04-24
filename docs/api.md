@@ -101,6 +101,63 @@ POST /api/v1/send
 }
 ```
 
+### Send Batch
+
+Queue multiple emails in a single request. Reduces HTTP overhead and BoltDB
+write-lock contention on large mailings. All valid messages are enqueued
+atomically in one transaction; invalid messages are reported per-item
+without aborting the rest of the batch.
+
+```
+POST /api/v1/send/batch
+```
+
+**Request:**
+```json
+{
+  "messages": [
+    { "from": "a@example.com", "to": ["x@example.com"], "subject": "s1", "body": "b1" },
+    { "from": "b@example.com", "to": ["y@example.com"], "subject": "s2", "html": "<p>b2</p>" }
+  ]
+}
+```
+
+Each element follows the same schema as `POST /api/v1/send`.
+
+Limits:
+- Maximum 1000 messages per request.
+- Per-message size limit matches `smtp.max_message_bytes` (default 10 MB).
+
+**Response:**
+```json
+{
+  "accepted": 2,
+  "rejected": 0,
+  "results": [
+    { "index": 0, "id": "550e8400-...", "status": "pending" },
+    { "index": 1, "id": "66aa77bb-...", "status": "pending" }
+  ]
+}
+```
+
+On validation errors individual results carry an `error` field instead of
+`id`/`status`:
+
+```json
+{
+  "accepted": 1,
+  "rejected": 1,
+  "results": [
+    { "index": 0, "id": "550e8400-...", "status": "pending" },
+    { "index": 1, "error": "invalid to address: bad" }
+  ]
+}
+```
+
+HTTP status is `202 Accepted` whenever the request itself is well-formed,
+even if some entries were rejected. `400` is returned for an empty
+`messages` array, and `413` when the batch exceeds the 1000-message limit.
+
 ### Get Message Status
 
 Get the delivery status of a message.
