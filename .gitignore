@@ -28,6 +28,12 @@ Thumbs.db
 # Claude
 CLAUDE.md
 tz.md
+
+# Local assistant state
+.nemo/
+
+# Local Ansible inventory (use hosts.yml.example as a template)
+ansible/inventory/hosts.yml
 tz-web.md
 
 # Test configs
