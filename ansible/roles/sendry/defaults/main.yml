@@ -214,6 +214,11 @@ sendry_web_allowed_ips: []
 #   - "192.168.1.0/24"
 #   - "203.0.113.50"
 
+# Public URL used to rewrite "/uploads/..." links in outgoing email HTML
+# to absolute URLs. Empty = no rewrite. Typically a CDN/static host.
+# Example: "https://cdn.example.com"
+sendry_web_public_upload_url: ""
+
 # Session settings
 sendry_web_session_secret: ""  # Required if web enabled! Use ansible-vault
 sendry_web_session_ttl: 24h
@@ -267,6 +272,17 @@ sendry_caddy_extra_global: ""
 
 # Additional Caddy site options (inside the site block)
 sendry_caddy_extra_site: ""
+
+# Also serve /uploads/* from the main sendry_caddy_domain site (alongside
+# the reverse proxy). Useful when uploaded images need to be reachable on
+# the same domain as the web panel.
+sendry_caddy_uploads_enabled: false
+
+# Additional sites that serve /uploads/* only (e.g. dedicated CDN hosts).
+# Each entry is a Caddy site address written verbatim into the Caddyfile.
+#   - address: "cdn.example.com"                       # auto HTTPS
+#   - address: "http://cdn.example.com:8025"           # plain HTTP on custom port
+sendry_caddy_uploads_hosts: []
 
 # =============================================================================
 # Caddy API Load Balancer (for MTA cluster)

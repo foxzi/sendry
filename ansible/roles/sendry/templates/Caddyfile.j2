@@ -14,6 +14,14 @@
 
 # Sendry Web Panel
 {{ sendry_caddy_domain }} {
+{% if sendry_caddy_uploads_enabled %}
+    handle_path /uploads/* {
+        root * {{ sendry_web_data_dir }}/uploads
+        header Cache-Control "public, max-age=2592000"
+        file_server
+    }
+
+{% endif %}
     reverse_proxy {{ sendry_web_listen }}
 
     encode gzip
@@ -36,6 +44,24 @@
 {% endif %}
 }
 {% endif %}
+{% for host in sendry_caddy_uploads_hosts %}
+
+# Uploads static host: {{ host.address }}
+{{ host.address }} {
+    handle_path /uploads/* {
+        root * {{ sendry_web_data_dir }}/uploads
+        encode zstd gzip
+
+        header Cache-Control "public, max-age=2592000"
+        header Access-Control-Allow-Origin "*"
+        header -Server
+
+        file_server
+    }
+
+    respond / 404
+}
+{% endfor %}
 {% if sendry_caddy_api_enabled and sendry_caddy_api_backends %}
 
 # Sendry API Load Balancer

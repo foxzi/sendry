@@ -20,3 +20,9 @@
     name: caddy
     state: reloaded
   when: sendry_caddy_enabled | bool
+
+- name: Restart caddy
+  ansible.builtin.systemd:
+    name: caddy
+    state: restarted
+  when: sendry_caddy_enabled | bool

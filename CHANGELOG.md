@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Ansible: `sendry_web_public_upload_url` renders `server.public_upload_url` in generated `web.yaml`
+- Ansible: `sendry_caddy_uploads_enabled` adds a `/uploads/*` file server to the main panel site
+- Ansible: `sendry_caddy_uploads_hosts` adds dedicated Caddy sites that serve `/uploads/*` only (supports custom scheme/port via verbatim address)
+- Ansible: `caddy` system user is added to the sendry group when the web panel is enabled so it can read the uploads directory
 - Tests: additional `dnssync` plan cases — DKIM skipped on empty `DNSRecord`, default selector `mail`, and quoted/whitespace-equivalent values treated as noop
 
 ## [0.4.17] - 2026-04-17

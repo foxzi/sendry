@@ -32,6 +32,14 @@
     group: caddy
     mode: "0755"
 
+- name: Allow Caddy to read sendry-web uploads
+  ansible.builtin.user:
+    name: caddy
+    groups: "{{ sendry_group }}"
+    append: true
+  when: sendry_web_enabled | bool
+  notify: Restart caddy
+
 - name: Generate Caddyfile
   ansible.builtin.template:
     src: Caddyfile.j2

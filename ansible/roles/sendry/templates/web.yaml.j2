@@ -3,6 +3,9 @@
 
 server:
   listen_addr: "{{ sendry_web_listen }}"
+{% if sendry_web_public_upload_url %}
+  public_upload_url: "{{ sendry_web_public_upload_url }}"
+{% endif %}
   tls:
     enabled: false
 {% if sendry_web_allowed_ips %}
