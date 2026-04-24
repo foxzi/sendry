@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Documentation: `docs/analytics.md` and `docs/analytics.ru.md` describing why current telemetry is monitoring, not analytics, and proposing a dedicated `sendry-analytics` service with event log, open/click tracking, VERP bounce handler, and a SQLite-to-ClickHouse migration path
 - Documentation: `docs/scaling.md` and `docs/scaling.ru.md` describing bottlenecks for large mailings and a staged plan to scale (batch API, webhook events, SMTP connection reuse, optional `sendry-dispatcher`, optional broker)
 - API: `POST /api/v1/send/batch` accepts up to 1000 messages per request, validates each independently, and enqueues valid ones in a single BoltDB transaction (reduces write-lock contention on large mailings)
 - Tests: batch API handler (accepted/rejected/mixed/empty/too-large)
