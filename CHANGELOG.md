@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- API: `POST /api/v1/send/batch` accepts up to 1000 messages per request, validates each independently, and enqueues valid ones in a single BoltDB transaction (reduces write-lock contention on large mailings)
+- Tests: batch API handler (accepted/rejected/mixed/empty/too-large)
 - Queue: `BoltStorage.EnqueueBatch` atomically enqueues a slice of messages in one transaction
 - Tests: `EnqueueBatch` happy/empty paths
 - Ansible: `sendry_web_public_upload_url` renders `server.public_upload_url` in generated `web.yaml`

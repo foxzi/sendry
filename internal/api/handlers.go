@@ -82,72 +82,10 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate request
-	if req.From == "" {
-		s.sendError(w, http.StatusBadRequest, "from is required")
+	msg, status, errMsg := s.buildMessageFromRequest(&req, r.RemoteAddr)
+	if msg == nil {
+		s.sendError(w, status, errMsg)
 		return
-	}
-	if _, err := mail.ParseAddress(req.From); err != nil {
-		s.sendError(w, http.StatusBadRequest, "invalid from address")
-		return
-	}
-	if len(req.To) == 0 {
-		s.sendError(w, http.StatusBadRequest, "to is required")
-		return
-	}
-	for _, to := range req.To {
-		if _, err := mail.ParseAddress(to); err != nil {
-			s.sendError(w, http.StatusBadRequest, fmt.Sprintf("invalid to address: %s", to))
-			return
-		}
-	}
-	for _, cc := range req.CC {
-		if _, err := mail.ParseAddress(cc); err != nil {
-			s.sendError(w, http.StatusBadRequest, fmt.Sprintf("invalid cc address: %s", cc))
-			return
-		}
-	}
-	for _, bcc := range req.BCC {
-		if _, err := mail.ParseAddress(bcc); err != nil {
-			s.sendError(w, http.StatusBadRequest, fmt.Sprintf("invalid bcc address: %s", bcc))
-			return
-		}
-	}
-	if req.Subject == "" && req.Body == "" && req.HTML == "" {
-		s.sendError(w, http.StatusBadRequest, "subject, body or html is required")
-		return
-	}
-
-	// Check email size limits
-	maxEmailSize := 10 * 1024 * 1024 // default 10 MB
-	if s.fullConfig != nil && s.fullConfig.SMTP.MaxMessageBytes > 0 {
-		maxEmailSize = s.fullConfig.SMTP.MaxMessageBytes
-	}
-	totalSize := len(req.Body) + len(req.HTML) + len(req.Subject)
-	if totalSize > maxEmailSize {
-		s.sendError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("email content too large (max %d bytes)", maxEmailSize))
-		return
-	}
-
-	// Build email data (RFC 5322)
-	data := s.buildEmailData(&req)
-
-	// Envelope recipients = To + CC + BCC
-	envelopeTo := make([]string, 0, len(req.To)+len(req.CC)+len(req.BCC))
-	envelopeTo = append(envelopeTo, req.To...)
-	envelopeTo = append(envelopeTo, req.CC...)
-	envelopeTo = append(envelopeTo, req.BCC...)
-
-	// Create message
-	msg := &queue.Message{
-		ID:        uuid.New().String(),
-		From:      req.From,
-		To:        envelopeTo,
-		Data:      data,
-		Status:    queue.StatusPending,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-		ClientIP:  r.RemoteAddr,
 	}
 
 	// Enqueue
@@ -167,6 +105,170 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 		ID:     msg.ID,
 		Status: string(msg.Status),
 	})
+}
+
+// BatchSendRequest is the request body for POST /send/batch
+type BatchSendRequest struct {
+	Messages []SendRequest `json:"messages"`
+}
+
+// BatchSendResultItem represents the result for a single message in a batch.
+type BatchSendResultItem struct {
+	Index  int    `json:"index"`
+	ID     string `json:"id,omitempty"`
+	Status string `json:"status,omitempty"`
+	Error  string `json:"error,omitempty"`
+}
+
+// BatchSendResponse is the response for POST /send/batch
+type BatchSendResponse struct {
+	Accepted int                   `json:"accepted"`
+	Rejected int                   `json:"rejected"`
+	Results  []BatchSendResultItem `json:"results"`
+}
+
+// maxBatchSize limits how many messages a single batch request may contain.
+const maxBatchSize = 1000
+
+// handleSendBatch handles POST /api/v1/send/batch.
+// Accepts an array of messages, validates each one, and enqueues all valid
+// messages in a single BoltDB transaction. Invalid messages are reported in
+// the response without blocking the rest of the batch.
+func (s *Server) handleSendBatch(w http.ResponseWriter, r *http.Request) {
+	var req BatchSendRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.sendError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if len(req.Messages) == 0 {
+		s.sendError(w, http.StatusBadRequest, "messages is required")
+		return
+	}
+	if len(req.Messages) > maxBatchSize {
+		s.sendError(w, http.StatusRequestEntityTooLarge,
+			fmt.Sprintf("batch too large: %d messages (max %d)", len(req.Messages), maxBatchSize))
+		return
+	}
+
+	results := make([]BatchSendResultItem, len(req.Messages))
+	toEnqueue := make([]*queue.Message, 0, len(req.Messages))
+	accepted := 0
+	rejected := 0
+
+	for i := range req.Messages {
+		msg, status, errMsg := s.buildMessageFromRequest(&req.Messages[i], r.RemoteAddr)
+		if msg == nil {
+			results[i] = BatchSendResultItem{Index: i, Error: errMsg}
+			rejected++
+			_ = status
+			continue
+		}
+		results[i] = BatchSendResultItem{
+			Index:  i,
+			ID:     msg.ID,
+			Status: string(msg.Status),
+		}
+		toEnqueue = append(toEnqueue, msg)
+		accepted++
+	}
+
+	if len(toEnqueue) > 0 {
+		if bs, ok := s.queue.(*queue.BoltStorage); ok {
+			if err := bs.EnqueueBatch(r.Context(), toEnqueue); err != nil {
+				s.logger.Error("failed to enqueue batch", "error", err, "size", len(toEnqueue))
+				s.sendError(w, http.StatusInternalServerError, "Failed to queue batch")
+				return
+			}
+		} else {
+			for _, msg := range toEnqueue {
+				if err := s.queue.Enqueue(r.Context(), msg); err != nil {
+					s.logger.Error("failed to enqueue message in batch", "id", msg.ID, "error", err)
+					// Mark the specific result as failed; continue with others.
+					for i := range results {
+						if results[i].ID == msg.ID {
+							results[i].Error = "Failed to queue message"
+							results[i].ID = ""
+							results[i].Status = ""
+							accepted--
+							rejected++
+							break
+						}
+					}
+				}
+			}
+		}
+	}
+
+	s.logger.Info("batch queued via API", "accepted", accepted, "rejected", rejected)
+
+	s.sendJSON(w, http.StatusAccepted, BatchSendResponse{
+		Accepted: accepted,
+		Rejected: rejected,
+		Results:  results,
+	})
+}
+
+// buildMessageFromRequest validates a SendRequest and builds a queue.Message.
+// On validation failure returns (nil, httpStatus, errorMessage).
+func (s *Server) buildMessageFromRequest(req *SendRequest, remoteAddr string) (*queue.Message, int, string) {
+	if req.From == "" {
+		return nil, http.StatusBadRequest, "from is required"
+	}
+	if _, err := mail.ParseAddress(req.From); err != nil {
+		return nil, http.StatusBadRequest, "invalid from address"
+	}
+	if len(req.To) == 0 {
+		return nil, http.StatusBadRequest, "to is required"
+	}
+	for _, to := range req.To {
+		if _, err := mail.ParseAddress(to); err != nil {
+			return nil, http.StatusBadRequest, fmt.Sprintf("invalid to address: %s", to)
+		}
+	}
+	for _, cc := range req.CC {
+		if _, err := mail.ParseAddress(cc); err != nil {
+			return nil, http.StatusBadRequest, fmt.Sprintf("invalid cc address: %s", cc)
+		}
+	}
+	for _, bcc := range req.BCC {
+		if _, err := mail.ParseAddress(bcc); err != nil {
+			return nil, http.StatusBadRequest, fmt.Sprintf("invalid bcc address: %s", bcc)
+		}
+	}
+	if req.Subject == "" && req.Body == "" && req.HTML == "" {
+		return nil, http.StatusBadRequest, "subject, body or html is required"
+	}
+
+	maxEmailSize := 10 * 1024 * 1024
+	if s.fullConfig != nil && s.fullConfig.SMTP.MaxMessageBytes > 0 {
+		maxEmailSize = s.fullConfig.SMTP.MaxMessageBytes
+	}
+	totalSize := len(req.Body) + len(req.HTML) + len(req.Subject)
+	if totalSize > maxEmailSize {
+		return nil, http.StatusRequestEntityTooLarge,
+			fmt.Sprintf("email content too large (max %d bytes)", maxEmailSize)
+	}
+
+	data := s.buildEmailData(req)
+
+	envelopeTo := make([]string, 0, len(req.To)+len(req.CC)+len(req.BCC))
+	envelopeTo = append(envelopeTo, req.To...)
+	envelopeTo = append(envelopeTo, req.CC...)
+	envelopeTo = append(envelopeTo, req.BCC...)
+
+	now := time.Now()
+	msg := &queue.Message{
+		ID:        uuid.New().String(),
+		From:      req.From,
+		To:        envelopeTo,
+		Data:      data,
+		Status:    queue.StatusPending,
+		CreatedAt: now,
+		UpdatedAt: now,
+		ClientIP:  remoteAddr,
+	}
+	return msg, http.StatusAccepted, ""
 }
 
 // handleStatus handles GET /api/v1/status/{id}

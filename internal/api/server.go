@@ -144,6 +144,7 @@ func (s *Server) setupRoutes() {
 		r.Use(s.authMiddleware)
 
 		r.Post("/send", s.handleSend)
+		r.Post("/send/batch", s.handleSendBatch)
 		r.Get("/status/{id}", s.handleStatus)
 		r.Get("/queue", s.handleQueue)
 		r.Delete("/queue/{id}", s.handleDeleteMessage)
