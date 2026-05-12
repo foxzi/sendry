@@ -4,12 +4,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/foxzi/sendry/internal/web/middleware"
 	"github.com/foxzi/sendry/internal/web/models"
 	"github.com/foxzi/sendry/internal/web/sendry"
+	smtpclient "github.com/foxzi/sendry/internal/web/smtp"
+	emailtpl "github.com/foxzi/sendry/internal/web/template"
 )
 
 func (h *Handlers) TemplateList(w http.ResponseWriter, r *http.Request) {
@@ -60,19 +64,6 @@ func (h *Handlers) TemplateList(w http.ResponseWriter, r *http.Request) {
 	h.render(w, "templates", data)
 }
 
-func (h *Handlers) TemplateNew(w http.ResponseWriter, r *http.Request) {
-	folders, _ := h.templates.GetFolders()
-
-	data := map[string]any{
-		"Title":   "New Template",
-		"Active":  "templates",
-		"User":    h.getUserFromContext(r),
-		"Folders": folders,
-	}
-
-	h.render(w, "template_new", data)
-}
-
 func (h *Handlers) TemplateCreate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		h.error(w, http.StatusBadRequest, "Invalid form data")
@@ -95,6 +86,11 @@ func (h *Handlers) TemplateCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	blockRefs := parseBlockRefs(r.FormValue("block_refs"))
+	if len(blockRefs) > 0 {
+		t.UseBlocks = true
+	}
+
 	user := h.getUserFromContext(r)
 	if err := h.templates.Create(t, user["Email"].(string)); err != nil {
 		h.logger.Error("failed to create template", "error", err)
@@ -102,9 +98,56 @@ func (h *Handlers) TemplateCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(blockRefs) > 0 {
+		if err := h.templates.SetBlockRefs(t.ID, blockRefs); err != nil {
+			h.logger.Error("failed to save block refs", "template_id", t.ID, "error", err)
+		}
+	}
+
 	h.settings.LogAction(r, middleware.GetUserID(r), user["Email"].(string),
 		"create", "template", t.ID, `{"name":"`+t.Name+`"}`)
 	http.Redirect(w, r, "/templates/"+t.ID, http.StatusSeeOther)
+}
+
+func parseBlockRefs(raw string) []models.TemplateBlockRef {
+	if raw == "" {
+		return nil
+	}
+	type wireRef struct {
+		BlockID   string `json:"block_id"`
+		GapHeight int    `json:"gap_height"`
+		GapColor  string `json:"gap_color"`
+		Condition string `json:"condition"`
+	}
+	var rich []wireRef
+	if err := json.Unmarshal([]byte(raw), &rich); err == nil {
+		out := make([]models.TemplateBlockRef, 0, len(rich))
+		for _, r := range rich {
+			if r.BlockID == "" {
+				continue
+			}
+			out = append(out, models.TemplateBlockRef{
+				BlockID:   r.BlockID,
+				GapHeight: r.GapHeight,
+				GapColor:  r.GapColor,
+				Condition: sanitizeIdentifier(r.Condition),
+			})
+		}
+		if len(out) > 0 {
+			return out
+		}
+	}
+	var ids []string
+	if err := json.Unmarshal([]byte(raw), &ids); err != nil {
+		return nil
+	}
+	out := make([]models.TemplateBlockRef, 0, len(ids))
+	for _, id := range ids {
+		if id != "" {
+			out = append(out, models.TemplateBlockRef{BlockID: id})
+		}
+	}
+	return out
 }
 
 func (h *Handlers) TemplateView(w http.ResponseWriter, r *http.Request) {
@@ -147,43 +190,18 @@ func (h *Handlers) TemplateView(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	skeleton, _ := json.MarshalIndent(buildSampleData(t.HTML+" "+t.Subject), "", "  ")
 	data := map[string]any{
-		"Title":       t.Name,
-		"Active":      "templates",
-		"User":        h.getUserFromContext(r),
-		"Template":    t,
-		"Deployments": deployments,
-		"Servers":     servers,
+		"Title":          t.Name,
+		"Active":         "templates",
+		"User":           h.getUserFromContext(r),
+		"Template":       t,
+		"Deployments":    deployments,
+		"Servers":        servers,
+		"VariablesShape": string(skeleton),
 	}
 
 	h.render(w, "template_view", data)
-}
-
-func (h *Handlers) TemplateEdit(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-
-	t, err := h.templates.GetByID(id)
-	if err != nil {
-		h.logger.Error("failed to get template", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load template")
-		return
-	}
-	if t == nil {
-		h.error(w, http.StatusNotFound, "Template not found")
-		return
-	}
-
-	folders, _ := h.templates.GetFolders()
-
-	data := map[string]any{
-		"Title":    "Edit " + t.Name,
-		"Active":   "templates",
-		"User":     h.getUserFromContext(r),
-		"Template": t,
-		"Folders":  folders,
-	}
-
-	h.render(w, "template_edit", data)
 }
 
 func (h *Handlers) TemplateUpdate(w http.ResponseWriter, r *http.Request) {
@@ -208,6 +226,12 @@ func (h *Handlers) TemplateUpdate(w http.ResponseWriter, r *http.Request) {
 	t.Variables = r.FormValue("variables")
 	t.Folder = r.FormValue("folder")
 
+	rawRefs := strings.TrimSpace(r.FormValue("block_refs"))
+	blockRefs := parseBlockRefs(rawRefs)
+	if rawRefs != "" && rawRefs != "null" {
+		t.UseBlocks = len(blockRefs) > 0
+	}
+
 	changeNote := r.FormValue("change_note")
 	if changeNote == "" {
 		changeNote = "Updated template"
@@ -218,6 +242,12 @@ func (h *Handlers) TemplateUpdate(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("failed to update template", "error", err)
 		h.error(w, http.StatusInternalServerError, "Failed to update template")
 		return
+	}
+
+	if rawRefs != "" {
+		if err := h.templates.SetBlockRefs(t.ID, blockRefs); err != nil {
+			h.logger.Error("failed to update block refs", "template_id", t.ID, "error", err)
+		}
 	}
 
 	h.settings.LogAction(r, middleware.GetUserID(r), user["Email"].(string),
@@ -600,12 +630,21 @@ func (h *Handlers) TemplateTestPage(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	userSMTP, err := h.userSMTP.ListByUser(middleware.GetUserID(r))
+	if err != nil {
+		h.logger.Error("list user smtp", "error", err)
+	}
+
+	sampleJSON, _ := json.MarshalIndent(buildSampleData(t.HTML+" "+t.Subject), "", "  ")
+
 	data := map[string]any{
-		"Title":    "Send Test Email - " + t.Name,
-		"Active":   "templates",
-		"User":     h.getUserFromContext(r),
-		"Template": t,
-		"Servers":  servers,
+		"Title":      "Send Test Email - " + t.Name,
+		"Active":     "templates",
+		"User":       h.getUserFromContext(r),
+		"Template":   t,
+		"Servers":    servers,
+		"UserSMTP":   userSMTP,
+		"SampleJSON": string(sampleJSON),
 	}
 
 	h.render(w, "template_test", data)
@@ -625,51 +664,59 @@ func (h *Handlers) TemplateTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	serverName := r.FormValue("server")
-	to := r.FormValue("to")
-	from := r.FormValue("from")
-
-	if serverName == "" || to == "" || from == "" {
-		h.error(w, http.StatusBadRequest, "Server, from, and to are required")
+	transport := r.FormValue("transport")
+	if transport == "" {
+		transport = "sendry"
+	}
+	to := strings.TrimSpace(r.FormValue("to"))
+	if to == "" {
+		h.error(w, http.StatusBadRequest, "Recipient (to) is required")
 		return
 	}
 
-	// Get Sendry client
+	sampleData := map[string]any{}
+	if varsJSON := strings.TrimSpace(r.FormValue("variables")); varsJSON != "" {
+		if err := json.Unmarshal([]byte(varsJSON), &sampleData); err != nil {
+			h.error(w, http.StatusBadRequest, "Invalid JSON in 'Sample data': "+err.Error())
+			return
+		}
+	}
+
+	if transport == "smtp" {
+		h.testSendViaSMTP(w, r, t, to, sampleData)
+		return
+	}
+
+	serverName := r.FormValue("server")
+	from := strings.TrimSpace(r.FormValue("from"))
+	if serverName == "" || from == "" {
+		h.error(w, http.StatusBadRequest, "Server and from are required for Sendry transport")
+		return
+	}
 	client, err := h.sendry.GetClient(serverName)
 	if err != nil {
 		h.error(w, http.StatusBadRequest, "Server not found: "+serverName)
 		return
 	}
 
-	// Get global variables for substitution
 	globalVars, err := h.settings.GetGlobalVariablesMap()
 	if err != nil {
 		h.logger.Error("failed to get global variables", "error", err)
 		globalVars = make(map[string]string)
 	}
-
-	// Merge request variables (override global)
-	if varsJSON := r.FormValue("variables"); varsJSON != "" {
-		var reqVars map[string]any
-		if err := json.Unmarshal([]byte(varsJSON), &reqVars); err == nil {
-			for k, v := range reqVars {
-				if s, ok := v.(string); ok {
-					globalVars[k] = s
-				} else {
-					globalVars[k] = fmt.Sprintf("%v", v)
-				}
-			}
+	for k, v := range sampleData {
+		if s, ok := v.(string); ok {
+			globalVars[k] = s
+		} else {
+			globalVars[k] = fmt.Sprintf("%v", v)
 		}
 	}
 
-	// Render template with variables
 	subject := renderTemplateVars(t.Subject, globalVars)
 	html := renderTemplateVars(t.HTML, globalVars)
 	text := renderTemplateVars(t.Text, globalVars)
-
 	html = makeAbsoluteURLs(html, h.cfg.Server.PublicURL, h.cfg.Server.PublicUploadURL)
 
-	// Send test email
 	req := &sendry.SendRequest{
 		From:    from,
 		To:      []string{to},
@@ -677,7 +724,6 @@ func (h *Handlers) TemplateTest(w http.ResponseWriter, r *http.Request) {
 		HTML:    html,
 		Body:    text,
 	}
-
 	ctx := r.Context()
 	resp, err := client.Send(ctx, req)
 	if err != nil {
@@ -685,12 +731,70 @@ func (h *Handlers) TemplateTest(w http.ResponseWriter, r *http.Request) {
 		h.error(w, http.StatusInternalServerError, "Failed to send test email: "+err.Error())
 		return
 	}
-
 	user := h.getUserFromContext(r)
 	h.logger.Info("test email sent", "template_id", id, "server", serverName, "to", to, "message_id", resp.ID, "user", user["Email"].(string))
-
-	// Redirect back to template with success message
 	http.Redirect(w, r, "/templates/"+id+"?test_sent=1", http.StatusSeeOther)
+}
+
+func (h *Handlers) testSendViaSMTP(w http.ResponseWriter, r *http.Request, t *models.Template, to string, sampleData map[string]any) {
+	if h.cipher == nil {
+		h.error(w, http.StatusServiceUnavailable, "Encryption not configured. Set auth.encryption_key in web.yaml.")
+		return
+	}
+	smtpID := r.FormValue("smtp_id")
+	if smtpID == "" {
+		h.error(w, http.StatusBadRequest, "SMTP server is required")
+		return
+	}
+	userID := middleware.GetUserID(r)
+	srv, err := h.userSMTP.GetByID(smtpID, userID)
+	if err != nil || srv == nil {
+		h.error(w, http.StatusBadRequest, "SMTP server not found")
+		return
+	}
+	password, err := h.cipher.Decrypt(srv.PasswordEnc)
+	if err != nil {
+		h.logger.Error("decrypt smtp password", "error", err)
+		h.error(w, http.StatusInternalServerError, "Failed to decrypt SMTP password")
+		return
+	}
+
+	subject, err := emailtpl.RenderHTML("subject", t.Subject, sampleData)
+	if err != nil {
+		h.error(w, http.StatusBadRequest, "Render subject: "+err.Error())
+		return
+	}
+	html, err := emailtpl.RenderHTML("body", t.HTML, sampleData)
+	if err != nil {
+		h.error(w, http.StatusBadRequest, "Render HTML: "+err.Error())
+		return
+	}
+	html = makeAbsoluteURLs(html, h.cfg.Server.PublicURL, h.cfg.Server.PublicUploadURL)
+
+	err = smtpclient.Send(smtpclient.Server{
+		Host:       srv.Host,
+		Port:       srv.Port,
+		Username:   srv.Username,
+		Password:   password,
+		Encryption: smtpclient.Encryption(srv.Encryption),
+	}, smtpclient.Message{
+		From:     srv.FromAddress,
+		FromName: srv.FromName,
+		To:       []string{to},
+		Subject:  "[TEST] " + subject,
+		HTML:     html,
+	})
+	if err != nil {
+		h.logger.Error("smtp test send", "template_id", t.ID, "smtp_id", smtpID, "error", err)
+		h.error(w, http.StatusInternalServerError, "SMTP send failed: "+err.Error())
+		return
+	}
+	user := h.getUserFromContext(r)
+	email, _ := user["Email"].(string)
+	h.logger.Info("smtp test email sent", "template_id", t.ID, "smtp_id", smtpID, "to", to, "user", email)
+	h.settings.LogAction(r, userID, email, "test_send", "template", t.ID,
+		auditJSON(map[string]any{"to": to, "smtp_id": smtpID}))
+	http.Redirect(w, r, "/templates/"+t.ID+"?test_sent=1", http.StatusSeeOther)
 }
 
 // renderTemplateVars replaces {{var}} with values from vars map
@@ -821,4 +925,174 @@ func containsChar(s string, c byte) bool {
 		}
 	}
 	return false
+}
+
+func buildSampleData(body string) map[string]any {
+	out := map[string]any{}
+	collectIntoMap(body, out)
+	return out
+}
+
+const identPathPat = `[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*`
+
+var (
+	templateIfRE  = regexp.MustCompile(`\{\{\s*if\s+\.?(` + identPathPat + `)\s*\}\}`)
+	templateVarRE = regexp.MustCompile(`\{\{\s*\.?(` + identPathPat + `)\s*\}\}`)
+)
+
+var templateReservedKeywords = map[string]bool{
+	"end": true, "else": true, "with": true, "range": true,
+	"if": true, "block": true, "define": true, "template": true,
+}
+
+func setNestedKey(out map[string]any, path string, value any) {
+	parts := strings.Split(path, ".")
+	cur := out
+	for i, p := range parts {
+		if i == len(parts)-1 {
+			if _, exists := cur[p]; !exists {
+				cur[p] = value
+			}
+			return
+		}
+		next, ok := cur[p].(map[string]any)
+		if !ok {
+			next = map[string]any{}
+			cur[p] = next
+		}
+		cur = next
+	}
+}
+
+func collectIntoMap(body string, out map[string]any) {
+	stripped := stripTopLevelRanges(body, out)
+	for _, m := range templateIfRE.FindAllStringSubmatch(stripped, -1) {
+		name := m[1]
+		if templateReservedKeywords[name] {
+			continue
+		}
+		setNestedKey(out, name, sampleValueFor(lastSegment(name)))
+	}
+	for _, m := range templateVarRE.FindAllStringSubmatch(stripped, -1) {
+		name := m[1]
+		if templateReservedKeywords[name] {
+			continue
+		}
+		setNestedKey(out, name, sampleValueFor(lastSegment(name)))
+	}
+}
+
+func stripTopLevelRanges(body string, out map[string]any) string {
+	var sb strings.Builder
+	i := 0
+	for i < len(body) {
+		idx := strings.Index(body[i:], "{{")
+		if idx < 0 {
+			sb.WriteString(body[i:])
+			break
+		}
+		idx += i
+		sb.WriteString(body[i:idx])
+		end := strings.Index(body[idx:], "}}")
+		if end < 0 {
+			sb.WriteString(body[idx:])
+			break
+		}
+		end += idx + 2
+		action := body[idx:end]
+		rmatch := topRangeStart.FindStringSubmatch(action)
+		if rmatch == nil {
+			sb.WriteString(action)
+			i = end
+			continue
+		}
+		listName := rmatch[1]
+		bodyStart := end
+		bodyEnd, blockEnd := findMatchingEnd(body, bodyStart)
+		if bodyEnd < 0 {
+			sb.WriteString(action)
+			i = end
+			continue
+		}
+		inner := body[bodyStart:bodyEnd]
+		element := map[string]any{}
+		collectIntoMap(inner, element)
+		setNestedKey(out, listName, []any{element})
+		i = blockEnd
+	}
+	return sb.String()
+}
+
+var topRangeStart = regexp.MustCompile(`^\{\{\s*range\s+\.?(` + identPathPat + `)\s*\}\}$`)
+
+var (
+	blockOpenRE  = regexp.MustCompile(`\{\{\s*(range|if|with|block|define)\b[^}]*\}\}`)
+	blockCloseRE = regexp.MustCompile(`\{\{\s*end\s*\}\}`)
+)
+
+func findMatchingEnd(body string, start int) (int, int) {
+	depth := 1
+	pos := start
+	for pos < len(body) {
+		nextOpen := blockOpenRE.FindStringIndex(body[pos:])
+		nextClose := blockCloseRE.FindStringIndex(body[pos:])
+		if nextClose == nil {
+			return -1, -1
+		}
+		if nextOpen != nil && nextOpen[0] < nextClose[0] {
+			depth++
+			pos += nextOpen[1]
+			continue
+		}
+		depth--
+		if depth == 0 {
+			return pos + nextClose[0], pos + nextClose[1]
+		}
+		pos += nextClose[1]
+	}
+	return -1, -1
+}
+
+func lastSegment(path string) string {
+	if i := strings.LastIndex(path, "."); i >= 0 {
+		return path[i+1:]
+	}
+	return path
+}
+
+func sampleValueFor(name string) string {
+	low := strings.ToLower(name)
+	switch {
+	case strings.Contains(low, "email"):
+		return "user@example.com"
+	case strings.Contains(low, "url") || strings.Contains(low, "link"):
+		return "https://example.com"
+	case strings.Contains(low, "phone"):
+		return "+7 999 123-45-67"
+	case strings.Contains(low, "year"):
+		return "2026"
+	case strings.Contains(low, "date"):
+		return "2026-01-01"
+	case strings.Contains(low, "price") || strings.Contains(low, "amount") || strings.Contains(low, "total") || strings.Contains(low, "sum"):
+		return "100 ₽"
+	case strings.Contains(low, "percent"):
+		return "10%"
+	case strings.Contains(low, "quantity") || strings.Contains(low, "count"):
+		return "1"
+	case strings.Contains(low, "number") || strings.HasSuffix(low, "id"):
+		return "12345"
+	case strings.Contains(low, "name"):
+		return "Sample " + name
+	}
+	return "Sample " + name
+}
+
+var identifierRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+func sanitizeIdentifier(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" || !identifierRE.MatchString(s) {
+		return ""
+	}
+	return s
 }
