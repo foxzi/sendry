@@ -40,6 +40,8 @@ type AuthConfig struct {
 	SessionSecret string        `yaml:"session_secret"`
 	SessionTTL    time.Duration `yaml:"session_ttl"`
 	OIDC          OIDCConfig    `yaml:"oidc"`
+
+	EncryptionKey string `yaml:"encryption_key"`
 }
 
 type OIDCConfig struct {
