@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.18] - 2026-05-12
+
 ### Added
 - Documentation: `docs/analytics.md` and `docs/analytics.ru.md` describing why current telemetry is monitoring, not analytics, and proposing a dedicated `sendry-analytics` service with event log, open/click tracking, VERP bounce handler, and a SQLite-to-ClickHouse migration path
 - Documentation: `docs/scaling.md` and `docs/scaling.ru.md` describing bottlenecks for large mailings and a staged plan to scale (batch API, webhook events, SMTP connection reuse, optional `sendry-dispatcher`, optional broker)

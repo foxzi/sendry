@@ -167,7 +167,7 @@ You can set these in `.env` file or pass directly:
 
 ```bash
 # .env
-VERSION=0.4.17
+VERSION=0.4.18
 TZ=Europe/Moscow
 ```
 
