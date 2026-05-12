@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -57,6 +59,8 @@ func (db *DB) Migrate() error {
 		migrationSends,
 		migrationEmailBlocks,
 		migrationMediaFiles,
+		migrationTemplateBlockRefs,
+		migrationUserSMTPServers,
 	}
 
 	for _, m := range migrations {
@@ -75,12 +79,155 @@ func (db *DB) Migrate() error {
 		"ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'",
 		"ALTER TABLE users ADD COLUMN password_hash TEXT",
 		"UPDATE users SET role = 'admin' WHERE id = (SELECT id FROM users ORDER BY created_at ASC LIMIT 1)",
+		"ALTER TABLE templates ADD COLUMN use_blocks INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE template_block_refs ADD COLUMN gap_height INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE template_block_refs ADD COLUMN gap_color TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE templates ADD COLUMN container_radius INTEGER NOT NULL DEFAULT 8",
+		"ALTER TABLE templates ADD COLUMN container_transparent INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE templates ADD COLUMN container_width INTEGER NOT NULL DEFAULT 600",
+		"ALTER TABLE templates ADD COLUMN container_padding_v INTEGER NOT NULL DEFAULT 20",
+		"ALTER TABLE templates ADD COLUMN container_padding_h INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE email_blocks ADD COLUMN border_radius INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE email_blocks ADD COLUMN padding_v INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE email_blocks ADD COLUMN padding_h INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE email_blocks ADD COLUMN background TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE templates ADD COLUMN page_background TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE templates ADD COLUMN container_radius_top INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE templates ADD COLUMN container_radius_bottom INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE template_block_refs ADD COLUMN condition TEXT NOT NULL DEFAULT ''",
 	}
 	for _, m := range alterMigrations {
 		db.Exec(m) // Ignore errors (column may already exist)
 	}
 
+	if err := db.dropColumnIfExists("templates", "container_background"); err != nil {
+		return fmt.Errorf("drop container_background: %w", err)
+	}
+	if err := db.dropColumnIfExists("templates", "block_divider_width"); err != nil {
+		return fmt.Errorf("drop block_divider_width: %w", err)
+	}
+	if err := db.dropColumnIfExists("templates", "block_divider_color"); err != nil {
+		return fmt.Errorf("drop block_divider_color: %w", err)
+	}
+
 	return nil
+}
+
+func (db *DB) dropColumnIfExists(table, column string) error {
+	if !db.columnExists(table, column) {
+		return nil
+	}
+	if _, err := db.Exec(fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s", table, column)); err == nil {
+		return nil
+	}
+	if _, err := db.Exec("PRAGMA foreign_keys = OFF"); err != nil {
+		return fmt.Errorf("disable fk: %w", err)
+	}
+	defer db.Exec("PRAGMA foreign_keys = ON")
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	cols, err := tableColumnsExcept(tx, table, column)
+	if err != nil {
+		return err
+	}
+	if len(cols) == 0 {
+		return fmt.Errorf("table %s has no columns left after removing %s", table, column)
+	}
+
+	createSQL, err := tableCreateSQLWithoutColumn(tx, table, column)
+	if err != nil {
+		return err
+	}
+
+	tmp := table + "__migrated"
+	createSQL = replaceTableName(createSQL, table, tmp)
+	if _, err := tx.Exec(createSQL); err != nil {
+		return fmt.Errorf("create temp: %w", err)
+	}
+	colList := strings.Join(cols, ", ")
+	if _, err := tx.Exec(fmt.Sprintf("INSERT INTO %s (%s) SELECT %s FROM %s", tmp, colList, colList, table)); err != nil {
+		return fmt.Errorf("copy rows: %w", err)
+	}
+	if _, err := tx.Exec(fmt.Sprintf("DROP TABLE %s", table)); err != nil {
+		return fmt.Errorf("drop original: %w", err)
+	}
+	if _, err := tx.Exec(fmt.Sprintf("ALTER TABLE %s RENAME TO %s", tmp, table)); err != nil {
+		return fmt.Errorf("rename: %w", err)
+	}
+	return tx.Commit()
+}
+
+func (db *DB) columnExists(table, column string) bool {
+	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return false
+		}
+		if name == column {
+			return true
+		}
+	}
+	return false
+}
+
+func tableColumnsExcept(tx *sql.Tx, table, except string) ([]string, error) {
+	rows, err := tx.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var cols []string
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return nil, err
+		}
+		if name == except {
+			continue
+		}
+		cols = append(cols, name)
+	}
+	return cols, nil
+}
+
+func tableCreateSQLWithoutColumn(tx *sql.Tx, table, column string) (string, error) {
+	var sqlText string
+	err := tx.QueryRow(`SELECT sql FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&sqlText)
+	if err != nil {
+		return "", err
+	}
+	var out []string
+	colRE := regexp.MustCompile(`(?i)^\s*` + regexp.QuoteMeta(column) + `\s+`)
+	for _, line := range strings.Split(sqlText, "\n") {
+		if colRE.MatchString(line) {
+			continue
+		}
+		out = append(out, line)
+	}
+	rebuilt := strings.Join(out, "\n")
+	rebuilt = regexp.MustCompile(`,\s*\)`).ReplaceAllString(rebuilt, "\n)")
+	return rebuilt, nil
+}
+
+func replaceTableName(createSQL, oldName, newName string) string {
+	re := regexp.MustCompile(`(?i)(CREATE\s+TABLE\s+(IF\s+NOT\s+EXISTS\s+)?["` + "`" + `]?)` + regexp.QuoteMeta(oldName) + `(["` + "`" + `]?)`)
+	return re.ReplaceAllString(createSQL, "${1}"+newName+"${3}")
 }
 
 const migrationUsers = `
@@ -116,6 +263,15 @@ CREATE TABLE IF NOT EXISTS templates (
     variables JSON,
     folder TEXT,
     current_version INTEGER DEFAULT 1,
+    use_blocks INTEGER NOT NULL DEFAULT 0,
+    container_radius INTEGER NOT NULL DEFAULT 8,
+    container_transparent INTEGER NOT NULL DEFAULT 0,
+    container_width INTEGER NOT NULL DEFAULT 600,
+    container_padding_v INTEGER NOT NULL DEFAULT 20,
+    container_padding_h INTEGER NOT NULL DEFAULT 0,
+    page_background TEXT NOT NULL DEFAULT '',
+    container_radius_top INTEGER NOT NULL DEFAULT 0,
+    container_radius_bottom INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -387,6 +543,10 @@ CREATE TABLE IF NOT EXISTS email_blocks (
     category TEXT NOT NULL DEFAULT 'general',
     html TEXT NOT NULL,
     preview_text TEXT,
+    border_radius INTEGER NOT NULL DEFAULT 0,
+    padding_v INTEGER NOT NULL DEFAULT 0,
+    padding_h INTEGER NOT NULL DEFAULT 0,
+    background TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -403,4 +563,37 @@ CREATE TABLE IF NOT EXISTS media_files (
     url TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+`
+
+const migrationTemplateBlockRefs = `
+CREATE TABLE IF NOT EXISTS template_block_refs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    template_id TEXT NOT NULL REFERENCES templates(id) ON DELETE CASCADE,
+    block_id TEXT NOT NULL REFERENCES email_blocks(id),
+    position INTEGER NOT NULL,
+    gap_height INTEGER NOT NULL DEFAULT 0,
+    gap_color TEXT NOT NULL DEFAULT '',
+    condition TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_template_block_refs_template ON template_block_refs(template_id, position);
+CREATE INDEX IF NOT EXISTS idx_template_block_refs_block ON template_block_refs(block_id);
+`
+
+const migrationUserSMTPServers = `
+CREATE TABLE IF NOT EXISTS user_smtp_servers (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    host TEXT NOT NULL,
+    port INTEGER NOT NULL,
+    username TEXT NOT NULL,
+    password_enc TEXT NOT NULL,
+    encryption TEXT NOT NULL DEFAULT 'ssl',
+    from_address TEXT NOT NULL,
+    from_name TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_user_smtp_servers_user ON user_smtp_servers(user_id);
 `

@@ -13,38 +13,77 @@
             <h2>Send Test</h2>
         </div>
         <div class="card-body">
-            {{if .Servers}}
             <form method="POST" action="/templates/{{.Template.ID}}/test">
                 <div class="form-group">
-                    <label for="server">Server</label>
-                    <select name="server" id="server" class="form-control" required>
+                    <label>Send through</label>
+                    <div style="display:flex; gap:1rem; align-items:center; margin-bottom:0.5rem;">
+                        <label style="display:flex; align-items:center; gap:0.4rem; font-weight:normal;">
+                            <input type="radio" name="transport" value="sendry"
+                                {{if .Servers}}checked{{end}}>
+                            Sendry server
+                        </label>
+                        <label style="display:flex; align-items:center; gap:0.4rem; font-weight:normal;">
+                            <input type="radio" name="transport" value="smtp"
+                                {{if not .Servers}}checked{{end}}>
+                            My SMTP
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group" data-transport="sendry">
+                    <label for="server">Sendry server</label>
+                    {{if .Servers}}
+                    <select name="server" id="server" class="form-control input">
                         <option value="">Select server...</option>
                         {{range .Servers}}
                         <option value="{{.Name}}">{{.Name}} ({{.Env}})</option>
                         {{end}}
                     </select>
-                    <span class="form-help">Choose a server to send through</span>
+                    {{else}}
+                    <p class="text-muted" style="margin:0;">No sendry servers configured.</p>
+                    {{end}}
+                </div>
+
+                <div class="form-group" data-transport="smtp">
+                    <label for="smtp_id">My SMTP server</label>
+                    <div style="display:flex; gap:0.5rem; align-items:center;">
+                        <select name="smtp_id" id="smtp_id" class="form-control input" style="flex:1;">
+                            <option value="">{{if .UserSMTP}}Select SMTP...{{else}}No servers — add one →{{end}}</option>
+                            {{range .UserSMTP}}
+                            <option value="{{.ID}}">{{.Name}} — {{.Host}}:{{.Port}}</option>
+                            {{end}}
+                        </select>
+                        <button type="button" class="btn btn-sm btn-secondary" id="smtp-mgr-toggle">
+                            Manage SMTP
+                        </button>
+                    </div>
                 </div>
 
                 <div class="form-group">
-                    <label for="from">From</label>
-                    <input type="email" name="from" id="from" class="form-control" required placeholder="sender@example.com">
-                    <span class="form-help">Sender email address</span>
+                    <label for="from">From <span class="text-muted" style="font-weight:normal;">(sendry only)</span></label>
+                    <input type="email" name="from" id="from" class="form-control input" placeholder="sender@example.com">
+                    <span class="form-help">Sendry server only — for SMTP we use the server's own from address.</span>
                 </div>
 
                 <div class="form-group">
-                    <label for="to">To</label>
-                    <input type="email" name="to" id="to" class="form-control" required placeholder="recipient@example.com">
-                    <span class="form-help">Your email to receive the test</span>
+                    <label for="to">To *</label>
+                    <input type="email" name="to" id="to" class="form-control input" required placeholder="recipient@example.com">
+                </div>
+
+                <div class="form-group">
+                    <label for="variables" style="display:flex; align-items:center; justify-content:space-between;">
+                        <span>Sample data (JSON)</span>
+                        <button type="button" class="btn btn-sm btn-secondary" id="reset-sample">Reset to auto-generated</button>
+                    </label>
+                    <textarea name="variables" id="variables" rows="14" class="form-control input"
+                        style="font-family:monospace; font-size:13px;">{{.SampleJSON}}</textarea>
+                    <span class="form-help">Auto-generated from the template's variables. Edit values as needed; arrays and {{"{{range}}"}} blocks supported.</span>
                 </div>
 
                 <div class="form-group">
                     <button type="submit" class="btn btn-primary">Send Test Email</button>
                 </div>
             </form>
-            {{else}}
-            <p class="empty-state">No servers configured. Add servers in config to send test emails.</p>
-            {{end}}
         </div>
     </div>
 
@@ -74,6 +113,102 @@
     </div>
 </div>
 
+<div id="smtp-mgr-overlay"
+     style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; align-items:flex-start; justify-content:center; padding:3rem 1rem; overflow-y:auto;">
+<div class="card" id="smtp-mgr-card" style="max-width:780px; width:100%; max-height:calc(100vh - 4rem); overflow-y:auto; background:var(--bg, #fff);">
+    <div class="card-header" style="display:flex; align-items:center; justify-content:space-between;">
+        <h2 style="margin:0;">My SMTP servers</h2>
+        <div style="display:flex; gap:0.5rem;">
+            <button type="button" class="btn btn-sm btn-primary" id="smtp-add-toggle">+ Add server</button>
+            <button type="button" class="btn btn-sm btn-secondary" id="smtp-mgr-close" aria-label="Close">✕</button>
+        </div>
+    </div>
+    <div class="card-body">
+        <div id="smtp-form-wrap" style="display:none; border:1px solid var(--border); border-radius:var(--radius); padding:1rem; margin-bottom:1rem;">
+            <h3 style="margin-top:0;">Add SMTP server</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Name *</label>
+                    <input type="text" id="smtp-form-name" class="input" placeholder="My mail.ru">
+                </div>
+                <div class="form-group">
+                    <label>Encryption</label>
+                    <select id="smtp-form-encryption" class="input">
+                        <option value="ssl">SSL/TLS (465)</option>
+                        <option value="starttls">STARTTLS (587)</option>
+                        <option value="none">None</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group" style="flex:2;">
+                    <label>Host *</label>
+                    <input type="text" id="smtp-form-host" class="input" placeholder="smtp.mail.ru">
+                </div>
+                <div class="form-group">
+                    <label>Port *</label>
+                    <input type="number" id="smtp-form-port" class="input" value="465" min="1" max="65535">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Username *</label>
+                    <input type="text" id="smtp-form-username" class="input" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label>Password *</label>
+                    <input type="password" id="smtp-form-password" class="input" autocomplete="new-password">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>From address *</label>
+                    <input type="email" id="smtp-form-from-address" class="input" placeholder="noreply@example.com">
+                </div>
+                <div class="form-group">
+                    <label>From name</label>
+                    <input type="text" id="smtp-form-from-name" class="input">
+                </div>
+            </div>
+            <div style="display:flex; gap:0.5rem; align-items:center; margin-top:0.5rem;">
+                <button type="button" class="btn btn-primary btn-sm" id="smtp-form-save">Save</button>
+                <button type="button" class="btn btn-secondary btn-sm" id="smtp-form-cancel">Cancel</button>
+                <span id="smtp-form-status" class="text-muted" style="font-size:0.85rem;"></span>
+            </div>
+        </div>
+
+        <table class="table" id="smtp-list-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Host : Port</th>
+                    <th>Encryption</th>
+                    <th>From</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="smtp-list-body">
+                {{range .UserSMTP}}
+                <tr data-smtp-row="{{.ID}}">
+                    <td>{{.Name}}</td>
+                    <td><code>{{.Host}}:{{.Port}}</code></td>
+                    <td><span class="badge">{{.Encryption}}</span></td>
+                    <td>{{if .FromName}}{{.FromName}} &lt;{{.FromAddress}}&gt;{{else}}{{.FromAddress}}{{end}}</td>
+                    <td style="text-align:right; white-space:nowrap;">
+                        <button type="button" class="btn btn-sm btn-secondary" data-smtp-test="{{.ID}}">Test</button>
+                        <button type="button" class="btn btn-sm btn-danger" data-smtp-delete="{{.ID}}">Delete</button>
+                    </td>
+                </tr>
+                {{end}}
+                {{if not .UserSMTP}}
+                <tr id="smtp-empty-row"><td colspan="5" class="text-muted" style="text-align:center;">No SMTP servers yet.</td></tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+</div>
+
 <div class="card">
     <div class="card-header">
         <h2>Notes</h2>
@@ -87,4 +222,157 @@
         </ul>
     </div>
 </div>
+
+<script>
+(function() {
+    function applyTransport() {
+        var v = document.querySelector('input[name=transport]:checked');
+        if (!v) return;
+        var smtp = v.value === 'smtp';
+        document.querySelectorAll('[data-transport=sendry]').forEach(function(el) {
+            el.style.display = smtp ? 'none' : '';
+        });
+        document.querySelectorAll('[data-transport=smtp]').forEach(function(el) {
+            el.style.display = smtp ? '' : 'none';
+        });
+        var fromInput = document.getElementById('from');
+        if (fromInput) {
+            fromInput.disabled = smtp;
+            fromInput.required = !smtp;
+        }
+        var smtpSel = document.getElementById('smtp_id');
+        if (smtpSel) smtpSel.required = smtp;
+        var srvSel = document.getElementById('server');
+        if (srvSel) srvSel.required = !smtp;
+    }
+    document.querySelectorAll('input[name=transport]').forEach(function(r) {
+        r.addEventListener('change', applyTransport);
+    });
+    applyTransport();
+
+    var varsTa = document.getElementById('variables');
+    var resetBtn = document.getElementById('reset-sample');
+    var defaultSample = varsTa ? varsTa.value : '';
+    if (resetBtn) {
+        resetBtn.addEventListener('click', function() {
+            if (varsTa) varsTa.value = defaultSample;
+        });
+    }
+
+    // ---------- inline SMTP management ----------
+    // The "Manage SMTP" toggle reveals an in-page CRUD card so users can
+    // add/test/delete servers without leaving the test page. All ops go
+    // through the same JSON endpoints used by /settings/smtp; we just
+    // skip the redirect-based form pages.
+    var mgrOverlay = document.getElementById('smtp-mgr-overlay');
+    var mgrBtn = document.getElementById('smtp-mgr-toggle');
+    var mgrClose = document.getElementById('smtp-mgr-close');
+    function openMgr() {
+        if (!mgrOverlay) return;
+        mgrOverlay.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+    function closeMgr() {
+        if (!mgrOverlay) return;
+        mgrOverlay.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+    if (mgrBtn) mgrBtn.addEventListener('click', openMgr);
+    if (mgrClose) mgrClose.addEventListener('click', closeMgr);
+    if (mgrOverlay) {
+        // Click on the dark backdrop (not the inner card) closes the modal.
+        mgrOverlay.addEventListener('click', function(e) {
+            if (e.target === mgrOverlay) closeMgr();
+        });
+    }
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && mgrOverlay && mgrOverlay.style.display !== 'none') closeMgr();
+    });
+
+    var formWrap = document.getElementById('smtp-form-wrap');
+    var addBtn = document.getElementById('smtp-add-toggle');
+    var cancelBtn = document.getElementById('smtp-form-cancel');
+    var saveBtn = document.getElementById('smtp-form-save');
+    var statusEl = document.getElementById('smtp-form-status');
+
+    function setFormVisible(v) {
+        if (formWrap) formWrap.style.display = v ? '' : 'none';
+    }
+    function clearForm() {
+        ['name','host','username','password','from-address','from-name'].forEach(function(k) {
+            var el = document.getElementById('smtp-form-' + k);
+            if (el) el.value = '';
+        });
+        var p = document.getElementById('smtp-form-port');
+        if (p) p.value = '465';
+        var e = document.getElementById('smtp-form-encryption');
+        if (e) e.value = 'ssl';
+        if (statusEl) statusEl.textContent = '';
+    }
+    if (addBtn) addBtn.addEventListener('click', function() {
+        clearForm();
+        setFormVisible(true);
+    });
+    if (cancelBtn) cancelBtn.addEventListener('click', function() { setFormVisible(false); });
+
+    if (saveBtn) saveBtn.addEventListener('click', function() {
+        var fd = new FormData();
+        fd.append('name', document.getElementById('smtp-form-name').value);
+        fd.append('host', document.getElementById('smtp-form-host').value);
+        fd.append('port', document.getElementById('smtp-form-port').value);
+        fd.append('username', document.getElementById('smtp-form-username').value);
+        fd.append('password', document.getElementById('smtp-form-password').value);
+        fd.append('encryption', document.getElementById('smtp-form-encryption').value);
+        fd.append('from_address', document.getElementById('smtp-form-from-address').value);
+        fd.append('from_name', document.getElementById('smtp-form-from-name').value);
+        if (statusEl) { statusEl.textContent = 'Saving…'; statusEl.style.color = ''; }
+        fetch('/settings/smtp', {
+            method: 'POST',
+            credentials: 'same-origin',
+            body: fd,
+            redirect: 'manual' // server returns 303 on success
+        }).then(function(r) {
+            // 303/0 in opaqueredirect both indicate success here
+            if (r.type === 'opaqueredirect' || r.ok) {
+                if (statusEl) { statusEl.textContent = 'Saved — refreshing…'; statusEl.style.color = 'var(--text-muted)'; }
+                window.location.reload();
+                return;
+            }
+            return r.text().then(function(t) { throw new Error(t || ('HTTP ' + r.status)); });
+        }).catch(function(err) {
+            if (statusEl) { statusEl.textContent = 'Failed: ' + err.message; statusEl.style.color = 'crimson'; }
+        });
+    });
+
+    // Test / Delete buttons in the existing rows.
+    document.querySelectorAll('[data-smtp-test]').forEach(function(b) {
+        b.addEventListener('click', function() {
+            var id = this.getAttribute('data-smtp-test');
+            var orig = this.textContent; var self = this;
+            self.textContent = 'Testing…'; self.disabled = true;
+            fetch('/settings/smtp/' + id + '/test', { method: 'POST', credentials: 'same-origin' })
+                .then(function(r) { return r.json().then(function(j) { return {ok: r.ok, data: j}; }); })
+                .then(function(res) {
+                    if (res.ok && res.data.ok) alert('OK — sent to ' + (res.data.to || 'from address'));
+                    else alert('Failed: ' + (res.data.error || 'unknown'));
+                })
+                .catch(function(e) { alert('Failed: ' + e.message); })
+                .finally(function() { self.textContent = orig; self.disabled = false; });
+        });
+    });
+
+    document.querySelectorAll('[data-smtp-delete]').forEach(function(b) {
+        b.addEventListener('click', function() {
+            if (!confirm('Delete this SMTP server?')) return;
+            var id = this.getAttribute('data-smtp-delete');
+            fetch('/settings/smtp/' + id + '/delete', {
+                method: 'POST', credentials: 'same-origin', redirect: 'manual'
+            }).then(function(r) {
+                if (r.type === 'opaqueredirect' || r.ok) window.location.reload();
+                else alert('Delete failed: HTTP ' + r.status);
+            }).catch(function(e) { alert('Delete failed: ' + e.message); });
+        });
+    });
+})();
+</script>
 {{end}}

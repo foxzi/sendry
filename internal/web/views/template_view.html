@@ -9,8 +9,7 @@
     <div class="header-actions">
         <a href="/templates/{{.Template.ID}}/test" class="btn btn-secondary">Send Test</a>
         <a href="/templates/{{.Template.ID}}/export" class="btn btn-secondary">Export</a>
-        <a href="/templates/{{.Template.ID}}/preview" class="btn btn-secondary" target="_blank">Preview</a>
-        <a href="/templates/{{.Template.ID}}/edit" class="btn btn-primary">Edit</a>
+        <a href="/templates/{{.Template.ID}}/builder" class="btn btn-primary">Edit</a>
     </div>
 </div>
 
@@ -95,15 +94,41 @@
     </div>
 </div>
 
+     sample payload so Subject macros, range and if blocks expand the
+     same way they will when the API serves a real recipient. The width
+     buttons resize the surrounding shell so the wrapper @media rules
 <div class="card">
     <div class="card-header">
-        <h2>Content Preview</h2>
-        <div class="tabs">
-            <button class="tab active" data-tab="html">HTML</button>
-            <button class="tab" data-tab="text">Plain Text</button>
+        <h2>Preview</h2>
+        <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+            <span class="text-muted" style="font-size:0.8rem;">Width:</span>
+            <button type="button" class="btn btn-sm btn-primary" data-tplview-width="600">Desktop · 600px</button>
+            <button type="button" class="btn btn-sm btn-secondary" data-tplview-width="320">Mobile · 320px</button>
+            <span class="text-muted" id="tplview-status" style="font-size:0.8rem; margin-left:0.5rem;"></span>
         </div>
     </div>
     <div class="card-body">
+        <div style="background:#f5f5f5; padding:1.5rem 1rem; border-radius:var(--radius); display:flex; justify-content:center;">
+            <div id="tplview-shell" style="width:600px; max-width:100%; transition:width 0.15s; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+                <iframe id="tplview-frame" style="width:100%; height:720px; border:none; display:block;"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header" style="cursor:pointer;" id="source-toggle">
+        <h2 style="display:flex; align-items:center; gap:0.5rem;">
+            <span id="source-toggle-icon" style="display:inline-block; transition:transform 0.15s;">▶</span>
+            Source
+        </h2>
+        <span class="text-muted" style="font-size:0.85rem;">Click to view raw HTML / plain text</span>
+    </div>
+    <div class="card-body" id="source-body" style="display:none;">
+        <div class="tabs" style="margin-bottom:0.75rem;">
+            <button class="tab active" data-tab="html">HTML</button>
+            <button class="tab" data-tab="text">Plain Text</button>
+        </div>
         <div id="tab-html" class="tab-content active">
             {{if .Template.HTML}}
             <pre class="code-preview"><code>{{.Template.HTML}}</code></pre>
@@ -118,16 +143,23 @@
             <p class="text-muted">No plain text content</p>
             {{end}}
         </div>
+        <p class="text-muted" style="font-size:0.85rem; margin-top:0.75rem;">
+            To edit the content open the <a href="/templates/{{.Template.ID}}/builder">Builder</a>.
+        </p>
     </div>
 </div>
 
-{{if .Template.Variables}}
+{{if .VariablesShape}}
 <div class="card">
     <div class="card-header">
-        <h2>Variables</h2>
+        <h2>Variables — expected payload shape</h2>
     </div>
     <div class="card-body">
-        <pre class="code-preview"><code>{{.Template.Variables}}</code></pre>
+        <p class="text-muted" style="margin-top:0; font-size:0.85rem;">
+            Auto-detected from the template body. Strings are placeholders; arrays come from {{"{{range}}"}} blocks.
+            Use this as the contract for the backend that calls <code>/v1/send/template</code>.
+        </p>
+        <pre class="code-preview"><code>{{.VariablesShape}}</code></pre>
     </div>
 </div>
 {{end}}
@@ -146,13 +178,75 @@
 </div>
 
 <script>
-document.querySelectorAll('.tab').forEach(tab => {
+// Tabs (HTML / Plain Text) inside the collapsible Source card.
+document.querySelectorAll('.tab').forEach(function(tab) {
     tab.addEventListener('click', function() {
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+        document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+        document.querySelectorAll('.tab-content').forEach(function(c) { c.style.display = 'none'; });
         this.classList.add('active');
         document.getElementById('tab-' + this.dataset.tab).style.display = 'block';
     });
 });
+
+// Source card toggle. Hidden by default to keep the live preview focal;
+// users click the header to inspect the raw HTML/text.
+(function() {
+    var toggle = document.getElementById('source-toggle');
+    var body = document.getElementById('source-body');
+    var icon = document.getElementById('source-toggle-icon');
+    if (!toggle || !body) return;
+    toggle.addEventListener('click', function() {
+        var open = body.style.display !== 'none';
+        body.style.display = open ? 'none' : 'block';
+        if (icon) icon.style.transform = open ? '' : 'rotate(90deg)';
+    });
+})();
+
+// Live preview — POST the saved template HTML through the same engine
+// the worker uses, with a built-in sample payload that exercises arrays
+// and conditionals so range/if blocks are expanded properly. The Subject
+// macro is also expanded so the iframe matches what recipients see.
+(function() {
+    var frame = document.getElementById('tplview-frame');
+    var shell = document.getElementById('tplview-shell');
+    var status = document.getElementById('tplview-status');
+    if (!frame) return;
+
+    var html = {{toJSON .Template.HTML}};
+    var subject = {{toJSON .Template.Subject}};
+    var sample = {};
+    try { sample = JSON.parse({{toJSON .VariablesShape}}); } catch (e) { sample = {}; }
+    sample.Subject = subject;
+
+    function render() {
+        if (status) { status.textContent = 'Rendering…'; status.style.color = ''; }
+        fetch('/builder/render-preview', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            credentials: 'same-origin',
+            body: JSON.stringify({html: html, data: sample})
+        }).then(function(r) {
+            if (!r.ok) return r.text().then(function(t) { throw new Error(t); });
+            return r.text();
+        }).then(function(rendered) {
+            frame.srcdoc = rendered;
+            if (status) { status.textContent = 'OK'; status.style.color = 'var(--text-muted)'; }
+        }).catch(function(err) {
+            frame.srcdoc = '<pre style="padding:1rem; color:crimson; white-space:pre-wrap;">' + err.message + '</pre>';
+            if (status) { status.textContent = 'Error'; status.style.color = 'crimson'; }
+        });
+    }
+    render();
+
+    document.querySelectorAll('[data-tplview-width]').forEach(function(b) {
+        b.addEventListener('click', function() {
+            shell.style.width = this.getAttribute('data-tplview-width') + 'px';
+            document.querySelectorAll('[data-tplview-width]').forEach(function(x) {
+                x.className = 'btn btn-sm btn-secondary';
+            });
+            this.className = 'btn btn-sm btn-primary';
+        });
+    });
+})();
 </script>
 {{end}}

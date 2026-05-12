@@ -1,0 +1,73 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1>My SMTP Servers</h1>
+        <p class="text-muted">Configure outbound SMTP providers used for "Send test" on templates. Credentials are
+            stored encrypted and only visible to you.</p>
+    </div>
+    <a href="/settings/smtp/new" class="btn btn-primary">Add SMTP Server</a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {{if .Servers}}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Host : Port</th>
+                    <th>Encryption</th>
+                    <th>From</th>
+                    <th>Username</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Servers}}
+                <tr>
+                    <td>{{.Name}}</td>
+                    <td><code>{{.Host}}:{{.Port}}</code></td>
+                    <td><span class="badge">{{.Encryption}}</span></td>
+                    <td>{{if .FromName}}{{.FromName}} &lt;{{.FromAddress}}&gt;{{else}}{{.FromAddress}}{{end}}</td>
+                    <td>{{.Username}}</td>
+                    <td style="text-align:right; white-space:nowrap;">
+                        <button class="btn btn-sm btn-secondary" data-test-smtp="{{.ID}}">Test</button>
+                        <a class="btn btn-sm btn-secondary" href="/settings/smtp/{{.ID}}/edit">Edit</a>
+                        <form method="post" action="/settings/smtp/{{.ID}}/delete" style="display:inline;"
+                            onsubmit="return confirm('Delete this SMTP server?')">
+                            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <p class="empty-state">No SMTP servers yet. Add one to enable "Send test" through your own provider.</p>
+        {{end}}
+    </div>
+</div>
+
+<script>
+document.querySelectorAll('[data-test-smtp]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var id = this.getAttribute('data-test-smtp');
+        var orig = this.textContent;
+        var self = this;
+        self.textContent = 'Testing…';
+        self.disabled = true;
+        fetch('/settings/smtp/' + id + '/test', { method: 'POST', credentials: 'same-origin' })
+            .then(function(r) { return r.json().then(function(j) { return {ok: r.ok, data: j}; }); })
+            .then(function(res) {
+                if (res.ok && res.data.ok) {
+                    alert('OK — sent test email to ' + (res.data.to || 'from address'));
+                } else {
+                    alert('Failed: ' + (res.data.error || 'unknown error'));
+                }
+            })
+            .catch(function(e) { alert('Failed: ' + e.message); })
+            .finally(function() { self.textContent = orig; self.disabled = false; });
+    });
+});
+</script>
+{{end}}

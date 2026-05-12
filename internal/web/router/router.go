@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"github.com/foxzi/sendry/internal/web/models"
 	"github.com/foxzi/sendry/internal/web/repository"
 	"github.com/foxzi/sendry/internal/web/sendry"
+	emailtpl "github.com/foxzi/sendry/internal/web/template"
 )
 
 var (
@@ -296,9 +296,18 @@ func (r *EmailRouter) resolveTemplate(ctx context.Context, req *APISendRequest) 
 	}
 
 	// Render template
-	subject := renderVars(tmpl.Subject, data)
-	html := renderVars(tmpl.HTML, data)
-	text := renderVars(tmpl.Text, data)
+	subject, err := renderVars("subject", tmpl.Subject, data, false)
+	if err != nil {
+		return nil, "", fmt.Errorf("render subject: %w", err)
+	}
+	html, err := renderVars("html", tmpl.HTML, data, true)
+	if err != nil {
+		return nil, "", fmt.Errorf("render html: %w", err)
+	}
+	text, err := renderVars("text", tmpl.Text, data, false)
+	if err != nil {
+		return nil, "", fmt.Errorf("render text: %w", err)
+	}
 
 	if r.publicURL != "" || r.publicUploadURL != "" {
 		html = rewriteAssetURLs(html, r.publicURL, r.publicUploadURL)
@@ -458,21 +467,11 @@ func mergeVariables(global map[string]string, data map[string]any) map[string]an
 	return result
 }
 
-var varPattern = regexp.MustCompile(`\{\{([^}]+)\}\}`)
-
-// renderVars replaces {{variable}} placeholders with values
-func renderVars(template string, data map[string]any) string {
-	return varPattern.ReplaceAllStringFunc(template, func(match string) string {
-		// Extract variable name
-		varName := strings.TrimSpace(match[2 : len(match)-2])
-
-		if val, ok := data[varName]; ok {
-			return fmt.Sprintf("%v", val)
-		}
-
-		// Keep original if variable not found
-		return match
-	})
+func renderVars(name, src string, data map[string]any, html bool) (string, error) {
+	if html {
+		return emailtpl.RenderHTML(name, src, data)
+	}
+	return emailtpl.RenderText(name, src, data)
 }
 
 // rewriteAssetURLs expands relative /uploads/ and /static/ src attributes in

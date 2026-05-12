@@ -4,9 +4,8 @@
     <div class="header-actions">
         <a href="/blocks" class="btn btn-secondary">Blocks</a>
         <a href="/media" class="btn btn-secondary">Media</a>
-        <a href="/templates/builder" class="btn btn-secondary">Builder</a>
         <a href="/templates/import" class="btn btn-secondary">Import</a>
-        <a href="/templates/new" class="btn btn-primary">New Template</a>
+        <a href="/templates/builder" class="btn btn-primary">New Template</a>
     </div>
 </div>
 
@@ -67,7 +66,7 @@
                     </td>
                     <td>{{.UpdatedAt.Format "2006-01-02 15:04"}}</td>
                     <td class="actions">
-                        <a href="/templates/{{.ID}}/edit" class="btn btn-sm">Edit</a>
+                        <a href="/templates/{{.ID}}/builder" class="btn btn-sm">Edit</a>
                         <a href="/templates/{{.ID}}/versions" class="btn btn-sm">History</a>
                     </td>
                 </tr>
@@ -89,7 +88,7 @@
         {{else}}
         <div class="empty-state">
             <p>No templates found</p>
-            <a href="/templates/new" class="btn btn-primary">Create your first template</a>
+            <a href="/templates/builder" class="btn btn-primary">Create your first template</a>
         </div>
         {{end}}
     </div>

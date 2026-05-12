@@ -235,9 +235,16 @@
 }
 
 .builder-block-preview {
-    pointer-events: none;
     overflow: hidden;
     border-radius: var(--radius);
+}
+.builder-block-preview [contenteditable="true"]:focus {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+.builder-block-preview [contenteditable="true"]:hover {
+    cursor: text;
+    background: rgba(116, 185, 8, 0.08);
 }
 
 /* Drop zone indicator */
@@ -257,7 +264,6 @@
 
 /* Preview panel */
 .builder-preview-container {
-    background: #f4f4f4;
     padding: 20px;
     display: flex;
     justify-content: center;
@@ -265,9 +271,6 @@
 
 .builder-preview-frame {
     width: 600px;
-    background: #ffffff;
-    border-radius: 8px;
-    overflow: hidden;
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
@@ -325,7 +328,7 @@
     </div>
 </div>
 
-<form method="post" action="/templates/builder" id="builder-form">
+<form method="post" action="{{if .Template}}/templates/{{.Template.ID}}/builder{{else}}/templates/builder{{end}}" id="builder-form">
     <div class="builder-layout">
         <div class="builder-sidebar">
             <div class="builder-sidebar-header">Block Library</div>
@@ -352,11 +355,13 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label for="name">Template Name *</label>
-                        <input type="text" id="name" name="name" required class="input" placeholder="Welcome Email">
+                        <input type="text" id="name" name="name" required class="input" placeholder="Welcome Email"
+                            value="{{if .Template}}{{.Template.Name}}{{end}}">
                     </div>
                     <div class="form-group">
                         <label for="folder">Folder</label>
-                        <input type="text" id="folder" name="folder" class="input" placeholder="marketing" list="folders">
+                        <input type="text" id="folder" name="folder" class="input" placeholder="marketing" list="folders"
+                            value="{{if .Template}}{{.Template.Folder}}{{end}}">
                         <datalist id="folders">
                             {{range .Folders}}
                             <option value="{{.}}">
@@ -366,13 +371,93 @@
                 </div>
                 <div class="form-group">
                     <label for="subject">Subject *</label>
-                    <input type="text" id="subject" name="subject" required class="input" placeholder="Welcome to your company!">
+                    <input type="text" id="subject" name="subject" required class="input" placeholder="Welcome to your company!"
+                        value="{{if .Template}}{{.Template.Subject}}{{end}}">
                 </div>
                 <div class="form-group">
                     <label for="description">Description</label>
-                    <input type="text" id="description" name="description" class="input" placeholder="Brief description of this template">
+                    <input type="text" id="description" name="description" class="input" placeholder="Brief description of this template"
+                        value="{{if .Template}}{{.Template.Description}}{{end}}">
                 </div>
+
+                <details style="border:1px solid var(--border); border-radius:var(--radius); padding:0.5rem 0.75rem; margin-top:0.5rem;">
+                    <summary style="cursor:pointer; font-size:0.85rem; color:var(--text-muted);">Container layout</summary>
+
+                    <div class="form-row" style="margin-top:0.75rem;">
+                        <div class="form-group">
+                            <label for="container-width">Email width (px)</label>
+                            <input type="number" id="container-width" name="container_width" min="320" max="1200" step="10" class="input"
+                                value="{{if and .Template .Template.ContainerWidth}}{{.Template.ContainerWidth}}{{else}}600{{end}}">
+                        </div>
+                        <div class="form-group">
+                            <label for="container-radius">Border radius — all (px)</label>
+                            <input type="number" id="container-radius" name="container_radius" min="0" max="64" step="1" class="input"
+                                value="{{if .Template}}{{.Template.ContainerRadius}}{{else}}8{{end}}">
+                        </div>
+                    </div>
+                    <div class="form-row" style="margin-top:0.5rem;">
+                        <div class="form-group">
+                            <label for="container-radius-top">Border radius — top only (px)</label>
+                            <input type="number" id="container-radius-top" name="container_radius_top" min="0" max="64" step="1" class="input"
+                                value="{{if .Template}}{{.Template.ContainerRadiusTop}}{{else}}0{{end}}">
+                        </div>
+                        <div class="form-group">
+                            <label for="container-radius-bottom">Border radius — bottom only (px)</label>
+                            <input type="number" id="container-radius-bottom" name="container_radius_bottom" min="0" max="64" step="1" class="input"
+                                value="{{if .Template}}{{.Template.ContainerRadiusBottom}}{{else}}0{{end}}">
+                        </div>
+                    </div>
+                    <p class="text-muted" style="font-size:0.78rem; margin:0.25rem 0 0;">
+                        Top/Bottom override the "all" radius when &gt; 0. Leave both at 0 to apply the same radius to every corner.
+                    </p>
+                    <div class="form-row" style="margin-top:0.5rem;">
+                        <div class="form-group">
+                            <label for="container-padding-v">Outer padding — vertical (px)</label>
+                            <input type="number" id="container-padding-v" name="container_padding_v" min="0" max="200" step="2" class="input"
+                                value="{{if .Template}}{{.Template.ContainerPaddingV}}{{else}}20{{end}}">
+                        </div>
+                        <div class="form-group">
+                            <label for="container-padding-h">Outer padding — horizontal (px)</label>
+                            <input type="number" id="container-padding-h" name="container_padding_h" min="0" max="200" step="2" class="input"
+                                value="{{if .Template}}{{.Template.ContainerPaddingH}}{{else}}0{{end}}">
+                        </div>
+                    </div>
+                    <div class="form-row" style="margin-top:0.5rem;">
+                        <div class="form-group">
+                            <label for="page-background">Page background</label>
+                            <div style="display:flex; align-items:center; gap:0.5rem;">
+                                <input type="color" id="page-background" name="page_background" class="input" style="height:38px; padding:2px; max-width:100px;"
+                                    value="{{if and .Template .Template.PageBackground (ne .Template.PageBackground "transparent")}}{{.Template.PageBackground}}{{else}}#F5F5F5{{end}}">
+                                <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; font-weight:normal;">
+                                    <input type="checkbox" id="page-background-transparent" name="page_background_transparent" value="on"
+                                        {{if and .Template (eq .Template.PageBackground "transparent")}}checked{{end}}>
+                                    Transparent
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <label style="display:flex; align-items:center; gap:0.4rem; margin-top:0.6rem; font-size:0.85rem;">
+                        <input type="checkbox" id="container-transparent" name="container_transparent" value="on"
+                            {{if and .Template .Template.ContainerTransparent}}checked{{end}}>
+                        Transparent container background
+                    </label>
+                    <p class="text-muted" style="font-size:0.8rem; margin:0.4rem 0 0;">
+                        Per-block colours come from the block's own markup. Use "Gap below" on a block to add coloured spacing between blocks.
+                    </p>
+                </details>
             </div>
+
+            {{if .LegacyRecovered}}
+            <div class="alert" style="background:#FFFBE6; border:1px solid #FFC905; color:#7a5b00; padding:0.6rem 0.9rem; border-radius:var(--radius); margin-bottom:0.75rem; font-size:0.9rem;">
+                ⚠ This template was missing block links — sendry auto-detected blocks by matching their HTML.
+                Verify the order is correct and click <strong>Save</strong> to persist the link.
+            </div>
+            {{else if .LegacyEmpty}}
+            <div class="alert" style="background:#FFEEE5; border:1px solid #DC662D; color:#8a3c0e; padding:0.6rem 0.9rem; border-radius:var(--radius); margin-bottom:0.75rem; font-size:0.9rem;">
+                ⚠ This template's HTML was edited outside the builder, so we can't recover its block layout.
+                Add the blocks you want and click <strong>Save</strong> to overwrite the current HTML.
+            </div>
+            {{end}}
 
             <div class="builder-canvas">
                 <div class="builder-canvas-header">
@@ -392,11 +477,24 @@
                 </div>
 
                 <div class="builder-canvas-body" id="canvas-preview" style="display:none;">
-                    <div style="display:flex; gap:0.5rem; margin-bottom:0.75rem;">
+                    <details style="margin-bottom:0.75rem;" open>
+                        <summary style="cursor:pointer; font-size:0.85rem; color:var(--text-muted); margin-bottom:0.4rem;">
+                            Sample data (JSON) — describes the payload the backend should send to <code>/v1/send/template</code>
+                        </summary>
+                        <textarea id="builder-preview-data"
+                            class="input"
+                            rows="12"
+                            style="font-family:monospace; font-size:12px; width:100%; box-sizing:border-box;"
+                            placeholder='{"Items":[{"Name":"A","Price":"100 ₽"}]}'></textarea>
+                    </details>
+                    <div style="display:flex; gap:0.5rem; margin-bottom:0.75rem; align-items:center; flex-wrap:wrap;">
+                        <button type="button" class="btn btn-sm btn-primary" id="btn-preview-render">Render</button>
+                        <span style="border-left:1px solid var(--border); height:24px; margin:0 0.25rem;"></span>
                         <button type="button" class="btn btn-sm btn-primary" data-preview-width="600" onclick="setPreviewWidth(600, this)">Desktop (600px)</button>
-                        <button type="button" class="btn btn-sm btn-secondary" data-preview-width="375" onclick="setPreviewWidth(375, this)">Mobile (375px)</button>
+                        <button type="button" class="btn btn-sm btn-secondary" data-preview-width="320" onclick="setPreviewWidth(320, this)">Mobile (320px)</button>
+                        <span class="text-muted" id="builder-preview-status" style="font-size:0.8rem; margin-left:auto;"></span>
                     </div>
-                    <div class="builder-preview-container" style="background:#f5f5f5; padding:1rem; border-radius:var(--radius); overflow-x:auto;">
+                    <div class="builder-preview-container" style="padding:1rem; border-radius:var(--radius); overflow-x:auto;">
                         <div class="builder-preview-frame" id="preview-frame" style="width:600px; margin:0 auto; transition:width 0.3s;"></div>
                     </div>
                 </div>
@@ -411,7 +509,7 @@
                     </div>
                     <div style="display:flex; gap:0.5rem;">
                         <a href="/templates" class="btn btn-secondary">Cancel</a>
-                        <button type="submit" class="btn btn-primary" id="btn-create">Create Template</button>
+                        <button type="submit" class="btn btn-primary" id="btn-create">{{if .Template}}Save Changes{{else}}Create Template{{end}}</button>
                     </div>
                 </div>
             </div>
@@ -420,6 +518,7 @@
 
     <input type="hidden" name="html" id="html-hidden">
     <input type="hidden" name="variables" id="variables-hidden">
+    <input type="hidden" name="block_refs" id="block-refs-hidden">
 </form>
 
 <script>
@@ -437,7 +536,8 @@ function setPreviewWidth(w, btn) {
 
 window.__builderData = {
     categories: {{toJSON .Categories}},
-    wrapper: {{toJSON .Wrapper}}
+    wrapper: {{toJSON .Wrapper}},
+    initialBlocks: {{if .InitialBlocks}}{{toJSON .InitialBlocks}}{{else}}[]{{end}}
 };
 </script>
 <script src="/static/js/builder.js"></script>

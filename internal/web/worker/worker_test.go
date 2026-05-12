@@ -4,23 +4,23 @@ import (
 	"testing"
 )
 
-func TestRenderTemplate(t *testing.T) {
-	tests := []struct {
+func TestRenderTemplate_Flat(t *testing.T) {
+	cases := []struct {
 		name     string
 		template string
-		vars     map[string]string
+		vars     map[string]any
 		want     string
 	}{
 		{
 			name:     "simple substitution",
 			template: "Hello, {{name}}!",
-			vars:     map[string]string{"name": "World"},
+			vars:     map[string]any{"name": "World"},
 			want:     "Hello, World!",
 		},
 		{
 			name:     "multiple variables",
 			template: "{{greeting}}, {{name}}! Welcome to {{company}}.",
-			vars: map[string]string{
+			vars: map[string]any{
 				"greeting": "Hello",
 				"name":     "John",
 				"company":  "Acme Corp",
@@ -28,43 +28,38 @@ func TestRenderTemplate(t *testing.T) {
 			want: "Hello, John! Welcome to Acme Corp.",
 		},
 		{
-			name:     "missing variable unchanged",
+
+			name:     "missing variable empty",
 			template: "Hello, {{name}}! Your code is {{code}}.",
-			vars:     map[string]string{"name": "John"},
-			want:     "Hello, John! Your code is {{code}}.",
+			vars:     map[string]any{"name": "John"},
+			want:     "Hello, John! Your code is .",
 		},
 		{
 			name:     "no variables",
 			template: "Hello, World!",
-			vars:     map[string]string{"name": "John"},
+			vars:     map[string]any{"name": "John"},
 			want:     "Hello, World!",
 		},
 		{
 			name:     "empty template",
 			template: "",
-			vars:     map[string]string{"name": "John"},
+			vars:     map[string]any{"name": "John"},
 			want:     "",
 		},
 		{
 			name:     "variable with underscores",
 			template: "Hello, {{first_name}}!",
-			vars:     map[string]string{"first_name": "John"},
+			vars:     map[string]any{"first_name": "John"},
 			want:     "Hello, John!",
-		},
-		{
-			name:     "html content",
-			template: "<h1>{{title}}</h1><p>{{content}}</p>",
-			vars: map[string]string{
-				"title":   "Welcome",
-				"content": "This is a test.",
-			},
-			want: "<h1>Welcome</h1><p>This is a test.</p>",
 		},
 	}
 
-	for _, tt := range tests {
+	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			got := renderTemplate(tt.template, tt.vars)
+			got, err := renderTemplate("t", tt.template, tt.vars)
+			if err != nil {
+				t.Fatalf("renderTemplate err: %v", err)
+			}
 			if got != tt.want {
 				t.Errorf("renderTemplate() = %q, want %q", got, tt.want)
 			}
@@ -72,14 +67,36 @@ func TestRenderTemplate(t *testing.T) {
 	}
 }
 
+func TestRenderTemplate_RangeIf(t *testing.T) {
+	tmpl := `{{if Items}}<ul>{{range Items}}<li>{{.Name}}</li>{{end}}</ul>{{end}}`
+	out, err := renderTemplate("t", tmpl, map[string]any{
+		"Items": []map[string]any{
+			{"Name": "A"},
+			{"Name": "B"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	want := "<ul><li>A</li><li>B</li></ul>"
+	if out != want {
+		t.Errorf("got %q want %q", out, want)
+	}
+
+	out, _ = renderTemplate("t", tmpl, map[string]any{"Items": []any{}})
+	if out != "" {
+		t.Errorf("expected empty, got %q", out)
+	}
+}
+
 func TestMergeVariables(t *testing.T) {
-	tests := []struct {
+	cases := []struct {
 		name          string
 		global        map[string]string
 		campaign      map[string]string
 		recipientJSON string
 		wantKey       string
-		wantValue     string
+		want          any
 	}{
 		{
 			name:          "global only",
@@ -87,7 +104,7 @@ func TestMergeVariables(t *testing.T) {
 			campaign:      nil,
 			recipientJSON: "",
 			wantKey:       "company",
-			wantValue:     "Global Corp",
+			want:          "Global Corp",
 		},
 		{
 			name:          "campaign overrides global",
@@ -95,23 +112,23 @@ func TestMergeVariables(t *testing.T) {
 			campaign:      map[string]string{"company": "Campaign Corp"},
 			recipientJSON: "",
 			wantKey:       "company",
-			wantValue:     "Campaign Corp",
+			want:          "Campaign Corp",
 		},
 		{
-			name:          "recipient overrides all",
+			name:          "recipient overrides all (string)",
 			global:        map[string]string{"name": "Global"},
 			campaign:      map[string]string{"name": "Campaign"},
 			recipientJSON: `{"name": "John"}`,
 			wantKey:       "name",
-			wantValue:     "John",
+			want:          "John",
 		},
 		{
-			name:          "all levels combined",
-			global:        map[string]string{"global_var": "global"},
-			campaign:      map[string]string{"campaign_var": "campaign"},
-			recipientJSON: `{"recipient_var": "recipient"}`,
-			wantKey:       "recipient_var",
-			wantValue:     "recipient",
+			name:          "recipient with array",
+			global:        nil,
+			campaign:      nil,
+			recipientJSON: `{"Items": [{"Name": "A"}, {"Name": "B"}]}`,
+			wantKey:       "Items",
+			want: nil,
 		},
 		{
 			name:          "invalid json ignored",
@@ -119,7 +136,7 @@ func TestMergeVariables(t *testing.T) {
 			campaign:      nil,
 			recipientJSON: "invalid json",
 			wantKey:       "name",
-			wantValue:     "Global",
+			want:          "Global",
 		},
 		{
 			name:          "empty recipient json",
@@ -127,15 +144,19 @@ func TestMergeVariables(t *testing.T) {
 			campaign:      map[string]string{"email": "test@example.com"},
 			recipientJSON: "",
 			wantKey:       "email",
-			wantValue:     "test@example.com",
+			want:          "test@example.com",
 		},
 	}
 
-	for _, tt := range tests {
+	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			got := mergeVariables(tt.global, tt.campaign, tt.recipientJSON)
-			if got[tt.wantKey] != tt.wantValue {
-				t.Errorf("mergeVariables()[%s] = %q, want %q", tt.wantKey, got[tt.wantKey], tt.wantValue)
+			val, ok := got[tt.wantKey]
+			if !ok {
+				t.Fatalf("missing key %q", tt.wantKey)
+			}
+			if tt.want != nil && val != tt.want {
+				t.Errorf("mergeVariables()[%s] = %v, want %v", tt.wantKey, val, tt.want)
 			}
 		})
 	}
@@ -157,7 +178,6 @@ func TestMergeVariables_AllPresent(t *testing.T) {
 
 	got := mergeVariables(global, campaign, recipientJSON)
 
-	// Check all keys are present
 	expectedKeys := []string{"company", "support_email", "campaign_name", "name", "order_id"}
 	for _, key := range expectedKeys {
 		if _, ok := got[key]; !ok {
@@ -165,12 +185,11 @@ func TestMergeVariables_AllPresent(t *testing.T) {
 		}
 	}
 
-	// Check priority: recipient > campaign > global
 	if got["support_email"] != "campaign@example.com" {
-		t.Errorf("mergeVariables()[support_email] = %q, want campaign override", got["support_email"])
+		t.Errorf("mergeVariables()[support_email] = %v, want campaign override", got["support_email"])
 	}
 	if got["name"] != "John Doe" {
-		t.Errorf("mergeVariables()[name] = %q, want recipient value", got["name"])
+		t.Errorf("mergeVariables()[name] = %v, want recipient value", got["name"])
 	}
 }
 

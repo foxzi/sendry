@@ -8,6 +8,7 @@ import (
 
 	"github.com/foxzi/sendry/internal/web/auth"
 	"github.com/foxzi/sendry/internal/web/config"
+	"github.com/foxzi/sendry/internal/web/crypto"
 	"github.com/foxzi/sendry/internal/web/db"
 	"github.com/foxzi/sendry/internal/web/middleware"
 	"github.com/foxzi/sendry/internal/web/repository"
@@ -34,10 +35,27 @@ type Handlers struct {
 	apiKeys    *repository.APIKeyRepository
 	blocks     *repository.BlockRepository
 	media      *repository.MediaRepository
+	userSMTP   *repository.UserSMTPRepository
+	cipher     *crypto.Cipher
 	router     *router.EmailRouter
 }
 
 func New(cfg *config.Config, db *db.DB, logger *slog.Logger, v *views.Engine, oidcProvider *auth.OIDCProvider) *Handlers {
+	var ciph *crypto.Cipher
+	if key, derived, err := crypto.LoadKey(cfg.Auth.EncryptionKey, cfg.Auth.SessionSecret); err == nil {
+		if derived {
+			logger.Warn("auth.encryption_key is empty — derived from session_secret. " +
+				"Rotating session_secret will invalidate every stored SMTP password. " +
+				"Set auth.encryption_key in web.yaml to a 64-char hex value (openssl rand -hex 32) before going to prod.")
+		}
+		if c, cerr := crypto.NewCipher(key); cerr == nil {
+			ciph = c
+		} else {
+			logger.Error("failed to init cipher", "error", cerr)
+		}
+	} else {
+		logger.Error("failed to load encryption key", "error", err)
+	}
 	sendryMgr := sendry.NewManager(cfg.Sendry.Servers)
 	templates := repository.NewTemplateRepository(db.DB)
 	settings := repository.NewSettingsRepository(db.DB)
@@ -75,6 +93,8 @@ func New(cfg *config.Config, db *db.DB, logger *slog.Logger, v *views.Engine, oi
 		apiKeys:    apiKeys,
 		blocks:     repository.NewBlockRepository(db.DB),
 		media:      repository.NewMediaRepository(db.DB),
+		userSMTP:   repository.NewUserSMTPRepository(db.DB),
+		cipher:     ciph,
 		router:     emailRouter,
 	}
 }

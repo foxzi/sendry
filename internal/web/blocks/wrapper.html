@@ -21,13 +21,14 @@
   </style>
   <![endif]-->
   <style type="text/css">
+    :root { color-scheme: light only; supported-color-schemes: light only; }
+
     body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
     table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
     img { -ms-interpolation-mode: bicubic; border: 0; outline: none; text-decoration: none; }
     body { margin: 0; padding: 0; width: 100% !important; height: 100% !important; }
     a[x-apple-data-detectors] { color: inherit !important; text-decoration: none !important; font-size: inherit !important; font-family: inherit !important; font-weight: inherit !important; line-height: inherit !important; }
 
-    /* Responsive */
     @media only screen and (max-width: 480px) {
       .email-container { width: 100% !important; max-width: 100% !important; }
       .fluid-table { width: 100% !important; }
@@ -38,14 +39,63 @@
       .hide-mobile { display: none !important; }
       .font-mobile-sm { font-size: 24px !important; line-height: 30px !important; }
     }
+
+    @media (prefers-color-scheme: dark) {
+      body, .force-page-bg {
+        background-color: #1C1C1E !important;
+      }
+      .email-container {
+        background-color: #2C2C2E !important;
+      }
+      .force-bg-white,
+      table.force-bg-white,
+      td.force-bg-white {
+        background-color: #2C2C2E !important;
+      }
+      .force-text-dark { color: #E4E4E4 !important; }
+      .force-text-muted { color: #9A9A9A !important; }
+      .force-text-black { color: #FFFFFF !important; }
+      .email-container [style*="color:#262B26"],
+      .email-container [style*="color: #262B26"],
+      .email-container [style*="color:#000000"],
+      .email-container [style*="color: #000000"],
+      .email-container [style*="color:#000001"],
+      .email-container [style*="color: #000001"] {
+        color: #E4E4E4 !important;
+      }
+      .email-container [style*="color:#959595"],
+      .email-container [style*="color: #959595"] {
+        color: #9A9A9A !important;
+      }
+      .email-container [style*="border-top:1px solid #E4E4E4"],
+      .email-container [style*="border-top: 1px solid #E4E4E4"],
+      .email-container [style*="border-bottom:1px solid #E4E4E4"],
+      .email-container [style*="border-bottom: 1px solid #E4E4E4"] {
+        border-color: #3A3A3C !important;
+      }
+      .email-container [style*="background:#F5F5F5"],
+      .email-container [style*="background: #F5F5F5"],
+      .email-container [style*="background-color:#F5F5F5"],
+      .email-container [style*="background-color: #F5F5F5"] {
+        background-color: #3A3A3C !important;
+      }
+    }
+
+    [data-ogsc] .force-bg-white,
+    [data-ogsb] .force-bg-white { background-color: #FEFFFE !important; }
+    [data-ogsc] .force-text-dark,
+    [data-ogsb] .force-text-dark { color: #262B26 !important; }
+    [data-ogsc] .force-text-muted,
+    [data-ogsb] .force-text-muted { color: #959595 !important; }
+    [data-ogsc] .force-text-black,
+    [data-ogsb] .force-text-black { color: #000001 !important; }
   </style>
 </head>
-<body style="margin:0; padding:0; background-color:#f5f5f5; font-family:Arial, Helvetica, sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f5f5;">
+<body bgcolor="{{PAGE_BG}}" style="margin:0; padding:0; background-color:{{PAGE_BG}}; font-family:Arial, Helvetica, sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="{{PAGE_BG}}" style="background-color:{{PAGE_BG}};">
     <tr>
-      <td align="center" style="padding:20px 0;">
-        <!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" align="center"><tr><td><![endif]-->
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="email-container" style="background-color:#ffffff; border-radius:8px; overflow:hidden; width:600px; max-width:600px;">
+      <td align="center" style="padding:{{CONTAINER_PADDING_V}}px {{CONTAINER_PADDING_H}}px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="email-container" bgcolor="{{CONTAINER_BG}}" style="background-color:{{CONTAINER_BG}}; border-radius:{{CONTAINER_RADIUS}}; overflow:hidden; width:{{CONTAINER_WIDTH}}px; max-width:{{CONTAINER_WIDTH}}px;">
           {{BLOCKS}}
         </table>
         <!--[if mso]></td></tr></table><![endif]-->
