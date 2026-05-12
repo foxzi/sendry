@@ -131,6 +131,27 @@
                     placeholder="Short description of this block">
             </div>
 
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="border_radius">Border radius (px)</label>
+                    <input type="number" id="border_radius" name="border_radius" min="0" max="64" step="1" class="input"
+                        value="{{if .Block}}{{.Block.BorderRadius}}{{else}}0{{end}}">
+                </div>
+                <div class="form-group">
+                    <label for="padding_v">Content padding — vertical (px)</label>
+                    <input type="number" id="padding_v" name="padding_v" min="0" max="200" step="2" class="input"
+                        value="{{if .Block}}{{.Block.PaddingV}}{{else}}0{{end}}">
+                </div>
+                <div class="form-group">
+                    <label for="padding_h">Content padding — horizontal (px)</label>
+                    <input type="number" id="padding_h" name="padding_h" min="0" max="200" step="2" class="input"
+                        value="{{if .Block}}{{.Block.PaddingH}}{{else}}0{{end}}">
+                </div>
+            </div>
+            <p class="text-muted" style="font-size:0.8rem; margin:0.4rem 0 1rem;">
+                Radius and padding apply through a wrapping table at render time, so the block's HTML stays clean.
+            </p>
+
             <div class="form-group">
                 <label for="html">HTML</label>
                 <div class="html-toolbar">
@@ -141,12 +162,47 @@
                     style="font-family:monospace; font-size:13px; tab-size:2;">{{if .Block}}{{.Block.HTML}}{{end}}</textarea>
             </div>
 
+            {{if not .IsEdit}}
             <div id="block-preview" style="margin-bottom:1rem;">
-                <label>Preview</label>
+                <label>Quick preview</label>
                 <div style="border:1px solid var(--border); border-radius:var(--radius); padding:1rem; background:#fff; max-width:600px;">
                     <iframe id="preview-frame" style="width:100%; height:300px; border:none;"></iframe>
                 </div>
+                <p class="text-muted" style="margin-top:0.4rem; font-size:0.8rem;">
+                    Substitutes simple <code>{{"{{"}}Variable}}</code> placeholders from the test values modal.
+                    Save the block to unlock the server-side <strong>Live preview</strong> that supports
+                    <code>{{"{{"}}range}}</code> and <code>{{"{{"}}if}}</code>.
+                </p>
             </div>
+            {{end}}
+
+            {{if .IsEdit}}
+            <div class="form-group">
+                <label>Live preview (server render — supports arrays and conditionals)</label>
+                <div style="display:flex; flex-direction:column; gap:1rem;">
+                    <div>
+                        <textarea id="livepreview-data"
+                            class="input"
+                            rows="10"
+                            style="font-family:monospace; font-size:12px; width:100%; box-sizing:border-box;"
+                            placeholder='Paste JSON here, e.g. {"Items":[{"Name":"A","Price":"100 ₽"}]}'>{{.SampleJSON}}</textarea>
+                        <div style="display:flex; gap:0.5rem; margin-top:0.5rem; align-items:center; flex-wrap:wrap;">
+                            <button type="button" class="btn btn-primary btn-sm" id="livepreview-render">Render</button>
+                            <span style="border-left:1px solid var(--border); height:24px; margin:0 0.25rem;"></span>
+                            <span class="text-muted" style="font-size:0.8rem;">Width:</span>
+                            <button type="button" class="btn btn-sm btn-primary" data-livepreview-width="600">Desktop · 600px</button>
+                            <button type="button" class="btn btn-sm btn-secondary" data-livepreview-width="320">Mobile · 320px</button>
+                            <span class="text-muted" id="livepreview-status" style="font-size:0.8rem; margin-left:auto;"></span>
+                        </div>
+                    </div>
+                    <div style="background:#f5f5f5; padding:1.5rem 1rem; border-radius:var(--radius); display:flex; justify-content:center;">
+                        <div id="livepreview-shell" style="width:600px; max-width:100%; transition:width 0.15s; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+                            <iframe id="livepreview-frame" style="width:100%; height:720px; border:none; display:block;"></iframe>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {{end}}
 
             <div class="form-actions">
                 <button type="submit" class="btn btn-primary">{{if .IsEdit}}Update Block{{else}}Create Block{{end}}</button>
@@ -201,6 +257,8 @@ function saveTestValues() { localStorage.setItem('sendry_test_values', JSON.stri
     var textarea = document.getElementById('html');
     var frame = document.getElementById('preview-frame');
 
+    if (!frame) return;
+
     function applyTestValues(html) {
         // Replace variables that have test values
         for (var key in testValues) {
@@ -234,6 +292,57 @@ function saveTestValues() { localStorage.setItem('sendry_test_values', JSON.stri
     textarea.addEventListener('input', updatePreview);
     updatePreview();
     window._updatePreview = updatePreview;
+})();
+
+(function() {
+    var btn = document.getElementById('livepreview-render');
+    if (!btn) return; // Only present on edit page (block already saved).
+    var ta = document.getElementById('livepreview-data');
+    var frame = document.getElementById('livepreview-frame');
+    var status = document.getElementById('livepreview-status');
+    var blockId = {{if .Block}}{{toJSON .Block.ID}}{{else}}""{{end}};
+
+    function render() {
+        if (!blockId) return;
+        var raw = ta.value.trim();
+        var parsed = {};
+        if (raw) {
+            try { parsed = JSON.parse(raw); }
+            catch(e) { status.textContent = 'JSON parse error: ' + e.message; status.style.color = 'crimson'; return; }
+        }
+        status.textContent = 'Rendering…'; status.style.color = '';
+
+        fetch('/blocks/' + blockId + '/preview', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(parsed),
+            credentials: 'same-origin'
+        }).then(function(r) {
+            if (!r.ok) return r.text().then(function(t) { throw new Error(t); });
+            return r.text();
+        }).then(function(html) {
+            frame.srcdoc = html;
+            status.textContent = 'OK — block rendered with the JSON above.';
+            status.style.color = 'var(--text-muted)';
+        }).catch(function(err) {
+            status.textContent = 'Error: ' + err.message;
+            status.style.color = 'crimson';
+        });
+    }
+
+    btn.addEventListener('click', render);
+    render();
+    var shell = document.getElementById('livepreview-shell');
+    document.querySelectorAll('[data-livepreview-width]').forEach(function(b) {
+        b.addEventListener('click', function() {
+            var w = this.getAttribute('data-livepreview-width');
+            shell.style.width = w + 'px';
+            document.querySelectorAll('[data-livepreview-width]').forEach(function(x) {
+                x.className = 'btn btn-sm btn-secondary';
+            });
+            this.className = 'btn btn-sm btn-primary';
+        });
+    });
 })();
 
 // --- Image picker ---

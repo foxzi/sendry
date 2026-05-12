@@ -6,6 +6,43 @@
     </div>
 </div>
 
+<details class="card" style="margin-bottom:1rem;">
+    <summary style="padding:0.75rem 1rem; cursor:pointer; font-weight:600;">📘 How to write blocks &amp; use variables</summary>
+    <div class="card-body" style="font-size:0.9rem; line-height:1.6;">
+        <p style="margin-top:0;">A block is a fragment of email-safe HTML — usually one or more <code>&lt;tr&gt;...&lt;/tr&gt;</code> rows or a self-contained <code>&lt;table&gt;</code>. Blocks compose into templates via the visual builder.</p>
+
+        <h3 style="margin:1rem 0 0.5rem;">Variables</h3>
+        <p style="margin:0 0 0.5rem;">Always use the dot-prefixed Go template syntax:</p>
+        <ul style="margin:0 0 0.75rem 1.25rem;">
+            <li><code>{{"{{.Variable}}"}}</code> — substitutes a value from the payload.</li>
+            <li><code>{{"{{if .Cond}}...{{end}}"}}</code> — renders the inside only when the value is truthy.</li>
+            <li><code>{{"{{range .Items}}{{.Name}}: {{.Price}}{{end}}"}}</code> — iterates over an array of objects.</li>
+        </ul>
+        <p style="margin:0 0 0.75rem;">Example payload for a block using <code>{{"{{range .Items}}"}}</code>:</p>
+        <pre class="code-preview" style="margin:0 0 1rem;"><code>{
+  "OrderNumber": "12345",
+  "Items": [
+    {"Name": "Product A", "Price": "100 ₽"},
+    {"Name": "Product B", "Price": "200 ₽"}
+  ]
+}</code></pre>
+
+        <h3 style="margin:1rem 0 0.5rem;">HTML rules</h3>
+        <ul style="margin:0 0 0.75rem 1.25rem;">
+            <li>Use <strong>tables</strong> for layout — Outlook ignores flex/grid.</li>
+            <li>Inline styles only — <code>&lt;style&gt;</code> blocks are stripped by Gmail/Yandex.</li>
+            <li>Set explicit <code>width</code> on tables; cap visible content at <strong>600px</strong>.</li>
+            <li>Use <code>role="presentation"</code> on layout tables for accessibility.</li>
+        </ul>
+
+        <h3 style="margin:1rem 0 0.5rem;">Per-block appearance</h3>
+        <p style="margin:0;">Border-radius, padding, and background colour are set on the block's <em>view</em> page (Appearance card). They wrap the block at render time so the source HTML stays clean.</p>
+
+        <h3 style="margin:1rem 0 0.5rem;">Inline editing</h3>
+        <p style="margin:0;">Plain text inside blocks can be edited directly on the canvas in the builder. Variables and surrounding markup are protected — edit the placeholder names through the block's HTML source instead.</p>
+    </div>
+</details>
+
 <div class="card">
     <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
         <form class="filter-form" method="get" action="/blocks" style="flex:1;">
