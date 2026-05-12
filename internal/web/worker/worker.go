@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log/slog"
-	"regexp"
-	"strings"
 	"sync"
 	"time"
 
@@ -14,6 +12,7 @@ import (
 	"github.com/foxzi/sendry/internal/web/models"
 	"github.com/foxzi/sendry/internal/web/repository"
 	"github.com/foxzi/sendry/internal/web/sendry"
+	emailtpl "github.com/foxzi/sendry/internal/web/template"
 )
 
 // Worker processes send jobs in the background
@@ -34,9 +33,6 @@ type Worker struct {
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 }
-
-// variable pattern for template substitution: {{variable_name}}
-var varPattern = regexp.MustCompile(`\{\{([^}]+)\}\}`)
 
 // Config holds worker configuration
 type Config struct {
@@ -366,15 +362,27 @@ func (w *Worker) processItem(
 	}
 
 	// Build email subject with variable substitution
-	subject := tmpl.Subject
+	subjectSrc := tmpl.Subject
 	if variant.SubjectOverride != "" {
-		subject = variant.SubjectOverride
+		subjectSrc = variant.SubjectOverride
 	}
-	subject = renderTemplate(subject, vars)
+	subject, err := renderTextTemplate("subject", subjectSrc, vars)
+	if err != nil {
+		w.updateItemFailed(item.ID, "render subject: "+err.Error())
+		return
+	}
 
 	// Render HTML and text with variable substitution
-	html := renderTemplate(tmpl.HTML, vars)
-	text := renderTemplate(tmpl.Text, vars)
+	html, err := renderTemplate("html", tmpl.HTML, vars)
+	if err != nil {
+		w.updateItemFailed(item.ID, "render html: "+err.Error())
+		return
+	}
+	text, err := renderTextTemplate("text", tmpl.Text, vars)
+	if err != nil {
+		w.updateItemFailed(item.ID, "render text: "+err.Error())
+		return
+	}
 
 	// Build email request
 	req := &sendry.SendRequest{
@@ -406,9 +414,8 @@ func (w *Worker) processItem(
 	w.logger.Debug("email queued", "item_id", item.ID, "email", item.Email, "sendry_id", resp.ID)
 }
 
-// mergeVariables merges variable maps with priority: recipient > campaign > global
-func mergeVariables(global, campaign map[string]string, recipientJSON string) map[string]string {
-	result := make(map[string]string)
+func mergeVariables(global, campaign map[string]string, recipientJSON string) map[string]any {
+	result := make(map[string]any)
 
 	// Start with global variables (lowest priority)
 	for k, v := range global {
@@ -420,12 +427,18 @@ func mergeVariables(global, campaign map[string]string, recipientJSON string) ma
 		result[k] = v
 	}
 
-	// Add recipient variables (highest priority)
 	if recipientJSON != "" {
-		var recipientVars map[string]string
+		var recipientVars map[string]any
 		if err := json.Unmarshal([]byte(recipientJSON), &recipientVars); err == nil {
 			for k, v := range recipientVars {
 				result[k] = v
+			}
+		} else {
+			var flat map[string]string
+			if err := json.Unmarshal([]byte(recipientJSON), &flat); err == nil {
+				for k, v := range flat {
+					result[k] = v
+				}
 			}
 		}
 	}
@@ -433,21 +446,12 @@ func mergeVariables(global, campaign map[string]string, recipientJSON string) ma
 	return result
 }
 
-// renderTemplate substitutes {{variable}} patterns in template string
-func renderTemplate(template string, vars map[string]string) string {
-	if template == "" {
-		return template
-	}
+func renderTemplate(name, src string, vars map[string]any) (string, error) {
+	return emailtpl.RenderHTML(name, src, vars)
+}
 
-	return varPattern.ReplaceAllStringFunc(template, func(match string) string {
-		// Extract variable name (remove {{ and }})
-		varName := strings.TrimSpace(match[2 : len(match)-2])
-		if value, ok := vars[varName]; ok {
-			return value
-		}
-		// Keep original if variable not found
-		return match
-	})
+func renderTextTemplate(name, src string, vars map[string]any) (string, error) {
+	return emailtpl.RenderText(name, src, vars)
 }
 
 func (w *Worker) updateItemFailed(itemID, errorMsg string) {

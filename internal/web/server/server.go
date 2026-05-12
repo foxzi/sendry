@@ -65,6 +65,10 @@ func New(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		oidc:   oidcProvider,
 	}
 
+	if err := runWrapperRebuildMigration(database, viewEngine, cfg, oidcProvider, logger); err != nil {
+		logger.Error("wrapper rebuild migration failed", "error", err)
+	}
+
 	// Setup HTTP server
 	s.http = &http.Server{
 		Addr:         cfg.Server.ListenAddr,
@@ -119,14 +123,15 @@ func (s *Server) setupRoutes() http.Handler {
 
 	// Templates
 	protected.HandleFunc("GET /templates", h.TemplateList)
-	protected.HandleFunc("GET /templates/new", h.TemplateNew)
 	protected.HandleFunc("GET /templates/builder", h.BuilderPage)
 	protected.HandleFunc("POST /templates/builder", h.BuilderCreate)
+	protected.HandleFunc("GET /templates/{id}/builder", h.BuilderPage)
+	protected.HandleFunc("POST /templates/{id}/builder", h.BuilderUpdate)
+	protected.HandleFunc("POST /builder/render-preview", h.BuilderRenderPreview)
 	protected.HandleFunc("GET /templates/import", h.TemplateImportPage)
 	protected.HandleFunc("POST /templates/import", h.TemplateImport)
 	protected.HandleFunc("POST /templates", h.TemplateCreate)
 	protected.HandleFunc("GET /templates/{id}", h.TemplateView)
-	protected.HandleFunc("GET /templates/{id}/edit", h.TemplateEdit)
 	protected.HandleFunc("PUT /templates/{id}", h.TemplateUpdate)
 	protected.HandleFunc("DELETE /templates/{id}", h.TemplateDelete)
 	protected.HandleFunc("GET /templates/{id}/versions", h.TemplateVersions)
@@ -150,7 +155,18 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("GET /blocks/{id}", h.BlockView)
 	protected.HandleFunc("GET /blocks/{id}/edit", h.BlockEdit)
 	protected.HandleFunc("POST /blocks/{id}", h.BlockUpdate)
+	protected.HandleFunc("POST /blocks/{id}/preview", h.BlockPreview)
+	protected.HandleFunc("POST /blocks/{id}/appearance", h.BlockUpdateAppearance)
+	protected.HandleFunc("POST /blocks/{id}/inline-edit", h.BlockInlineEdit)
 	protected.HandleFunc("POST /blocks/{id}/delete", h.BlockDelete)
+
+	protected.HandleFunc("GET /settings/smtp", h.SMTPList)
+	protected.HandleFunc("GET /settings/smtp/new", h.SMTPNew)
+	protected.HandleFunc("POST /settings/smtp", h.SMTPCreate)
+	protected.HandleFunc("GET /settings/smtp/{id}/edit", h.SMTPEdit)
+	protected.HandleFunc("POST /settings/smtp/{id}", h.SMTPUpdate)
+	protected.HandleFunc("POST /settings/smtp/{id}/delete", h.SMTPDelete)
+	protected.HandleFunc("POST /settings/smtp/{id}/test", h.SMTPTestConnection)
 
 	// Recipients
 	protected.HandleFunc("GET /recipients", h.RecipientListList)
