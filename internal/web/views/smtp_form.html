@@ -1,0 +1,83 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1>{{if .IsEdit}}Edit SMTP Server{{else}}Add SMTP Server{{end}}</h1>
+        <p class="text-muted">Outbound SMTP credentials for "Send test". Password is stored encrypted.</p>
+    </div>
+    <a href="/settings/smtp" class="btn btn-secondary">Back</a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="post" action="{{if .IsEdit}}/settings/smtp/{{.Server.ID}}{{else}}/settings/smtp{{end}}">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="name">Name *</label>
+                    <input type="text" id="name" name="name" class="input" required
+                        value="{{if .Server}}{{.Server.Name}}{{end}}"
+                        placeholder="My mail.ru">
+                </div>
+                <div class="form-group">
+                    <label for="encryption">Encryption *</label>
+                    <select id="encryption" name="encryption" class="input">
+                        <option value="ssl"      {{if and .Server (eq .Server.Encryption "ssl")}}selected{{end}}>SSL/TLS (port 465)</option>
+                        <option value="starttls" {{if and .Server (eq .Server.Encryption "starttls")}}selected{{end}}>STARTTLS (port 587)</option>
+                        <option value="none"     {{if and .Server (eq .Server.Encryption "none")}}selected{{end}}>None (debug only)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group" style="flex:2;">
+                    <label for="host">Host *</label>
+                    <input type="text" id="host" name="host" class="input" required
+                        value="{{if .Server}}{{.Server.Host}}{{end}}"
+                        placeholder="smtp.mail.ru">
+                </div>
+                <div class="form-group">
+                    <label for="port">Port *</label>
+                    <input type="number" id="port" name="port" class="input" required min="1" max="65535"
+                        value="{{if .Server}}{{.Server.Port}}{{else}}465{{end}}">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="username">Username *</label>
+                    <input type="text" id="username" name="username" class="input" required
+                        autocomplete="off"
+                        value="{{if .Server}}{{.Server.Username}}{{end}}"
+                        placeholder="user@mail.ru">
+                </div>
+                <div class="form-group">
+                    <label for="password">Password{{if not .IsEdit}} *{{end}}</label>
+                    <input type="password" id="password" name="password" class="input"
+                        autocomplete="new-password"
+                        {{if not .IsEdit}}required{{end}}
+                        placeholder="{{if .IsEdit}}Leave blank to keep current{{else}}App password / SMTP token{{end}}">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="from_address">From address *</label>
+                    <input type="email" id="from_address" name="from_address" class="input" required
+                        value="{{if .Server}}{{.Server.FromAddress}}{{end}}"
+                        placeholder="noreply@example.com">
+                </div>
+                <div class="form-group">
+                    <label for="from_name">From name</label>
+                    <input type="text" id="from_name" name="from_name" class="input"
+                        value="{{if .Server}}{{.Server.FromName}}{{end}}"
+                        placeholder="My Service">
+                </div>
+            </div>
+
+            <div style="display:flex; gap:0.5rem; margin-top:1rem;">
+                <button type="submit" class="btn btn-primary">{{if .IsEdit}}Save Changes{{else}}Create{{end}}</button>
+                <a class="btn btn-secondary" href="/settings/smtp">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{{end}}
