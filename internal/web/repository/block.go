@@ -23,9 +23,9 @@ func (r *BlockRepository) Create(b *models.EmailBlock) error {
 	b.UpdatedAt = b.CreatedAt
 
 	_, err := r.db.Exec(`
-		INSERT INTO email_blocks (id, name, category, html, preview_text, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		b.ID, b.Name, b.Category, b.HTML, b.PreviewText, b.CreatedAt, b.UpdatedAt,
+		INSERT INTO email_blocks (id, name, category, html, preview_text, border_radius, padding_v, padding_h, background, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		b.ID, b.Name, b.Category, b.HTML, b.PreviewText, b.BorderRadius, b.PaddingV, b.PaddingH, b.Background, b.CreatedAt, b.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create block: %w", err)
@@ -36,9 +36,9 @@ func (r *BlockRepository) Create(b *models.EmailBlock) error {
 func (r *BlockRepository) GetByID(id string) (*models.EmailBlock, error) {
 	b := &models.EmailBlock{}
 	err := r.db.QueryRow(`
-		SELECT id, name, category, html, preview_text, created_at, updated_at
+		SELECT id, name, category, html, preview_text, border_radius, padding_v, padding_h, background, created_at, updated_at
 		FROM email_blocks WHERE id = ?`, id,
-	).Scan(&b.ID, &b.Name, &b.Category, &b.HTML, &b.PreviewText, &b.CreatedAt, &b.UpdatedAt)
+	).Scan(&b.ID, &b.Name, &b.Category, &b.HTML, &b.PreviewText, &b.BorderRadius, &b.PaddingV, &b.PaddingH, &b.Background, &b.CreatedAt, &b.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -67,7 +67,7 @@ func (r *BlockRepository) List(filter models.BlockListFilter) ([]models.EmailBlo
 		return nil, 0, err
 	}
 
-	query := `SELECT id, name, category, html, preview_text, created_at, updated_at
+	query := `SELECT id, name, category, html, preview_text, border_radius, padding_v, padding_h, background, created_at, updated_at
 		FROM email_blocks WHERE 1=1`
 
 	queryArgs := []any{}
@@ -96,7 +96,7 @@ func (r *BlockRepository) List(filter models.BlockListFilter) ([]models.EmailBlo
 	var blocks []models.EmailBlock
 	for rows.Next() {
 		var b models.EmailBlock
-		if err := rows.Scan(&b.ID, &b.Name, &b.Category, &b.HTML, &b.PreviewText, &b.CreatedAt, &b.UpdatedAt); err != nil {
+		if err := rows.Scan(&b.ID, &b.Name, &b.Category, &b.HTML, &b.PreviewText, &b.BorderRadius, &b.PaddingV, &b.PaddingH, &b.Background, &b.CreatedAt, &b.UpdatedAt); err != nil {
 			return nil, 0, err
 		}
 		blocks = append(blocks, b)
@@ -107,9 +107,9 @@ func (r *BlockRepository) List(filter models.BlockListFilter) ([]models.EmailBlo
 func (r *BlockRepository) Update(b *models.EmailBlock) error {
 	b.UpdatedAt = time.Now()
 	_, err := r.db.Exec(`
-		UPDATE email_blocks SET name = ?, category = ?, html = ?, preview_text = ?, updated_at = ?
+		UPDATE email_blocks SET name = ?, category = ?, html = ?, preview_text = ?, border_radius = ?, padding_v = ?, padding_h = ?, background = ?, updated_at = ?
 		WHERE id = ?`,
-		b.Name, b.Category, b.HTML, b.PreviewText, b.UpdatedAt, b.ID,
+		b.Name, b.Category, b.HTML, b.PreviewText, b.BorderRadius, b.PaddingV, b.PaddingH, b.Background, b.UpdatedAt, b.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update block: %w", err)
@@ -145,7 +145,7 @@ func (r *BlockRepository) GetCategories() ([]string, error) {
 
 func (r *BlockRepository) ListGroupedByCategory() ([]models.BlockCategory, error) {
 	rows, err := r.db.Query(`
-		SELECT id, name, category, html, preview_text, created_at, updated_at
+		SELECT id, name, category, html, preview_text, border_radius, padding_v, padding_h, background, created_at, updated_at
 		FROM email_blocks ORDER BY category, name`)
 	if err != nil {
 		return nil, err
@@ -157,7 +157,7 @@ func (r *BlockRepository) ListGroupedByCategory() ([]models.BlockCategory, error
 
 	for rows.Next() {
 		var b models.EmailBlock
-		if err := rows.Scan(&b.ID, &b.Name, &b.Category, &b.HTML, &b.PreviewText, &b.CreatedAt, &b.UpdatedAt); err != nil {
+		if err := rows.Scan(&b.ID, &b.Name, &b.Category, &b.HTML, &b.PreviewText, &b.BorderRadius, &b.PaddingV, &b.PaddingH, &b.Background, &b.CreatedAt, &b.UpdatedAt); err != nil {
 			return nil, err
 		}
 

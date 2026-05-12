@@ -29,12 +29,15 @@ func (r *TemplateRepository) Create(t *models.Template, createdBy string) error 
 	t.CurrentVersion = 1
 	t.CreatedAt = time.Now()
 	t.UpdatedAt = t.CreatedAt
+	if t.ContainerWidth <= 0 {
+		t.ContainerWidth = 600
+	}
 
 	// Insert template
 	_, err = tx.Exec(`
-		INSERT INTO templates (id, name, description, subject, html, text, variables, folder, current_version, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		t.ID, t.Name, t.Description, t.Subject, t.HTML, t.Text, t.Variables, t.Folder, t.CurrentVersion, t.CreatedAt, t.UpdatedAt,
+		INSERT INTO templates (id, name, description, subject, html, text, variables, folder, current_version, use_blocks, container_radius, container_transparent, container_width, container_padding_v, container_padding_h, page_background, container_radius_top, container_radius_bottom, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		t.ID, t.Name, t.Description, t.Subject, t.HTML, t.Text, t.Variables, t.Folder, t.CurrentVersion, t.UseBlocks, t.ContainerRadius, t.ContainerTransparent, t.ContainerWidth, t.ContainerPaddingV, t.ContainerPaddingH, t.PageBackground, t.ContainerRadiusTop, t.ContainerRadiusBottom, t.CreatedAt, t.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create template: %w", err)
@@ -57,9 +60,9 @@ func (r *TemplateRepository) Create(t *models.Template, createdBy string) error 
 func (r *TemplateRepository) GetByID(id string) (*models.Template, error) {
 	t := &models.Template{}
 	err := r.db.QueryRow(`
-		SELECT id, name, description, subject, html, text, variables, folder, current_version, created_at, updated_at
+		SELECT id, name, description, subject, html, text, variables, folder, current_version, use_blocks, container_radius, container_transparent, container_width, container_padding_v, container_padding_h, page_background, container_radius_top, container_radius_bottom, created_at, updated_at
 		FROM templates WHERE id = ?`, id,
-	).Scan(&t.ID, &t.Name, &t.Description, &t.Subject, &t.HTML, &t.Text, &t.Variables, &t.Folder, &t.CurrentVersion, &t.CreatedAt, &t.UpdatedAt)
+	).Scan(&t.ID, &t.Name, &t.Description, &t.Subject, &t.HTML, &t.Text, &t.Variables, &t.Folder, &t.CurrentVersion, &t.UseBlocks, &t.ContainerRadius, &t.ContainerTransparent, &t.ContainerWidth, &t.ContainerPaddingV, &t.ContainerPaddingH, &t.PageBackground, &t.ContainerRadiusTop, &t.ContainerRadiusBottom, &t.CreatedAt, &t.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -109,7 +112,7 @@ func (r *TemplateRepository) List(filter models.TemplateListFilter) ([]models.Te
 
 	// Get templates
 	query := `
-		SELECT t.id, t.name, t.description, t.subject, t.html, t.text, t.variables, t.folder, t.current_version, t.created_at, t.updated_at,
+		SELECT t.id, t.name, t.description, t.subject, t.html, t.text, t.variables, t.folder, t.current_version, t.use_blocks, t.container_radius, t.container_transparent, t.container_width, t.container_padding_v, t.container_padding_h, t.page_background, t.container_radius_top, t.container_radius_bottom, t.created_at, t.updated_at,
 			COALESCE(d.deployed_count, 0) as deployed_count,
 			COALESCE(d.out_of_sync_count, 0) as out_of_sync_count
 		FROM templates t
@@ -154,7 +157,7 @@ func (r *TemplateRepository) List(filter models.TemplateListFilter) ([]models.Te
 		var t models.TemplateWithStatus
 		err := rows.Scan(
 			&t.ID, &t.Name, &t.Description, &t.Subject, &t.HTML, &t.Text,
-			&t.Variables, &t.Folder, &t.CurrentVersion, &t.CreatedAt, &t.UpdatedAt,
+			&t.Variables, &t.Folder, &t.CurrentVersion, &t.UseBlocks, &t.ContainerRadius, &t.ContainerTransparent, &t.ContainerWidth, &t.ContainerPaddingV, &t.ContainerPaddingH, &t.PageBackground, &t.ContainerRadiusTop, &t.ContainerRadiusBottom, &t.CreatedAt, &t.UpdatedAt,
 			&t.DeployedCount, &t.OutOfSyncCount,
 		)
 		if err != nil {
@@ -197,9 +200,9 @@ func (r *TemplateRepository) Update(t *models.Template, changeNote, updatedBy st
 
 	// Update template
 	_, err = tx.Exec(`
-		UPDATE templates SET name = ?, description = ?, subject = ?, html = ?, text = ?, variables = ?, folder = ?, current_version = ?, updated_at = ?
+		UPDATE templates SET name = ?, description = ?, subject = ?, html = ?, text = ?, variables = ?, folder = ?, current_version = ?, use_blocks = ?, container_radius = ?, container_transparent = ?, container_width = ?, container_padding_v = ?, container_padding_h = ?, page_background = ?, container_radius_top = ?, container_radius_bottom = ?, updated_at = ?
 		WHERE id = ?`,
-		t.Name, t.Description, t.Subject, t.HTML, t.Text, t.Variables, t.Folder, t.CurrentVersion, t.UpdatedAt, t.ID,
+		t.Name, t.Description, t.Subject, t.HTML, t.Text, t.Variables, t.Folder, t.CurrentVersion, t.UseBlocks, t.ContainerRadius, t.ContainerTransparent, t.ContainerWidth, t.ContainerPaddingV, t.ContainerPaddingH, t.PageBackground, t.ContainerRadiusTop, t.ContainerRadiusBottom, t.UpdatedAt, t.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update template: %w", err)
@@ -317,6 +320,81 @@ func (r *TemplateRepository) SaveDeployment(d *models.TemplateDeployment) error 
 		d.TemplateID, d.ServerName, d.RemoteID, d.DeployedVersion, time.Now(),
 	)
 	return err
+}
+
+func (r *TemplateRepository) SetBlockRefs(templateID string, refs []models.TemplateBlockRef) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec("DELETE FROM template_block_refs WHERE template_id = ?", templateID); err != nil {
+		return fmt.Errorf("clear refs: %w", err)
+	}
+	for i, ref := range refs {
+		if ref.BlockID == "" {
+			continue
+		}
+		if _, err := tx.Exec(
+			`INSERT INTO template_block_refs
+				(template_id, block_id, position, gap_height, gap_color, condition)
+			 VALUES (?, ?, ?, ?, ?, ?)`,
+			templateID, ref.BlockID, i+1, ref.GapHeight, ref.GapColor, ref.Condition,
+		); err != nil {
+			return fmt.Errorf("insert ref: %w", err)
+		}
+	}
+	return tx.Commit()
+}
+
+func (r *TemplateRepository) GetBlockRefs(templateID string) ([]models.TemplateBlockRef, error) {
+	rows, err := r.db.Query(`
+		SELECT id, template_id, block_id, position, gap_height, gap_color, condition, created_at
+		FROM template_block_refs
+		WHERE template_id = ?
+		ORDER BY position`,
+		templateID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	refs := []models.TemplateBlockRef{}
+	for rows.Next() {
+		var ref models.TemplateBlockRef
+		if err := rows.Scan(&ref.ID, &ref.TemplateID, &ref.BlockID, &ref.Position, &ref.GapHeight, &ref.GapColor, &ref.Condition, &ref.CreatedAt); err != nil {
+			return nil, err
+		}
+		refs = append(refs, ref)
+	}
+	return refs, rows.Err()
+}
+
+func (r *TemplateRepository) GetTemplatesByBlockID(blockID string) ([]models.Template, error) {
+	rows, err := r.db.Query(`
+		SELECT DISTINCT t.id, t.name, t.folder, t.use_blocks, t.updated_at
+		FROM templates t
+		INNER JOIN template_block_refs r ON r.template_id = t.id
+		WHERE r.block_id = ?
+		ORDER BY t.name`,
+		blockID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	templates := []models.Template{}
+	for rows.Next() {
+		var t models.Template
+		if err := rows.Scan(&t.ID, &t.Name, &t.Folder, &t.UseBlocks, &t.UpdatedAt); err != nil {
+			return nil, err
+		}
+		templates = append(templates, t)
+	}
+	return templates, rows.Err()
 }
 
 // GetFolders returns distinct folder names
