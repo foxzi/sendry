@@ -94,9 +94,6 @@
     </div>
 </div>
 
-     sample payload so Subject macros, range and if blocks expand the
-     same way they will when the API serves a real recipient. The width
-     buttons resize the surrounding shell so the wrapper @media rules
 <div class="card">
     <div class="card-header">
         <h2>Preview</h2>
@@ -229,6 +226,7 @@ document.querySelectorAll('.tab').forEach(function(tab) {
             if (!r.ok) return r.text().then(function(t) { throw new Error(t); });
             return r.text();
         }).then(function(rendered) {
+            rendered = rendered.replace(/@media\s*\(prefers-color-scheme:\s*dark\)\s*\{[\s\S]*?\}\s*\}/g, '');
             frame.srcdoc = rendered;
             if (status) { status.textContent = 'OK'; status.style.color = 'var(--text-muted)'; }
         }).catch(function(err) {
