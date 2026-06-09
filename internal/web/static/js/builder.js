@@ -375,8 +375,13 @@
         });
     }
 
+    function replaceHrefVars(html) {
+        return html.replace(/(href=")(\{\{\.\w+\}\})(")/gi, '$1#$3');
+    }
+
     function replaceTextVars(html) {
-        return html.replace(/\{\{\.(\w+)\}\}/g, function(match, varName) {
+        return html.replace(/<[^>]*>|\{\{\.(\w+)\}\}/g, function(match, varName) {
+            if (match[0] === '<') return match; // a tag — leave untouched
             return '<span data-placeholder="' + varName + '" style="background:#E4E4E4;color:#959595;padding:1px 4px;border-radius:3px;font-size:12px;">' + varName + '</span>';
         });
     }
@@ -407,6 +412,7 @@
     function previewHTML(html) {
         html = applyTestValues(html);
         html = replaceImageVars(html);
+        html = replaceHrefVars(html);
         html = replaceTextVars(html);
         return html;
     }
@@ -432,39 +438,66 @@
         }, true);
     }
 
+    function bindEditable(el, original, item, previewEl) {
+        el.setAttribute('contenteditable', 'true');
+        el.setAttribute('spellcheck', 'false');
+        el.dataset.originalText = original;
+        el.addEventListener('mousedown', function(e) { e.stopPropagation(); });
+        el.addEventListener('focus', function() {
+            var blockEl = el.closest('.builder-block');
+            if (blockEl) blockEl.draggable = false;
+        });
+        el.addEventListener('input', function() { scheduleInlineSave(item, previewEl); });
+        el.addEventListener('blur', function() {
+            var blockEl = el.closest('.builder-block');
+            if (blockEl) blockEl.draggable = true;
+            scheduleInlineSave(item, previewEl, true);
+        });
+        el.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); el.blur(); }
+        });
+    }
+
     function enableInlineEdit(previewEl, item) {
         previewEl.querySelectorAll('td, th, span, p, h1, h2, h3, h4, h5, h6, li, a, b, strong, i, em').forEach(function(node) {
             if (node.dataset && node.dataset.placeholder) return;
+            if (node.dataset && node.dataset.inlineText) return; // already-wrapped fragment
+            var mixed = false;
             var blocksParent = false;
             for (var c = 0; c < node.children.length; c++) {
                 var ch = node.children[c];
                 if (ch.tagName === 'BR') continue;
+                if (ch.tagName === 'IMG' || ch.tagName === 'A') { mixed = true; continue; }
                 if (ch.dataset && ch.dataset.placeholder) continue;
                 blocksParent = true;
                 break;
             }
             if (blocksParent) return;
+
+            if (mixed) {
+                var textNodes = [];
+                node.childNodes.forEach(function(c) {
+                    if (c.nodeType === 3 && c.nodeValue && c.nodeValue.trim()) textNodes.push(c);
+                });
+                textNodes.forEach(function(tn) {
+                    var raw = tn.nodeValue;
+                    var trimmed = raw.trim();
+                    if (!trimmed) return;
+                    if (item.html.indexOf(trimmed) === -1) return;
+                    var span = document.createElement('span');
+                    span.dataset.inlineText = '1';
+                    span.textContent = raw;
+                    tn.parentNode.replaceChild(span, tn);
+                    bindEditable(span, trimmed, item, previewEl);
+                });
+                return;
+            }
+
             var canonical = canonicalText(node);
             var trimmed = canonical.trim();
             if (!trimmed) return;
             if (item.html.indexOf(trimmed) === -1) return;
-            node.setAttribute('contenteditable', 'true');
-            node.setAttribute('spellcheck', 'false');
-            node.dataset.originalText = trimmed;
-            node.addEventListener('mousedown', function(e) { e.stopPropagation(); });
-            node.addEventListener('focus', function() {
-                var blockEl = node.closest('.builder-block');
-                if (blockEl) blockEl.draggable = false;
-            });
-            node.addEventListener('input', function() { scheduleInlineSave(item, previewEl); });
-            node.addEventListener('blur', function() {
-                var blockEl = node.closest('.builder-block');
-                if (blockEl) blockEl.draggable = true;
-                scheduleInlineSave(item, previewEl, true);
-            });
-            node.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); node.blur(); }
-            });
+            bindEditable(node, trimmed, item, previewEl);
         });
     }
 
