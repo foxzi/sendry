@@ -438,10 +438,11 @@
         }, true);
     }
 
-    function bindEditable(el, original, item, previewEl) {
+    function bindEditable(el, original, item, previewEl, srcIndex) {
         el.setAttribute('contenteditable', 'true');
         el.setAttribute('spellcheck', 'false');
         el.dataset.originalText = original;
+        if (srcIndex !== undefined && srcIndex >= 0) el.dataset.sourceIndex = String(srcIndex);
         el.addEventListener('mousedown', function(e) { e.stopPropagation(); });
         el.addEventListener('focus', function() {
             var blockEl = el.closest('.builder-block');
@@ -459,6 +460,13 @@
     }
 
     function enableInlineEdit(previewEl, item) {
+        var cursor = 0;
+        var locate = function(text) {
+            var at = item.html.indexOf(text, cursor);
+            if (at === -1) return -1;
+            cursor = at + text.length;
+            return at;
+        };
         previewEl.querySelectorAll('td, th, span, p, h1, h2, h3, h4, h5, h6, li, a, b, strong, i, em').forEach(function(node) {
             if (node.dataset && node.dataset.placeholder) return;
             if (node.dataset && node.dataset.inlineText) return; // already-wrapped fragment
@@ -483,12 +491,13 @@
                     var raw = tn.nodeValue;
                     var trimmed = raw.trim();
                     if (!trimmed) return;
-                    if (item.html.indexOf(trimmed) === -1) return;
+                    var at = locate(trimmed);
+                    if (at === -1) return;
                     var span = document.createElement('span');
                     span.dataset.inlineText = '1';
                     span.textContent = raw;
                     tn.parentNode.replaceChild(span, tn);
-                    bindEditable(span, trimmed, item, previewEl);
+                    bindEditable(span, trimmed, item, previewEl, at);
                 });
                 return;
             }
@@ -496,8 +505,9 @@
             var canonical = canonicalText(node);
             var trimmed = canonical.trim();
             if (!trimmed) return;
-            if (item.html.indexOf(trimmed) === -1) return;
-            bindEditable(node, trimmed, item, previewEl);
+            var at = locate(trimmed);
+            if (at === -1) return;
+            bindEditable(node, trimmed, item, previewEl, at);
         });
     }
 
@@ -512,6 +522,8 @@
         var newSourceHTML = item.html;
         var changes = 0;
         var diagnostics = [];
+
+        var edits = [];
         previewEl.querySelectorAll('[contenteditable="true"]').forEach(function(node) {
             var original = node.dataset.originalText;
             var current = canonicalText(node).trim();
@@ -522,13 +534,27 @@
                 diagnostics.push('placeholder count mismatch in ' + JSON.stringify(original.slice(0, 30)));
                 return;
             }
-            var idx = newSourceHTML.indexOf(original);
+            var idx = -1;
+            if (node.dataset.sourceIndex !== undefined) {
+                var si = parseInt(node.dataset.sourceIndex, 10);
+                if (si >= 0 && item.html.substr(si, original.length) === original) idx = si;
+            }
+            if (idx === -1) idx = item.html.indexOf(original);
             if (idx === -1) {
                 diagnostics.push('original text not found in source: ' + JSON.stringify(original.slice(0, 30)));
                 return;
             }
-            newSourceHTML = newSourceHTML.slice(0, idx) + current + newSourceHTML.slice(idx + original.length);
-            node.dataset.originalText = current;
+            edits.push({ idx: idx, original: original, current: current, node: node });
+        });
+
+        edits.sort(function(a, b) { return a.idx - b.idx; });
+        var offset = 0;
+        edits.forEach(function(e) {
+            var pos = e.idx + offset;
+            newSourceHTML = newSourceHTML.slice(0, pos) + e.current + newSourceHTML.slice(pos + e.original.length);
+            offset += e.current.length - e.original.length;
+            e.node.dataset.originalText = e.current;
+            if (e.node.dataset.sourceIndex !== undefined) e.node.dataset.sourceIndex = String(e.idx);
             changes++;
         });
         console.log('[inline-edit] save called', {
