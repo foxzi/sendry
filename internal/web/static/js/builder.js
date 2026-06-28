@@ -554,9 +554,21 @@
             newSourceHTML = newSourceHTML.slice(0, pos) + e.current + newSourceHTML.slice(pos + e.original.length);
             offset += e.current.length - e.original.length;
             e.node.dataset.originalText = e.current;
-            if (e.node.dataset.sourceIndex !== undefined) e.node.dataset.sourceIndex = String(e.idx);
             changes++;
         });
+
+        if (changes > 0) {
+            var recur = 0;
+            previewEl.querySelectorAll('[contenteditable="true"]').forEach(function(node) {
+                if (node.dataset.sourceIndex === undefined) return;
+                var t = node.dataset.originalText;
+                if (t === undefined) return;
+                var at = newSourceHTML.indexOf(t, recur);
+                if (at === -1) return;
+                node.dataset.sourceIndex = String(at);
+                recur = at + t.length;
+            });
+        }
         console.log('[inline-edit] save called', {
             blockId: item.blockId,
             sourceLen: item.html.length,
