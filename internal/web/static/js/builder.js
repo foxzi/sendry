@@ -376,7 +376,7 @@
     }
 
     function replaceHrefVars(html) {
-        return html.replace(/(href=")(\{\{\.\w+\}\})(")/gi, '$1#$3');
+        return html.replace(/href\s*=\s*(['"])\s*\{\{\s*\.\w+(?:\.\w+)*\s*\}\}\s*\1/gi, 'href=$1#$1');
     }
 
     function replaceTextVars(html) {

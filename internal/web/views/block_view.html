@@ -171,7 +171,7 @@
             if (!r.ok) return r.text().then(function(t) { throw new Error(t); });
             return r.text();
         }).then(function(html) {
-            html = html.replace(/@media\s*\(prefers-color-scheme:\s*dark\)\s*\{[\s\S]*?\}\s*\}/g, '');
+            html = html.replace(/@media\s*\(prefers-color-scheme:\s*dark\)\s*\{[\s\S]*?\}\s*\}/g, function(m){ return m.indexOf('.force-page-bg') !== -1 ? '' : m; });
             frame.srcdoc = html;
             status.textContent = 'OK';
             status.style.color = 'var(--text-muted)';

@@ -488,7 +488,12 @@ func (h *Handlers) TemplatePreview(w http.ResponseWriter, r *http.Request) {
 var darkModeBlockRe = regexp.MustCompile(`(?s)@media\s*\(prefers-color-scheme:\s*dark\)\s*\{.*?\}\s*\}`)
 
 func stripDarkModeCSS(html string) string {
-	return darkModeBlockRe.ReplaceAllString(html, "")
+	return darkModeBlockRe.ReplaceAllStringFunc(html, func(m string) string {
+		if strings.Contains(m, ".force-page-bg") {
+			return ""
+		}
+		return m
+	})
 }
 
 // TemplateExportData represents template data for export/import
