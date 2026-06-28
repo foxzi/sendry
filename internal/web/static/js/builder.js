@@ -469,7 +469,8 @@
         };
         previewEl.querySelectorAll('td, th, span, p, h1, h2, h3, h4, h5, h6, li, a, b, strong, i, em').forEach(function(node) {
             if (node.dataset && node.dataset.placeholder) return;
-            if (node.dataset && node.dataset.inlineText) return; // already-wrapped fragment
+            if (node.dataset && node.dataset.inlineText) return;
+            if (node.dataset && node.dataset.inlineDone) return;
             var mixed = false;
             var blocksParent = false;
             for (var c = 0; c < node.children.length; c++) {
@@ -483,21 +484,26 @@
             if (blocksParent) return;
 
             if (mixed) {
-                var textNodes = [];
-                node.childNodes.forEach(function(c) {
-                    if (c.nodeType === 3 && c.nodeValue && c.nodeValue.trim()) textNodes.push(c);
-                });
-                textNodes.forEach(function(tn) {
-                    var raw = tn.nodeValue;
-                    var trimmed = raw.trim();
-                    if (!trimmed) return;
-                    var at = locate(trimmed);
-                    if (at === -1) return;
-                    var span = document.createElement('span');
-                    span.dataset.inlineText = '1';
-                    span.textContent = raw;
-                    tn.parentNode.replaceChild(span, tn);
-                    bindEditable(span, trimmed, item, previewEl, at);
+                Array.prototype.slice.call(node.childNodes).forEach(function(ch) {
+                    if (ch.nodeType === 3) {
+                        var raw = ch.nodeValue;
+                        var trimmed = raw && raw.trim();
+                        if (!trimmed) return;
+                        var at = locate(trimmed);
+                        if (at === -1) return;
+                        var span = document.createElement('span');
+                        span.dataset.inlineText = '1';
+                        span.textContent = raw;
+                        ch.parentNode.replaceChild(span, ch);
+                        bindEditable(span, trimmed, item, previewEl, at);
+                    } else if (ch.nodeType === 1 && ch.tagName === 'A') {
+                        var aText = canonicalText(ch).trim();
+                        if (!aText) return;
+                        var aAt = locate(aText);
+                        if (aAt === -1) return;
+                        bindEditable(ch, aText, item, previewEl, aAt);
+                        ch.dataset.inlineDone = '1';
+                    }
                 });
                 return;
             }
