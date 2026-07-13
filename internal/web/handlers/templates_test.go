@@ -1,6 +1,9 @@
 package handlers
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestConvertToGoTemplate(t *testing.T) {
 	tests := []struct {
@@ -85,6 +88,64 @@ func TestConvertToGoTemplate(t *testing.T) {
 			result := convertToGoTemplate(tt.input)
 			if result != tt.expected {
 				t.Errorf("convertToGoTemplate(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestStripDarkModeCSS(t *testing.T) {
+	wrapperBlock := `@media (prefers-color-scheme: dark) {
+      body, .force-page-bg {
+        background-color: #1C1C1E !important;
+      }
+      .email-container {
+        background-color: #2C2C2E !important;
+      }
+    }`
+
+	tests := []struct {
+		name        string
+		input       string
+		wantContain []string
+		wantMissing []string
+	}{
+		{
+			name:        "removes wrapper dark-mode block",
+			input:       "<style>.a{color:red;}" + wrapperBlock + ".b{color:blue;}</style>",
+			wantContain: []string{".a{color:red;}", ".b{color:blue;}"},
+			wantMissing: []string{"force-page-bg", "prefers-color-scheme"},
+		},
+		{
+			name: "preserves other dark-mode blocks without wrapper marker",
+			input: `<style>@media (prefers-color-scheme: dark) {
+      .custom-block { color: #fff; }
+    }</style>`,
+			wantContain: []string{"prefers-color-scheme", ".custom-block"},
+		},
+		{
+			name:        "no dark-mode block leaves html untouched",
+			input:       "<style>.a{color:red;}</style>",
+			wantContain: []string{"<style>.a{color:red;}</style>"},
+		},
+		{
+			name:        "empty input",
+			input:       "",
+			wantContain: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := stripDarkModeCSS(tt.input)
+			for _, s := range tt.wantContain {
+				if !strings.Contains(got, s) {
+					t.Errorf("expected result to contain %q, got %q", s, got)
+				}
+			}
+			for _, s := range tt.wantMissing {
+				if strings.Contains(got, s) {
+					t.Errorf("expected result to NOT contain %q, got %q", s, got)
+				}
 			}
 		})
 	}

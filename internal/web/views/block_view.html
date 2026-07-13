@@ -171,6 +171,7 @@
             if (!r.ok) return r.text().then(function(t) { throw new Error(t); });
             return r.text();
         }).then(function(html) {
+            html = SendryPreview.stripWrapperDarkModeCSS(html);
             frame.srcdoc = html;
             status.textContent = 'OK';
             status.style.color = 'var(--text-muted)';
@@ -180,7 +181,11 @@
         });
     }
 
-    render();
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', render);
+    } else {
+        render();
+    }
 
     // Appearance inputs: debounced auto-save to /blocks/{id}/appearance,
     // re-render preview on success so radius/padding changes show up

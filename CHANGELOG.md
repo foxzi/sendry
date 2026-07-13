@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- builder: replaceTextVars now supports dotted placeholder paths (e.g. {{.User.Email}}) and optional whitespace inside braces
 
 ## [0.4.18] - 2026-05-12
 
@@ -21,6 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ansible: `sendry_caddy_uploads_hosts` adds dedicated Caddy sites that serve `/uploads/*` only (supports custom scheme/port via verbatim address)
 - Ansible: `caddy` system user is added to the sendry group when the web panel is enabled so it can read the uploads directory
 - Tests: additional `dnssync` plan cases — DKIM skipped on empty `DNSRecord`, default selector `mail`, and quoted/whitespace-equivalent values treated as noop
+- Unit test `TestStripDarkModeCSS` covering wrapper removal, custom dark-mode preservation, and no-op cases
+
+### Changed
+- Extract duplicated dark-mode strip regex from email builder preview views into shared `preview-utils.js` helper
+
+### Fixed
+- Email builder preview: `replaceHrefVars` now requires a whitespace boundary so it no longer rewrites `data-href` or `xlink:href` attributes
+- Email builder preview: defer initial render until DOMContentLoaded so `SendryPreview` helper is loaded before use (avoids race with layout scripts)
 
 ## [0.4.17] - 2026-04-17
 

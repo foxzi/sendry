@@ -321,6 +321,7 @@ function saveTestValues() { localStorage.setItem('sendry_test_values', JSON.stri
             if (!r.ok) return r.text().then(function(t) { throw new Error(t); });
             return r.text();
         }).then(function(html) {
+            html = SendryPreview.stripWrapperDarkModeCSS(html);
             frame.srcdoc = html;
             status.textContent = 'OK — block rendered with the JSON above.';
             status.style.color = 'var(--text-muted)';
@@ -331,7 +332,11 @@ function saveTestValues() { localStorage.setItem('sendry_test_values', JSON.stri
     }
 
     btn.addEventListener('click', render);
-    render();
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', render);
+    } else {
+        render();
+    }
     var shell = document.getElementById('livepreview-shell');
     document.querySelectorAll('[data-livepreview-width]').forEach(function(b) {
         b.addEventListener('click', function() {

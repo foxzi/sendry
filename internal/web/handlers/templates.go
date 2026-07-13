@@ -471,6 +471,8 @@ func (h *Handlers) TemplatePreview(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	html = stripDarkModeCSS(html)
+
 	data := map[string]any{
 		"Title":    "Preview: " + t.Name,
 		"Active":   "templates",
@@ -481,6 +483,17 @@ func (h *Handlers) TemplatePreview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.render(w, "template_preview", data)
+}
+
+var darkModeBlockRe = regexp.MustCompile(`(?s)@media\s*\(prefers-color-scheme:\s*dark\)\s*\{.*?\}\s*\}`)
+
+func stripDarkModeCSS(html string) string {
+	return darkModeBlockRe.ReplaceAllStringFunc(html, func(m string) string {
+		if strings.Contains(m, ".force-page-bg") {
+			return ""
+		}
+		return m
+	})
 }
 
 // TemplateExportData represents template data for export/import
