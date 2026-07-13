@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Tests: additional `dnssync` plan cases — DKIM skipped on empty `DNSRecord`, default selector `mail`, and quoted/whitespace-equivalent values treated as noop
+- Unit test `TestStripDarkModeCSS` covering wrapper removal, custom dark-mode preservation, and no-op cases
 
 ### Changed
 - Extract duplicated dark-mode strip regex from email builder preview views into shared `preview-utils.js` helper
