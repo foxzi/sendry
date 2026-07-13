@@ -6,7 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-- builder: replaceTextVars now supports dotted placeholder paths (e.g. {{.User.Email}}) and optional whitespace inside braces
+
+## [0.4.19] - 2026-07-13
+
+### Fixed
+- Email builder: `replaceTextVars` now supports dotted placeholder paths (e.g. `{{.User.Email}}`) and optional whitespace inside braces, so nested template variables are wrapped as styled placeholders in the preview instead of leaking raw template syntax
+- Email builder: `enableInlineEdit` skips nodes whose ancestor is already `contenteditable`, preventing nested edit zones (e.g. `<a>` inside `<td>`) that broke source-index mapping in `saveInlineEdit`
+- Email builder: initial `render()` is deferred until `DOMContentLoaded` in template/block views so `SendryPreview` helper is loaded before first use (avoids race with layout scripts)
+- Email builder: `replaceHrefVars` now requires a whitespace boundary so it no longer rewrites `data-href` or `xlink:href` attributes
+
+### Changed
+- Extract duplicated dark-mode strip regex from email builder preview views into shared `preview-utils.js` helper
+
+### Added
+- Unit test `TestStripDarkModeCSS` covering wrapper removal, custom dark-mode preservation, and no-op cases
 
 ## [0.4.18] - 2026-05-12
 
