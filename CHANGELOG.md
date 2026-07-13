@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Email builder preview: `replaceHrefVars` now requires a whitespace boundary so it no longer rewrites `data-href` or `xlink:href` attributes
+- Email builder preview: defer initial render until DOMContentLoaded so `SendryPreview` helper is loaded before use (avoids race with layout scripts)
 
 ## [0.4.17] - 2026-04-17
 

@@ -234,7 +234,11 @@ document.querySelectorAll('.tab').forEach(function(tab) {
             if (status) { status.textContent = 'Error'; status.style.color = 'crimson'; }
         });
     }
-    render();
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', render);
+    } else {
+        render();
+    }
 
     document.querySelectorAll('[data-tplview-width]').forEach(function(b) {
         b.addEventListener('click', function() {

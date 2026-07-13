@@ -181,7 +181,11 @@
         });
     }
 
-    render();
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', render);
+    } else {
+        render();
+    }
 
     // Appearance inputs: debounced auto-save to /blocks/{id}/appearance,
     // re-render preview on success so radius/padding changes show up

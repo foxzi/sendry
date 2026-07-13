@@ -473,6 +473,11 @@
             if (node.dataset && node.dataset.placeholder) return;
             if (node.dataset && node.dataset.inlineText) return;
             if (node.dataset && node.dataset.inlineDone) return;
+            // Skip nodes whose ancestor was already turned into a contenteditable
+            // region (e.g. an <a> inside a <td>): making a descendant editable
+            // too would create overlapping edit zones and break source-index
+            // mapping during saveInlineEdit.
+            if (node.parentNode && node.parentNode.closest && node.parentNode.closest('[contenteditable="true"]')) return;
             var mixed = false;
             var blocksParent = false;
             for (var c = 0; c < node.children.length; c++) {

@@ -332,7 +332,11 @@ function saveTestValues() { localStorage.setItem('sendry_test_values', JSON.stri
     }
 
     btn.addEventListener('click', render);
-    render();
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', render);
+    } else {
+        render();
+    }
     var shell = document.getElementById('livepreview-shell');
     document.querySelectorAll('[data-livepreview-width]').forEach(function(b) {
         b.addEventListener('click', function() {
