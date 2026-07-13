@@ -46,3 +46,7 @@ configs/web.yaml
 
 # Ansible DKIM keys (contain private keys)
 ansible/dkim_keys/
+
+# Agent state
+.nemo/
+ansible/inventory/hosts.yml
