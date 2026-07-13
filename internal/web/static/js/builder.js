@@ -376,7 +376,9 @@
     }
 
     function replaceHrefVars(html) {
-        return html.replace(/href\s*=\s*(['"])\s*\{\{\s*\.\w+(?:\.\w+)*\s*\}\}\s*\1/gi, 'href=$1#$1');
+        // Only match a standalone `href` attribute (preceded by whitespace inside
+        // a tag), not longer attribute names like `data-href` or `xlink:href`.
+        return html.replace(/(\s)href\s*=\s*(['"])\s*\{\{\s*\.\w+(?:\.\w+)*\s*\}\}\s*\2/gi, '$1href=$2#$2');
     }
 
     function replaceTextVars(html) {
