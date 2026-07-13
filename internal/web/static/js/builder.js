@@ -382,7 +382,10 @@
     }
 
     function replaceTextVars(html) {
-        return html.replace(/<[^>]*>|\{\{\.(\w+)\}\}/g, function(match, varName) {
+        // Support nested/dotted paths like {{.User.Email}} and optional
+        // internal whitespace like {{ .Name }}. Tags are skipped to avoid
+        // wrapping placeholders that live inside attributes.
+        return html.replace(/<[^>]*>|\{\{\s*\.(\w+(?:\.\w+)*)\s*\}\}/g, function(match, varName) {
             if (match[0] === '<') return match; // a tag — leave untouched
             return '<span data-placeholder="' + varName + '" style="background:#E4E4E4;color:#959595;padding:1px 4px;border-radius:3px;font-size:12px;">' + varName + '</span>';
         });
