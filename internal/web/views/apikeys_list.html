@@ -44,10 +44,14 @@
                 <tr>
                     <td>{{.Name}}</td>
                     <td class="key-prefix">{{.KeyPrefix}}...</td>
-                    <td>
+                    <td class="domains-cell">
                         {{if .AllowedDomains}}
+                        {{$total := len .AllowedDomains}}
                         <span class="domain-badges">
-                            {{range .AllowedDomains}}<span class="badge badge-info">{{.}}</span> {{end}}
+                            {{range $i, $d := .AllowedDomains}}<span class="badge badge-info{{if ge $i 3}} domain-extra domain-hidden{{end}}">{{$d}}</span> {{end}}
+                            {{if gt $total 3}}
+                            <button type="button" class="badge badge-more" onclick="toggleDomains(this, {{sub $total 3}})">+{{sub $total 3}}</button>
+                            {{end}}
                         </span>
                         {{else}}
                         <span class="text-secondary">All</span>
@@ -220,6 +224,13 @@ function editKey(id, name, allowedDomains, rateLimitMinute, rateLimitHour) {
 
     document.getElementById('edit-modal').style.display = 'flex';
 }
+
+function toggleDomains(btn, extraCount) {
+    const badges = btn.closest('.domain-badges');
+    const collapsed = badges.querySelector('.domain-extra').classList.contains('domain-hidden');
+    badges.querySelectorAll('.domain-extra').forEach(el => el.classList.toggle('domain-hidden', !collapsed));
+    btn.textContent = collapsed ? 'less' : '+' + extraCount;
+}
 </script>
 
 <style>
@@ -315,13 +326,26 @@ function editKey(id, name, allowedDomains, rateLimitMinute, rateLimitHour) {
     width: 16px;
     height: 16px;
 }
+.domains-cell {
+    max-width: 340px;
+}
 .domain-badges {
     display: flex;
     flex-wrap: wrap;
     gap: 0.25rem;
 }
 .badge-info {
-    background: var(--accent);
+    background: var(--primary);
+    color: white;
+    font-size: 0.75rem;
+}
+.domain-hidden {
+    display: none;
+}
+.badge-more {
+    border: none;
+    cursor: pointer;
+    background: var(--secondary);
     color: white;
     font-size: 0.75rem;
 }
