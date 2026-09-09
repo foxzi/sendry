@@ -50,7 +50,7 @@
                         <span class="domain-badges">
                             {{range $i, $d := .AllowedDomains}}<span class="badge badge-info{{if ge $i 3}} domain-extra domain-hidden{{end}}">{{$d}}</span> {{end}}
                             {{if gt $total 3}}
-                            <button type="button" class="badge badge-more" onclick="toggleDomains(this, {{sub $total 3}})">+{{sub $total 3}}</button>
+                            <button type="button" class="badge badge-more" aria-expanded="false" aria-label="Show {{sub $total 3}} more domains" onclick="toggleDomains(this, {{sub $total 3}})">+{{sub $total 3}}</button>
                             {{end}}
                         </span>
                         {{else}}
@@ -230,6 +230,8 @@ function toggleDomains(btn, extraCount) {
     const collapsed = badges.querySelector('.domain-extra').classList.contains('domain-hidden');
     badges.querySelectorAll('.domain-extra').forEach(el => el.classList.toggle('domain-hidden', !collapsed));
     btn.textContent = collapsed ? 'less' : '+' + extraCount;
+    btn.setAttribute('aria-expanded', collapsed ? 'true' : 'false');
+    btn.setAttribute('aria-label', collapsed ? 'Hide ' + extraCount + ' extra domains' : 'Show ' + extraCount + ' more domains');
 }
 </script>
 

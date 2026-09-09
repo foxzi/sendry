@@ -774,8 +774,8 @@ td.actions form {
 }
 
 .btn-warning:hover {
-    background: #d97706;
-    border-color: #d97706;
+    background: #b45309;
+    border-color: #b45309;
     color: white;
 }
 
@@ -786,8 +786,8 @@ td.actions form {
 }
 
 .btn-success:hover {
-    background: #059669;
-    border-color: #059669;
+    background: #047857;
+    border-color: #047857;
     color: white;
 }
 
