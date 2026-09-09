@@ -770,25 +770,25 @@ td.actions form {
 .btn-warning {
     background: var(--warning);
     border-color: var(--warning);
-    color: white;
+    color: #111827;
 }
 
 .btn-warning:hover {
-    background: #b45309;
-    border-color: #b45309;
-    color: white;
+    background: #d97706;
+    border-color: #d97706;
+    color: #111827;
 }
 
 .btn-success {
     background: var(--success);
     border-color: var(--success);
-    color: white;
+    color: #111827;
 }
 
 .btn-success:hover {
-    background: #047857;
-    border-color: #047857;
-    color: white;
+    background: #059669;
+    border-color: #059669;
+    color: #111827;
 }
 
 /* Current version row highlight */
