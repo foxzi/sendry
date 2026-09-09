@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- API keys page: `.btn-warning`/`.btn-success` now use dark labels and domain badges a darker primary background to meet WCAG 4.5:1 contrast
+- API keys page: domain disclosure button now exposes `aria-expanded` and a descriptive `aria-label` for screen readers
+
 ## [0.4.19] - 2026-07-13
 
 ### Fixed

@@ -732,6 +732,18 @@ code {
     gap: 0.5rem;
 }
 
+/* A td must stay a table cell — display:flex breaks it out of the table layout */
+td.actions {
+    display: table-cell;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+td.actions .btn,
+td.actions form {
+    margin-right: 0.25rem;
+}
+
 .actions-bar {
     display: flex;
     gap: 1rem;
@@ -758,7 +770,25 @@ code {
 .btn-warning {
     background: var(--warning);
     border-color: var(--warning);
-    color: white;
+    color: #111827;
+}
+
+.btn-warning:hover {
+    background: #d97706;
+    border-color: #d97706;
+    color: #111827;
+}
+
+.btn-success {
+    background: var(--success);
+    border-color: var(--success);
+    color: #111827;
+}
+
+.btn-success:hover {
+    background: #059669;
+    border-color: #059669;
+    color: #111827;
 }
 
 /* Current version row highlight */
