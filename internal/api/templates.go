@@ -380,6 +380,11 @@ func (s *TemplateServer) handleSendTemplate(w http.ResponseWriter, r *http.Reque
 		sendError(w, http.StatusBadRequest, "from is required")
 		return
 	}
+	from, err := mail.ParseAddress(req.From)
+	if err != nil {
+		sendError(w, http.StatusBadRequest, "invalid from address")
+		return
+	}
 
 	if len(req.To) == 0 {
 		sendError(w, http.StatusBadRequest, "to is required")
@@ -406,7 +411,6 @@ func (s *TemplateServer) handleSendTemplate(w http.ResponseWriter, r *http.Reque
 
 	// Get template
 	var tmpl *template.Template
-	var err error
 
 	if req.TemplateID != "" {
 		tmpl, err = s.storage.Get(r.Context(), req.TemplateID)
@@ -432,19 +436,13 @@ func (s *TemplateServer) handleSendTemplate(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Build email data
-	data := s.buildEmailData(req.From, req.To, req.CC, result.Subject, result.Text, result.HTML, req.Headers)
+	data := s.buildEmailData(from, req.To, req.CC, result.Subject, result.Text, result.HTML, req.Headers)
 
-	// Envelope recipients = To + CC + BCC
-	envelopeTo := make([]string, 0, len(req.To)+len(req.CC)+len(req.BCC))
-	envelopeTo = append(envelopeTo, req.To...)
-	envelopeTo = append(envelopeTo, req.CC...)
-	envelopeTo = append(envelopeTo, req.BCC...)
-
-	// Create message
+	// Create message; envelope recipients = To + CC + BCC
 	msg := &queue.Message{
 		ID:        uuid.New().String(),
-		From:      req.From,
-		To:        envelopeTo,
+		From:      from.Address,
+		To:        envelopeAddresses(req.To, req.CC, req.BCC),
 		Data:      data,
 		Status:    queue.StatusPending,
 		CreatedAt: time.Now(),
@@ -465,18 +463,18 @@ func (s *TemplateServer) handleSendTemplate(w http.ResponseWriter, r *http.Reque
 }
 
 // buildEmailData constructs RFC 5322 email data
-func (s *TemplateServer) buildEmailData(from string, to []string, cc []string, subject, text, html string, headers map[string]string) []byte {
+func (s *TemplateServer) buildEmailData(from *mail.Address, to []string, cc []string, subject, text, html string, headers map[string]string) []byte {
 	var buf bytes.Buffer
 
 	// Headers
-	buf.WriteString(fmt.Sprintf("From: %s\r\n", from))
-	buf.WriteString(fmt.Sprintf("To: %s\r\n", strings.Join(to, ", ")))
+	buf.WriteString(fmt.Sprintf("From: %s\r\n", headerAddress(from)))
+	buf.WriteString(fmt.Sprintf("To: %s\r\n", headerAddressList(to)))
 	if len(cc) > 0 {
-		buf.WriteString(fmt.Sprintf("Cc: %s\r\n", strings.Join(cc, ", ")))
+		buf.WriteString(fmt.Sprintf("Cc: %s\r\n", headerAddressList(cc)))
 	}
-	buf.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
+	buf.WriteString(fmt.Sprintf("Subject: %s\r\n", encodeHeader(subject)))
 	buf.WriteString(fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z)))
-	buf.WriteString(fmt.Sprintf("Message-ID: <%s@%s>\r\n", uuid.New().String(), email.ExtractDomainOrDefault(from, "localhost")))
+	buf.WriteString(fmt.Sprintf("Message-ID: <%s@%s>\r\n", uuid.New().String(), email.ExtractDomainOrDefault(from.Address, "localhost")))
 
 	// Custom headers (sanitize to prevent header injection)
 	for k, v := range headers {
