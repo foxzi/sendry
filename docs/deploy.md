@@ -55,7 +55,7 @@ On every host the playbook `ansible/playbooks/upgrade.yml`:
 2. Verifies the services run `/usr/bin/…`. If a unit was overridden to another binary (e.g. `/usr/local/bin/sendry-web`), the playbook fails with an explanation instead of silently leaving the old process running.
 3. On the panel, backs up SQLite before installing: `sqlite3 app.db ".backup /var/lib/sendry-web/backups/app-<old version>-<date>.db"`, keeping the newest 5. `sendry-web serve` migrates the database on start and there is no down-migration.
 4. Skips the install when the version is already present (re-runs are idempotent and restart nothing). Otherwise downloads the deb from the GitHub Release and installs it with dpkg; downgrades are allowed.
-5. Restarts the services from step 1 and waits up to 30 s for HTTP 200 from `/health` (MTA `http://127.0.0.1:8080/health`, panel `http://127.0.0.1:8088/health`, both overridable in the inventory).
+5. Re-enables at boot (`systemctl enable`) the services that were enabled before the package changed: the package prerm script up to 0.4.20 disables `sendry` on upgrade. Then restarts the services from step 1 and waits up to 30 s for HTTP 200 from `/health` (MTA `http://127.0.0.1:8080/health`, panel `http://127.0.0.1:8088/health`, both overridable in the inventory).
 6. Prints `sendry version` / `sendry-web version`.
 
 Configs in `/etc/sendry` are never read or modified.

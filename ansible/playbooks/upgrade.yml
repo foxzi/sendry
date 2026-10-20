@@ -92,12 +92,26 @@
       ansible.builtin.set_fact:
         sendry_services: "{{ sendry_services_raw.stdout_lines | map('trim') | select | list }}"
 
+    - name: Read which services are enabled at boot
+      ansible.builtin.command: systemctl is-enabled {{ item }}
+      loop: "{{ sendry_services }}"
+      register: sendry_enabled_raw
+      changed_when: false
+      failed_when: false
+
+    - name: Set enabled service list fact
+      ansible.builtin.set_fact:
+        sendry_enabled_services: >-
+          {{ sendry_enabled_raw.results | selectattr('stdout', 'defined')
+             | selectattr('stdout', 'equalto', 'enabled') | map(attribute='item') | list }}
+
     - name: Show current state
       ansible.builtin.debug:
         msg:
           - "installed: {{ sendry_installed_version }}"
           - "target:    {{ sendry_target_deb_version }}"
           - "services:  {{ sendry_services | join(', ') if sendry_services else 'none (nothing will be restarted)' }}"
+          - "enabled:   {{ sendry_enabled_services | join(', ') if sendry_enabled_services else 'none' }}"
 
     # ------------------------------------------------------------------
     # Safety checks
@@ -226,6 +240,16 @@
     - name: Decide whether services need a restart
       ansible.builtin.set_fact:
         sendry_restarted: "{{ sendry_services | length > 0 and (sendry_installed_version != sendry_target_deb_version or upgrade_force_restart | bool) }}"
+
+    # The package's prerm script (packaging/preremove.sh in releases up to 0.4.20)
+    # runs on upgrade as well and disables sendry.service, so put the boot
+    # setting back to what it was before the package changed.
+    - name: Keep services enabled at boot
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        enabled: true
+        daemon_reload: true
+      loop: "{{ sendry_enabled_services }}"
 
     - name: Restart services
       ansible.builtin.systemd_service:

@@ -18,7 +18,17 @@
                 <dt>Environment</dt>
                 <dd><span class="badge badge-{{.Server.Env}}">{{.Server.Env}}</span></dd>
                 <dt>Status</dt>
-                <dd><span class="badge badge-running">Online</span></dd>
+                <dd>
+                    <span class="badge badge-{{if .Server.Online}}running{{else}}failed{{end}}">
+                        {{if .Server.Online}}Online{{else}}Offline{{end}}
+                    </span>
+                </dd>
+                {{if .Server.Online}}
+                <dt>Version</dt>
+                <dd>{{.Server.Version}}</dd>
+                <dt>Uptime</dt>
+                <dd>{{.Server.Uptime}}</dd>
+                {{end}}
             </dl>
         </div>
     </div>

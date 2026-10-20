@@ -18,6 +18,7 @@
                 <div class="server-info">
                     <p class="text-muted">{{.BaseURL}}</p>
                     <span class="badge badge-{{.Env}}">{{.Env}}</span>
+                    {{if .Version}}<span class="text-muted">v{{.Version}}</span>{{end}}
                 </div>
                 <div class="server-actions">
                     <a href="/servers/{{.Name}}" class="btn btn-sm">View</a>
