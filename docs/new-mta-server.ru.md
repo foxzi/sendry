@@ -61,8 +61,32 @@
    ```
    Проверить результат можно командой из шага 8.
 5. **DKIM** менять не нужно. Ключ общий для всех MTA, TXT-запись `<селектор>._domainkey.<домен>` уже опубликована.
+6. **IPv6.** Если у сервера есть глобальный IPv6-адрес (`ip -6 addr show scope global`), sendry будет доставлять письма по нему в первую очередь: клиент делает обычный `net.Dial("tcp")`, а Go предпочитает IPv6. Значит, для IPv6 нужно то же, что для IPv4: AAAA-запись `<FQDN> → <IPv6>`, PTR для `<IPv6>` и `ip6:<IPv6>` в `_spf.semena.run`. Без этого Gmail отклоняет письма. Так было с mx3: AAAA в DNS не было, а IPv6 у сервера был.
+
+Проверить все записи с ноутбука одной командой (1.1.1.1 — публичный DNS, чтобы не зависеть от локального кэша):
+
+```
+dig +short @1.1.1.1 <FQDN> A; dig +short @1.1.1.1 <FQDN> AAAA
+dig +short @1.1.1.1 -x <IP>; dig +short @1.1.1.1 -x <IPv6>
+dig +short @1.1.1.1 _spf.semena.run TXT
+```
 
 ## 1. Установка пакета
+
+Проверенный путь (mx3, 20.10.2026): тем же playbook, которым обновляются остальные серверы. Для этого сначала:
+
+1. На сервере завести пользователя `deploy` с ключом и sudo без пароля: блок команд в [deploy.ru.md](deploy.ru.md), раздел «Пользователь `deploy` на каждом сервере».
+2. Добавить хост в `ansible/inventory/prod.yml` в группу `sendry_mta` (имя `mx3`, `ansible_host: <FQDN>`).
+3. С ноутбука:
+
+```
+cd ansible
+ansible-playbook -i inventory/prod.yml playbooks/upgrade.yml -l mx3 -e sendry_version=0.4.20 --private-key ~/sendry-deploy
+```
+
+На пустом сервере playbook покажет `installed: none`, `services: none`, скачает deb из GitHub Release и установит его. Ожидаем `changed=2`, `failed=0`. Сервисы не трогает, потому что их ещё нет. После этого сервер уже обновляется кнопкой Deploy вместе с остальными.
+
+Альтернатива без Ansible, из APT-репозитория:
 
 ```
 echo "deb [trusted=yes] https://foxzi.github.io/sendry/apt stable main" | sudo tee /etc/apt/sources.list.d/sendry.list
@@ -73,10 +97,11 @@ sendry version
 
 Ставим ту же версию, которая будет на остальных серверах. Пакет создаёт пользователя `sendry`, каталоги `/etc/sendry` и `/var/lib/sendry`, systemd-юнит `sendry.service` и пример конфига. Сервис после установки не запущен, это нормально.
 
-Задать имя хоста, оно попадает в SMTP-приветствие:
+Задать имя хоста, оно попадает в SMTP-приветствие `HELO`, и почтовые серверы сверяют его с PTR. Проверить текущее: `hostname`. На mx3 из коробки стояло `sendy-marketing`, с опечаткой.
 
 ```
 sudo hostnamectl set-hostname <FQDN>
+hostname
 ```
 
 ## 2. Конфиг `/etc/sendry/config.yaml`
@@ -103,13 +128,14 @@ cat /etc/sendry/config.yaml
 
 У каждого MTA свой `api.api_key`. Его потом надо будет вписать в панель, сохрани.
 
-Права и проверка:
+Как это делалось для mx3: заготовка конфига (копия mx1 с заменёнными полями и двумя плейсхолдерами) копируется `scp` в домашнюю папку `deploy`, там правится `nano` (пароль `admin` взять из конфига mx1: `sudo grep -A1 "users:" /etc/sendry/config.yaml`), затем кладётся на место с правами и временная копия удаляется:
 
 ```
-sudo chown root:sendry /etc/sendry/config.yaml
-sudo chmod 640 /etc/sendry/config.yaml
-sendry config validate -c /etc/sendry/config.yaml
+sudo install -o root -g sendry -m 640 /home/deploy/config.yaml /etc/sendry/config.yaml && rm /home/deploy/config.yaml
+sudo sendry config validate -c /etc/sendry/config.yaml
 ```
+
+`install` за один шаг копирует файл поверх шаблонного из пакета и выставляет владельца root, группу `sendry`, права 640. Валидация должна ответить `Configuration is valid` и показать `Hostname: <FQDN>`. Валидация **не** проверяет, что плейсхолдеры заменены, это смотреть глазами: `sudo grep -nE "api_key:|admin:" /etc/sendry/config.yaml`.
 
 Если конфига с mx1 под рукой нет, можно сгенерировать новый мастером, а потом сверить SMTP-пользователей с mx1:
 
@@ -120,21 +146,22 @@ sudo sendry init --domain <домен> --hostname <FQDN> --acme --acme-email adm
 ## 3. Firewall
 
 ```
-sudo apt install ufw
+sudo apt install -y ufw
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
 sudo ufw allow 22/tcp
 sudo ufw allow 25/tcp
 sudo ufw allow from <IP_панели> to any port 8080 proto tcp
-sudo ufw enable
-sudo ufw status
+sudo ufw allow from <IPv6_панели> to any port 8080 proto tcp
+sudo ufw --force enable
+sudo ufw status verbose
 ```
+
+Панель: IPv4 `46.224.65.96`, IPv6 `2a01:4f8:c013:ddcd::1`. Правило для 22 должно быть добавлено **до** `enable`, иначе SSH-сессия оборвётся. `--force` подавляет вопрос «вы уверены».
 
 Порты 587 и 465 открывать только если к этому MTA будут ходить внешние SMTP-клиенты напрямую. Панель ходит через 8080, ей они не нужны. Входящий 25 тоже не нужен: сервер только отправляет, почту для доменов принимает `mail.funtik.tech`.
 
-Если у сервера есть IPv6, добавить и его правило, иначе повторится ситуация mx1, где по IPv6 открыто всё:
-
-```
-sudo ufw allow from 2a01:4f8:c013:ddcd::1 to any port 8080 proto tcp
-```
+`ufw` пишет правила и для IPv4, и для IPv6, поэтому ситуация mx1, где по IPv6 открыто всё, здесь не повторится.
 
 ## 4. TLS-сертификат
 
@@ -195,7 +222,7 @@ sendry:
 sudo systemctl restart sendry-web
 ```
 
-В панели открыть **Servers**: mx3 должен быть зелёным, с версией 0.4.20. Если красный, проверь с сервера панели:
+В панели открыть **Servers**: mx3 должен быть зелёным в списке. Версию покажет 0.3.2 для всех серверов, это зашитая строка в `/health` (см. `ci-cd-plan.ru.md`, «Найдено по пути»); на странице самого сервера бейдж «Online» тоже зашит и ничего не значит, смотреть на список. Если в списке красный, проверь с сервера панели:
 
 ```
 curl -s -H "Authorization: Bearer <api_key>" http://<IP>:8080/api/v1/domains
@@ -255,8 +282,8 @@ journalctl -u sendry -f
 
 ## 10. Что дальше
 
-- Если ставил `mx3: 0` в весах, после успешных тестов поднять вес. Новый IP «холодный», первые дни лучше давать ему небольшую долю писем.
-- Добавить сервер в `ansible/inventory/prod.yml` из плана CI/CD (`ci-cd-plan.ru.md`), чтобы он обновлялся вместе с остальными.
+- Пока домен не раскатан на сервер из панели (статус deployed), панель через него не отправляет: `getDeployedServers` в `internal/web/router/router.go` берёт только такие серверы. Поэтому до готовности DNS достаточно не нажимать Deploy домена, веса менять не нужно. Новый IP «холодный», первые дни лучше давать ему небольшую долю писем (`weighted_round_robin`).
+- Добавить сервер в `ansible/inventory/prod.yml` из плана CI/CD (`ci-cd-plan.ru.md`), чтобы он обновлялся вместе с остальными. Для mx3 сделано 2026-10-20.
 - Записать `<FQDN>`, `<IP>` и `api_key` туда, где хранятся доступы к mx1.
 
 ## Если что-то не так
