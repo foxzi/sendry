@@ -111,7 +111,7 @@ docker compose up -d
 
 ### Ansible
 
-For automated deployment on multiple servers, see [Ansible documentation](docs/ansible.md).
+For automated deployment on multiple servers, see [Ansible documentation](docs/ansible.md). Releasing and rolling out new versions from GitHub Actions is described in [Release and Deploy](docs/deploy.md).
 
 ```bash
 cd ansible
@@ -315,6 +315,7 @@ See documentation:
 - [Sendry Web panel](docs/sendry-web.md)
 - [DNS sync (Cloudflare)](docs/dns-sync.md)
 - [Ansible deployment](docs/ansible.md)
+- [Release and deploy from GitHub Actions](docs/deploy.md)
 
 ## Project Structure
 

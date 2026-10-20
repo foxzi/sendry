@@ -14,10 +14,12 @@ Ansible role for automated Sendry deployment on one or multiple servers.
 ```
 ansible/
 ├── inventory/
-│   └── hosts.yml.example
+│   ├── hosts.yml.example
+│   └── prod.yml              # production hosts for playbooks/upgrade.yml
 ├── playbooks/
 │   ├── sendry.yml
-│   └── dkim.yml
+│   ├── dkim.yml
+│   └── upgrade.yml           # package-only upgrade, used by .github/workflows/deploy.yml
 ├── roles/
 │   └── sendry/
 │       ├── defaults/main.yml
@@ -41,6 +43,8 @@ ansible/
 ```
 
 ## Quick Start
+
+Upgrading already configured servers to a new version (without regenerating configs) is done by the separate `upgrade.yml` playbook, see [Release and Deploy](deploy.md).
 
 ```bash
 cd ansible

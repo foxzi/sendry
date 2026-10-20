@@ -1,0 +1,58 @@
+name: Set up Ansible
+description: Installs ansible-core and configures the SSH key for deploy jobs
+
+inputs:
+  ssh_key:
+    description: Private SSH key for the deploy user
+    required: true
+  known_hosts:
+    description: Contents of known_hosts (ssh-keyscan output); when empty, host keys are not verified
+    required: false
+    default: ''
+  ansible_version:
+    description: pip version spec for ansible-core
+    required: false
+    default: '>=2.17,<2.19'
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install ansible-core
+      shell: bash
+      env:
+        ANSIBLE_VERSION: ${{ inputs.ansible_version }}
+      run: |
+        set -euo pipefail
+        python -m pip install --quiet --upgrade pip
+        python -m pip install --quiet "ansible-core${ANSIBLE_VERSION}"
+        ansible --version | head -n1
+
+    - name: Configure SSH
+      shell: bash
+      env:
+        SSH_KEY: ${{ inputs.ssh_key }}
+        KNOWN_HOSTS: ${{ inputs.known_hosts }}
+      run: |
+        set -euo pipefail
+        if [ -z "$SSH_KEY" ]; then
+          echo "::error::DEPLOY_SSH_KEY secret is empty. Add it to the 'production' environment."
+          exit 1
+        fi
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+        printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+        chmod 600 ~/.ssh/id_ed25519
+        if [ -n "$KNOWN_HOSTS" ]; then
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+          echo "ANSIBLE_HOST_KEY_CHECKING=True" >> "$GITHUB_ENV"
+        else
+          echo "::warning::DEPLOY_KNOWN_HOSTS is not set; SSH host keys are not verified"
+          echo "ANSIBLE_HOST_KEY_CHECKING=False" >> "$GITHUB_ENV"
+        fi
+        echo "ANSIBLE_PRIVATE_KEY_FILE=$HOME/.ssh/id_ed25519" >> "$GITHUB_ENV"

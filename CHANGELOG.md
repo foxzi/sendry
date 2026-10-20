@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- GitHub Actions workflow `Release (button)`: computes the next semver from the latest tag and tags HEAD of main (patch/minor/major)
+- GitHub Actions workflow `Deploy`: rolls out a released version to production servers over SSH with Ansible (all/mta/panel)
+- Ansible playbook `playbooks/upgrade.yml`: upgrades the deb package only, backs up the panel SQLite database, restarts active services and checks `/health`
+- Production inventory `ansible/inventory/prod.yml` and docs `docs/deploy.md` / `docs/deploy.ru.md`
+
+### Changed
+- `release.yml` can be started on an existing tag via `workflow_dispatch` (used by `Release (button)`, since tags pushed with `GITHUB_TOKEN` do not trigger it)
+
 ## [0.4.20] - 2026-09-09
 
 ### Fixed

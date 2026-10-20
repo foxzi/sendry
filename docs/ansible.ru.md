@@ -14,10 +14,12 @@ Ansible роль для автоматического развертывани�
 ```
 ansible/
 ├── inventory/
-│   └── hosts.yml.example
+│   ├── hosts.yml.example
+│   └── prod.yml              # production hosts for playbooks/upgrade.yml
 ├── playbooks/
 │   ├── sendry.yml
-│   └── dkim.yml
+│   ├── dkim.yml
+│   └── upgrade.yml           # package-only upgrade, used by .github/workflows/deploy.yml
 ├── roles/
 │   └── sendry/
 │       ├── defaults/main.yml
@@ -41,6 +43,8 @@ ansible/
 ```
 
 ## Быстрый старт
+
+Обновление уже настроенных серверов до новой версии (без перегенерации конфигов) делается отдельным playbook `upgrade.yml`, см. [Релиз и деплой по кнопке](deploy.ru.md).
 
 ```bash
 cd ansible

@@ -98,7 +98,7 @@ docker run -p 25:25 -p 587:587 -p 8080:8080 \
 
 ### Ansible
 
-Для автоматического развертывания на нескольких серверах см. [документацию Ansible](ansible.ru.md).
+Для автоматического развертывания на нескольких серверах см. [документацию Ansible](ansible.ru.md). Выпуск версий и раскатка на прод из GitHub Actions: [Релиз и деплой по кнопке](deploy.ru.md).
 
 ```bash
 cd ansible
@@ -302,6 +302,7 @@ curl -X DELETE http://localhost:8080/api/v1/queue/{message_id} \
 - [Веб-панель Sendry](sendry-web.ru.md)
 - [Синхронизация DNS (Cloudflare)](dns-sync.ru.md)
 - [Развертывание через Ansible](ansible.ru.md)
+- [Релиз и деплой по кнопке](deploy.ru.md)
 
 ## Структура проекта
 
