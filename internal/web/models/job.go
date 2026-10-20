@@ -71,8 +71,8 @@ type JobItemFilter struct {
 	Offset    int
 }
 
-// JobErrorCount is the number of job items with the same error text and status
-type JobErrorCount struct {
+// ErrorCount is the number of job items or sends with the same error text and status
+type ErrorCount struct {
 	Error  string
 	Status string
 	Count  int

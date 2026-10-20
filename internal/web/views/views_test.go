@@ -2,6 +2,7 @@ package views
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -61,5 +62,61 @@ func TestRenderJobErrors(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("job_items has no %q", want)
 		}
+	}
+}
+
+func TestRenderSendErrors(t *testing.T) {
+	e, err := New()
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	sends := []models.SendWithDetails{{Send: models.Send{
+		ID: "0123456789abcdef", FromAddress: "shop@example.com", ToAddresses: `["a@example.org"]`,
+		Status: "queued", ErrorMessage: "MAIL FROM failed: x509: certificate has expired", CreatedAt: time.Now(),
+	}}}
+
+	var buf bytes.Buffer
+	err = e.Render(&buf, "sends_list", map[string]any{
+		"Sends":      sends,
+		"Stats":      &models.SendStats{Total: 1, Queued: 1},
+		"Total":      1,
+		"Page":       1,
+		"TotalPages": 2,
+		"ErrorType":  stats.ErrorTechnical,
+		"ErrorTypes": stats.ErrorTypes,
+		"Errors": []struct {
+			Type     stats.ErrorType
+			Failed   int
+			Retrying int
+		}{{Type: stats.ErrorTechnical, Retrying: 1}},
+	})
+	if err != nil {
+		t.Fatalf("render sends_list: %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{
+		`<a href="/sends?status=queued&error_type=technical">1</a>`,
+		`<option value="technical" selected>`,
+		`>Temporary technical error</span>`,
+		`&error_type=technical" class="btn btn-sm">Next`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("sends_list has no %q", want)
+		}
+	}
+}
+
+func TestLayoutFooterYear(t *testing.T) {
+	e, err := New()
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	var buf bytes.Buffer
+	if err := e.Render(&buf, "sends_list", map[string]any{}); err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if want := fmt.Sprintf("Sendry Web &copy; %d", time.Now().Year()); !strings.Contains(buf.String(), want) {
+		t.Errorf("footer has no %q", want)
 	}
 }

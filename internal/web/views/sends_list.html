@@ -10,6 +10,10 @@
         <div class="stat-label">Total</div>
     </div>
     <div class="stat-card" style="flex: 1;">
+        <div class="stat-value" style="color: var(--primary)">{{.Stats.Queued}}</div>
+        <div class="stat-label">Queued</div>
+    </div>
+    <div class="stat-card" style="flex: 1;">
         <div class="stat-value" style="color: var(--success)">{{.Stats.Sent}}</div>
         <div class="stat-label">Sent</div>
     </div>
@@ -24,6 +28,35 @@
 </div>
 {{end}}
 
+{{if .Errors}}
+<div class="card" style="margin-bottom: 1rem">
+    <div class="card-header">
+        <h2>Delivery Errors</h2>
+    </div>
+    <div class="card-body">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Error Type</th>
+                    <th>Failed</th>
+                    <th>Retrying</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Errors}}
+                <tr>
+                    <td>{{.Type.Label}}</td>
+                    <td>{{if .Failed}}<a href="/sends?status=failed&error_type={{.Type}}">{{.Failed}}</a>{{else}}<span class="text-muted">0</span>{{end}}</td>
+                    <td>{{if .Retrying}}<a href="/sends?status=queued&error_type={{.Type}}">{{.Retrying}}</a>{{else}}<span class="text-muted">0</span>{{end}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        <p class="text-muted">Retrying: messages still in the MTA queue after a failed delivery attempt.</p>
+    </div>
+</div>
+{{end}}
+
 <div class="card">
     <div class="card-header">
         <form class="filter-form" method="get" action="/sends">
@@ -31,6 +64,7 @@
             <select name="status" class="input">
                 <option value="">All Status</option>
                 <option value="pending" {{if eq .Status "pending"}}selected{{end}}>Pending</option>
+                <option value="queued" {{if eq .Status "queued"}}selected{{end}}>Queued</option>
                 <option value="sent" {{if eq .Status "sent"}}selected{{end}}>Sent</option>
                 <option value="failed" {{if eq .Status "failed"}}selected{{end}}>Failed</option>
             </select>
@@ -46,8 +80,14 @@
                 <option value="{{.}}" {{if eq $.Server .}}selected{{end}}>{{.}}</option>
                 {{end}}
             </select>
+            <select name="error_type" class="input">
+                <option value="">All Errors</option>
+                {{range .ErrorTypes}}
+                <option value="{{.}}" {{if eq . $.ErrorType}}selected{{end}}>{{.Label}}</option>
+                {{end}}
+            </select>
             <button type="submit" class="btn">Filter</button>
-            {{if or .Search .Status .Domain .Server}}
+            {{if or .Search .Status .Domain .Server .ErrorType}}
             <a href="/sends" class="btn btn-secondary">Clear</a>
             {{end}}
         </form>
@@ -82,6 +122,7 @@
                         {{else}}
                         <span class="badge badge-scheduled">{{.Status}}</span>
                         {{end}}
+                        {{if .ErrorMessage}}<span class="badge" title="{{.ErrorMessage}}">{{(errorType .ErrorMessage).Label}}</span>{{end}}
                     </td>
                     <td>{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
                 </tr>
@@ -92,11 +133,11 @@
         {{if gt .TotalPages 1}}
         <div class="pagination">
             {{if gt .Page 1}}
-            <a href="/sends?page={{sub .Page 1}}{{if .Search}}&search={{.Search}}{{end}}{{if .Status}}&status={{.Status}}{{end}}{{if .Domain}}&domain={{.Domain}}{{end}}{{if .Server}}&server={{.Server}}{{end}}" class="btn btn-sm">&laquo; Prev</a>
+            <a href="/sends?page={{sub .Page 1}}{{if .Search}}&search={{.Search}}{{end}}{{if .Status}}&status={{.Status}}{{end}}{{if .Domain}}&domain={{.Domain}}{{end}}{{if .Server}}&server={{.Server}}{{end}}{{if .ErrorType}}&error_type={{.ErrorType}}{{end}}" class="btn btn-sm">&laquo; Prev</a>
             {{end}}
             <span class="pagination-info">Page {{.Page}} of {{.TotalPages}} ({{.Total}} total)</span>
             {{if lt .Page .TotalPages}}
-            <a href="/sends?page={{add .Page 1}}{{if .Search}}&search={{.Search}}{{end}}{{if .Status}}&status={{.Status}}{{end}}{{if .Domain}}&domain={{.Domain}}{{end}}{{if .Server}}&server={{.Server}}{{end}}" class="btn btn-sm">Next &raquo;</a>
+            <a href="/sends?page={{add .Page 1}}{{if .Search}}&search={{.Search}}{{end}}{{if .Status}}&status={{.Status}}{{end}}{{if .Domain}}&domain={{.Domain}}{{end}}{{if .Server}}&server={{.Server}}{{end}}{{if .ErrorType}}&error_type={{.ErrorType}}{{end}}" class="btn btn-sm">Next &raquo;</a>
             {{end}}
         </div>
         {{end}}

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/foxzi/sendry/internal/web/models"
+	"github.com/foxzi/sendry/internal/web/stats"
 	"github.com/google/uuid"
 )
 
@@ -74,7 +75,8 @@ func (r *SendRepository) GetByID(id string) (*models.Send, error) {
 	return s, nil
 }
 
-// List returns sends with optional filtering
+// List returns sends with optional filtering.
+// Error type is not stored, so with ErrorType set the sends with an error are classified and paged in Go.
 func (r *SendRepository) List(filter models.SendFilter) ([]models.SendWithDetails, int, error) {
 	// Count total
 	countQuery := "SELECT COUNT(*) FROM sends WHERE 1=1"
@@ -111,6 +113,9 @@ func (r *SendRepository) List(filter models.SendFilter) ([]models.SendWithDetail
 	if filter.Search != "" {
 		countQuery += " AND (from_address LIKE ? OR to_addresses LIKE ? OR subject LIKE ?)"
 		args = append(args, "%"+filter.Search+"%", "%"+filter.Search+"%", "%"+filter.Search+"%")
+	}
+	if filter.ErrorType != "" {
+		countQuery += " AND COALESCE(error_message, '') != ''"
 	}
 
 	var total int
@@ -163,10 +168,13 @@ func (r *SendRepository) List(filter models.SendFilter) ([]models.SendWithDetail
 		query += " AND (s.from_address LIKE ? OR s.to_addresses LIKE ? OR s.subject LIKE ?)"
 		queryArgs = append(queryArgs, "%"+filter.Search+"%", "%"+filter.Search+"%", "%"+filter.Search+"%")
 	}
+	if filter.ErrorType != "" {
+		query += " AND COALESCE(s.error_message, '') != ''"
+	}
 
 	query += " ORDER BY s.created_at DESC"
 
-	if filter.Limit > 0 {
+	if filter.Limit > 0 && filter.ErrorType == "" {
 		query += fmt.Sprintf(" LIMIT %d", filter.Limit)
 		if filter.Offset > 0 {
 			query += fmt.Sprintf(" OFFSET %d", filter.Offset)
@@ -203,10 +211,25 @@ func (r *SendRepository) List(filter models.SendFilter) ([]models.SendWithDetail
 			s.SentAt = &sentAt.Time
 		}
 
+		if filter.ErrorType != "" && stats.ClassifyError(s.ErrorMessage) != filter.ErrorType {
+			continue
+		}
+
 		sends = append(sends, s)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
 
-	return sends, total, rows.Err()
+	if filter.ErrorType != "" {
+		total = len(sends)
+		sends = sends[min(filter.Offset, total):]
+		if filter.Limit > 0 && len(sends) > filter.Limit {
+			sends = sends[:filter.Limit]
+		}
+	}
+
+	return sends, total, nil
 }
 
 // UpdateStatus updates the status of a send
@@ -225,6 +248,7 @@ func (r *SendRepository) GetStats(filter models.SendFilter) (*models.SendStats, 
 		SELECT
 			COUNT(*) as total,
 			SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+			SUM(CASE WHEN status = 'queued' THEN 1 ELSE 0 END) as queued,
 			SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) as sent,
 			SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
 		FROM sends WHERE 1=1`
@@ -248,11 +272,64 @@ func (r *SendRepository) GetStats(filter models.SendFilter) (*models.SendStats, 
 	}
 
 	stats := &models.SendStats{}
-	err := r.db.QueryRow(query, args...).Scan(&stats.Total, &stats.Pending, &stats.Sent, &stats.Failed)
+	err := r.db.QueryRow(query, args...).Scan(&stats.Total, &stats.Pending, &stats.Queued, &stats.Sent, &stats.Failed)
 	if err != nil {
 		return nil, err
 	}
 	return stats, nil
+}
+
+// ErrorCounts returns the number of sends per distinct error text and status
+func (r *SendRepository) ErrorCounts() ([]models.ErrorCount, error) {
+	rows, err := r.db.Query(`
+		SELECT error_message, status, COUNT(*)
+		FROM sends
+		WHERE COALESCE(error_message, '') != ''
+		GROUP BY error_message, status`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	counts := []models.ErrorCount{}
+	for rows.Next() {
+		var c models.ErrorCount
+		if err := rows.Scan(&c.Error, &c.Status, &c.Count); err != nil {
+			return nil, err
+		}
+		counts = append(counts, c)
+	}
+
+	return counts, rows.Err()
+}
+
+// GetQueuedSends returns sends accepted by the MTA but not delivered yet, starting after the given rowid.
+// It also returns the rowid of the last send, to be passed as afterRowID on the next call.
+func (r *SendRepository) GetQueuedSends(afterRowID int64, limit int) ([]models.Send, int64, error) {
+	rows, err := r.db.Query(`
+		SELECT rowid, id, server_name, server_msg_id, status, COALESCE(error_message, '')
+		FROM sends
+		WHERE status = 'queued' AND COALESCE(server_msg_id, '') != '' AND rowid > ?
+		ORDER BY rowid
+		LIMIT ?`, afterRowID, limit,
+	)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	sends := []models.Send{}
+	lastRowID := afterRowID
+	for rows.Next() {
+		var s models.Send
+		if err := rows.Scan(&lastRowID, &s.ID, &s.ServerName, &s.ServerMsgID, &s.Status, &s.ErrorMessage); err != nil {
+			return nil, 0, err
+		}
+		sends = append(sends, s)
+	}
+
+	return sends, lastRowID, rows.Err()
 }
 
 // GetDomains returns list of unique sender domains
@@ -315,7 +392,7 @@ func (r *SendRepository) GetTimeSeries(filter models.MonitoringFilter) ([]models
 			strftime(?, created_at) as timestamp,
 			SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) as sent,
 			SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
-			SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending
+			SUM(CASE WHEN status IN ('pending', 'queued') THEN 1 ELSE 0 END) as pending
 		FROM sends
 		WHERE created_at >= datetime('now', ?)`
 
@@ -372,7 +449,7 @@ func (r *SendRepository) GetDomainStats(filter models.MonitoringFilter) ([]model
 			sender_domain,
 			SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) as sent,
 			SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
-			SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+			SUM(CASE WHEN status IN ('pending', 'queued') THEN 1 ELSE 0 END) as pending,
 			COUNT(*) as total
 		FROM sends
 		WHERE created_at >= datetime('now', ?)

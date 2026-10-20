@@ -252,37 +252,3 @@ func (h *Handlers) JobRetry(w http.ResponseWriter, r *http.Request) {
 
 	http.Redirect(w, r, "/jobs/"+id, http.StatusSeeOther)
 }
-
-// jobErrorType is the number of failed and still retrying job items with one error type
-type jobErrorType struct {
-	Type     stats.ErrorType
-	Failed   int
-	Retrying int
-}
-
-// summarizeErrors groups job item errors by type in display order, skipping types without items
-func summarizeErrors(counts []models.JobErrorCount) []jobErrorType {
-	byType := make(map[stats.ErrorType]*jobErrorType)
-	for _, c := range counts {
-		et := stats.ClassifyError(c.Error)
-		row := byType[et]
-		if row == nil {
-			row = &jobErrorType{Type: et}
-			byType[et] = row
-		}
-		switch c.Status {
-		case "failed":
-			row.Failed += c.Count
-		case "queued":
-			row.Retrying += c.Count
-		}
-	}
-
-	var result []jobErrorType
-	for _, et := range stats.ErrorTypes {
-		if row := byType[et]; row != nil && row.Failed+row.Retrying > 0 {
-			result = append(result, *row)
-		}
-	}
-	return result
-}

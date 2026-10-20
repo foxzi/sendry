@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/foxzi/sendry/internal/web/stats"
 )
@@ -41,7 +42,8 @@ var funcs = template.FuncMap{
 		s := strings.ReplaceAll(string(b), "</", `<\/`)
 		return template.JS(s)
 	},
-	"errorType": stats.ClassifyError,
+	"errorType":   stats.ClassifyError,
+	"currentYear": func() int { return time.Now().Year() },
 }
 
 type Engine struct {

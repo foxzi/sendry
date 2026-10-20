@@ -344,7 +344,7 @@ func (r *JobRepository) ListItems(filter models.JobItemFilter) ([]models.SendJob
 }
 
 // ErrorCounts returns the number of job items per distinct error text and status
-func (r *JobRepository) ErrorCounts(jobID string) ([]models.JobErrorCount, error) {
+func (r *JobRepository) ErrorCounts(jobID string) ([]models.ErrorCount, error) {
 	rows, err := r.db.Query(`
 		SELECT error, status, COUNT(*)
 		FROM send_job_items
@@ -356,9 +356,9 @@ func (r *JobRepository) ErrorCounts(jobID string) ([]models.JobErrorCount, error
 	}
 	defer rows.Close()
 
-	counts := []models.JobErrorCount{}
+	counts := []models.ErrorCount{}
 	for rows.Next() {
-		var c models.JobErrorCount
+		var c models.ErrorCount
 		if err := rows.Scan(&c.Error, &c.Status, &c.Count); err != nil {
 			return nil, err
 		}

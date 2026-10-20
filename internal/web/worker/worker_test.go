@@ -223,7 +223,7 @@ func TestMapSendryStatus(t *testing.T) {
 	}
 }
 
-func TestQueuedItemUpdate(t *testing.T) {
+func TestDeliveryUpdate(t *testing.T) {
 	const certErr = "MAIL FROM failed: x509: certificate has expired"
 	cases := []struct {
 		name        string
@@ -243,9 +243,9 @@ func TestQueuedItemUpdate(t *testing.T) {
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			status, errMsg, changed := queuedItemUpdate(tt.item, &tt.status)
+			status, errMsg, changed := deliveryUpdate(tt.item.Status, tt.item.Error, &tt.status)
 			if changed != tt.wantChanged || (changed && (status != tt.wantStatus || errMsg != tt.wantError)) {
-				t.Errorf("queuedItemUpdate() = (%q, %q, %v), want (%q, %q, %v)",
+				t.Errorf("deliveryUpdate() = (%q, %q, %v), want (%q, %q, %v)",
 					status, errMsg, changed, tt.wantStatus, tt.wantError, tt.wantChanged)
 			}
 		})

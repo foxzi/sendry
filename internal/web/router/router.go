@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/foxzi/sendry/internal/web/config"
 	"github.com/foxzi/sendry/internal/web/models"
@@ -180,14 +179,13 @@ func (r *EmailRouter) Send(ctx context.Context, req *APISendRequest, apiKeyID, c
 	// Send with failover
 	resp, actualServer, err := r.sendWithFailover(ctx, sendReq, servers, selectedServer)
 
-	// Update send record with result
-	now := time.Now()
+	// Update send record with result. Delivery is confirmed later by the worker polling the MTA.
 	if err != nil {
 		r.sends.UpdateStatus(send.ID, models.SendStatusFailed, err.Error(), "", nil)
 		return nil, err
 	}
 
-	r.sends.UpdateStatus(send.ID, models.SendStatusSent, "", resp.ID, &now)
+	r.sends.UpdateStatus(send.ID, models.SendStatusQueued, "", resp.ID, nil)
 
 	r.logger.Info("email sent via API",
 		"send_id", send.ID,

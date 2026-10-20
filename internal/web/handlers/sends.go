@@ -6,6 +6,7 @@ import (
 
 	"github.com/foxzi/sendry/internal/web/models"
 	"github.com/foxzi/sendry/internal/web/repository"
+	"github.com/foxzi/sendry/internal/web/stats"
 )
 
 // SendsList shows the send history list
@@ -15,6 +16,7 @@ func (h *Handlers) SendsList(w http.ResponseWriter, r *http.Request) {
 	status := r.URL.Query().Get("status")
 	domain := r.URL.Query().Get("domain")
 	server := r.URL.Query().Get("server")
+	errorType := stats.ParseErrorType(r.URL.Query().Get("error_type"))
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	if page < 1 {
 		page = 1
@@ -28,6 +30,7 @@ func (h *Handlers) SendsList(w http.ResponseWriter, r *http.Request) {
 		Status:       status,
 		SenderDomain: domain,
 		ServerName:   server,
+		ErrorType:    errorType,
 		Limit:        limit,
 		Offset:       offset,
 	}
@@ -40,7 +43,11 @@ func (h *Handlers) SendsList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get stats
-	stats, _ := h.sends.GetStats(models.SendFilter{})
+	sendStats, _ := h.sends.GetStats(models.SendFilter{})
+	errorCounts, err := h.sends.ErrorCounts()
+	if err != nil {
+		h.logger.Error("failed to count send errors", "error", err)
+	}
 
 	// Get unique domains and servers for filters
 	domains, _ := h.sends.GetDomains()
@@ -53,7 +60,7 @@ func (h *Handlers) SendsList(w http.ResponseWriter, r *http.Request) {
 		"Active":     "sends",
 		"User":       h.getUserFromContext(r),
 		"Sends":      sends,
-		"Stats":      stats,
+		"Stats":      sendStats,
 		"Total":      total,
 		"Page":       page,
 		"TotalPages": totalPages,
@@ -63,6 +70,9 @@ func (h *Handlers) SendsList(w http.ResponseWriter, r *http.Request) {
 		"Server":     server,
 		"Domains":    domains,
 		"Servers":    servers,
+		"Errors":     summarizeErrors(errorCounts),
+		"ErrorType":  errorType,
+		"ErrorTypes": stats.ErrorTypes,
 	}
 
 	h.render(w, "sends_list", data)
