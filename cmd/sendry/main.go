@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/foxzi/sendry/internal/app"
+	"github.com/foxzi/sendry/internal/buildinfo"
 	"github.com/foxzi/sendry/internal/config"
 )
 
@@ -20,6 +21,7 @@ var (
 )
 
 func main() {
+	buildinfo.Version = version
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}

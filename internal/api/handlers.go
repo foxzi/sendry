@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/foxzi/sendry/internal/buildinfo"
 	"github.com/foxzi/sendry/internal/email"
 	"github.com/foxzi/sendry/internal/queue"
 )
@@ -363,7 +364,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 	s.sendJSON(w, http.StatusOK, HealthResponse{
 		Status:  "ok",
-		Version: "0.3.2",
+		Version: buildinfo.Version,
 		Uptime:  time.Since(s.startTime).String(),
 		Queue:   stats,
 	})
