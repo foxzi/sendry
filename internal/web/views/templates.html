@@ -27,7 +27,15 @@
     </div>
     <div class="card-body">
         {{if .Templates}}
-        <table class="table">
+        <table class="table templates-table">
+            <colgroup>
+                <col class="col-name">
+                <col class="col-folder">
+                <col class="col-version">
+                <col class="col-status">
+                <col class="col-updated">
+                <col class="col-actions">
+            </colgroup>
             <thead>
                 <tr>
                     <th>Name</th>
@@ -44,7 +52,7 @@
                     <td>
                         <a href="/templates/{{.ID}}">{{.Name}}</a>
                         {{if .Description}}
-                        <div class="text-muted">{{.Description}}</div>
+                        <div class="text-muted desc-clamp" title="{{.Description}}">{{.Description}}</div>
                         {{end}}
                     </td>
                     <td>
@@ -64,7 +72,7 @@
                         <span class="badge badge-warning">Out of Sync ({{.OutOfSyncCount}}/{{.DeployedCount}})</span>
                         {{end}}
                     </td>
-                    <td>{{.UpdatedAt.Format "2006-01-02 15:04"}}</td>
+                    <td class="nowrap">{{.UpdatedAt.Format "2006-01-02 15:04"}}</td>
                     <td class="actions">
                         <a href="/templates/{{.ID}}/builder" class="btn btn-sm">Edit</a>
                         <a href="/templates/{{.ID}}/versions" class="btn btn-sm">History</a>
@@ -93,4 +101,20 @@
         {{end}}
     </div>
 </div>
+<style>
+.templates-table {
+    table-layout: fixed;
+}
+.templates-table .col-folder { width: 150px; }
+.templates-table .col-version { width: 90px; }
+.templates-table .col-status { width: 170px; }
+.templates-table .col-updated { width: 160px; }
+.templates-table .col-actions { width: 160px; }
+.templates-table td {
+    overflow-wrap: anywhere;
+}
+.templates-table .desc-clamp {
+    max-width: none;
+}
+</style>
 {{end}}
