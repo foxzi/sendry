@@ -4,6 +4,10 @@ on:
   push:
     tags:
       - 'v*'
+  # Started by release-button.yml on the freshly pushed tag (tags pushed with
+  # GITHUB_TOKEN do not fire the push trigger). Also handy to rebuild a release
+  # by hand: Run workflow -> choose the tag as ref.
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io

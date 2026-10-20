@@ -1,0 +1,274 @@
+---
+# Upgrade (or downgrade) the sendry package on already configured servers.
+#
+# Only the package is touched: configs in /etc/sendry stay as they are.
+# Services that are running or enabled on the host are restarted after the
+# package changes and checked via /health.
+#
+# Usage:
+#   ansible-playbook -i inventory/prod.yml playbooks/upgrade.yml \
+#     -l sendry_mta -e sendry_version=0.4.20
+#
+# Variables (-e or inventory):
+#   sendry_version           required, e.g. 0.4.20 (without "v")
+#   upgrade_force_restart    restart services even if the package did not change (default false)
+#   sendry_health_url        MTA health URL (default http://127.0.0.1:8080/health)
+#   sendry_web_health_url    panel health URL (default http://127.0.0.1:8088/health)
+#   sendry_web_db_path       panel SQLite path (default /var/lib/sendry-web/app.db)
+#   sendry_web_backup_keep   how many DB backups to keep (default 5)
+
+- name: Upgrade sendry package
+  hosts: "{{ upgrade_hosts | default('all') }}"
+  become: true
+  serial: "{{ upgrade_serial | default(1) }}"
+  gather_facts: true
+
+  vars:
+    upgrade_force_restart: false
+    sendry_health_url: "http://127.0.0.1:8080/health"
+    sendry_web_health_url: "http://127.0.0.1:8088/health"
+    sendry_web_db_path: /var/lib/sendry-web/app.db
+    sendry_web_backup_dir: /var/lib/sendry-web/backups
+    sendry_web_backup_keep: 5
+    sendry_health_retries: 15
+    sendry_health_delay: 2
+    sendry_github_repo: foxzi/sendry
+
+  pre_tasks:
+    - name: Check required variables
+      ansible.builtin.assert:
+        that:
+          - sendry_version is defined
+          - sendry_version is match('^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$')
+        fail_msg: "sendry_version is required, e.g. -e sendry_version=0.4.20 (without the leading v)"
+        quiet: true
+
+    - name: Check OS family
+      ansible.builtin.assert:
+        that: ansible_os_family == 'Debian'
+        fail_msg: "upgrade.yml supports Debian/Ubuntu hosts only (deb packages)"
+        quiet: true
+
+  tasks:
+    # ------------------------------------------------------------------
+    # Discover current state
+    # ------------------------------------------------------------------
+    - name: Set package facts
+      ansible.builtin.set_fact:
+        sendry_deb_arch: "{{ (ansible_architecture == 'x86_64') | ternary('amd64', 'arm64') }}"
+        sendry_target_deb_version: "{{ sendry_version }}-1"
+
+    - name: Set package URL
+      ansible.builtin.set_fact:
+        sendry_deb_url: >-
+          https://github.com/{{ sendry_github_repo }}/releases/download/v{{ sendry_version }}/sendry_{{ sendry_version }}-1_{{ sendry_deb_arch }}.deb
+
+    - name: Read installed package version
+      ansible.builtin.command: dpkg-query -W -f='${Version}' sendry
+      register: sendry_dpkg
+      changed_when: false
+      failed_when: false
+
+    - name: Set installed version fact
+      ansible.builtin.set_fact:
+        sendry_installed_version: "{{ (sendry_dpkg.rc == 0) | ternary(sendry_dpkg.stdout | trim, 'none') }}"
+
+    - name: Detect sendry services on this host
+      ansible.builtin.shell: |
+        set -o pipefail
+        for s in sendry sendry-web; do
+          active=$(systemctl is-active "$s" 2>/dev/null || true)
+          enabled=$(systemctl is-enabled "$s" 2>/dev/null || true)
+          if [ "$active" = "active" ] || [ "$enabled" = "enabled" ]; then
+            echo "$s"
+          fi
+        done
+      args:
+        executable: /bin/bash
+      register: sendry_services_raw
+      changed_when: false
+
+    - name: Set service list fact
+      ansible.builtin.set_fact:
+        sendry_services: "{{ sendry_services_raw.stdout_lines | map('trim') | select | list }}"
+
+    - name: Show current state
+      ansible.builtin.debug:
+        msg:
+          - "installed: {{ sendry_installed_version }}"
+          - "target:    {{ sendry_target_deb_version }}"
+          - "services:  {{ sendry_services | join(', ') if sendry_services else 'none (nothing will be restarted)' }}"
+
+    # ------------------------------------------------------------------
+    # Safety checks
+    # ------------------------------------------------------------------
+    - name: Check that running services use the packaged binaries
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - -p
+          - ExecStart
+          - --value
+          - "{{ item }}"
+      loop: "{{ sendry_services }}"
+      register: sendry_execstart
+      changed_when: false
+      tags: [skip_ansible_lint]  # systemd module cannot read ExecStart
+
+    - name: Fail if a service was overridden to a non-package binary
+      ansible.builtin.fail:
+        msg: >-
+          {{ item.item }} runs {{ item.stdout }} instead of /usr/bin/{{ item.item }}.
+          Remove the unit override (systemctl cat {{ item.item }}) before upgrading,
+          otherwise the new package will be installed but the service keeps the old binary.
+      loop: "{{ sendry_execstart.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when:
+        - item.stdout is defined
+        - ("path=/usr/bin/" ~ item.item ~ " ") not in item.stdout
+
+    # ------------------------------------------------------------------
+    # Panel: back up SQLite before the new binary migrates it
+    # ------------------------------------------------------------------
+    - name: Back up sendry-web database
+      when:
+        - "'sendry-web' in sendry_services"
+        - sendry_installed_version != sendry_target_deb_version or upgrade_force_restart | bool
+      block:
+        - name: Check that the database exists
+          ansible.builtin.stat:
+            path: "{{ sendry_web_db_path }}"
+          register: sendry_web_db
+
+        - name: Ensure sqlite3 is installed
+          ansible.builtin.apt:
+            name: sqlite3
+            state: present
+            update_cache: true
+            cache_valid_time: 3600
+          when: sendry_web_db.stat.exists
+
+        - name: Create backup directory
+          ansible.builtin.file:
+            path: "{{ sendry_web_backup_dir }}"
+            state: directory
+            owner: sendry
+            group: sendry
+            mode: "0750"
+          when: sendry_web_db.stat.exists
+
+        - name: Create online backup via sqlite3
+          ansible.builtin.command: >-
+            sqlite3 {{ sendry_web_db_path | quote }}
+            ".backup {{ sendry_web_backup_dir }}/app-{{ sendry_installed_version }}-{{ ansible_date_time.iso8601_basic_short }}.db"
+          changed_when: true
+          when: sendry_web_db.stat.exists
+
+        - name: List existing backups
+          ansible.builtin.find:
+            paths: "{{ sendry_web_backup_dir }}"
+            patterns: "app-*.db"
+          register: sendry_web_backups
+          when: sendry_web_db.stat.exists
+
+        - name: Remove old backups (keep the newest {{ sendry_web_backup_keep }})
+          ansible.builtin.file:
+            path: "{{ item.path }}"
+            state: absent
+          loop: "{{ ((sendry_web_backups.files | default([])) | sort(attribute='mtime', reverse=true) | list)[sendry_web_backup_keep | int :] }}"
+          loop_control:
+            label: "{{ item.path }}"
+          when: sendry_web_db.stat.exists
+
+    # ------------------------------------------------------------------
+    # Install the package
+    # ------------------------------------------------------------------
+    - name: Install sendry {{ sendry_version }}
+      when: sendry_installed_version != sendry_target_deb_version
+      block:
+        - name: Download package
+          ansible.builtin.get_url:
+            url: "{{ sendry_deb_url }}"
+            dest: "/tmp/sendry_{{ sendry_version }}_{{ sendry_deb_arch }}.deb"
+            mode: "0644"
+            timeout: 60
+          register: sendry_deb_download
+          retries: 3
+          delay: 5
+          until: sendry_deb_download is succeeded
+
+        - name: Install package (dpkg, allows downgrade)
+          ansible.builtin.apt:
+            deb: "/tmp/sendry_{{ sendry_version }}_{{ sendry_deb_arch }}.deb"
+          register: sendry_deb_install
+
+      always:
+        - name: Remove downloaded package
+          ansible.builtin.file:
+            path: "/tmp/sendry_{{ sendry_version }}_{{ sendry_deb_arch }}.deb"
+            state: absent
+
+    - name: Verify installed version
+      ansible.builtin.command: dpkg-query -W -f='${Version}' sendry
+      register: sendry_dpkg_after
+      changed_when: false
+
+    - name: Fail if package version does not match
+      ansible.builtin.fail:
+        msg: "expected {{ sendry_target_deb_version }}, dpkg reports {{ sendry_dpkg_after.stdout }}"
+      when: sendry_dpkg_after.stdout | trim != sendry_target_deb_version
+
+    # ------------------------------------------------------------------
+    # Restart services and check health
+    # ------------------------------------------------------------------
+    - name: Decide whether services need a restart
+      ansible.builtin.set_fact:
+        sendry_restarted: "{{ sendry_services | length > 0 and (sendry_installed_version != sendry_target_deb_version or upgrade_force_restart | bool) }}"
+
+    - name: Restart services
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        state: restarted
+        daemon_reload: true
+      loop: "{{ sendry_services }}"
+      when: sendry_restarted | bool
+
+    - name: Wait for sendry /health
+      ansible.builtin.uri:
+        url: "{{ sendry_health_url }}"
+        status_code: 200
+        timeout: 5
+      register: sendry_health
+      retries: "{{ sendry_health_retries }}"
+      delay: "{{ sendry_health_delay }}"
+      until: sendry_health.status == 200
+      when: "'sendry' in sendry_services"
+
+    - name: Wait for sendry-web /health
+      ansible.builtin.uri:
+        url: "{{ sendry_web_health_url }}"
+        status_code: 200
+        timeout: 5
+      register: sendry_web_health
+      retries: "{{ sendry_health_retries }}"
+      delay: "{{ sendry_health_delay }}"
+      until: sendry_web_health.status == 200
+      when: "'sendry-web' in sendry_services"
+
+    - name: Read binary versions
+      ansible.builtin.command: "{{ item }} version"
+      loop:
+        - /usr/bin/sendry
+        - /usr/bin/sendry-web
+      register: sendry_bin_versions
+      changed_when: false
+      failed_when: false
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg:
+          - "package: {{ sendry_installed_version }} -> {{ sendry_dpkg_after.stdout | trim }}"
+          - "restarted: {{ sendry_services | join(', ') if sendry_restarted else 'nothing' }}"
+          - "{{ sendry_bin_versions.results | map(attribute='stdout') | map('trim') | list }}"

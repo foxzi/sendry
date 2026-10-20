@@ -1,0 +1,173 @@
+name: Deploy
+
+# Rolls out an already built release to the production servers listed in
+# ansible/inventory/prod.yml by running ansible/playbooks/upgrade.yml over SSH.
+# Only the package is updated; configs on the servers are not touched.
+#
+# Repository secrets (Settings -> Secrets and variables -> Actions):
+#   DEPLOY_SSH_KEY      private key for the deploy user (ed25519)
+#   DEPLOY_KNOWN_HOSTS  optional, output of ssh-keyscan for all hosts;
+#                       when set, host keys are verified
+# Optional hardening: add `environment: production` to the deploy jobs and move
+# the secrets into that environment to get required reviewers per deploy.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to deploy, e.g. 0.4.21 (must exist as a GitHub Release)'
+        type: string
+        required: true
+      target:
+        description: 'What to deploy'
+        type: choice
+        required: true
+        default: all
+        options:
+          - all
+          - mta
+          - panel
+      limit:
+        description: 'Optional: single inventory host (e.g. mx1) to deploy to'
+        type: string
+        required: false
+        default: ''
+      force_restart:
+        description: 'Restart services even if the package version is already installed'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  ANSIBLE_FORCE_COLOR: '1'
+  PY_COLORS: '1'
+
+jobs:
+  prepare:
+    name: Check release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - name: Normalize version and check that the release exists
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RAW_VERSION: ${{ inputs.version }}
+          REPO: ${{ github.repository }}
+          TARGET: ${{ inputs.target }}
+          LIMIT: ${{ inputs.limit }}
+        run: |
+          set -euo pipefail
+          VERSION="${RAW_VERSION#v}"
+          VERSION="$(echo "$VERSION" | tr -d '[:space:]')"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::Invalid version: '${RAW_VERSION}'. Expected e.g. 0.4.21"
+            exit 1
+          fi
+          ASSETS=$(gh release view "v${VERSION}" --repo "$REPO" --json assets --jq '.assets[].name')
+          for ARCH in amd64 arm64; do
+            if ! grep -qx "sendry_${VERSION}-1_${ARCH}.deb" <<< "$ASSETS"; then
+              echo "::error::Release v${VERSION} has no sendry_${VERSION}-1_${ARCH}.deb asset (build not finished?)"
+              exit 1
+            fi
+          done
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Deploying sendry ${VERSION}, target=${TARGET}, limit='${LIMIT}'"
+
+  deploy-mta:
+    name: Deploy MTA
+    needs: prepare
+    if: inputs.target == 'all' || inputs.target == 'mta'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Ansible
+        uses: ./.github/actions/setup-ansible
+        with:
+          ssh_key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+
+      - name: Upgrade MTA servers (one at a time)
+        working-directory: ansible
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          LIMIT: ${{ inputs.limit }}
+          FORCE_RESTART: ${{ inputs.force_restart }}
+        run: |
+          set -euo pipefail
+          HOSTS="sendry_mta"
+          if [ -n "$LIMIT" ]; then HOSTS="sendry_mta:&${LIMIT}"; fi
+          ansible-playbook -i inventory/prod.yml playbooks/upgrade.yml \
+            -l "$HOSTS" \
+            -e "sendry_version=${VERSION}" \
+            -e "upgrade_force_restart=${FORCE_RESTART}" \
+            -e upgrade_serial=1
+
+  deploy-panel:
+    name: Deploy panel
+    needs: [prepare, deploy-mta]
+    # Runs after the MTA job, or alone when target=panel; never after a failed MTA job.
+    if: >-
+      always()
+      && needs.prepare.result == 'success'
+      && (inputs.target == 'all' || inputs.target == 'panel')
+      && (needs.deploy-mta.result == 'success' || needs.deploy-mta.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Ansible
+        uses: ./.github/actions/setup-ansible
+        with:
+          ssh_key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+
+      - name: Upgrade panel
+        working-directory: ansible
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          LIMIT: ${{ inputs.limit }}
+          FORCE_RESTART: ${{ inputs.force_restart }}
+        run: |
+          set -euo pipefail
+          HOSTS="sendry_panel"
+          if [ -n "$LIMIT" ]; then HOSTS="sendry_panel:&${LIMIT}"; fi
+          ansible-playbook -i inventory/prod.yml playbooks/upgrade.yml \
+            -l "$HOSTS" \
+            -e "sendry_version=${VERSION}" \
+            -e "upgrade_force_restart=${FORCE_RESTART}"
+
+  summary:
+    name: Summary
+    needs: [prepare, deploy-mta, deploy-panel]
+    if: always() && needs.prepare.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write summary
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TARGET: ${{ inputs.target }}
+          LIMIT: ${{ inputs.limit }}
+          MTA: ${{ needs.deploy-mta.result }}
+          PANEL: ${{ needs.deploy-panel.result }}
+        run: |
+          {
+            echo "## Deploy sendry ${VERSION}"
+            echo
+            echo "| Target | Result |"
+            echo "|---|---|"
+            echo "| MTA (sendry_mta) | ${MTA} |"
+            echo "| Panel (sendry_panel) | ${PANEL} |"
+            echo
+            echo "target=\`${TARGET}\` limit=\`${LIMIT:-all hosts}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

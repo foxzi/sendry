@@ -1,0 +1,174 @@
+name: Release (button)
+
+# Cuts a new release from the current main without a manual commit:
+# computes the next semver from the latest v* tag, tags HEAD of main, pushes
+# the tag and then starts the regular Release workflow (release.yml) on that
+# tag. release.yml builds binaries, packages, the Docker image and the GitHub
+# Release.
+#
+# The tag is pushed with the default GITHUB_TOKEN, and such pushes do not
+# trigger other workflows, so release.yml is started explicitly with
+# `gh workflow run` (it has a workflow_dispatch trigger for this).
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump (patch: fixes, minor: new features / API changes, major: breaking)'
+        type: choice
+        required: true
+        default: patch
+        options:
+          - patch
+          - minor
+          - major
+      dry_run:
+        description: 'Only show the next version, do not create the tag'
+        type: boolean
+        default: false
+      skip_ci_check:
+        description: 'Tag even if CI for this commit has not passed'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: release-button
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: Tag next version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse to run outside main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Run this workflow from the main branch (selected: ${GITHUB_REF})"
+          exit 1
+
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Compute next version
+        id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          set -euo pipefail
+          LAST_TAG=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || true)
+          if [ -z "$LAST_TAG" ]; then
+            echo "::error::No v*.*.* tag found"
+            exit 1
+          fi
+          IFS=. read -r MAJOR MINOR PATCH <<< "${LAST_TAG#v}"
+          case "$BUMP" in
+            patch) PATCH=$((PATCH + 1)) ;;
+            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+            *) echo "::error::Unknown bump: $BUMP"; exit 1 ;;
+          esac
+          NEXT_TAG="v${MAJOR}.${MINOR}.${PATCH}"
+          if git rev-parse -q --verify "refs/tags/${NEXT_TAG}" >/dev/null; then
+            echo "::error::Tag ${NEXT_TAG} already exists"
+            exit 1
+          fi
+          SHA=$(git rev-parse HEAD)
+          if [ "$(git rev-parse "${LAST_TAG}^{commit}")" = "$SHA" ]; then
+            echo "::error::HEAD of main is already tagged as ${LAST_TAG}, nothing to release"
+            exit 1
+          fi
+          {
+            echo "last_tag=${LAST_TAG}"
+            echo "next_tag=${NEXT_TAG}"
+            echo "next_version=${MAJOR}.${MINOR}.${PATCH}"
+            echo "sha=${SHA}"
+          } >> "$GITHUB_OUTPUT"
+          echo "${LAST_TAG} -> ${NEXT_TAG} (${SHA})"
+
+      - name: Check CI status of HEAD
+        if: ${{ !inputs.skip_ci_check }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.version.outputs.sha }}
+        run: |
+          set -euo pipefail
+          CONCLUSION=$(gh run list --workflow ci.yml --commit "$SHA" --branch main \
+            --json conclusion,status --jq 'map(select(.status == "completed")) | .[0].conclusion // "none"')
+          echo "CI for ${SHA}: ${CONCLUSION}"
+          if [ "$CONCLUSION" != "success" ]; then
+            echo "::error::CI has not passed for ${SHA} (conclusion: ${CONCLUSION}). Wait for CI or set skip_ci_check."
+            exit 1
+          fi
+
+      - name: Changes since last tag
+        id: changes
+        env:
+          LAST_TAG: ${{ steps.version.outputs.last_tag }}
+        run: |
+          {
+            echo "log<<EOF"
+            git log --no-merges --pretty='- %s (%h)' "${LAST_TAG}..HEAD"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag
+        if: ${{ !inputs.dry_run }}
+        env:
+          NEXT_TAG: ${{ steps.version.outputs.next_tag }}
+          SHA: ${{ steps.version.outputs.sha }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          git config user.name "${ACTOR}"
+          git config user.email "${ACTOR}@users.noreply.github.com"
+          git tag -a "${NEXT_TAG}" "${SHA}" -m "Release ${NEXT_TAG}"
+          git push origin "refs/tags/${NEXT_TAG}"
+
+      - name: Start Release workflow on the new tag
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEXT_TAG: ${{ steps.version.outputs.next_tag }}
+        run: |
+          set -euo pipefail
+          # The tag was pushed with GITHUB_TOKEN, which never triggers release.yml by itself.
+          gh workflow run release.yml --ref "${NEXT_TAG}"
+          echo "Started release.yml for ${NEXT_TAG}"
+
+      - name: Summary
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          LAST_TAG: ${{ steps.version.outputs.last_tag }}
+          NEXT_TAG: ${{ steps.version.outputs.next_tag }}
+          NEXT_VERSION: ${{ steps.version.outputs.next_version }}
+          SHA: ${{ steps.version.outputs.sha }}
+          CHANGES: ${{ steps.changes.outputs.log }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          {
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "## Dry run: next version would be ${NEXT_TAG}"
+            else
+              echo "## Tagged ${NEXT_TAG}"
+            fi
+            echo
+            echo "- previous: \`${LAST_TAG}\`"
+            echo "- commit: \`${SHA}\`"
+            if [ "$DRY_RUN" != "true" ]; then
+              echo "- build: [Release workflow](${REPO_URL}/actions/workflows/release.yml)"
+              echo "- release page: ${REPO_URL}/releases/tag/${NEXT_TAG}"
+              echo "- deploy when the release is ready: [Deploy workflow](${REPO_URL}/actions/workflows/deploy.yml) with version \`${NEXT_VERSION}\`"
+            fi
+            echo
+            echo "### Changes since ${LAST_TAG}"
+            echo
+            echo "${CHANGES:-_no commits_}"
+          } >> "$GITHUB_STEP_SUMMARY"

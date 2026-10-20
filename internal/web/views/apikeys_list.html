@@ -24,6 +24,7 @@
     </div>
     <div class="card-body">
         {{if .APIKeys}}
+        <div class="table-wrap">
         <table class="table">
             <thead>
                 <tr>
@@ -58,18 +59,17 @@
                         {{end}}
                     </td>
                     <td>{{.SendCount}}</td>
-                    <td>
+                    <td class="rate-cell">
                         {{if or .RateLimitMinute .RateLimitHour}}
-                            {{if .RateLimitMinute}}{{.RateLimitMinute}}/min{{end}}
-                            {{if and .RateLimitMinute .RateLimitHour}} | {{end}}
-                            {{if .RateLimitHour}}{{.RateLimitHour}}/hr{{end}}
+                            {{if .RateLimitMinute}}<span class="rate-line">{{.RateLimitMinute}}/min</span>{{end}}
+                            {{if .RateLimitHour}}<span class="rate-line">{{.RateLimitHour}}/hr</span>{{end}}
                         {{else}}
                         <span class="text-secondary">-</span>
                         {{end}}
                     </td>
-                    <td>{{.CreatedAt.Format "2006-01-02"}}</td>
-                    <td>{{if .LastUsedAt}}{{.LastUsedAt.Format "2006-01-02 15:04"}}{{else}}<span class="text-secondary">-</span>{{end}}</td>
-                    <td>{{if .ExpiresAt}}{{.ExpiresAt.Format "2006-01-02"}}{{else}}<span class="text-secondary">-</span>{{end}}</td>
+                    <td class="date-cell">{{.CreatedAt.Format "2006-01-02"}}</td>
+                    <td class="date-cell">{{if .LastUsedAt}}{{.LastUsedAt.Format "2006-01-02 15:04"}}{{else}}<span class="text-secondary">-</span>{{end}}</td>
+                    <td class="date-cell">{{if .ExpiresAt}}{{.ExpiresAt.Format "2006-01-02"}}{{else}}<span class="text-secondary">-</span>{{end}}</td>
                     <td>
                         {{if .Active}}
                         <span class="badge badge-completed">Active</span>
@@ -95,6 +95,7 @@
                 {{end}}
             </tbody>
         </table>
+        </div>
 
         {{if gt .TotalPages 1}}
         <div class="pagination">
@@ -368,7 +369,39 @@ function toggleDomains(btn, extraCount) {
 .table .actions .btn {
     margin: 2px;
 }
-.table td {
+.table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -1.5rem;
+    padding: 0 1.5rem;
+}
+.table-wrap .table th,
+.table-wrap .table td {
+    padding: 0.6rem 0.5rem;
+    font-size: 0.875rem;
+    vertical-align: middle;
+}
+.table-wrap .table th {
+    white-space: nowrap;
+}
+.table-wrap .table th:first-child,
+.table-wrap .table td:first-child {
+    padding-left: 0;
+}
+.table-wrap .table th:last-child,
+.table-wrap .table td:last-child {
+    padding-right: 0;
+}
+.table-wrap .actions .btn {
+    padding: 0.25rem 0.5rem;
+}
+.rate-line {
+    display: block;
+}
+.table .key-prefix,
+.table .date-cell,
+.table .rate-cell,
+.table .actions {
     white-space: nowrap;
 }
 .table .domain-badges {

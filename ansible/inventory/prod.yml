@@ -1,0 +1,31 @@
+---
+# Production inventory for playbooks/upgrade.yml (used by .github/workflows/deploy.yml).
+#
+# Contains no secrets: MTA hostnames are already public in DNS (MX/SPF records).
+# Configs on these servers are managed by hand; only the package is upgraded here.
+#
+# Adding a new MTA: add a host under sendry_mta and put the deploy SSH key on it
+# (see docs/deploy.ru.md).
+
+all:
+  children:
+    sendry_mta:
+      hosts:
+        mx1:
+          ansible_host: mx1.semena.run   # 77.42.38.2
+        mx2:
+          ansible_host: mx2.semena.run   # 49.13.12.61
+        mx3:
+          ansible_host: sendry-marketing.semena.run   # 162.55.35.18, new MTA (docs/new-mta-server.ru.md)
+
+    sendry_panel:
+      hosts:
+        panel:
+          ansible_host: sendry.soroka.app
+          # Panel listens on 8088 by default (web.yaml listen_addr); override if changed.
+          sendry_web_health_url: "http://127.0.0.1:8088/health"
+
+  vars:
+    ansible_user: deploy
+    ansible_become: true
+    ansible_python_interpreter: /usr/bin/python3
