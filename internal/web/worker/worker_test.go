@@ -2,6 +2,9 @@ package worker
 
 import (
 	"testing"
+
+	"github.com/foxzi/sendry/internal/web/models"
+	"github.com/foxzi/sendry/internal/web/sendry"
 )
 
 func TestRenderTemplate_Flat(t *testing.T) {
@@ -215,6 +218,35 @@ func TestMapSendryStatus(t *testing.T) {
 			got := mapSendryStatus(tt.sendryStatus)
 			if got != tt.want {
 				t.Errorf("mapSendryStatus(%q) = %q, want %q", tt.sendryStatus, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestQueuedItemUpdate(t *testing.T) {
+	const certErr = "MAIL FROM failed: x509: certificate has expired"
+	cases := []struct {
+		name        string
+		item        models.SendJobItem
+		status      sendry.StatusResponse
+		wantStatus  string
+		wantError   string
+		wantChanged bool
+	}{
+		{"deferred keeps queued with error", models.SendJobItem{Status: "queued"}, sendry.StatusResponse{Status: "deferred", LastError: certErr}, "queued", certErr, true},
+		{"deferred same error", models.SendJobItem{Status: "queued", Error: certErr}, sendry.StatusResponse{Status: "deferred", LastError: certErr}, "queued", certErr, false},
+		{"sending without error", models.SendJobItem{Status: "queued"}, sendry.StatusResponse{Status: "sending"}, "queued", "", false},
+		{"delivered clears error", models.SendJobItem{Status: "queued", Error: certErr}, sendry.StatusResponse{Status: "delivered", LastError: certErr}, "sent", "", true},
+		{"failed", models.SendJobItem{Status: "queued", Error: certErr}, sendry.StatusResponse{Status: "failed", LastError: "550 5.1.1 User unknown"}, "failed", "550 5.1.1 User unknown", true},
+		{"unknown status", models.SendJobItem{Status: "queued"}, sendry.StatusResponse{Status: "weird"}, "", "", false},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			status, errMsg, changed := queuedItemUpdate(tt.item, &tt.status)
+			if changed != tt.wantChanged || (changed && (status != tt.wantStatus || errMsg != tt.wantError)) {
+				t.Errorf("queuedItemUpdate() = (%q, %q, %v), want (%q, %q, %v)",
+					status, errMsg, changed, tt.wantStatus, tt.wantError, tt.wantChanged)
 			}
 		})
 	}

@@ -185,6 +185,16 @@ sendry-web cleanup --days 90 --dry-run    # preview what would be deleted
 - Real-time progress monitoring
 - Pause, resume, cancel operations
 - Retry failed items
+- Delivery errors by type ("Delivery Errors" block on the job page)
+
+#### Delivery error types
+
+The type is not stored: the panel derives it from the MTA error text on every page load
+(`internal/web/stats/errors.go`): address does not exist, mailbox full, temporarily unavailable,
+domain unreachable, rejected by server, rejected as spam, blocked, temporary technical error
+(TLS, timeouts, rate limits, panel/API errors), unknown. **Failed** counts final failures,
+**Retrying** counts messages the MTA is still retrying (`deferred`) with their last error.
+Each count links to the item list filtered by type (`/jobs/{id}/items?status=…&error_type=…`).
 
 ### Monitoring
 

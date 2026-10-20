@@ -29,6 +29,9 @@ type Worker struct {
 	pollInterval time.Duration
 	concurrency  int
 
+	// rowid of the last queued item checked, so status tracking cycles through all queued items
+	queuedCursor int64
+
 	ctx    context.Context
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -127,10 +130,18 @@ func (w *Worker) processJobs() {
 
 // trackQueuedItems checks status of queued items via Sendry API
 func (w *Worker) trackQueuedItems() {
-	items, err := w.jobs.GetQueuedItems(w.batchSize * 2)
+	limit := w.batchSize * 2
+	items, lastRowID, err := w.jobs.GetQueuedItems(w.queuedCursor, limit)
 	if err != nil {
 		w.logger.Error("failed to get queued items", "error", err)
 		return
+	}
+
+	// Start over from the oldest item once the end of the queue is reached
+	if len(items) < limit {
+		w.queuedCursor = 0
+	} else {
+		w.queuedCursor = lastRowID
 	}
 
 	for _, item := range items {
@@ -151,13 +162,8 @@ func (w *Worker) trackQueuedItems() {
 			continue
 		}
 
-		// Map Sendry status to local status
-		newStatus := mapSendryStatus(status.Status)
-		if newStatus != "" && newStatus != item.Status {
-			errorMsg := ""
-			if newStatus == "failed" {
-				errorMsg = status.LastError
-			}
+		newStatus, errorMsg, changed := queuedItemUpdate(item, status)
+		if changed {
 			if err := w.jobs.UpdateItemStatus(item.ID, newStatus, item.SendryMsgID, errorMsg); err != nil {
 				w.logger.Error("failed to update item status", "item_id", item.ID, "error", err)
 			} else {
@@ -167,10 +173,27 @@ func (w *Worker) trackQueuedItems() {
 	}
 }
 
+// queuedItemUpdate returns the local status and error for a queued item from its Sendry status,
+// and whether the item has to be updated. Deferred messages stay queued but keep the last
+// delivery error, so problems are visible before the message finally fails.
+func queuedItemUpdate(item models.SendJobItem, status *sendry.StatusResponse) (string, string, bool) {
+	newStatus := mapSendryStatus(status.Status)
+	if newStatus == "" {
+		return "", "", false
+	}
+
+	errorMsg := ""
+	if newStatus != "sent" {
+		errorMsg = status.LastError
+	}
+
+	return newStatus, errorMsg, newStatus != item.Status || errorMsg != item.Error
+}
+
 // mapSendryStatus maps Sendry API status to local status
 func mapSendryStatus(status string) string {
 	switch status {
-	case "queued", "pending", "processing":
+	case "queued", "pending", "processing", "sending", "deferred":
 		return "queued"
 	case "sent", "delivered":
 		return "sent"

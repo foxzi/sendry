@@ -8,6 +8,8 @@ import (
 	"io/fs"
 	"path/filepath"
 	"strings"
+
+	"github.com/foxzi/sendry/internal/web/stats"
 )
 
 //go:embed *.html
@@ -39,6 +41,7 @@ var funcs = template.FuncMap{
 		s := strings.ReplaceAll(string(b), "</", `<\/`)
 		return template.JS(s)
 	},
+	"errorType": stats.ClassifyError,
 }
 
 type Engine struct {

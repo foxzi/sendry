@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	"github.com/foxzi/sendry/internal/web/stats"
+)
 
 // SendJob represents a campaign send job
 type SendJob struct {
@@ -60,8 +64,16 @@ type JobListFilter struct {
 
 // JobItemFilter for filtering job items
 type JobItemFilter struct {
-	JobID  string
+	JobID     string
+	Status    string
+	ErrorType stats.ErrorType
+	Limit     int
+	Offset    int
+}
+
+// JobErrorCount is the number of job items with the same error text and status
+type JobErrorCount struct {
+	Error  string
 	Status string
-	Limit  int
-	Offset int
+	Count  int
 }
