@@ -454,3 +454,81 @@ func TestSendWithOnlyCCNoBCC(t *testing.T) {
 		}
 	}
 }
+
+func TestSendWithDisplayName(t *testing.T) {
+	server, q := setupTestServer("test-api-key")
+
+	body := `{
+		"from": "Семяныч семена <shop@semyanich.im>",
+		"to": ["Получатель <to@example.com>"],
+		"cc": ["cc@example.com"],
+		"subject": "Новая коллекция",
+		"body": "Hello"
+	}`
+
+	req := httptest.NewRequest("POST", "/api/v1/send", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer test-api-key")
+	w := httptest.NewRecorder()
+
+	server.router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("Status = %d, want %d. Body: %s", w.Code, http.StatusAccepted, w.Body.String())
+	}
+
+	for _, msg := range q.messages {
+		// Envelope must carry bare addresses only (MAIL FROM / RCPT TO)
+		if msg.From != "shop@semyanich.im" {
+			t.Errorf("Envelope From = %q, want %q", msg.From, "shop@semyanich.im")
+		}
+		wantTo := []string{"to@example.com", "cc@example.com"}
+		if strings.Join(msg.To, ",") != strings.Join(wantTo, ",") {
+			t.Errorf("Envelope To = %v, want %v", msg.To, wantTo)
+		}
+
+		// Headers must be ASCII with the display name and subject MIME-encoded
+		data := string(msg.Data)
+		headers := data[:strings.Index(data, "\r\n\r\n")]
+		for _, r := range headers {
+			if r > 127 {
+				t.Fatalf("Headers contain non-ASCII characters:\n%s", headers)
+			}
+		}
+		if !strings.Contains(headers, "From: =?utf-8?q?") || !strings.Contains(headers, "<shop@semyanich.im>") {
+			t.Errorf("From header not encoded as expected:\n%s", headers)
+		}
+		if !strings.Contains(headers, "Subject: =?utf-8?q?") {
+			t.Errorf("Subject header not encoded as expected:\n%s", headers)
+		}
+		if !strings.Contains(headers, "@semyanich.im>\r\n") {
+			t.Errorf("Message-ID should use sender domain:\n%s", headers)
+		}
+	}
+}
+
+func TestSendPlainFromUnchanged(t *testing.T) {
+	server, q := setupTestServer("test-api-key")
+
+	body := `{"from": "sender@example.com", "to": ["to@example.com"], "subject": "Plain", "body": "Hello"}`
+
+	req := httptest.NewRequest("POST", "/api/v1/send", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer test-api-key")
+	w := httptest.NewRecorder()
+
+	server.router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("Status = %d, want %d. Body: %s", w.Code, http.StatusAccepted, w.Body.String())
+	}
+	for _, msg := range q.messages {
+		data := string(msg.Data)
+		if !strings.Contains(data, "From: sender@example.com\r\n") {
+			t.Error("Plain From header should stay unchanged")
+		}
+		if !strings.Contains(data, "Subject: Plain\r\n") {
+			t.Error("ASCII Subject header should stay unchanged")
+		}
+	}
+}

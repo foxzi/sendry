@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"mime"
 	"net/http"
 	"net/mail"
 	"strings"
@@ -216,7 +217,8 @@ func (s *Server) buildMessageFromRequest(req *SendRequest, remoteAddr string) (*
 	if req.From == "" {
 		return nil, http.StatusBadRequest, "from is required"
 	}
-	if _, err := mail.ParseAddress(req.From); err != nil {
+	from, err := mail.ParseAddress(req.From)
+	if err != nil {
 		return nil, http.StatusBadRequest, "invalid from address"
 	}
 	if len(req.To) == 0 {
@@ -251,18 +253,13 @@ func (s *Server) buildMessageFromRequest(req *SendRequest, remoteAddr string) (*
 			fmt.Sprintf("email content too large (max %d bytes)", maxEmailSize)
 	}
 
-	data := s.buildEmailData(req)
-
-	envelopeTo := make([]string, 0, len(req.To)+len(req.CC)+len(req.BCC))
-	envelopeTo = append(envelopeTo, req.To...)
-	envelopeTo = append(envelopeTo, req.CC...)
-	envelopeTo = append(envelopeTo, req.BCC...)
+	data := s.buildEmailData(req, from)
 
 	now := time.Now()
 	msg := &queue.Message{
 		ID:        uuid.New().String(),
-		From:      req.From,
-		To:        envelopeTo,
+		From:      from.Address,
+		To:        envelopeAddresses(req.To, req.CC, req.BCC),
 		Data:      data,
 		Status:    queue.StatusPending,
 		CreatedAt: now,
@@ -371,16 +368,16 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 // buildEmailData constructs RFC 5322 email data
-func (s *Server) buildEmailData(req *SendRequest) []byte {
+func (s *Server) buildEmailData(req *SendRequest, from *mail.Address) []byte {
 	var buf bytes.Buffer
 
 	// Headers
-	buf.WriteString(fmt.Sprintf("From: %s\r\n", req.From))
-	buf.WriteString(fmt.Sprintf("To: %s\r\n", strings.Join(req.To, ", ")))
+	buf.WriteString(fmt.Sprintf("From: %s\r\n", headerAddress(from)))
+	buf.WriteString(fmt.Sprintf("To: %s\r\n", headerAddressList(req.To)))
 	if len(req.CC) > 0 {
-		buf.WriteString(fmt.Sprintf("Cc: %s\r\n", strings.Join(req.CC, ", ")))
+		buf.WriteString(fmt.Sprintf("Cc: %s\r\n", headerAddressList(req.CC)))
 	}
-	buf.WriteString(fmt.Sprintf("Subject: %s\r\n", req.Subject))
+	buf.WriteString(fmt.Sprintf("Subject: %s\r\n", encodeHeader(req.Subject)))
 	buf.WriteString(fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z)))
 	buf.WriteString(fmt.Sprintf("Message-ID: <%s@%s>\r\n", uuid.New().String(), email.ExtractDomainOrDefault(req.From, "localhost")))
 
@@ -437,6 +434,49 @@ func (s *Server) sendJSON(w http.ResponseWriter, status int, v interface{}) {
 }
 
 // sanitizeHeaderValue removes CRLF characters to prevent header injection
+// envelopeAddresses returns bare addresses for the SMTP envelope (MAIL FROM / RCPT TO).
+// Inputs are already validated, so "Name <addr>" forms are reduced to addr.
+func envelopeAddresses(lists ...[]string) []string {
+	var result []string
+	for _, list := range lists {
+		for _, s := range list {
+			if addr, err := mail.ParseAddress(s); err == nil {
+				result = append(result, addr.Address)
+			} else {
+				result = append(result, s)
+			}
+		}
+	}
+	return result
+}
+
+// headerAddress formats an address for a message header,
+// MIME-encoding a non-ASCII display name (RFC 2047).
+func headerAddress(addr *mail.Address) string {
+	if addr.Name == "" {
+		return addr.Address
+	}
+	return addr.String()
+}
+
+// headerAddressList formats a list of validated addresses for a To/Cc header.
+func headerAddressList(list []string) string {
+	formatted := make([]string, 0, len(list))
+	for _, s := range list {
+		if addr, err := mail.ParseAddress(s); err == nil {
+			formatted = append(formatted, headerAddress(addr))
+		} else {
+			formatted = append(formatted, s)
+		}
+	}
+	return strings.Join(formatted, ", ")
+}
+
+// encodeHeader MIME-encodes a header value if it contains non-ASCII characters.
+func encodeHeader(s string) string {
+	return mime.QEncoding.Encode("utf-8", s)
+}
+
 func sanitizeHeaderValue(s string) string {
 	s = strings.ReplaceAll(s, "\r", "")
 	s = strings.ReplaceAll(s, "\n", "")
