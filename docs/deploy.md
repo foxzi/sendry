@@ -44,7 +44,7 @@ File: `.github/workflows/deploy.yml`. Wait until the **Release** workflow for th
 |---|---|
 | `version` | e.g. `0.4.21` (a leading `v` is accepted). Must exist as a GitHub Release with deb assets, otherwise the workflow stops at the first job |
 | `target` | `all`: every MTA one by one, then the panel; `mta`: MTA only; `panel`: panel only |
-| `limit` | one inventory host (`mx1`, `mx2`, `panel`); empty means all hosts of the group |
+| `limit` | one inventory host (`mx1`, `mx2`, `mx3`, `panel`); empty means all hosts of the group |
 | `force_restart` | restart services even if the version is already installed |
 
 Job **Deploy MTA** walks the `sendry_mta` group with `serial: 1`; the panel survives thanks to `multi_send` failover. Job **Deploy panel** runs only after a successful MTA job (or alone when `target=panel`). Two deploys cannot run at once (`concurrency: deploy-production`). Secrets are plain repository secrets; no GitHub environment is required.
@@ -78,6 +78,7 @@ sudo systemctl start sendry-web
 |---|---|---|
 | `mx1` | `sendry_mta` | `mx1.semena.run` |
 | `mx2` | `sendry_mta` | `mx2.semena.run` |
+| `mx3` | `sendry_mta` | `sendry-marketing.semena.run` (new MTA, see new-mta-server.ru.md) |
 | `panel` | `sendry_panel` | `sendry.soroka.app` |
 
 The file is committed; it contains no secrets. The SSH user is `ansible_user` at the bottom of the file (`deploy`, with `become`). To add an MTA, add a host under `sendry_mta` and install the deploy public key on it.
@@ -91,7 +92,7 @@ Repository → Settings → Secrets and variables → Actions → New repository
 | Secret | Value |
 |---|---|
 | `DEPLOY_SSH_KEY` | private ed25519 key of the deploy user (`ssh-keygen -t ed25519 -f sendry-deploy -C sendry-deploy -N ""`, paste the whole `sendry-deploy` file) |
-| `DEPLOY_KNOWN_HOSTS` | optional, output of `ssh-keyscan mx1.semena.run mx2.semena.run sendry.soroka.app`. When set, host keys are verified; otherwise the workflow warns and skips verification |
+| `DEPLOY_KNOWN_HOSTS` | optional, output of `ssh-keyscan mx1.semena.run mx2.semena.run sendry-marketing.semena.run sendry.soroka.app`. When set, host keys are verified; otherwise the workflow warns and skips verification |
 
 To require a manual approval per deploy, the owner can create an environment `production` with Required reviewers, move the secrets there and add `environment: production` to both deploy jobs in `deploy.yml`.
 
@@ -121,7 +122,7 @@ cd ansible
 ansible-playbook -i inventory/prod.yml playbooks/upgrade.yml -l mx1 -e sendry_version=0.4.20 --private-key ~/sendry-deploy
 ```
 
-Expect the package to update, `systemctl is-active sendry`, `/health` to answer and the panel's Servers page to show the new version. A second run must change nothing. Then `-l mx2`, then `-l sendry_panel`.
+Expect the package to update, `systemctl is-active sendry`, `/health` to answer and the panel's Servers page to show the new version. A second run must change nothing. Then `-l mx2`, `-l mx3`, then `-l sendry_panel`.
 
 ## Troubleshooting
 

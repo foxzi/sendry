@@ -53,7 +53,7 @@ Actions → Release (button) → Run workflow (ветка `main`):
 |---|---|
 | `version` | версия, например `0.4.21` (можно с `v`). Должна существовать как GitHub Release с deb-пакетами, иначе workflow остановится на первом шаге |
 | `target` | `all` — сначала все MTA по одному, потом панель; `mta` — только MTA; `panel` — только панель |
-| `limit` | один хост из inventory, например `mx1` или `mx2`. Пусто — все хосты группы |
+| `limit` | один хост из inventory, например `mx1`, `mx2`, `mx3` или `panel`. Пусто — все хосты группы |
 | `force_restart` | перезапустить сервисы, даже если нужная версия уже стоит |
 
 Порядок: job **Deploy MTA** идёт по хостам группы `sendry_mta` строго по одному (`serial: 1`), панель переживает это за счёт failover в `multi_send`. Job **Deploy panel** запускается только после успешного MTA-job (или сразу, если `target=panel`). Два деплоя одновременно не запустятся (`concurrency: deploy-production`). Секреты берутся из обычных секретов репозитория; environment с обязательным подтверждением не используется, его при желании может добавить владелец репозитория (см. ниже).
@@ -89,6 +89,7 @@ sudo systemctl start sendry-web
 |---|---|---|
 | `mx1` | `sendry_mta` | `mx1.semena.run` (77.42.38.2) |
 | `mx2` | `sendry_mta` | `mx2.semena.run` (49.13.12.61) |
+| `mx3` | `sendry_mta` | `sendry-marketing.semena.run` (162.55.35.18), новый MTA, см. [new-mta-server.ru.md](new-mta-server.ru.md) |
 | `panel` | `sendry_panel` | `sendry.soroka.app` |
 
 Файл в репозитории, секретов в нём нет. SSH-пользователь задаётся переменной `ansible_user` в конце файла (сейчас `deploy`, с `become`).
@@ -104,7 +105,7 @@ sudo systemctl start sendry-web
 | Секрет | Что это |
 |---|---|
 | `DEPLOY_SSH_KEY` | приватный ключ ed25519 пользователя деплоя. Сгенерировать на ноутбуке: `ssh-keygen -t ed25519 -f sendry-deploy -C sendry-deploy -N ""`, в секрет положить содержимое `sendry-deploy` целиком |
-| `DEPLOY_KNOWN_HOSTS` | необязательно. Вывод `ssh-keyscan mx1.semena.run mx2.semena.run sendry.soroka.app`. Если задан, SSH проверяет отпечатки хостов; если нет, workflow пишет предупреждение и работает без проверки |
+| `DEPLOY_KNOWN_HOSTS` | необязательно. Вывод `ssh-keyscan mx1.semena.run mx2.semena.run sendry-marketing.semena.run sendry.soroka.app`. Если задан, SSH проверяет отпечатки хостов; если нет, workflow пишет предупреждение и работает без проверки |
 
 Кнопке релиза секреты не нужны.
 
@@ -141,7 +142,7 @@ cd ansible
 ansible-playbook -i inventory/prod.yml playbooks/upgrade.yml -l mx1 -e sendry_version=0.4.20 --private-key ~/sendry-deploy
 ```
 
-Ожидаем: пакет обновился, `systemctl is-active sendry`, `/health` отвечает, в панели в разделе Servers mx1 зелёный с новой версией. Повторный запуск той же команды ничего не меняет. Потом `-l mx2`, потом `-l sendry_panel`.
+Ожидаем: пакет обновился, `systemctl is-active sendry`, `/health` отвечает, в панели в разделе Servers mx1 зелёный с новой версией. Повторный запуск той же команды ничего не меняет. Потом `-l mx2`, `-l mx3`, потом `-l sendry_panel`.
 
 ## Если что-то не так
 
