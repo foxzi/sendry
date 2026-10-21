@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/foxzi/sendry/internal/web/models"
+	"github.com/foxzi/sendry/internal/web/stats"
 	"github.com/google/uuid"
 )
 
@@ -251,46 +252,43 @@ func (r *JobRepository) CreateItems(items []models.SendJobItem) error {
 	return tx.Commit()
 }
 
-// ListItems returns job items with filtering
+// ListItems returns job items with filtering.
+// Error type is not stored, so with ErrorType set the items with an error are classified and paged in Go.
 func (r *JobRepository) ListItems(filter models.JobItemFilter) ([]models.SendJobItem, int, error) {
-	// Count total
-	countQuery := "SELECT COUNT(*) FROM send_job_items WHERE job_id = ?"
+	where := " WHERE i.job_id = ?"
 	args := []any{filter.JobID}
 
 	if filter.Status != "" {
-		countQuery += " AND status = ?"
+		where += " AND i.status = ?"
 		args = append(args, filter.Status)
 	}
+	if filter.ErrorType != "" {
+		where += " AND COALESCE(i.error, '') != ''"
+	}
 
+	// Count total
 	var total int
-	if err := r.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
+	if err := r.db.QueryRow("SELECT COUNT(*) FROM send_job_items i"+where, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
 	// Get items
 	query := `
 		SELECT i.id, i.job_id, i.recipient_id, r.email, i.variant_id, COALESCE(v.name, ''), i.server_name, i.status,
-			i.sendry_msg_id, i.error, i.queued_at, i.sent_at, i.created_at
+			COALESCE(i.sendry_msg_id, ''), COALESCE(i.error, ''), i.queued_at, i.sent_at, i.created_at
 		FROM send_job_items i
 		LEFT JOIN recipients r ON i.recipient_id = r.id
-		LEFT JOIN campaign_variants v ON i.variant_id = v.id
-		WHERE i.job_id = ?`
+		LEFT JOIN campaign_variants v ON i.variant_id = v.id` + where + " ORDER BY i.created_at"
 
-	args = []any{filter.JobID}
-	if filter.Status != "" {
-		query += " AND i.status = ?"
-		args = append(args, filter.Status)
-	}
-
-	query += " ORDER BY i.created_at"
-
-	if filter.Limit > 0 {
-		query += " LIMIT ?"
-		args = append(args, filter.Limit)
-	}
-	if filter.Offset > 0 {
-		query += " OFFSET ?"
-		args = append(args, filter.Offset)
+	if filter.ErrorType == "" {
+		if filter.Limit > 0 {
+			query += " LIMIT ?"
+			args = append(args, filter.Limit)
+		}
+		if filter.Offset > 0 {
+			query += " OFFSET ?"
+			args = append(args, filter.Offset)
+		}
 	}
 
 	rows, err := r.db.Query(query, args...)
@@ -311,6 +309,10 @@ func (r *JobRepository) ListItems(filter models.JobItemFilter) ([]models.SendJob
 			return nil, 0, err
 		}
 
+		if filter.ErrorType != "" && stats.ClassifyError(item.Error) != filter.ErrorType {
+			continue
+		}
+
 		if email.Valid {
 			item.Email = email.String
 		}
@@ -326,8 +328,44 @@ func (r *JobRepository) ListItems(filter models.JobItemFilter) ([]models.SendJob
 
 		items = append(items, item)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	if filter.ErrorType != "" {
+		total = len(items)
+		items = items[min(filter.Offset, total):]
+		if filter.Limit > 0 && len(items) > filter.Limit {
+			items = items[:filter.Limit]
+		}
+	}
 
 	return items, total, nil
+}
+
+// ErrorCounts returns the number of job items per distinct error text and status
+func (r *JobRepository) ErrorCounts(jobID string) ([]models.ErrorCount, error) {
+	rows, err := r.db.Query(`
+		SELECT error, status, COUNT(*)
+		FROM send_job_items
+		WHERE job_id = ? AND COALESCE(error, '') != ''
+		GROUP BY error, status`, jobID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	counts := []models.ErrorCount{}
+	for rows.Next() {
+		var c models.ErrorCount
+		if err := rows.Scan(&c.Error, &c.Status, &c.Count); err != nil {
+			return nil, err
+		}
+		counts = append(counts, c)
+	}
+
+	return counts, rows.Err()
 }
 
 // UpdateItemStatus updates a job item status
@@ -344,7 +382,7 @@ func (r *JobRepository) UpdateItemStatus(id, status, sendryMsgID, errorMsg strin
 
 	_, err := r.db.Exec(`
 		UPDATE send_job_items SET status = ?, sendry_msg_id = ?, error = ?,
-			queued_at = COALESCE(?, queued_at), sent_at = ?
+			queued_at = COALESCE(queued_at, ?), sent_at = ?
 		WHERE id = ?`,
 		status, sendryMsgID, errorMsg, queuedAt, sentAt, id,
 	)
@@ -506,30 +544,33 @@ func (r *JobRepository) GetPendingItems(jobID string, limit int) ([]models.SendJ
 	return items, nil
 }
 
-// GetQueuedItems returns items with status 'queued' for status tracking
-func (r *JobRepository) GetQueuedItems(limit int) ([]models.SendJobItem, error) {
+// GetQueuedItems returns items with status 'queued' for status tracking, starting after the given rowid.
+// Walking by rowid lets the caller cycle through all queued items instead of re-checking the oldest ones.
+// It also returns the rowid of the last item, to be passed as afterRowID on the next call.
+func (r *JobRepository) GetQueuedItems(afterRowID int64, limit int) ([]models.SendJobItem, int64, error) {
 	rows, err := r.db.Query(`
-		SELECT i.id, i.job_id, i.recipient_id, r.email, i.variant_id, i.server_name,
-			i.status, i.sendry_msg_id, i.created_at
+		SELECT i.rowid, i.id, i.job_id, i.recipient_id, r.email, i.variant_id, i.server_name,
+			i.status, i.sendry_msg_id, COALESCE(i.error, ''), i.created_at
 		FROM send_job_items i
 		LEFT JOIN recipients r ON i.recipient_id = r.id
-		WHERE i.status = 'queued' AND i.sendry_msg_id != ''
-		ORDER BY i.created_at
-		LIMIT ?`, limit,
+		WHERE i.status = 'queued' AND i.sendry_msg_id != '' AND i.rowid > ?
+		ORDER BY i.rowid
+		LIMIT ?`, afterRowID, limit,
 	)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
 	items := []models.SendJobItem{}
+	lastRowID := afterRowID
 	for rows.Next() {
 		var item models.SendJobItem
 		var email sql.NullString
-		err := rows.Scan(&item.ID, &item.JobID, &item.RecipientID, &email, &item.VariantID,
-			&item.ServerName, &item.Status, &item.SendryMsgID, &item.CreatedAt)
+		err := rows.Scan(&lastRowID, &item.ID, &item.JobID, &item.RecipientID, &email, &item.VariantID,
+			&item.ServerName, &item.Status, &item.SendryMsgID, &item.Error, &item.CreatedAt)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if email.Valid {
 			item.Email = email.String
@@ -537,5 +578,6 @@ func (r *JobRepository) GetQueuedItems(limit int) ([]models.SendJobItem, error) 
 		items = append(items, item)
 	}
 
-	return items, nil
+	return items, lastRowID, rows.Err()
+
 }

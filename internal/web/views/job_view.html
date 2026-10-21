@@ -45,6 +45,35 @@
     </div>
 </div>
 
+{{if .Errors}}
+<div class="card" style="margin-bottom: 1.5rem">
+    <div class="card-header">
+        <h2>Delivery Errors</h2>
+    </div>
+    <div class="card-body">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Error Type</th>
+                    <th>Failed</th>
+                    <th>Retrying</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Errors}}
+                <tr>
+                    <td>{{.Type.Label}}</td>
+                    <td>{{if .Failed}}<a href="/jobs/{{$.Job.ID}}/items?status=failed&error_type={{.Type}}">{{.Failed}}</a>{{else}}<span class="text-muted">0</span>{{end}}</td>
+                    <td>{{if .Retrying}}<a href="/jobs/{{$.Job.ID}}/items?status=queued&error_type={{.Type}}">{{.Retrying}}</a>{{else}}<span class="text-muted">0</span>{{end}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        <p class="text-muted">Retrying: messages still in the MTA queue after a failed delivery attempt.</p>
+    </div>
+</div>
+{{end}}
+
 <div class="card" style="margin-bottom: 1.5rem">
     <div class="card-header">
         <h2>Progress</h2>

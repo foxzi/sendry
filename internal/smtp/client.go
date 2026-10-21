@@ -39,8 +39,9 @@ type Client struct {
 	timeout      time.Duration
 	hostname     string
 	logger       *slog.Logger
-	dkimSigner   *dkim.Signer   // Legacy single signer (deprecated)
-	dkimProvider DKIMProvider   // Multi-domain DKIM provider
+	dkimSigner   *dkim.Signer // Legacy single signer (deprecated)
+	dkimProvider DKIMProvider // Multi-domain DKIM provider
+	port         string       // MX port, overridden in tests
 }
 
 // NewClient creates a new SMTP client
@@ -53,6 +54,7 @@ func NewClient(resolver *dns.Resolver, hostname string, timeout time.Duration, l
 		timeout:  timeout,
 		hostname: hostname,
 		logger:   logger,
+		port:     "25",
 	}
 }
 
@@ -171,9 +173,9 @@ func (c *Client) sendToDomain(ctx context.Context, domain string, from string, t
 	}
 }
 
-// sendToMX sends to a specific MX host
-func (c *Client) sendToMX(ctx context.Context, mx string, from string, to []string, data []byte) error {
-	addr := net.JoinHostPort(mx, "25")
+// connect opens a connection to the MX host and sends HELO
+func (c *Client) connect(ctx context.Context, mx string) (*smtp.Client, error) {
+	addr := net.JoinHostPort(mx, c.port)
 
 	// Create connection with timeout
 	dialer := &net.Dialer{
@@ -182,12 +184,11 @@ func (c *Client) sendToMX(ctx context.Context, mx string, from string, to []stri
 
 	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
-		return &DeliveryError{
+		return nil, &DeliveryError{
 			Temporary: true,
 			Message:   fmt.Sprintf("connection failed to %s: %v", addr, err),
 		}
 	}
-	defer conn.Close()
 
 	// Set deadline
 	deadline, ok := ctx.Deadline()
@@ -200,16 +201,27 @@ func (c *Client) sendToMX(ctx context.Context, mx string, from string, to []stri
 	// Create SMTP client
 	client, err := smtp.NewClient(conn, mx)
 	if err != nil {
-		return &DeliveryError{
+		conn.Close()
+		return nil, &DeliveryError{
 			Temporary: true,
 			Message:   fmt.Sprintf("SMTP client creation failed: %v", err),
 		}
 	}
-	defer client.Close()
 
 	// Send HELO
 	if err := client.Hello(c.hostname); err != nil {
-		return c.categorizeError(err, "HELO")
+		client.Close()
+		return nil, c.categorizeError(err, "HELO")
+	}
+
+	return client, nil
+}
+
+// sendToMX sends to a specific MX host
+func (c *Client) sendToMX(ctx context.Context, mx string, from string, to []string, data []byte) error {
+	client, err := c.connect(ctx, mx)
+	if err != nil {
+		return err
 	}
 
 	// Try STARTTLS (opportunistic)
@@ -219,14 +231,20 @@ func (c *Client) sendToMX(ctx context.Context, mx string, from string, to []stri
 			MinVersion: tls.VersionTLS12,
 		}
 		if err := client.StartTLS(tlsConfig); err != nil {
-			c.logger.Warn("STARTTLS failed, continuing without encryption",
+			// A failed handshake leaves the connection unusable, so reconnect and send in plain text
+			c.logger.Warn("STARTTLS failed, retrying without TLS",
 				"mx", mx,
 				"error", err,
 			)
+			client.Close()
+			if client, err = c.connect(ctx, mx); err != nil {
+				return err
+			}
 		} else {
 			c.logger.Debug("STARTTLS successful", "mx", mx)
 		}
 	}
+	defer client.Close()
 
 	// Sign message with DKIM if signer is configured for this sender
 	messageData := data

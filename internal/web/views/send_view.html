@@ -13,6 +13,8 @@
             <span class="badge badge-completed">Sent</span>
             {{else if eq .Send.Status "failed"}}
             <span class="badge badge-failed">Failed</span>
+            {{else if eq .Send.Status "queued"}}
+            <span class="badge badge-scheduled">Queued</span>
             {{else}}
             <span class="badge badge-scheduled">{{.Send.Status}}</span>
             {{end}}
@@ -106,7 +108,7 @@
             {{if .Send.ErrorMessage}}
             <tr>
                 <th>Error</th>
-                <td class="text-danger">{{.Send.ErrorMessage}}</td>
+                <td><span class="badge">{{(errorType .Send.ErrorMessage).Label}}</span> <span class="text-danger">{{.Send.ErrorMessage}}</span></td>
             </tr>
             {{end}}
         </table>

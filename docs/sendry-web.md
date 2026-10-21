@@ -185,6 +185,24 @@ sendry-web cleanup --days 90 --dry-run    # preview what would be deleted
 - Real-time progress monitoring
 - Pause, resume, cancel operations
 - Retry failed items
+- Delivery errors by type ("Delivery Errors" block on the job page)
+
+#### Delivery error types
+
+The type is not stored: the panel derives it from the MTA error text on every page load
+(`internal/web/stats/errors.go`): address does not exist, mailbox full, temporarily unavailable,
+domain unreachable, rejected by server, rejected as spam, blocked, temporary technical error
+(TLS, timeouts, rate limits, panel/API errors), unknown. **Failed** counts final failures,
+**Retrying** counts messages the MTA is still retrying (`deferred`) with their last error.
+Each count links to the item list filtered by type (`/jobs/{id}/items?status=…&error_type=…`).
+
+### Send History
+
+Emails sent via the panel API. `queued` means accepted by the MTA, delivery not confirmed yet (including
+`deferred` with the last error); `sent` means delivered; `failed` means delivery failed or the MTA could
+not be reached. The worker updates `queued` sends by polling the MTA, like job items. Before this change `sent`
+meant "accepted by the MTA"; old records are not re-checked. The API response still returns
+`"status": "sent"` meaning "accepted". Delivery Errors block and the error type filter work as on the job page.
 
 ### Monitoring
 

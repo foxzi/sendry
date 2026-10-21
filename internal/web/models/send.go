@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	"github.com/foxzi/sendry/internal/web/stats"
+)
 
 // Send represents a single email send through the API
 type Send struct {
@@ -15,7 +19,7 @@ type Send struct {
 	SenderDomain string     `json:"sender_domain"`
 	ServerName   string     `json:"server_name"`
 	ServerMsgID  string     `json:"server_msg_id,omitempty"`
-	Status       string     `json:"status"` // pending, sent, failed
+	Status       string     `json:"status"` // pending, queued, sent, failed
 	ErrorMessage string     `json:"error_message,omitempty"`
 	CreatedAt    time.Time  `json:"created_at"`
 	SentAt       *time.Time `json:"sent_at,omitempty"`
@@ -25,7 +29,8 @@ type Send struct {
 // SendStatus constants
 const (
 	SendStatusPending = "pending"
-	SendStatusSent    = "sent"
+	SendStatusQueued  = "queued" // accepted by the MTA, delivery not confirmed yet
+	SendStatusSent    = "sent"   // delivered by the MTA
 	SendStatusFailed  = "failed"
 )
 
@@ -39,6 +44,7 @@ type SendFilter struct {
 	FromDate     *time.Time
 	ToDate       *time.Time
 	Search       string // Search in from/to/subject
+	ErrorType    stats.ErrorType
 	Limit        int
 	Offset       int
 }
@@ -47,6 +53,7 @@ type SendFilter struct {
 type SendStats struct {
 	Total   int `json:"total"`
 	Pending int `json:"pending"`
+	Queued  int `json:"queued"`
 	Sent    int `json:"sent"`
 	Failed  int `json:"failed"`
 }

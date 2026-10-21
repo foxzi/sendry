@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/foxzi/sendry/internal/web/models"
+	"github.com/foxzi/sendry/internal/web/stats"
 )
 
 func (h *Handlers) JobList(w http.ResponseWriter, r *http.Request) {
@@ -81,6 +82,11 @@ func (h *Handlers) JobView(w http.ResponseWriter, r *http.Request) {
 		progress = (stats.Sent + stats.Failed) * 100 / stats.Total
 	}
 
+	errorCounts, err := h.jobs.ErrorCounts(id)
+	if err != nil {
+		h.logger.Error("failed to count job errors", "error", err)
+	}
+
 	// Get recent items
 	items, _, _ := h.jobs.ListItems(models.JobItemFilter{
 		JobID: id,
@@ -100,6 +106,7 @@ func (h *Handlers) JobView(w http.ResponseWriter, r *http.Request) {
 		"Progress": progress,
 		"Items":    items,
 		"Servers":  servers,
+		"Errors":   summarizeErrors(errorCounts),
 	}
 
 	h.render(w, "job_view", data)
@@ -108,6 +115,7 @@ func (h *Handlers) JobView(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) JobItems(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	status := r.URL.Query().Get("status")
+	errorType := stats.ParseErrorType(r.URL.Query().Get("error_type"))
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	if page < 1 {
 		page = 1
@@ -122,10 +130,11 @@ func (h *Handlers) JobItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filter := models.JobItemFilter{
-		JobID:  id,
-		Status: status,
-		Limit:  limit,
-		Offset: offset,
+		JobID:     id,
+		Status:    status,
+		ErrorType: errorType,
+		Limit:     limit,
+		Offset:    offset,
 	}
 
 	items, total, err := h.jobs.ListItems(filter)
@@ -147,6 +156,8 @@ func (h *Handlers) JobItems(w http.ResponseWriter, r *http.Request) {
 		"Page":       page,
 		"TotalPages": totalPages,
 		"Status":     status,
+		"ErrorType":  errorType,
+		"ErrorTypes": stats.ErrorTypes,
 	}
 
 	h.render(w, "job_items", data)
