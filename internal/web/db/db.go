@@ -36,6 +36,14 @@ func New(path string) (*DB, error) {
 }
 
 func (db *DB) Migrate() error {
+	// The first draft of the tracking branch had a global stop list without
+	// list_id. It was never released; drop it so the per-list schema applies.
+	if db.tableExists("unsubscribes") && !db.columnExists("unsubscribes", "list_id") {
+		if _, err := db.Exec("DROP TABLE unsubscribes"); err != nil {
+			return fmt.Errorf("drop draft unsubscribes table: %w", err)
+		}
+	}
+
 	migrations := []string{
 		migrationUsers,
 		migrationSessions,
@@ -61,6 +69,9 @@ func (db *DB) Migrate() error {
 		migrationMediaFiles,
 		migrationTemplateBlockRefs,
 		migrationUserSMTPServers,
+		migrationEmailEvents,
+		migrationUnsubscribes,
+		migrationJobVariantSnapshots,
 	}
 
 	for _, m := range migrations {
@@ -95,6 +106,22 @@ func (db *DB) Migrate() error {
 		"ALTER TABLE templates ADD COLUMN container_radius_top INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE templates ADD COLUMN container_radius_bottom INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE template_block_refs ADD COLUMN condition TEXT NOT NULL DEFAULT ''",
+		// Open/click tracking and unsubscribes
+		"ALTER TABLE campaigns ADD COLUMN track_opens INTEGER NOT NULL DEFAULT 1",
+		"ALTER TABLE campaigns ADD COLUMN track_clicks INTEGER NOT NULL DEFAULT 1",
+		"ALTER TABLE campaigns ADD COLUMN add_utm INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE api_keys ADD COLUMN track_opens INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE api_keys ADD COLUMN track_clicks INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE send_jobs ADD COLUMN skipped_unsubscribed INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE send_job_items ADD COLUMN opened_at TIMESTAMP",
+		"ALTER TABLE send_job_items ADD COLUMN open_count INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE send_job_items ADD COLUMN clicked_at TIMESTAMP",
+		"ALTER TABLE send_job_items ADD COLUMN click_count INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE send_job_items ADD COLUMN unsubscribed_at TIMESTAMP",
+		"ALTER TABLE sends ADD COLUMN opened_at TIMESTAMP",
+		"ALTER TABLE sends ADD COLUMN open_count INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE sends ADD COLUMN clicked_at TIMESTAMP",
+		"ALTER TABLE sends ADD COLUMN click_count INTEGER NOT NULL DEFAULT 0",
 	}
 	for _, m := range alterMigrations {
 		db.Exec(m) // Ignore errors (column may already exist)
@@ -160,6 +187,14 @@ func (db *DB) dropColumnIfExists(table, column string) error {
 		return fmt.Errorf("rename: %w", err)
 	}
 	return tx.Commit()
+}
+
+func (db *DB) tableExists(table string) bool {
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&n); err != nil {
+		return false
+	}
+	return n > 0
 }
 
 func (db *DB) columnExists(table, column string) bool {
@@ -596,4 +631,68 @@ CREATE TABLE IF NOT EXISTS user_smtp_servers (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_user_smtp_servers_user ON user_smtp_servers(user_id);
+`
+
+// email_events is an append-only log of engagement events (opens, clicks,
+// unsubscribes). Rows are never deleted for now; retention is decided later.
+const migrationEmailEvents = `
+CREATE TABLE IF NOT EXISTS email_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT NOT NULL,
+    source_type TEXT NOT NULL,
+    source_id TEXT NOT NULL,
+    campaign_id TEXT,
+    job_id TEXT,
+    variant_id TEXT,
+    email TEXT NOT NULL,
+    link_id INTEGER,
+    url TEXT,
+    ip TEXT,
+    user_agent TEXT,
+    is_machine INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_email_events_source ON email_events(source_type, source_id);
+CREATE INDEX IF NOT EXISTS idx_email_events_job ON email_events(job_id, type);
+CREATE INDEX IF NOT EXISTS idx_email_events_campaign ON email_events(campaign_id, type);
+CREATE INDEX IF NOT EXISTS idx_email_events_email ON email_events(email);
+CREATE INDEX IF NOT EXISTS idx_email_events_created ON email_events(created_at);
+`
+
+// unsubscribes is the journal of unsubscribes per address book (recipient
+// list). The source of truth for sending is recipients.status = 'unsubscribed'
+// in that list; the same address in another list keeps receiving mail. The
+// journal records when and from which campaign the address unsubscribed.
+const migrationUnsubscribes = `
+CREATE TABLE IF NOT EXISTS unsubscribes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    list_id TEXT NOT NULL REFERENCES recipient_lists(id) ON DELETE CASCADE,
+    recipient_id TEXT,
+    email TEXT NOT NULL,
+    campaign_id TEXT,
+    job_id TEXT,
+    source_type TEXT NOT NULL,
+    source_id TEXT,
+    created_at TIMESTAMP NOT NULL,
+    UNIQUE(list_id, email)
+);
+CREATE INDEX IF NOT EXISTS idx_unsubscribes_campaign ON unsubscribes(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_unsubscribes_created ON unsubscribes(created_at);
+`
+
+// job_variant_snapshots keeps the HTML of each variant as it was when the job
+// started, with data-sl link numbers, so the click map stays correct after
+// the template is edited.
+const migrationJobVariantSnapshots = `
+CREATE TABLE IF NOT EXISTS job_variant_snapshots (
+    job_id TEXT NOT NULL REFERENCES send_jobs(id) ON DELETE CASCADE,
+    variant_id TEXT NOT NULL,
+    variant_name TEXT,
+    template_id TEXT,
+    template_version INTEGER,
+    html TEXT NOT NULL,
+    links JSON NOT NULL DEFAULT '[]',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (job_id, variant_id)
+);
 `

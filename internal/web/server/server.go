@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/foxzi/sendry/internal/web/auth"
@@ -99,6 +100,12 @@ func (s *Server) setupRoutes() http.Handler {
 	mux.Handle("GET /uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(s.cfg.Server.UploadPath))))
 
 	// Auth routes (public)
+	// Public tracking endpoints (signed tokens, no auth, not IP-filtered)
+	mux.HandleFunc("GET /t/o/{token}", h.TrackOpen)
+	mux.HandleFunc("GET /t/c/{token}", h.TrackClick)
+	mux.HandleFunc("GET /u/{token}", h.UnsubscribePage)
+	mux.HandleFunc("POST /u/{token}", h.UnsubscribeConfirm)
+
 	mux.HandleFunc("GET /auth/login", h.LoginPage)
 	mux.HandleFunc("POST /auth/login", h.Login)
 	mux.HandleFunc("GET /auth/logout", h.Logout)
@@ -303,6 +310,12 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("GET /servers/{server}/dns-check", h.DNSCheck)
 	protected.HandleFunc("GET /servers/{server}/ip-check", h.IPCheck)
 
+	// Tracking settings, stop list, click map
+	protected.HandleFunc("GET /settings/tracking", adminOnly(http.HandlerFunc(h.TrackingSettings)).ServeHTTP)
+	protected.HandleFunc("POST /settings/tracking", adminOnly(http.HandlerFunc(h.TrackingSettingsSave)).ServeHTTP)
+	protected.HandleFunc("GET /jobs/{id}/clickmap", h.JobClickMap)
+	protected.HandleFunc("GET /jobs/{id}/clickmap/snapshot", h.JobClickMapSnapshot)
+
 	// Wrap protected routes with auth middleware
 	authMiddleware := middleware.Auth(s.cfg, s.db, s.logger)
 	mux.Handle("/", authMiddleware(protected))
@@ -312,9 +325,18 @@ func (s *Server) setupRoutes() http.Handler {
 	handler = middleware.Logger(s.logger)(handler)
 	handler = middleware.Recovery(s.logger)(handler)
 
-	// Apply IP filter if configured
+	// Apply IP filter if configured. Public tracking paths (/t/, /u/) are
+	// reached by email readers from anywhere, so they bypass the filter.
 	if len(s.cfg.Server.AllowedIPs) > 0 {
-		handler = middleware.IPFilter(s.cfg.Server.AllowedIPs, s.logger)(handler)
+		filtered := middleware.IPFilter(s.cfg.Server.AllowedIPs, s.logger)(handler)
+		open := handler
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if isPublicTrackingPath(r.URL.Path) {
+				open.ServeHTTP(w, r)
+				return
+			}
+			filtered.ServeHTTP(w, r)
+		})
 	}
 
 	return handler
@@ -351,4 +373,9 @@ func (s *Server) Run(ctx context.Context) error {
 		s.db.Close()
 		return nil
 	}
+}
+
+// isPublicTrackingPath reports whether path is an open/click/unsubscribe endpoint
+func isPublicTrackingPath(path string) bool {
+	return strings.HasPrefix(path, "/t/") || strings.HasPrefix(path, "/u/")
 }

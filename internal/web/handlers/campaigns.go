@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/foxzi/sendry/internal/web/middleware"
@@ -49,10 +50,20 @@ func (h *Handlers) CampaignList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) CampaignNew(w http.ResponseWriter, r *http.Request) {
+	// Tracking checkboxes default to the panel-wide tracking settings
+	trackOpens, trackClicks := false, false
+	if ts, err := h.settings.GetTrackingSettings(); err != nil {
+		h.logger.Error("failed to load tracking settings", "error", err)
+	} else if ts != nil {
+		trackOpens, trackClicks = ts.OpensDefault, ts.ClicksDefault
+	}
+
 	data := map[string]any{
-		"Title":  "New Campaign",
-		"Active": "campaigns",
-		"User":   h.getUserFromContext(r),
+		"Title":       "New Campaign",
+		"Active":      "campaigns",
+		"User":        h.getUserFromContext(r),
+		"TrackOpens":  trackOpens,
+		"TrackClicks": trackClicks,
 	}
 
 	h.render(w, "campaign_new", data)
@@ -72,6 +83,9 @@ func (h *Handlers) CampaignCreate(w http.ResponseWriter, r *http.Request) {
 		ReplyTo:     r.FormValue("reply_to"),
 		Variables:   r.FormValue("variables"),
 		Tags:        r.FormValue("tags"),
+		TrackOpens:  r.FormValue("track_opens") != "",
+		TrackClicks: r.FormValue("track_clicks") != "",
+		AddUTM:      r.FormValue("add_utm") != "",
 	}
 
 	if c.Name == "" || c.FromEmail == "" {
@@ -112,10 +126,16 @@ func (h *Handlers) CampaignView(w http.ResponseWriter, r *http.Request) {
 	// Get recipient lists for send page
 	recipientLists, _, _ := h.recipients.ListLists(models.RecipientListFilter{Limit: 100})
 
+	trackingStats, err := h.tracking.CampaignStats(id)
+	if err != nil {
+		h.logger.Error("failed to load campaign tracking stats", "error", err)
+	}
+
 	data := map[string]any{
 		"Title":          c.Name,
 		"Active":         "campaigns",
 		"User":           h.getUserFromContext(r),
+		"Tracking":       trackingStats,
 		"Campaign":       c,
 		"Variants":       variants,
 		"RecipientLists": recipientLists,
@@ -169,6 +189,9 @@ func (h *Handlers) CampaignUpdate(w http.ResponseWriter, r *http.Request) {
 	c.FromName = r.FormValue("from_name")
 	c.ReplyTo = r.FormValue("reply_to")
 	c.Tags = r.FormValue("tags")
+	c.TrackOpens = r.FormValue("track_opens") != ""
+	c.TrackClicks = r.FormValue("track_clicks") != ""
+	c.AddUTM = r.FormValue("add_utm") != ""
 
 	if err := h.campaigns.Update(c); err != nil {
 		h.logger.Error("failed to update campaign", "error", err)
@@ -322,14 +345,28 @@ func (h *Handlers) CampaignSendPage(w http.ResponseWriter, r *http.Request) {
 	variants, _ := h.campaigns.GetVariants(id)
 	recipientLists, _, _ := h.recipients.ListLists(models.RecipientListFilter{Limit: 100})
 
+	// Warn when no variant template contains the unsubscribe link variable
+	hasUnsubscribeLink := false
+	for _, v := range variants {
+		tmpl, err := h.templates.GetByID(v.TemplateID)
+		if err != nil || tmpl == nil {
+			continue
+		}
+		if strings.Contains(tmpl.HTML, "unsubscribe_url") {
+			hasUnsubscribeLink = true
+			break
+		}
+	}
+
 	data := map[string]any{
-		"Title":          "Send " + c.Name,
-		"Active":         "campaigns",
-		"User":           h.getUserFromContext(r),
-		"Campaign":       c,
-		"Variants":       variants,
-		"RecipientLists": recipientLists,
-		"Servers":        h.cfg.Sendry.Servers,
+		"NoUnsubscribeLink": len(variants) > 0 && !hasUnsubscribeLink,
+		"Title":             "Send " + c.Name,
+		"Active":            "campaigns",
+		"User":              h.getUserFromContext(r),
+		"Campaign":          c,
+		"Variants":          variants,
+		"RecipientLists":    recipientLists,
+		"Servers":           h.cfg.Sendry.Servers,
 	}
 
 	h.render(w, "campaign_send", data)
@@ -428,6 +465,14 @@ func (h *Handlers) CampaignSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Recipients unsubscribed in this address book are not in the job (only
+	// active ones are listed); count them for the job stats.
+	skipped, err := h.unsubs.CountInList(recipientListID)
+	if err != nil {
+		h.logger.Error("failed to count unsubscribed recipients", "error", err)
+		skipped = 0
+	}
+
 	// Create job items
 	items := make([]models.SendJobItem, len(recipients))
 	serverIdx := 0
@@ -454,6 +499,12 @@ func (h *Handlers) CampaignSend(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("failed to create job items", "error", err)
 		h.error(w, http.StatusInternalServerError, "Failed to create job items")
 		return
+	}
+
+	if skipped > 0 {
+		if err := h.jobs.SetSkippedUnsubscribed(job.ID, skipped); err != nil {
+			h.logger.Error("failed to store skipped count", "job_id", job.ID, "error", err)
+		}
 	}
 
 	// Start job if not scheduled

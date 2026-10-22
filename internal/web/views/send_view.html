@@ -114,4 +114,53 @@
         </table>
     </div>
 </div>
+
+<div class="card" style="margin-top: 1.5rem">
+    <div class="card-header">
+        <h2 data-i18n="trk.events">Events</h2>
+        <span class="text-muted">
+            <span data-i18n="trk.col_opened">Opened</span>: {{.Send.OpenCount}} &middot;
+            <span data-i18n="trk.col_clicks">Clicks</span>: {{.Send.ClickCount}}
+        </span>
+    </div>
+    <div class="card-body">
+        {{if .Events}}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th data-i18n="trk.col_time">Time</th>
+                    <th data-i18n="trk.col_type">Type</th>
+                    <th data-i18n="trk.col_link">Link</th>
+                    <th>IP</th>
+                    <th>User agent</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Events}}
+                <tr>
+                    <td>{{.CreatedAt.Format "2006-01-02 15:04:05"}}</td>
+                    <td>
+                        {{if eq .Type "open"}}<span data-i18n="trk.ev_open">Open</span>
+                        {{else if eq .Type "click"}}<span data-i18n="trk.ev_click">Click</span>
+                        {{else if eq .Type "unsubscribe"}}<span data-i18n="trk.ev_unsub">Unsubscribe</span>
+                        {{else}}{{.Type}}{{end}}
+                    </td>
+                    <td>{{if .URL}}<span class="trk-url" title="{{.URL}}">{{.URL}}</span>{{else}}<span class="text-muted">-</span>{{end}}</td>
+                    <td>{{if .IP}}{{.IP}}{{else}}<span class="text-muted">-</span>{{end}}</td>
+                    <td>{{if .UserAgent}}<span class="trk-url" title="{{.UserAgent}}">{{.UserAgent}}</span>{{else}}<span class="text-muted">-</span>{{end}}</td>
+                    <td>{{if .IsMachine}}<span class="badge badge-secondary" data-i18n="trk.machine">machine</span>{{end}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <div class="empty-state"><p data-i18n="trk.no_events">No events yet</p></div>
+        {{end}}
+    </div>
+</div>
+
+<style>
+.trk-url { display: inline-block; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+</style>
 {{end}}

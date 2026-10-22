@@ -43,16 +43,18 @@ func (r *SendRepository) Create(s *models.Send) error {
 func (r *SendRepository) GetByID(id string) (*models.Send, error) {
 	s := &models.Send{}
 	var apiKeyID, ccAddr, bccAddr, templateID, serverMsgID, errorMsg, clientIP sql.NullString
-	var sentAt sql.NullTime
+	var sentAt, openedAt, clickedAt sql.NullTime
 
 	err := r.db.QueryRow(`
 		SELECT id, api_key_id, from_address, to_addresses, cc_addresses, bcc_addresses,
 			subject, template_id, sender_domain, server_name, server_msg_id, status, error_message,
-			created_at, sent_at, client_ip
+			created_at, sent_at, client_ip,
+			opened_at, COALESCE(open_count, 0), clicked_at, COALESCE(click_count, 0)
 		FROM sends WHERE id = ?`, id,
 	).Scan(&s.ID, &apiKeyID, &s.FromAddress, &s.ToAddresses, &ccAddr, &bccAddr,
 		&s.Subject, &templateID, &s.SenderDomain, &s.ServerName, &serverMsgID,
-		&s.Status, &errorMsg, &s.CreatedAt, &sentAt, &clientIP)
+		&s.Status, &errorMsg, &s.CreatedAt, &sentAt, &clientIP,
+		&openedAt, &s.OpenCount, &clickedAt, &s.ClickCount)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -70,6 +72,12 @@ func (r *SendRepository) GetByID(id string) (*models.Send, error) {
 	s.ClientIP = clientIP.String
 	if sentAt.Valid {
 		s.SentAt = &sentAt.Time
+	}
+	if openedAt.Valid {
+		s.OpenedAt = &openedAt.Time
+	}
+	if clickedAt.Valid {
+		s.ClickedAt = &clickedAt.Time
 	}
 
 	return s, nil
@@ -117,6 +125,18 @@ func (r *SendRepository) List(filter models.SendFilter) ([]models.SendWithDetail
 	if filter.ErrorType != "" {
 		countQuery += " AND COALESCE(error_message, '') != ''"
 	}
+	switch filter.Opened {
+	case "yes":
+		countQuery += " AND opened_at IS NOT NULL"
+	case "no":
+		countQuery += " AND opened_at IS NULL"
+	}
+	switch filter.Clicked {
+	case "yes":
+		countQuery += " AND clicked_at IS NOT NULL"
+	case "no":
+		countQuery += " AND clicked_at IS NULL"
+	}
 
 	var total int
 	if err := r.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
@@ -128,6 +148,7 @@ func (r *SendRepository) List(filter models.SendFilter) ([]models.SendWithDetail
 		SELECT s.id, s.api_key_id, s.from_address, s.to_addresses, s.cc_addresses, s.bcc_addresses,
 			s.subject, s.template_id, s.sender_domain, s.server_name, s.server_msg_id, s.status,
 			s.error_message, s.created_at, s.sent_at, s.client_ip,
+			s.opened_at, COALESCE(s.open_count, 0), s.clicked_at, COALESCE(s.click_count, 0),
 			COALESCE(k.name, '') as api_key_name,
 			COALESCE(t.name, '') as template_name
 		FROM sends s
@@ -171,6 +192,18 @@ func (r *SendRepository) List(filter models.SendFilter) ([]models.SendWithDetail
 	if filter.ErrorType != "" {
 		query += " AND COALESCE(s.error_message, '') != ''"
 	}
+	switch filter.Opened {
+	case "yes":
+		query += " AND s.opened_at IS NOT NULL"
+	case "no":
+		query += " AND s.opened_at IS NULL"
+	}
+	switch filter.Clicked {
+	case "yes":
+		query += " AND s.clicked_at IS NOT NULL"
+	case "no":
+		query += " AND s.clicked_at IS NULL"
+	}
 
 	query += " ORDER BY s.created_at DESC"
 
@@ -191,11 +224,12 @@ func (r *SendRepository) List(filter models.SendFilter) ([]models.SendWithDetail
 	for rows.Next() {
 		var s models.SendWithDetails
 		var apiKeyID, ccAddr, bccAddr, templateID, serverMsgID, errorMsg, clientIP sql.NullString
-		var sentAt sql.NullTime
+		var sentAt, openedAt, clickedAt sql.NullTime
 
 		if err := rows.Scan(&s.ID, &apiKeyID, &s.FromAddress, &s.ToAddresses, &ccAddr, &bccAddr,
 			&s.Subject, &templateID, &s.SenderDomain, &s.ServerName, &serverMsgID,
 			&s.Status, &errorMsg, &s.CreatedAt, &sentAt, &clientIP,
+			&openedAt, &s.OpenCount, &clickedAt, &s.ClickCount,
 			&s.APIKeyName, &s.TemplateName); err != nil {
 			return nil, 0, err
 		}
@@ -209,6 +243,12 @@ func (r *SendRepository) List(filter models.SendFilter) ([]models.SendWithDetail
 		s.ClientIP = clientIP.String
 		if sentAt.Valid {
 			s.SentAt = &sentAt.Time
+		}
+		if openedAt.Valid {
+			s.OpenedAt = &openedAt.Time
+		}
+		if clickedAt.Valid {
+			s.ClickedAt = &clickedAt.Time
 		}
 
 		if filter.ErrorType != "" && stats.ClassifyError(s.ErrorMessage) != filter.ErrorType {
@@ -308,7 +348,8 @@ func (r *SendRepository) ErrorCounts() ([]models.ErrorCount, error) {
 // It also returns the rowid of the last send, to be passed as afterRowID on the next call.
 func (r *SendRepository) GetQueuedSends(afterRowID int64, limit int) ([]models.Send, int64, error) {
 	rows, err := r.db.Query(`
-		SELECT rowid, id, server_name, server_msg_id, status, COALESCE(error_message, '')
+		SELECT rowid, id, server_name, server_msg_id, status, COALESCE(error_message, ''),
+			opened_at, COALESCE(open_count, 0), clicked_at, COALESCE(click_count, 0)
 		FROM sends
 		WHERE status = 'queued' AND COALESCE(server_msg_id, '') != '' AND rowid > ?
 		ORDER BY rowid
@@ -323,8 +364,16 @@ func (r *SendRepository) GetQueuedSends(afterRowID int64, limit int) ([]models.S
 	lastRowID := afterRowID
 	for rows.Next() {
 		var s models.Send
-		if err := rows.Scan(&lastRowID, &s.ID, &s.ServerName, &s.ServerMsgID, &s.Status, &s.ErrorMessage); err != nil {
+		var openedAt, clickedAt sql.NullTime
+		if err := rows.Scan(&lastRowID, &s.ID, &s.ServerName, &s.ServerMsgID, &s.Status, &s.ErrorMessage,
+			&openedAt, &s.OpenCount, &clickedAt, &s.ClickCount); err != nil {
 			return nil, 0, err
+		}
+		if openedAt.Valid {
+			s.OpenedAt = &openedAt.Time
+		}
+		if clickedAt.Valid {
+			s.ClickedAt = &clickedAt.Time
 		}
 		sends = append(sends, s)
 	}

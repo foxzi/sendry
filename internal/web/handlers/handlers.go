@@ -38,6 +38,8 @@ type Handlers struct {
 	userSMTP   *repository.UserSMTPRepository
 	cipher     *crypto.Cipher
 	router     *router.EmailRouter
+	tracking   *repository.TrackingRepository
+	unsubs     *repository.UnsubscribeRepository
 }
 
 func New(cfg *config.Config, db *db.DB, logger *slog.Logger, v *views.Engine, oidcProvider *auth.OIDCProvider) *Handlers {
@@ -96,6 +98,8 @@ func New(cfg *config.Config, db *db.DB, logger *slog.Logger, v *views.Engine, oi
 		userSMTP:   repository.NewUserSMTPRepository(db.DB),
 		cipher:     ciph,
 		router:     emailRouter,
+		tracking:   repository.NewTrackingRepository(db.DB),
+		unsubs:     repository.NewUnsubscribeRepository(db.DB),
 	}
 }
 

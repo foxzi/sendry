@@ -1,0 +1,91 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1 data-i18n="trk.tab_clickmap">Click map</h1>
+        <p class="text-muted">Job: <a href="/jobs/{{.Job.ID}}">{{slice .Job.ID 0 8}}...</a> | Campaign: <a href="/campaigns/{{.Job.CampaignID}}">{{.Job.CampaignName}}</a></p>
+    </div>
+</div>
+
+<div class="tabs" style="margin-bottom: 1rem">
+    <a href="/jobs/{{.Job.ID}}" class="tab" data-i18n="trk.tab_overview">Overview</a>
+    <a href="/jobs/{{.Job.ID}}/items" class="tab" data-i18n="trk.tab_recipients">Recipients</a>
+    <a href="/jobs/{{.Job.ID}}/clickmap" class="tab active" data-i18n="trk.tab_clickmap">Click map</a>
+</div>
+
+{{if .Current}}
+<div class="card" style="margin-bottom: 1.5rem">
+    <div class="card-header">
+        <div class="filter-form">
+            {{if gt (len .Snapshots) 1}}
+            <form method="get" action="/jobs/{{.Job.ID}}/clickmap" style="display:inline">
+                <select name="variant" class="input" onchange="this.form.submit()">
+                    {{range .Snapshots}}
+                    <option value="{{.VariantID}}" {{if eq .VariantID $.Variant}}selected{{end}}>{{if .VariantName}}{{.VariantName}}{{else}}{{.VariantID}}{{end}}</option>
+                    {{end}}
+                </select>
+            </form>
+            {{end}}
+            <div class="tabs" id="cm-mode">
+                <button type="button" class="tab active" data-mode="unique_clicks" data-i18n="trk.mode_unique">Unique</button>
+                <button type="button" class="tab" data-mode="total_clicks" data-i18n="trk.mode_total">Total</button>
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="cm-wrap" id="cm-wrap">
+            <iframe id="cm-frame" sandbox="allow-same-origin" src="/jobs/{{.Job.ID}}/clickmap/snapshot?variant={{.Variant}}" title="Click map"></iframe>
+            <div id="cm-overlay"></div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h2 data-i18n="trk.links">Links</h2></div>
+    <div class="card-body">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th data-i18n="trk.col_label">Label</th>
+                    <th data-i18n="trk.col_kind">Kind</th>
+                    <th>URL</th>
+                    <th data-i18n="trk.mode_unique">Unique</th>
+                    <th data-i18n="trk.mode_total">Total</th>
+                    <th data-i18n="trk.col_share">Share</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Rows}}
+                <tr data-link="{{.LinkID}}">
+                    <td>{{.LinkID}}</td>
+                    <td>{{.Label}}</td>
+                    <td>{{.Kind}}</td>
+                    <td><span class="cm-url" title="{{.URL}}">{{.URL}}</span></td>
+                    <td>{{.UniqueClicks}}</td>
+                    <td>{{.TotalClicks}}</td>
+                    <td>{{printf "%.1f" .Share}}%</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script type="application/json" id="cm-data">{{toJSON .Links}}</script>
+<script src="/static/js/clickmap.js"></script>
+{{else}}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state"><p data-i18n="trk.map_empty">Карта появится после начала отправки</p></div>
+    </div>
+</div>
+{{end}}
+
+<style>
+.cm-wrap { position: relative; max-width: 800px; margin: 0 auto; border: 1px solid var(--border); background: #fff; }
+.cm-wrap iframe { display: block; width: 100%; height: 600px; border: 0; }
+#cm-overlay { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
+.cm-badge { position: absolute; min-width: 22px; padding: 1px 6px; border-radius: 11px; font: 600 12px/18px sans-serif; color: #fff; text-align: center; pointer-events: auto; box-shadow: 0 1px 3px rgba(0,0,0,.4); cursor: default; }
+.cm-url { display: inline-block; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+</style>
+{{end}}

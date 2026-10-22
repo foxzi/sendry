@@ -4,7 +4,10 @@
         <h1>Job Items</h1>
         <p class="text-muted">Job: {{slice .Job.ID 0 8}}... | Campaign: {{.Job.CampaignName}}</p>
     </div>
-    <a href="/jobs/{{.Job.ID}}" class="btn btn-secondary">Back to Job</a>
+    <div class="header-actions">
+        <a href="/jobs/{{.Job.ID}}/clickmap" class="btn" data-i18n="trk.tab_clickmap">Click map</a>
+        <a href="/jobs/{{.Job.ID}}" class="btn btn-secondary">Back to Job</a>
+    </div>
 </div>
 
 <div class="card">
@@ -23,8 +26,18 @@
                 <option value="{{.}}" {{if eq . $.ErrorType}}selected{{end}}>{{.Label}}</option>
                 {{end}}
             </select>
+            <select name="opened" class="input">
+                <option value="" data-i18n="trk.opened_any">Opened: any</option>
+                <option value="yes" {{if eq .Opened "yes"}}selected{{end}} data-i18n="trk.opened_yes">Opened</option>
+                <option value="no" {{if eq .Opened "no"}}selected{{end}} data-i18n="trk.opened_no">Not opened</option>
+            </select>
+            <select name="clicked" class="input">
+                <option value="" data-i18n="trk.clicked_any">Clicked: any</option>
+                <option value="yes" {{if eq .Clicked "yes"}}selected{{end}} data-i18n="trk.clicked_yes">Clicked</option>
+                <option value="no" {{if eq .Clicked "no"}}selected{{end}} data-i18n="trk.clicked_no">Not clicked</option>
+            </select>
             <button type="submit" class="btn">Filter</button>
-            {{if or .Status .ErrorType}}
+            {{if or .Status .ErrorType .Opened .Clicked}}
             <a href="/jobs/{{.Job.ID}}/items" class="btn btn-secondary">Clear</a>
             {{end}}
         </form>
@@ -40,17 +53,21 @@
                     <th>Server</th>
                     <th>Status</th>
                     <th>Sendry ID</th>
+                    <th data-i18n="trk.col_opened">Opened</th>
+                    <th data-i18n="trk.col_clicks">Clicks</th>
                     <th>Error</th>
                 </tr>
             </thead>
             <tbody>
                 {{range .Items}}
                 <tr>
-                    <td>{{.Email}}</td>
+                    <td>{{.Email}}{{if .UnsubscribedAt}} <span class="badge badge-secondary" data-i18n="trk.unsub_badge">unsubscribed</span>{{end}}</td>
                     <td>{{if .VariantName}}{{.VariantName}}{{else}}<span class="text-muted">-</span>{{end}}</td>
                     <td>{{.ServerName}}</td>
                     <td><span class="badge badge-{{.Status}}">{{.Status}}</span></td>
                     <td>{{if .SendryMsgID}}<code>{{.SendryMsgID}}</code>{{else}}<span class="text-muted">-</span>{{end}}</td>
+                    <td>{{if .OpenedAt}}{{.OpenedAt.Format "2006-01-02 15:04"}}{{if gt .OpenCount 0}} <span class="text-muted">&times;{{.OpenCount}}</span>{{end}}{{else}}<span class="text-muted">-</span>{{end}}</td>
+                    <td>{{if .ClickCount}}{{.ClickCount}}{{else}}<span class="text-muted">-</span>{{end}}</td>
                     <td>{{if .Error}}<span class="badge">{{(errorType .Error).Label}}</span> <span class="text-error">{{.Error}}</span>{{else}}<span class="text-muted">-</span>{{end}}</td>
                 </tr>
                 {{end}}
@@ -60,11 +77,11 @@
         {{if gt .TotalPages 1}}
         <div class="pagination">
             {{if gt .Page 1}}
-            <a href="/jobs/{{.Job.ID}}/items?page={{sub .Page 1}}{{if .Status}}&status={{.Status}}{{end}}{{if .ErrorType}}&error_type={{.ErrorType}}{{end}}" class="btn btn-sm">&laquo; Prev</a>
+            <a href="/jobs/{{.Job.ID}}/items?page={{sub .Page 1}}{{if .Status}}&status={{.Status}}{{end}}{{if .ErrorType}}&error_type={{.ErrorType}}{{end}}{{if .Opened}}&opened={{.Opened}}{{end}}{{if .Clicked}}&clicked={{.Clicked}}{{end}}" class="btn btn-sm">&laquo; Prev</a>
             {{end}}
             <span class="pagination-info">Page {{.Page}} of {{.TotalPages}}</span>
             {{if lt .Page .TotalPages}}
-            <a href="/jobs/{{.Job.ID}}/items?page={{add .Page 1}}{{if .Status}}&status={{.Status}}{{end}}{{if .ErrorType}}&error_type={{.ErrorType}}{{end}}" class="btn btn-sm">Next &raquo;</a>
+            <a href="/jobs/{{.Job.ID}}/items?page={{add .Page 1}}{{if .Status}}&status={{.Status}}{{end}}{{if .ErrorType}}&error_type={{.ErrorType}}{{end}}{{if .Opened}}&opened={{.Opened}}{{end}}{{if .Clicked}}&clicked={{.Clicked}}{{end}}" class="btn btn-sm">Next &raquo;</a>
             {{end}}
         </div>
         {{end}}

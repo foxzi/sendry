@@ -300,6 +300,7 @@ curl -X DELETE http://localhost:8080/api/v1/queue/{message_id} \
 - [Rate limiting](ratelimit.ru.md)
 - [Prometheus метрики](metrics.ru.md)
 - [Веб-панель Sendry](sendry-web.ru.md)
+- [Трекинг: открытия, клики, отписки](tracking.ru.md)
 - [Синхронизация DNS (Cloudflare)](dns-sync.ru.md)
 - [Развертывание через Ansible](ansible.ru.md)
 - [Релиз и деплой по кнопке](deploy.ru.md)

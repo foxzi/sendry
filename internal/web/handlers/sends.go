@@ -121,8 +121,14 @@ func (h *Handlers) SendView(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	events, err := h.tracking.SourceEvents(models.SourceSend, id, 200)
+	if err != nil {
+		h.logger.Error("failed to load send events", "id", id, "error", err)
+	}
+
 	data := map[string]any{
 		"Title":        "Send Details",
+		"Events":       events,
 		"Active":       "sends",
 		"User":         h.getUserFromContext(r),
 		"Send":         send,

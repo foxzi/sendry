@@ -26,10 +26,7 @@ func (h *Handlers) APISend(w http.ResponseWriter, r *http.Request) {
 
 	// Get API key from context
 	apiKey := middleware.GetAPIKeyFromContext(r)
-	apiKeyID := ""
 	if apiKey != nil {
-		apiKeyID = apiKey.ID
-
 		// Check domain permissions
 		if len(apiKey.AllowedDomains) > 0 && req.From != "" {
 			senderDomain := extractDomainFromEmail(req.From)
@@ -47,7 +44,7 @@ func (h *Handlers) APISend(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Send through router
-	resp, err := h.router.Send(r.Context(), &req, apiKeyID, clientIP)
+	resp, err := h.router.Send(r.Context(), &req, apiKey, clientIP)
 	if err != nil {
 		switch {
 		case errors.Is(err, router.ErrDomainNotFound):

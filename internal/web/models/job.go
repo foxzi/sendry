@@ -22,8 +22,11 @@ type SendJob struct {
 	Stats           string     `json:"stats"`    // JSON with stats
 	DryRun          bool       `json:"dry_run"`
 	DryRunLimit     int        `json:"dry_run_limit"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	// SkippedUnsubscribed is how many list recipients were left out at job start
+	// because they are on the unsubscribe stop list
+	SkippedUnsubscribed int       `json:"skipped_unsubscribed"`
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
 }
 
 // SendJobItem represents a single email in a send job
@@ -43,6 +46,11 @@ type SendJobItem struct {
 	QueuedAt           *time.Time `json:"queued_at,omitempty"`
 	SentAt             *time.Time `json:"sent_at,omitempty"`
 	CreatedAt          time.Time  `json:"created_at"`
+	OpenedAt           *time.Time `json:"opened_at,omitempty"` // first non-machine open
+	OpenCount          int        `json:"open_count"`
+	ClickedAt          *time.Time `json:"clicked_at,omitempty"` // first non-machine click
+	ClickCount         int        `json:"click_count"`
+	UnsubscribedAt     *time.Time `json:"unsubscribed_at,omitempty"`
 }
 
 // JobStats holds aggregated job statistics
@@ -67,8 +75,11 @@ type JobItemFilter struct {
 	JobID     string
 	Status    string
 	ErrorType stats.ErrorType
-	Limit     int
-	Offset    int
+	// Engagement filters: "", "yes", "no"
+	Opened  string
+	Clicked string
+	Limit   int
+	Offset  int
 }
 
 // ErrorCount is the number of job items or sends with the same error text and status

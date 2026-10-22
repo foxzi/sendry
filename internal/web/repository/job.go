@@ -46,14 +46,15 @@ func (r *JobRepository) GetByID(id string) (*models.SendJob, error) {
 	err := r.db.QueryRow(`
 		SELECT j.id, j.campaign_id, c.name, j.recipient_list_id, rl.name, j.status,
 			j.scheduled_at, j.started_at, j.completed_at, j.servers, j.strategy, j.stats,
-			COALESCE(j.dry_run, 0), COALESCE(j.dry_run_limit, 0), j.created_at, j.updated_at
+			COALESCE(j.dry_run, 0), COALESCE(j.dry_run_limit, 0), j.created_at, j.updated_at,
+			COALESCE(j.skipped_unsubscribed, 0)
 		FROM send_jobs j
 		LEFT JOIN campaigns c ON j.campaign_id = c.id
 		LEFT JOIN recipient_lists rl ON j.recipient_list_id = rl.id
 		WHERE j.id = ?`, id,
 	).Scan(&job.ID, &job.CampaignID, &campaignName, &job.RecipientListID, &listName, &job.Status,
 		&scheduledAt, &startedAt, &completedAt, &job.Servers, &job.Strategy, &job.Stats,
-		&job.DryRun, &job.DryRunLimit, &job.CreatedAt, &job.UpdatedAt)
+		&job.DryRun, &job.DryRunLimit, &job.CreatedAt, &job.UpdatedAt, &job.SkippedUnsubscribed)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -105,7 +106,8 @@ func (r *JobRepository) List(filter models.JobListFilter) ([]models.SendJob, int
 	query := `
 		SELECT j.id, j.campaign_id, c.name, j.recipient_list_id, rl.name, j.status,
 			j.scheduled_at, j.started_at, j.completed_at, j.servers, j.strategy, j.stats,
-			COALESCE(j.dry_run, 0), COALESCE(j.dry_run_limit, 0), j.created_at, j.updated_at
+			COALESCE(j.dry_run, 0), COALESCE(j.dry_run_limit, 0), j.created_at, j.updated_at,
+			COALESCE(j.skipped_unsubscribed, 0)
 		FROM send_jobs j
 		LEFT JOIN campaigns c ON j.campaign_id = c.id
 		LEFT JOIN recipient_lists rl ON j.recipient_list_id = rl.id
@@ -146,7 +148,7 @@ func (r *JobRepository) List(filter models.JobListFilter) ([]models.SendJob, int
 
 		err := rows.Scan(&job.ID, &job.CampaignID, &campaignName, &job.RecipientListID, &listName, &job.Status,
 			&scheduledAt, &startedAt, &completedAt, &job.Servers, &job.Strategy, &job.Stats,
-			&job.DryRun, &job.DryRunLimit, &job.CreatedAt, &job.UpdatedAt)
+			&job.DryRun, &job.DryRunLimit, &job.CreatedAt, &job.UpdatedAt, &job.SkippedUnsubscribed)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -265,6 +267,18 @@ func (r *JobRepository) ListItems(filter models.JobItemFilter) ([]models.SendJob
 	if filter.ErrorType != "" {
 		where += " AND COALESCE(i.error, '') != ''"
 	}
+	switch filter.Opened {
+	case "yes":
+		where += " AND i.opened_at IS NOT NULL"
+	case "no":
+		where += " AND i.opened_at IS NULL"
+	}
+	switch filter.Clicked {
+	case "yes":
+		where += " AND i.clicked_at IS NOT NULL"
+	case "no":
+		where += " AND i.clicked_at IS NULL"
+	}
 
 	// Count total
 	var total int
@@ -275,7 +289,8 @@ func (r *JobRepository) ListItems(filter models.JobItemFilter) ([]models.SendJob
 	// Get items
 	query := `
 		SELECT i.id, i.job_id, i.recipient_id, r.email, i.variant_id, COALESCE(v.name, ''), i.server_name, i.status,
-			COALESCE(i.sendry_msg_id, ''), COALESCE(i.error, ''), i.queued_at, i.sent_at, i.created_at
+			COALESCE(i.sendry_msg_id, ''), COALESCE(i.error, ''), i.queued_at, i.sent_at, i.created_at,
+			i.opened_at, COALESCE(i.open_count, 0), i.clicked_at, COALESCE(i.click_count, 0), i.unsubscribed_at
 		FROM send_job_items i
 		LEFT JOIN recipients r ON i.recipient_id = r.id
 		LEFT JOIN campaign_variants v ON i.variant_id = v.id` + where + " ORDER BY i.created_at"
@@ -301,10 +316,11 @@ func (r *JobRepository) ListItems(filter models.JobItemFilter) ([]models.SendJob
 	for rows.Next() {
 		var item models.SendJobItem
 		var email, variantName sql.NullString
-		var queuedAt, sentAt sql.NullTime
+		var queuedAt, sentAt, openedAt, clickedAt, unsubAt sql.NullTime
 
 		err := rows.Scan(&item.ID, &item.JobID, &item.RecipientID, &email, &item.VariantID, &variantName,
-			&item.ServerName, &item.Status, &item.SendryMsgID, &item.Error, &queuedAt, &sentAt, &item.CreatedAt)
+			&item.ServerName, &item.Status, &item.SendryMsgID, &item.Error, &queuedAt, &sentAt, &item.CreatedAt,
+			&openedAt, &item.OpenCount, &clickedAt, &item.ClickCount, &unsubAt)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -325,6 +341,7 @@ func (r *JobRepository) ListItems(filter models.JobItemFilter) ([]models.SendJob
 		if sentAt.Valid {
 			item.SentAt = &sentAt.Time
 		}
+		setItemEngagement(&item, openedAt, clickedAt, unsubAt)
 
 		items = append(items, item)
 	}
@@ -410,7 +427,8 @@ func (r *JobRepository) GetStats(jobID string) (models.JobStats, error) {
 func (r *JobRepository) GetRunningJobs() ([]models.SendJob, error) {
 	rows, err := r.db.Query(`
 		SELECT j.id, j.campaign_id, c.name, j.recipient_list_id, COALESCE(rl.name, ''), j.status,
-			j.scheduled_at, j.started_at, j.completed_at, j.servers, j.strategy, COALESCE(j.stats, '{}'), j.created_at, j.updated_at
+			j.scheduled_at, j.started_at, j.completed_at, j.servers, j.strategy, COALESCE(j.stats, '{}'), j.created_at, j.updated_at,
+			COALESCE(j.skipped_unsubscribed, 0)
 		FROM send_jobs j
 		LEFT JOIN campaigns c ON j.campaign_id = c.id
 		LEFT JOIN recipient_lists rl ON j.recipient_list_id = rl.id
@@ -428,7 +446,7 @@ func (r *JobRepository) GetRunningJobs() ([]models.SendJob, error) {
 		var campaignName, listName sql.NullString
 
 		err := rows.Scan(&job.ID, &job.CampaignID, &campaignName, &job.RecipientListID, &listName, &job.Status,
-			&scheduledAt, &startedAt, &completedAt, &job.Servers, &job.Strategy, &job.Stats, &job.CreatedAt, &job.UpdatedAt)
+			&scheduledAt, &startedAt, &completedAt, &job.Servers, &job.Strategy, &job.Stats, &job.CreatedAt, &job.UpdatedAt, &job.SkippedUnsubscribed)
 		if err != nil {
 			return nil, err
 		}
@@ -459,7 +477,8 @@ func (r *JobRepository) GetRunningJobs() ([]models.SendJob, error) {
 func (r *JobRepository) GetScheduledJobsDue() ([]models.SendJob, error) {
 	rows, err := r.db.Query(`
 		SELECT j.id, j.campaign_id, c.name, j.recipient_list_id, COALESCE(rl.name, ''), j.status,
-			j.scheduled_at, j.started_at, j.completed_at, j.servers, j.strategy, COALESCE(j.stats, '{}'), j.created_at, j.updated_at
+			j.scheduled_at, j.started_at, j.completed_at, j.servers, j.strategy, COALESCE(j.stats, '{}'), j.created_at, j.updated_at,
+			COALESCE(j.skipped_unsubscribed, 0)
 		FROM send_jobs j
 		LEFT JOIN campaigns c ON j.campaign_id = c.id
 		LEFT JOIN recipient_lists rl ON j.recipient_list_id = rl.id
@@ -477,7 +496,7 @@ func (r *JobRepository) GetScheduledJobsDue() ([]models.SendJob, error) {
 		var campaignName, listName sql.NullString
 
 		err := rows.Scan(&job.ID, &job.CampaignID, &campaignName, &job.RecipientListID, &listName, &job.Status,
-			&scheduledAt, &startedAt, &completedAt, &job.Servers, &job.Strategy, &job.Stats, &job.CreatedAt, &job.UpdatedAt)
+			&scheduledAt, &startedAt, &completedAt, &job.Servers, &job.Strategy, &job.Stats, &job.CreatedAt, &job.UpdatedAt, &job.SkippedUnsubscribed)
 		if err != nil {
 			return nil, err
 		}
@@ -508,7 +527,8 @@ func (r *JobRepository) GetScheduledJobsDue() ([]models.SendJob, error) {
 func (r *JobRepository) GetPendingItems(jobID string, limit int) ([]models.SendJobItem, error) {
 	rows, err := r.db.Query(`
 		SELECT i.id, i.job_id, i.recipient_id, r.email, COALESCE(r.name, ''), COALESCE(r.variables, ''),
-			i.variant_id, i.server_name, i.status, i.created_at
+			i.variant_id, i.server_name, i.status, i.created_at,
+			i.opened_at, COALESCE(i.open_count, 0), i.clicked_at, COALESCE(i.click_count, 0), i.unsubscribed_at
 		FROM send_job_items i
 		LEFT JOIN recipients r ON i.recipient_id = r.id
 		WHERE i.job_id = ? AND i.status = 'pending'
@@ -524,8 +544,10 @@ func (r *JobRepository) GetPendingItems(jobID string, limit int) ([]models.SendJ
 	for rows.Next() {
 		var item models.SendJobItem
 		var email, name, variables sql.NullString
+		var openedAt, clickedAt, unsubAt sql.NullTime
 		err := rows.Scan(&item.ID, &item.JobID, &item.RecipientID, &email, &name, &variables,
-			&item.VariantID, &item.ServerName, &item.Status, &item.CreatedAt)
+			&item.VariantID, &item.ServerName, &item.Status, &item.CreatedAt,
+			&openedAt, &item.OpenCount, &clickedAt, &item.ClickCount, &unsubAt)
 		if err != nil {
 			return nil, err
 		}
@@ -538,6 +560,7 @@ func (r *JobRepository) GetPendingItems(jobID string, limit int) ([]models.SendJ
 		if variables.Valid {
 			item.RecipientVariables = variables.String
 		}
+		setItemEngagement(&item, openedAt, clickedAt, unsubAt)
 		items = append(items, item)
 	}
 
@@ -550,7 +573,8 @@ func (r *JobRepository) GetPendingItems(jobID string, limit int) ([]models.SendJ
 func (r *JobRepository) GetQueuedItems(afterRowID int64, limit int) ([]models.SendJobItem, int64, error) {
 	rows, err := r.db.Query(`
 		SELECT i.rowid, i.id, i.job_id, i.recipient_id, r.email, i.variant_id, i.server_name,
-			i.status, i.sendry_msg_id, COALESCE(i.error, ''), i.created_at
+			i.status, i.sendry_msg_id, COALESCE(i.error, ''), i.created_at,
+			i.opened_at, COALESCE(i.open_count, 0), i.clicked_at, COALESCE(i.click_count, 0), i.unsubscribed_at
 		FROM send_job_items i
 		LEFT JOIN recipients r ON i.recipient_id = r.id
 		WHERE i.status = 'queued' AND i.sendry_msg_id != '' AND i.rowid > ?
@@ -567,17 +591,33 @@ func (r *JobRepository) GetQueuedItems(afterRowID int64, limit int) ([]models.Se
 	for rows.Next() {
 		var item models.SendJobItem
 		var email sql.NullString
+		var openedAt, clickedAt, unsubAt sql.NullTime
 		err := rows.Scan(&lastRowID, &item.ID, &item.JobID, &item.RecipientID, &email, &item.VariantID,
-			&item.ServerName, &item.Status, &item.SendryMsgID, &item.Error, &item.CreatedAt)
+			&item.ServerName, &item.Status, &item.SendryMsgID, &item.Error, &item.CreatedAt,
+			&openedAt, &item.OpenCount, &clickedAt, &item.ClickCount, &unsubAt)
 		if err != nil {
 			return nil, 0, err
 		}
 		if email.Valid {
 			item.Email = email.String
 		}
+		setItemEngagement(&item, openedAt, clickedAt, unsubAt)
 		items = append(items, item)
 	}
 
 	return items, lastRowID, rows.Err()
 
+}
+
+// setItemEngagement copies nullable engagement timestamps into the item
+func setItemEngagement(item *models.SendJobItem, openedAt, clickedAt, unsubAt sql.NullTime) {
+	if openedAt.Valid {
+		item.OpenedAt = &openedAt.Time
+	}
+	if clickedAt.Valid {
+		item.ClickedAt = &clickedAt.Time
+	}
+	if unsubAt.Valid {
+		item.UnsubscribedAt = &unsubAt.Time
+	}
 }

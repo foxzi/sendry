@@ -78,7 +78,7 @@
                         {{end}}
                     </td>
                     <td class="actions">
-                        <button onclick="editKey('{{.ID}}', '{{.Name}}', [{{range $i, $d := .AllowedDomains}}{{if $i}},{{end}}'{{$d}}'{{end}}], {{.RateLimitMinute}}, {{.RateLimitHour}})" class="btn btn-sm">Edit</button>
+                        <button onclick="editKey('{{.ID}}', '{{.Name}}', [{{range $i, $d := .AllowedDomains}}{{if $i}},{{end}}'{{$d}}'{{end}}], {{.RateLimitMinute}}, {{.RateLimitHour}}, {{.TrackOpens}}, {{.TrackClicks}})" class="btn btn-sm">Edit</button>
                         <form method="post" action="/settings/api-keys/{{.ID}}/toggle" style="display: inline;">
                             {{if .Active}}
                             <button type="submit" class="btn btn-sm btn-warning">Deactivate</button>
@@ -157,6 +157,17 @@
                         {{end}}
                     </div>
                 </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="track_opens" value="on">
+                        Отслеживать открытия (по умолчанию для ключа)
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="track_clicks" value="on">
+                        Отслеживать клики (по умолчанию для ключа)
+                    </label>
+                    <small class="text-muted">Поля track_opens / track_clicks в запросе перекрывают эти значения.</small>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" onclick="document.getElementById('create-modal').style.display='none'" class="btn btn-secondary">Cancel</button>
@@ -202,6 +213,17 @@
                         {{end}}
                     </div>
                 </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="track_opens" id="edit_track_opens" value="on">
+                        Отслеживать открытия (по умолчанию для ключа)
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="track_clicks" id="edit_track_clicks" value="on">
+                        Отслеживать клики (по умолчанию для ключа)
+                    </label>
+                    <small class="text-muted">Поля track_opens / track_clicks в запросе перекрывают эти значения.</small>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" onclick="document.getElementById('edit-modal').style.display='none'" class="btn btn-secondary">Cancel</button>
@@ -212,7 +234,9 @@
 </div>
 
 <script>
-function editKey(id, name, allowedDomains, rateLimitMinute, rateLimitHour) {
+function editKey(id, name, allowedDomains, rateLimitMinute, rateLimitHour, trackOpens, trackClicks) {
+    document.getElementById('edit_track_opens').checked = !!trackOpens;
+    document.getElementById('edit_track_clicks').checked = !!trackClicks;
     document.getElementById('edit-form').action = '/settings/api-keys/' + id + '/edit';
     document.getElementById('edit_name').value = name;
     document.getElementById('edit_rate_limit_minute').value = rateLimitMinute || '';

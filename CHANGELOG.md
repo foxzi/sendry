@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- sendry-web: open, click and unsubscribe tracking (the MTA is unchanged). Public endpoints `GET /t/o/{token}.gif`, `GET /t/c/{token}`, `GET /u/{token}`, `POST /u/{token}` (button and RFC 8058 one-click) with HMAC-signed tokens, no auth, bypassing `server.allowed_ips`
+- sendry-web: Settings → Tracking (proxying domain, opens/clicks defaults), stored in the DB
+- sendry-web: campaign options track opens, track clicks, add UTM tags; API key flags `track_opens`/`track_clicks` and the same request fields on `POST /api/v1/send` and `/api/v1/send/template`
+- sendry-web: `List-Unsubscribe` / `List-Unsubscribe-Post` headers and `{{unsubscribe_url}}` variable for campaign mail, per-address-book unsubscribe (recipient status `unsubscribed` in the job's book only; `unsubscribes` is a per-(list, email) journal), unsubscribed addresses are visible in the address book with the status filter "Unsubscribed", unsubscribed recipients of the book skipped at job start and counted on the job
+- sendry-web: job and campaign statistics (Open Rate, CTR, CTOR, unsubscribes), per-recipient open/click columns, click map with per-variant snapshots, machine event filtering (`is_machine`)
+- Docs `docs/tracking.md` / `docs/tracking.ru.md` including an nginx example for a separate tracking domain
 - GitHub Actions workflow `Release (button)`: computes the next semver from the latest tag and tags HEAD of main (patch/minor/major)
 - GitHub Actions workflow `Deploy`: rolls out a released version to production servers over SSH with Ansible (all/mta/panel)
 - Ansible playbook `playbooks/upgrade.yml`: upgrades the deb package only, backs up the panel SQLite database, restarts active services and checks `/health`

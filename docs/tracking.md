@@ -1,0 +1,239 @@
+# Tracking: opens, clicks, unsubscribes
+
+All tracking lives in sendry-web (the panel). The MTA (`sendry`) is unchanged and knows nothing about tracking. Only the panel talks to the MTA, so it sees every message it sent itself: campaign jobs and mail sent through the panel API (port 8088).
+
+If an external system calls the MTA API (port 8080) directly, the panel does not see those messages and cannot track them.
+
+## What is tracked
+
+| Event | How it works |
+|---|---|
+| Open | A transparent 1x1 pixel is inserted into the HTML: `GET /t/o/{token}.gif` |
+| Click | Links are replaced with `GET /t/c/{token}`; the panel answers 302 to the original URL |
+| Unsubscribe | Page `GET /u/{token}` with a button, `POST /u/{token}` for the button and for one-click (RFC 8058) |
+
+Public endpoints need no authentication and bypass `server.allowed_ips`. All other panel paths are protected as before.
+
+Tokens are HMAC-signed. The destination URL is inside the token, so it cannot be tampered with and there is no open redirect. The domain is not part of the token: links work through any domain that proxies to the panel.
+
+Behaviour on an invalid token:
+
+- the pixel still returns a 1x1 GIF (no event recorded), with `Cache-Control: no-store`;
+- a click returns 404.
+
+## How to enable
+
+### Settings
+
+**Settings → Tracking** (admin only). Values are stored in the database, no restart needed.
+
+| Field | Description |
+|---|---|
+| Proxying domain | Domain the pixel, clicks and unsubscribe go through, e.g. `lnk.example.com`. `https://` is optional. Empty: `server.public_url` is used |
+| Opens enabled by default | Whether new campaigns track opens |
+| Clicks enabled by default | Same for clicks |
+
+If neither a proxying domain nor `server.public_url` is set, tracking is off. Emails go out without pixel, tracked links and unsubscribe link.
+
+### Campaign
+
+The campaign form has three options:
+
+- **Track opens**;
+- **Track clicks**;
+- **Add UTM tags**.
+
+Defaults for a new campaign come from Settings. Unsubscribe is always on.
+
+UTM tags are added to the URL on redirect:
+
+| Parameter | Value |
+|---|---|
+| `utm_source` | `email` |
+| `utm_medium` | `email` |
+| `utm_campaign` | campaign name |
+| `sc` | campaign ID |
+| `sr` | job item ID |
+| `sl` | link number |
+
+Parameters already present in the link are not overridden.
+
+### API key
+
+The API key form has `track_opens` and `track_clicks` flags. Both are off by default: transactional mail looks cleaner to spam filters without a pixel.
+
+### API request fields
+
+`POST /api/v1/send` and `POST /api/v1/send/template` of the panel API accept optional boolean fields `track_opens` and `track_clicks`. They override the key flags.
+
+```json
+{
+  "from": "shop@example.com",
+  "to": ["client@example.com"],
+  "subject": "Your order",
+  "html": "<p>Order placed. <a href=\"https://shop.example.com/orders/1\">View order</a></p>",
+  "track_opens": true,
+  "track_clicks": false
+}
+```
+
+If a field is omitted, the key flag applies.
+
+There is no unsubscribe for API mail at this stage: no unsubscribe link, no `List-Unsubscribe` headers, and unsubscribed addresses are not checked.
+
+## Unsubscribe
+
+Every campaign message gets these headers:
+
+```
+List-Unsubscribe: <https://lnk.example.com/u/{token}>
+List-Unsubscribe-Post: List-Unsubscribe=One-Click
+```
+
+Gmail and Yandex show their own "Unsubscribe" button based on them.
+
+Templates get the variable `{{unsubscribe_url}}`. Put it in the footer:
+
+```html
+<a href="{{unsubscribe_url}}">Unsubscribe</a>
+```
+
+If the template lacks it, the job start page shows a warning.
+
+### Flow
+
+1. The reader opens `/u/{token}` and sees a page with the address and an "Unsubscribe" button.
+2. The unsubscribe happens only after the button is pressed (POST). Antivirus software opens every link in a message, so unsubscribing on a plain visit would unsubscribe people without their knowledge.
+3. The page says "You are unsubscribing from the <sender> mailing at <email>". After the click it says "You are unsubscribed" and offers "Resubscribe".
+4. A one-click request from a mail client (via `List-Unsubscribe-Post`) unsubscribes immediately, without a page.
+
+### Unsubscribe applies to one address book
+
+An unsubscribe applies to one address book: the book the job was sent to. The reader gets the recipient status `unsubscribed` in that book. The source of truth is the recipient status (`recipients.status`).
+
+- If the same address is in another book, a campaign sent to that book still reaches it.
+- Re-importing a CSV into the book does not resubscribe the address.
+- Unsubscribed recipients of the book are not added to a job at start. The job page shows "Skipped (unsubscribed in this book)": the number of unsubscribed recipients of the book at job start.
+There is no separate Unsubscribes section. Unsubscribed addresses are visible in the address book (`/recipients/{id}`): the status filter "Unsubscribed" lists them. The status can be changed back in the recipient editor.
+
+The `unsubscribes` table is a journal per (book, email). Sending decisions use the recipient status.
+
+## Click map
+
+The click map is the **Click map** tab on the job page (campaign jobs only).
+
+Links are numbered in the template source: every `<a href>` gets a `data-sl="N"` attribute before variables are rendered. The link number is therefore the same for all recipients, even with different data and conditional blocks.
+
+Not tracked:
+
+- `mailto:`, `tel:`, `sms:`;
+- `#anchor` links;
+- links with the `data-notrack` attribute;
+- the `{{unsubscribe_url}}` link.
+
+When a job starts, the panel saves a snapshot of each message variant. If the template is edited later, the map stays correct.
+
+The tab shows:
+
+- the message snapshot in an `iframe` with badges on links: unique and total clicks;
+- a table: element label, URL, unique clicks, total, share;
+- a variant selector if there are several (A/B).
+
+Links hidden by a condition and not visible in the preview appear only in the table. API mail has no map; the message card shows a list of clicks.
+
+## Metrics
+
+| Metric | Formula |
+|---|---|
+| Delivered | Messages with status "delivered" |
+| Unique opens | Recipients who opened at least once |
+| Total opens | All opens |
+| Open Rate | unique opens / delivered |
+| Unique clicks | Recipients who clicked at least once |
+| Total clicks | All clicks |
+| CTR | unique clicks / delivered |
+| CTOR | unique clicks / unique opens |
+| Unsubscribes | Number of unsubscribed recipients |
+| Unsubscribe % | unsubscribes / delivered |
+
+Metrics appear on the job and campaign pages. The job item list has "Opened" and "Clicks" columns. Send History has an "Opened" column and an event feed in the message card.
+
+### Machine events
+
+Events from scanners, bots, and clicks within 2 seconds after sending are stored with the `is_machine` flag and excluded from statistics. Raw data is not discarded.
+
+Gmail and Yandex image proxies count as real opens.
+
+## Limitations
+
+- Apple Mail Privacy Protection preloads images itself, so opens for Apple Mail recipients are inflated. Read Open Rate with that in mind. Clicks are not affected.
+- Some clients block images. Those opens are not seen.
+- An API message with several recipients (`to`, `cc`, `bcc`) has one pixel. An open counts for the message, not for a specific recipient.
+- No unsubscribe for API mail yet.
+- Raw events are kept forever (table `email_events`). Retention will be decided later.
+- User-Agent parsing, GeoIP, hourly charts, spam complaints and bounces are out of scope. User-Agent and IP are stored.
+
+## Privacy
+
+Tracking records the IP address, User-Agent, time and recipient address. This is personal data. Disclose tracking in your privacy policy and follow local rules (GDPR and others). Every campaign must have an unsubscribe link.
+
+## Separate tracking domain (proxy)
+
+Links in emails can be served from a separate domain (for example `lnk.example.com`) instead of the panel domain. If that domain lands on a blocklist, you can replace it in minutes, and the panel itself stays closed.
+
+An nginx proxy passes only `/t/` and `/u/` to the panel. Everything else answers 404.
+
+### nginx example
+
+```nginx
+server {
+    listen 80;
+    server_name lnk.example.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name lnk.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/lnk.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/lnk.example.com/privkey.pem;
+
+    # Tracking only: opens, clicks, unsubscribe
+    location ~ ^/(t|u)/ {
+        proxy_pass https://panel.example.com;
+        proxy_ssl_server_name on;
+
+        proxy_set_header Host panel.example.com;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header User-Agent $http_user_agent;
+    }
+
+    # Everything else is closed
+    location / {
+        return 404;
+    }
+}
+```
+
+`$remote_addr` here is the reader IP. The panel reads it from `X-Real-IP`, then `X-Forwarded-For`. The headers are not verified: forging them only changes the IP in statistics.
+
+### Setup steps
+
+1. Create an A/AAAA record for `lnk.example.com` pointing to the proxy server and get a TLS certificate (for example with certbot).
+2. Put the config above into nginx and reload it.
+3. In the panel open **Settings → Tracking** and set "Proxying domain" to `lnk.example.com`.
+4. Check: `curl -I https://lnk.example.com/t/o/test.gif` returns a GIF, and `curl -I https://lnk.example.com/` returns 404.
+
+New messages use the new domain immediately, no restart needed.
+
+### Switching domains quickly
+
+If a domain gets blocked:
+
+1. Register a new domain and set up the proxy as above (the same server works: add another `server_name`).
+2. Change "Proxying domain" in Settings.
+3. Do not drop the old domain right away. Tokens are not bound to a domain, so links in already sent messages work again as soon as the old domain points to the same panel.
+
+To serve several domains at once, add several `server_name` entries with the same `location`.

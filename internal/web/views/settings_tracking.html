@@ -1,0 +1,53 @@
+{{define "content"}}
+<div class="page-header">
+    <h1 data-i18n="trk.settings_title">Tracking</h1>
+    <div class="header-actions">
+        <a href="/settings" class="btn btn-secondary">Back to Settings</a>
+    </div>
+</div>
+
+{{if .Error}}<div class="alert alert-error">{{.Error}}</div>{{end}}
+{{if .Success}}<div class="alert alert-success" data-i18n="trk.saved">{{.Success}}</div>{{end}}
+
+<div class="card" style="margin-bottom: 1.5rem">
+    <div class="card-body">
+        <form method="post" action="/settings/tracking">
+            <div class="form-group">
+                <label for="base_url" data-i18n="trk.base_url">Проксирующий домен</label>
+                <input type="text" id="base_url" name="base_url" class="input" value="{{.Settings.BaseURL}}" placeholder="lnk.example.com">
+                <small class="form-help" data-i18n="trk.base_url_help">Через этот домен идут пиксель, клики и отписка. Если домен заблокируют, впишите новый: изменится только в новых письмах, старые ссылки продолжат работать через любой домен, который проксирует на панель. Пусто: адрес панели.</small>
+            </div>
+
+            <div class="form-group">
+                <label><input type="checkbox" name="opens_default" value="1" {{if .Settings.OpensDefault}}checked{{end}}> <span data-i18n="trk.opens_default">Track opens by default for new campaigns</span></label>
+            </div>
+            <div class="form-group">
+                <label><input type="checkbox" name="clicks_default" value="1" {{if .Settings.ClicksDefault}}checked{{end}}> <span data-i18n="trk.clicks_default">Track clicks by default for new campaigns</span></label>
+            </div>
+
+            <button type="submit" class="btn btn-primary" data-i18n="save">Save</button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2 data-i18n="trk.effective">Effective tracking address</h2>
+    </div>
+    <div class="card-body">
+        {{if .Origin}}
+        <p><code>{{.Origin}}</code></p>
+        <dl class="details-list">
+            <dt data-i18n="trk.ex_open">Open pixel</dt>
+            <dd><code>{{.Origin}}/t/o/&lt;token&gt;.gif</code></dd>
+            <dt data-i18n="trk.ex_click">Click redirect</dt>
+            <dd><code>{{.Origin}}/t/c/&lt;token&gt;</code></dd>
+            <dt data-i18n="trk.ex_unsub">Unsubscribe page</dt>
+            <dd><code>{{.Origin}}/u/&lt;token&gt;</code></dd>
+        </dl>
+        {{else}}
+        <p class="text-muted" data-i18n="trk.no_origin">Neither a proxying domain nor server.public_url is set: tracking is off and emails go out without pixel, tracked links and unsubscribe link.</p>
+        {{end}}
+    </div>
+</div>
+{{end}}

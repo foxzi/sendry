@@ -11,9 +11,9 @@ type Send struct {
 	ID           string     `json:"id"`
 	APIKeyID     string     `json:"api_key_id,omitempty"`
 	FromAddress  string     `json:"from_address"`
-	ToAddresses  string     `json:"to_addresses"`   // JSON array
-	CCAddresses  string     `json:"cc_addresses"`   // JSON array
-	BCCAddresses string     `json:"bcc_addresses"`  // JSON array
+	ToAddresses  string     `json:"to_addresses"`  // JSON array
+	CCAddresses  string     `json:"cc_addresses"`  // JSON array
+	BCCAddresses string     `json:"bcc_addresses"` // JSON array
 	Subject      string     `json:"subject"`
 	TemplateID   string     `json:"template_id,omitempty"`
 	SenderDomain string     `json:"sender_domain"`
@@ -24,6 +24,10 @@ type Send struct {
 	CreatedAt    time.Time  `json:"created_at"`
 	SentAt       *time.Time `json:"sent_at,omitempty"`
 	ClientIP     string     `json:"client_ip,omitempty"`
+	OpenedAt     *time.Time `json:"opened_at,omitempty"` // first non-machine open
+	OpenCount    int        `json:"open_count"`
+	ClickedAt    *time.Time `json:"clicked_at,omitempty"` // first non-machine click
+	ClickCount   int        `json:"click_count"`
 }
 
 // SendStatus constants
@@ -45,6 +49,8 @@ type SendFilter struct {
 	ToDate       *time.Time
 	Search       string // Search in from/to/subject
 	ErrorType    stats.ErrorType
+	Opened       string // engagement filter: "", "yes", "no"
+	Clicked      string // engagement filter: "", "yes", "no"
 	Limit        int
 	Offset       int
 }

@@ -90,3 +90,42 @@
     </script>
 </body>
 </html>
+
+{{/* Engagement stat cards. Dot is models.TrackingStats. */}}
+{{define "tracking_cards"}}
+<div class="stats-grid" style="margin-bottom: 1.5rem">
+    <div class="stat-card">
+        <div class="stat-value" style="color: var(--success)">{{.Delivered}}</div>
+        <div class="stat-label" data-i18n="trk.delivered">Delivered</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{.UniqueOpens}}</div>
+        <div class="stat-label" data-i18n="trk.unique_opens">Opened (unique)</div>
+        <div class="text-muted">Open rate <strong>{{printf "%.1f" .OpenRate}}%</strong></div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{.TotalOpens}}</div>
+        <div class="stat-label" data-i18n="trk.total_opens">Opens total</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{.UniqueClicks}}</div>
+        <div class="stat-label" data-i18n="trk.unique_clicks">Clicked (unique)</div>
+        <div class="text-muted">CTR <strong>{{printf "%.1f" .CTR}}%</strong> &middot; CTOR <strong>{{printf "%.1f" .CTOR}}%</strong></div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{.TotalClicks}}</div>
+        <div class="stat-label" data-i18n="trk.total_clicks">Clicks total</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: var(--error)">{{.Unsubscribed}}</div>
+        <div class="stat-label" data-i18n="trk.unsubscribed">Unsubscribed</div>
+        <div class="text-muted">{{printf "%.1f" .UnsubRate}}%</div>
+    </div>
+    {{if gt .SkippedUnsub 0}}
+    <div class="stat-card">
+        <div class="stat-value" style="color: var(--warning)">{{.SkippedUnsub}}</div>
+        <div class="stat-label" data-i18n="trk.skipped">Skipped (unsubscribed in this list)</div>
+    </div>
+    {{end}}
+</div>
+{{end}}

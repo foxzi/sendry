@@ -211,6 +211,36 @@ meant "accepted by the MTA"; old records are not re-checked. The API response st
 - Domain configuration view
 - Sandbox message inspection
 
+### Tracking and unsubscribes
+
+The panel tracks opens and clicks and accepts unsubscribes. The public paths `/t/o/`, `/t/c/`, `/u/` need no authentication and bypass `server.allowed_ips`.
+
+- Settings: **Settings → Tracking** (proxying domain, defaults).
+- Campaign form: "Track opens", "Track clicks", "Add UTM tags".
+- Unsubscribed addresses are visible in the address book with the status filter "Unsubscribed". An unsubscribe applies only to the book the campaign was sent to.
+- Job page: statistics (Open Rate, CTR, CTOR, unsubscribes) and a "Click map" tab.
+
+Details: [Tracking](tracking.md).
+
+### Panel API
+
+Panel port (8088 by default), API key authentication (`Authorization: Bearer <key>` or `X-API-Key`).
+
+```
+POST /api/v1/send
+POST /api/v1/send/template
+GET  /api/v1/send/{id}/status
+```
+
+Besides the usual message fields (`from`, `to`, `subject`, `html`, `template_id`, `data`, and others), send requests accept optional tracking fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `track_opens` | boolean | Insert the open pixel. Overrides the API key flag |
+| `track_clicks` | boolean | Rewrite links to tracking links. Overrides the API key flag |
+
+If a field is omitted, the key flag `track_opens` / `track_clicks` applies (both off by default). There is no unsubscribe for API mail. Details and an example: [Tracking](tracking.md).
+
 ## Variable Substitution
 
 Templates support dynamic variable substitution using the `{{variable_name}}` syntax.

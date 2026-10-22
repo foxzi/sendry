@@ -93,6 +93,12 @@ func (h *Handlers) JobView(w http.ResponseWriter, r *http.Request) {
 		Limit: 50,
 	})
 
+	trackingStats, err := h.tracking.JobStats(id)
+	if err != nil {
+		h.logger.Error("failed to load tracking stats", "error", err)
+	}
+	snaps, _ := h.tracking.GetSnapshots(id)
+
 	// Parse servers from JSON
 	var servers []string
 	json.Unmarshal([]byte(job.Servers), &servers)
@@ -107,6 +113,8 @@ func (h *Handlers) JobView(w http.ResponseWriter, r *http.Request) {
 		"Items":    items,
 		"Servers":  servers,
 		"Errors":   summarizeErrors(errorCounts),
+		"Tracking": trackingStats,
+		"HasMap":   len(snaps) > 0,
 	}
 
 	h.render(w, "job_view", data)
@@ -129,10 +137,15 @@ func (h *Handlers) JobItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	opened := yesNo(r.URL.Query().Get("opened"))
+	clicked := yesNo(r.URL.Query().Get("clicked"))
+
 	filter := models.JobItemFilter{
 		JobID:     id,
 		Status:    status,
 		ErrorType: errorType,
+		Opened:    opened,
+		Clicked:   clicked,
 		Limit:     limit,
 		Offset:    offset,
 	}
@@ -158,6 +171,8 @@ func (h *Handlers) JobItems(w http.ResponseWriter, r *http.Request) {
 		"Status":     status,
 		"ErrorType":  errorType,
 		"ErrorTypes": stats.ErrorTypes,
+		"Opened":     opened,
+		"Clicked":    clicked,
 	}
 
 	h.render(w, "job_items", data)
@@ -251,4 +266,12 @@ func (h *Handlers) JobRetry(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, "/jobs/"+id, http.StatusSeeOther)
+}
+
+// yesNo normalises an engagement filter value to "yes", "no" or "".
+func yesNo(v string) string {
+	if v == "yes" || v == "no" {
+		return v
+	}
+	return ""
 }
