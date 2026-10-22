@@ -130,3 +130,29 @@ func TestUnsubscribe_RemoveAndIsUnsubscribed(t *testing.T) {
 		t.Error("still unsubscribed")
 	}
 }
+
+// A reader who unsubscribed and came back is not counted in the job's
+// unsubscribes any more.
+func TestUnsubscribe_ResubscribeClearsJobStat(t *testing.T) {
+	db := setupTestDB(t)
+	setupJobWithItems(t, db, [][2]string{{"sent", ""}})
+	ids := jobItemIDs(t, NewJobRepository(db), "job-1")
+	tracking := NewTrackingRepository(db)
+	unsubs := NewUnsubscribeRepository(db)
+
+	if _, err := unsubs.Add(&models.Unsubscribe{ListID: "l1", Email: "user0@example.org", SourceType: models.UnsubSourceLink}); err != nil {
+		t.Fatal(err)
+	}
+	if err := tracking.RecordEvent(jobEvent(models.EventUnsubscribe, ids[0], nil, false)); err != nil {
+		t.Fatal(err)
+	}
+	if st, _ := tracking.JobStats("job-1"); st.Unsubscribed != 1 {
+		t.Fatalf("unsubscribed = %d, want 1", st.Unsubscribed)
+	}
+	if err := unsubs.Remove("l1", "USER0@example.org"); err != nil {
+		t.Fatal(err)
+	}
+	if st, _ := tracking.JobStats("job-1"); st.Unsubscribed != 0 {
+		t.Errorf("unsubscribed after resubscribe = %d, want 0", st.Unsubscribed)
+	}
+}

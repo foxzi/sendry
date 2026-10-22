@@ -25,9 +25,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sendry-web: `sendry.multi_send.strategy` is validated at startup: `round_robin`, `weighted`, `first_healthy`; `weighted_round_robin` (the name the docs used) is accepted as a deprecated alias of `weighted` and now really uses `weights` (before it silently fell back to `round_robin`); `domain_affinity` is accepted but not implemented yet and falls back to `round_robin` with a warning; any other value is a config error
 - `make build-web-linux` / `build-web-linux-arm64` build a static binary on `golang:1.24-alpine` (musl), the same way as the release workflow
 - go.mod: `go-oidc`, `oauth2`, `go-sqlite3`, `x/term`, `client_model` listed as direct dependencies (`go mod tidy`)
+- **Upgrade note**, sendry-web: campaign mail needs a public address for the unsubscribe link (`server.public_url` or Settings → Tracking → proxying domain). Without it new campaigns cannot be started, and jobs already running or scheduled hold their emails until it is set (the job page says so). Check `server.public_url` before upgrading
+- **Upgrade note**, sendry-web: the database migration lower-cases recipient emails (ASCII letters) and merges addresses that differ only in case within one list into one recipient (an unsubscribed duplicate wins; name and variables of the removed duplicate are lost). Back up the database before upgrading
+- sendry-web: foreign keys are enforced on every database connection. A recipient list, recipient, campaign variant or template that a campaign job used cannot be deleted any more (409 with an explanation); delete the campaign first, or set a recipient to unsubscribed
+- sendry-web: retrying failed job items re-reads the template of a variant that has not sent anything yet, so a fixed template is used; variants that sent mail keep the template frozen at job start
+- sendry-web: the open rate of a job uses the campaign's open tracking at job start, not the current setting
+- sendry-web: resubscribing removes the address from the unsubscribe statistics of past jobs
+- sendry-web: only success messages hide after 5 seconds; warnings and errors (`alert-danger` too) stay, and so does the one-time display of a new API key
+- MTA: the `path` label of `sendry_api_requests_total` / `sendry_api_request_duration_seconds` is `unmatched` for requests that match no route (scanners added a series per probed URL, kept forever since counters are persisted)
 
 ### Fixed
-- Security: sendry-web `server.allowed_ips` could be bypassed by sending a forged `X-Forwarded-For` / `X-Real-IP` header; the panel IP filter and the audit log IP now honour these headers only from `server.trusted_proxies`
+- Security: sendry-web `server.allowed_ips` could be bypassed by sending a forged `X-Forwarded-For` / `X-Real-IP` header; the panel IP filter and the audit log IP now honour these headers only from `server.trusted_proxies`. The right-most untrusted `X-Forwarded-For` address wins and `X-Real-IP` is used only without `X-Forwarded-For`, since Caddy passes a client-supplied `X-Real-IP` through; the ansible Caddyfile and `docs/caddy-sendry-web.md` also overwrite `X-Real-IP`
+- Security: MTA `api.allowed_ips` and `metrics.allowed_ips` could be bypassed with a forged `X-Forwarded-For` / `X-Real-IP` header from any address; these headers now count only from loopback (a reverse proxy on the same host)
+- sendry-web: tracking events were lost under concurrent requests (`database is locked`): transactions now take the SQLite write lock at start (`_txlock=immediate`)
+- sendry-web: RFC 8058 one-click unsubscribe with a `multipart/form-data` body answered success without unsubscribing
+- sendry-web: unsubscribe links in mail already sent stopped working after the campaign was deleted or old job items were cleaned up; the token now names the recipient
+- sendry-web: an invalid schedule time started the campaign immediately; it is now an error
+- sendry-web: Outlook conditional comments (`<!--[if mso]>`) were removed from rendered templates, losing bulletproof buttons; they are kept now and their links tracked
+- sendry-web: tracking left links that do not parse as a URL (`50%off`) untouched instead of turning them into a 404 redirect; an unquoted `href` ending in `/` lost the slash; `<a` inside attribute values, `<textarea>`, `<title>` and after `<!-->` was mistaken for a link
+- sendry-web: a machine click no longer hides a human click from the same IP within 30 seconds; resume and retry keep the job's first start time
+- sendry-web: missing translations on Settings → Tracking
 - Metrics persistence: counters incremented by the MTA (messages, SMTP connections/auth, rate limits, API requests/errors) were never written to BoltDB, so they reset on restart despite `docs/metrics.md`; they are now persisted and restored
 - `sendry_smtp_tls_connections_total` is now incremented when an SMTP session runs over TLS (STARTTLS or implicit TLS)
 - sendry-web: expired sessions are purged from the database every hour; session expiry is compared in the same time zone as it is stored

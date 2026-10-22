@@ -86,6 +86,21 @@ func (r *TrackingRepository) ResolveSource(sourceType, sourceID string) (*models
 	return nil, nil
 }
 
+// ResolveRecipient returns the address book and email of a recipient, for an
+// unsubscribe link whose job item is gone (cleanup or campaign deletion).
+// Returns (nil, nil) if the recipient does not exist.
+func (r *TrackingRepository) ResolveRecipient(recipientID string) (*models.TrackingSource, error) {
+	src := &models.TrackingSource{RecipientID: recipientID}
+	err := r.db.QueryRow(`SELECT list_id, email FROM recipients WHERE id = ?`, recipientID).Scan(&src.ListID, &src.Email)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return src, nil
+}
+
 // Limits of stored request data: the public endpoints take whatever the
 // client sends, so long values are cut before they reach the database.
 const (
@@ -118,7 +133,7 @@ func truncateUTF8(s string, n int) string {
 //   - unsubscribe: unsubscribed_at set if NULL (send_job_items only)
 //
 // UserAgent and URL are truncated. If the same event (source, type, link_id,
-// IP) was already recorded within EventDedupWindow, nothing is written:
+// IP, machine flag) was already recorded within EventDedupWindow, nothing is written:
 // neither the event nor the counters; e.ID stays 0 in that case.
 func (r *TrackingRepository) RecordEvent(e *models.EmailEvent) error {
 	if e.CreatedAt.IsZero() {
@@ -144,9 +159,9 @@ func (r *TrackingRepository) RecordEvent(e *models.EmailEvent) error {
 			SELECT COUNT(*) FROM (
 				SELECT 1 FROM email_events
 				WHERE source_type = ? AND source_id = ? AND type = ? AND created_at >= ?
-					AND link_id IS ? AND ip = ?
+					AND link_id IS ? AND ip = ? AND is_machine = ?
 				LIMIT 1)`,
-			e.SourceType, e.SourceID, e.Type, e.CreatedAt.Add(-EventDedupWindow), linkID, e.IP,
+			e.SourceType, e.SourceID, e.Type, e.CreatedAt.Add(-EventDedupWindow), linkID, e.IP, e.IsMachine,
 		).Scan(&dup)
 		if err != nil {
 			return fmt.Errorf("failed to check duplicate event: %w", err)
@@ -256,7 +271,8 @@ func (r *TrackingRepository) SourceEvents(sourceType, sourceID string, limit int
 // (aliases i = send_job_items, j = send_jobs, c = campaigns). Everything is
 // counted over the same base, items accepted by the MTA (status queued or
 // sent), so rates never exceed 100%. Opens are counted only when the
-// campaign tracks opens: a click implies an open, but without the pixel an
+// campaign tracked opens when the job was created (send_jobs.track_opens,
+// the current campaign setting for older jobs): a click implies an open, but without the pixel an
 // open rate would be made of clicks alone. Totals come from the per-item
 // counters, which hold human events only. Skipped items are not messages:
 // they are left out of Total, and the unsubscribed ones are counted as
@@ -274,7 +290,7 @@ func (r *TrackingRepository) stats(jobWhere string, arg string) (models.Tracking
 			COUNT(DISTINCT CASE WHEN status = 'skipped' AND error = ? THEN recipient_id END)
 		FROM (
 			SELECT CASE WHEN i.status IN ('queued', 'sent') THEN 1 ELSE 0 END AS acc,
-				COALESCE(c.track_opens, 1) AS opens, i.status, i.error, i.recipient_id,
+				COALESCE(j.track_opens, c.track_opens, 1) AS opens, i.status, i.error, i.recipient_id,
 				i.opened_at, i.open_count, i.clicked_at, i.click_count, i.unsubscribed_at
 			FROM send_job_items i
 			JOIN send_jobs j ON j.id = i.job_id

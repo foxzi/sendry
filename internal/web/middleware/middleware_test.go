@@ -136,6 +136,7 @@ func TestIPFilter_TrustedProxies(t *testing.T) {
 		{"trusted proxy forwards allowed client", "127.0.0.1:1234", "203.0.113.5", "", http.StatusOK},
 		{"trusted proxy forwards denied client", "127.0.0.1:1234", "198.51.100.7", "", http.StatusForbidden},
 		{"trusted proxy X-Real-IP", "127.0.0.1:1234", "", "203.0.113.5", http.StatusOK},
+		{"forged X-Real-IP passed through by proxy", "127.0.0.1:1234", "198.51.100.7", "203.0.113.5", http.StatusForbidden},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

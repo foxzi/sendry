@@ -29,9 +29,9 @@ func (r *JobRepository) Create(job *models.SendJob) error {
 	job.UpdatedAt = job.CreatedAt
 
 	_, err := r.db.Exec(`
-		INSERT INTO send_jobs (id, campaign_id, recipient_list_id, status, scheduled_at, servers, strategy, stats, dry_run, dry_run_limit, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		job.ID, job.CampaignID, job.RecipientListID, job.Status, job.ScheduledAt, job.Servers, job.Strategy, job.Stats, job.DryRun, job.DryRunLimit, job.CreatedAt, job.UpdatedAt,
+		INSERT INTO send_jobs (id, campaign_id, recipient_list_id, status, scheduled_at, servers, strategy, stats, dry_run, dry_run_limit, track_opens, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		job.ID, job.CampaignID, job.RecipientListID, job.Status, job.ScheduledAt, job.Servers, job.Strategy, job.Stats, job.DryRun, job.DryRunLimit, job.TrackOpens, job.CreatedAt, job.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create job: %w", err)
@@ -190,7 +190,7 @@ func (r *JobRepository) UpdateStatus(id, status string) error {
 	}
 
 	_, err := r.db.Exec(`
-		UPDATE send_jobs SET status = ?, started_at = COALESCE(?, started_at), completed_at = ?, updated_at = ?
+		UPDATE send_jobs SET status = ?, started_at = COALESCE(started_at, ?), completed_at = ?, updated_at = ?
 		WHERE id = ?`,
 		status, startedAt, completedAt, now, id,
 	)
@@ -206,9 +206,28 @@ func (r *JobRepository) UpdateStats(id string, stats models.JobStats) error {
 }
 
 // RetryFailedItems puts the failed items of a job back to pending, clearing
-// their delivery state, and returns how many were reset.
+// their delivery state, and returns how many were reset. The frozen template
+// of a variant none of whose messages reached the MTA is dropped, so the
+// retry picks up the fixed template (typically the failures were render
+// errors); a variant that has delivered mail keeps its frozen template.
 func (r *JobRepository) RetryFailedItems(jobID string) (int64, error) {
-	res, err := r.db.Exec(`
+	tx, err := r.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`
+		DELETE FROM job_variant_snapshots
+		WHERE job_id = ? AND NOT EXISTS (
+			SELECT 1 FROM send_job_items i
+			WHERE i.job_id = job_variant_snapshots.job_id AND i.variant_id = job_variant_snapshots.variant_id
+				AND (i.status IN (?, ?) OR COALESCE(i.sendry_msg_id, '') != ''))`,
+		jobID, models.JobItemStatusQueued, models.JobItemStatusSent,
+	); err != nil {
+		return 0, fmt.Errorf("failed to drop unused frozen templates: %w", err)
+	}
+	res, err := tx.Exec(`
 		UPDATE send_job_items SET status = ?, error = NULL, sendry_msg_id = NULL, queued_at = NULL, sent_at = NULL
 		WHERE job_id = ? AND status = ?`,
 		models.JobItemStatusPending, jobID, models.JobItemStatusFailed,
@@ -216,7 +235,11 @@ func (r *JobRepository) RetryFailedItems(jobID string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return res.RowsAffected()
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return n, tx.Commit()
 }
 
 // CreateItems creates multiple job items in a batch. Items are pending unless

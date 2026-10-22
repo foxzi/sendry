@@ -102,7 +102,8 @@ func (r *UnsubscribeRepository) Add(u *models.Unsubscribe) (changed bool, err er
 }
 
 // Remove resubscribes email in listID: status back to active (only if it is
-// unsubscribed), journal row deleted, list counters refreshed after commit.
+// unsubscribed), journal row deleted, unsubscribe marks of its job items
+// cleared, list counters refreshed after commit.
 // No error if the address is not unsubscribed.
 func (r *UnsubscribeRepository) Remove(listID, email string) error {
 	email = NormalizeEmail(email)
@@ -121,6 +122,16 @@ func (r *UnsubscribeRepository) Remove(listID, email string) error {
 	}
 	if _, err := tx.Exec(`DELETE FROM unsubscribes WHERE list_id = ? AND email = ?`, listID, email); err != nil {
 		return fmt.Errorf("failed to delete unsubscribe journal row: %w", err)
+	}
+	// The campaign statistics count messages followed by an unsubscribe: a
+	// reader who came back is no longer one
+	if _, err := tx.Exec(`
+		UPDATE send_job_items SET unsubscribed_at = NULL
+		WHERE unsubscribed_at IS NOT NULL AND recipient_id IN (
+			SELECT id FROM recipients WHERE list_id = ? AND lower(email) = ?)`,
+		listID, email,
+	); err != nil {
+		return fmt.Errorf("failed to clear unsubscribe marks: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return err

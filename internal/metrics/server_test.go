@@ -133,7 +133,13 @@ func TestGetClientIP(t *testing.T) {
 			name:       "from X-Forwarded-For multiple",
 			remoteAddr: "127.0.0.1:12345",
 			headers:    map[string]string{"X-Forwarded-For": "10.0.0.1, 192.168.1.1, 127.0.0.1"},
-			expectedIP: "10.0.0.1",
+			expectedIP: "192.168.1.1",
+		},
+		{
+			name:       "forged X-Forwarded-For from a remote peer",
+			remoteAddr: "198.51.100.7:12345",
+			headers:    map[string]string{"X-Forwarded-For": "10.0.0.1"},
+			expectedIP: "198.51.100.7",
 		},
 		{
 			name:       "from X-Real-IP",

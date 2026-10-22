@@ -37,3 +37,18 @@ func TestRecipientRepository_EmailNormalized(t *testing.T) {
 		t.Errorf("recipients = %v", got)
 	}
 }
+
+// The app lowers emails the way SQLite lower() does (ASCII only), so the
+// unique (list_id, lower(email)) index and the lookups agree on non-ASCII.
+func TestNormalizeEmailMatchesSQLiteLower(t *testing.T) {
+	db := setupTestDB(t)
+	for _, e := range []string{"  User@Example.COM ", "Ä@X.com", "ÄÖ@Пример.РФ"} {
+		var lower string
+		if err := db.QueryRow(`SELECT lower(trim(?))`, e).Scan(&lower); err != nil {
+			t.Fatal(err)
+		}
+		if got := NormalizeEmail(e); got != lower {
+			t.Errorf("NormalizeEmail(%q) = %q, SQLite lower = %q", e, got, lower)
+		}
+	}
+}

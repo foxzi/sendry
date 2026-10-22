@@ -30,10 +30,12 @@ If `allowed_ips` is empty or not specified, all IPs are allowed.
 
 The `/health` endpoint is always accessible (useful for load balancers).
 
-IP detection order:
-1. `X-Forwarded-For` header (first IP)
-2. `X-Real-IP` header
+The client IP is the address of the connection. `X-Forwarded-For` and `X-Real-IP` are used only when the connection comes from loopback (a reverse proxy on the same host); from any other address they are ignored, otherwise anyone could pass `allowed_ips` with a forged header. Behind a local proxy the IP is taken in this order:
+1. `X-Forwarded-For`: the right-most address that is not loopback (the one the proxy appended)
+2. `X-Real-IP`
 3. `RemoteAddr`
+
+The same rule applies to `api.allowed_ips`.
 
 ## Available Metrics
 
@@ -88,6 +90,8 @@ IP detection order:
 | `sendry_api_requests_total` | method, path, status | counter | Total API requests |
 | `sendry_api_request_duration_seconds` | method, path | histogram | Request duration |
 | `sendry_api_errors_total` | error_type | counter | API errors |
+
+`path` is the route pattern (`/api/v1/status/{id}`). Requests that match no route get `path="unmatched"`.
 
 **Error types:**
 - `server_error` - 5xx errors

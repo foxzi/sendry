@@ -51,7 +51,7 @@ Tokens are signed with a secret stored in the database (generated on first use).
 
 If the proxying domain is empty, tracking links and redirects go through the panel address (`server.public_url`). The settings page warns about it: a separate domain is recommended, see [Separate tracking domain](#separate-tracking-domain-proxy).
 
-If neither a proxying domain nor `server.public_url` is set, a campaign cannot be sent: every campaign message must carry an unsubscribe link, and there is no public address for it. API mail goes out without pixel and tracked links.
+If neither a proxying domain nor `server.public_url` is set, a campaign cannot be sent: every campaign message must carry an unsubscribe link, and there is no public address for it. Jobs already running or scheduled send nothing then: their messages wait in the queue and the job page shows "Sending is on hold". Once the address is set, the job continues by itself. API mail goes out without pixel and tracked links.
 
 ### Campaign
 
@@ -123,7 +123,8 @@ If the template lacks it, the job start page shows a warning.
 1. The reader opens `/u/{token}` and sees a page with the address and an "Unsubscribe" button.
 2. The unsubscribe happens only after the button is pressed (POST). Antivirus software opens every link in a message, so unsubscribing on a plain visit would unsubscribe people without their knowledge.
 3. The page says that <email> is being unsubscribed from this mailing list of <sender>, and that other mailings the reader is subscribed to keep coming. The internal address book name is not shown. After the click it says "You are unsubscribed" and offers "Resubscribe".
-4. A one-click request from a mail client (via `List-Unsubscribe-Post`) unsubscribes immediately, without a page.
+4. A one-click request from a mail client (via `List-Unsubscribe-Post`) unsubscribes immediately, without a page. Both body formats are accepted: `multipart/form-data` (recommended by RFC 8058) and `application/x-www-form-urlencoded`.
+5. The unsubscribe link keeps working after the campaign is deleted or old jobs are cleaned up (`sendry-web cleanup`): the token names the recipient, and the panel finds the address book through it. The sender name is not shown on the page then.
 
 ### Unsubscribe applies to one address book
 
@@ -148,7 +149,10 @@ Not tracked:
 - `mailto:`, `tel:`, `sms:`;
 - `#anchor` links;
 - links with the `data-notrack` attribute;
-- the `{{unsubscribe_url}}` link.
+- the `{{unsubscribe_url}}` link;
+- addresses that do not parse as a URL (e.g. `https://a.com/50%off`): such a link goes out as is, otherwise the redirect to it would fail.
+
+Outlook buttons inside conditional comments (`<!--[if mso]> ... <![endif]-->`, including VML `<v:roundrect href=...>`) are kept in the message and tracked with the same number as the regular link to the same address. Plain HTML comments are removed from the message.
 
 When a job starts, the panel saves a snapshot of each message variant. If the template is edited later, the map stays correct.
 
@@ -172,12 +176,12 @@ Links hidden by a condition and not visible in the preview appear only in the ta
 | Total clicks | Sum of click counters of delivered messages |
 | CTR | unique clicks / delivered |
 | CTOR | unique clicks / unique opens |
-| Unsubscribes | Delivered messages that led to an unsubscribe |
+| Unsubscribes | Delivered messages that led to an unsubscribe. If the reader resubscribed, the message no longer counts |
 | Unsubscribe % | unsubscribes / delivered |
 
 All counts use the same base (delivered messages), so no rate exceeds 100%.
 
-A click implies an open: a message clicked with images blocked counts as opened. If the campaign does not track opens, open metrics are 0 (otherwise Open Rate would consist of clicks only) and CTOR is not computed.
+A click implies an open: a message clicked with images blocked counts as opened. If the campaign did not track opens when the job was started, the job's open metrics are 0 (otherwise Open Rate would consist of clicks only) and CTOR is not computed. Changing the campaign setting later does not change the statistics of jobs already started.
 
 Campaign metrics sum all jobs of the campaign except dry runs. "Skipped as unsubscribed" counts distinct recipients: an address skipped by two jobs counts once.
 
@@ -268,7 +272,7 @@ server:
 
 If the option is omitted, loopback and private networks are trusted: `127.0.0.0/8`, `::1/128`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7` (a reverse proxy on the same host or a Docker bridge). An empty list `[]` trusts nobody. If hosts of your private network can reach the panel directly, list only the real proxies.
 
-With a chain of proxies (lnk proxy, then nginx on the panel host) list all of them. If `X-Real-IP` names a trusted proxy (the inner nginx overwrote it), the panel takes the right-most `X-Forwarded-For` address that is not a trusted proxy.
+With a chain of proxies (lnk proxy, then nginx on the panel host) list all of them. The reader IP is the right-most `X-Forwarded-For` address that is not a trusted proxy: proxies append the address that connected to them, while the left part may come from the client. `X-Real-IP` is used only when there is no `X-Forwarded-For`: some proxies (Caddy, HAProxy) pass a client-supplied `X-Real-IP` through unchanged.
 
 The same rule applies to the client IP of panel API sends, the `server.allowed_ips` check and the audit log.
 

@@ -50,7 +50,7 @@
             <dd><code>{{.Origin}}/u/&lt;token&gt;</code></dd>
         </dl>
         {{else}}
-        <p class="text-muted" data-i18n="trk.no_origin">Neither a proxying domain nor server.public_url is set: tracking is off and emails go out without pixel, tracked links and unsubscribe link.</p>
+        <p class="text-muted" data-i18n="trk.no_origin">Neither a proxying domain nor server.public_url is set: campaigns cannot be sent (every campaign email needs an unsubscribe link), API emails go out without pixel and tracked links.</p>
         {{end}}
     </div>
 </div>

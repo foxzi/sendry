@@ -444,15 +444,27 @@ func TestApplyPreservesHTML(t *testing.T) {
 
 func TestUnsubscribeURL(t *testing.T) {
 	s := NewSigner([]byte("k"))
-	u := UnsubscribeURL("https://t.io", s, models.SourceSend, uid)
+	const rid = "0b6f4f5e-7f8a-4c1d-9e2b-3a4b5c6d7e8f"
+	u := UnsubscribeURL("https://t.io", s, models.SourceSend, uid, rid)
 	if !strings.HasPrefix(u, "https://t.io/u/") {
 		t.Fatal(u)
 	}
 	p, err := s.Decode(strings.TrimPrefix(u, "https://t.io/u/"))
-	if err != nil || p.Kind != KindUnsubscribe || p.SourceID != uid {
+	if err != nil || p.Kind != KindUnsubscribe || p.SourceID != uid || p.RecipientID != rid {
 		t.Errorf("%+v %v", p, err)
 	}
-	if UnsubscribeURL("x", nil, models.SourceSend, uid) != "" {
+	// Non-UUID recipient id and tokens without one (issued before it was added)
+	for _, r := range []string{"r1", ""} {
+		tok := strings.TrimPrefix(UnsubscribeURL("https://t.io", s, models.SourceSend, uid, r), "https://t.io/u/")
+		if p, err := s.Decode(tok); err != nil || p.RecipientID != r || p.SourceID != uid {
+			t.Errorf("recipient %q: %+v %v", r, p, err)
+		}
+	}
+	// The recipient id is only for unsubscribe tokens
+	if p, err := s.Decode(s.Encode(Payload{Kind: KindOpen, SourceType: models.SourceSend, SourceID: uid, RecipientID: rid})); err != nil || p.RecipientID != "" {
+		t.Errorf("open token: %+v %v", p, err)
+	}
+	if UnsubscribeURL("x", nil, models.SourceSend, uid, rid) != "" {
 		t.Error("nil signer")
 	}
 }
@@ -480,7 +492,8 @@ func TestClientIP(t *testing.T) {
 		{"untrusted peer: headers ignored", req("1.2.3.4:5555", map[string]string{"X-Real-IP": "6.6.6.6", "X-Forwarded-For": "5.5.5.5"}), "1.2.3.4"},
 		{"real ip from proxy", req("10.1.2.3:80", map[string]string{"X-Real-IP": "6.6.6.6"}), "6.6.6.6"},
 		{"single trusted ip", req("192.0.2.7:80", map[string]string{"X-Real-IP": "6.6.6.6"}), "6.6.6.6"},
-		{"real ip beats xff", req("127.0.0.1:80", map[string]string{"X-Real-IP": "6.6.6.6", "X-Forwarded-For": "5.5.5.5"}), "6.6.6.6"},
+		{"xff beats real ip", req("127.0.0.1:80", map[string]string{"X-Real-IP": "6.6.6.6", "X-Forwarded-For": "5.5.5.5"}), "5.5.5.5"},
+		{"client-forged real ip passed through by caddy", req("127.0.0.1:80", map[string]string{"X-Real-IP": "10.0.0.5", "X-Forwarded-For": "203.0.113.9"}), "203.0.113.9"},
 		{"xff right-most untrusted", req("10.1.2.3:80", map[string]string{"X-Forwarded-For": "1.1.1.1, 9.9.9.9, 10.1.2.3"}), "9.9.9.9"},
 		{"proxy chain: real ip is the outer proxy", req("127.0.0.1:80", map[string]string{"X-Real-IP": "10.5.5.5", "X-Forwarded-For": "8.8.8.8, 10.5.5.5"}), "8.8.8.8"},
 		{"xff all trusted", req("10.1.2.3:80", map[string]string{"X-Forwarded-For": "10.9.9.9, 10.1.2.3"}), "10.9.9.9"},
@@ -560,3 +573,41 @@ func TestMachine(t *testing.T) {
 }
 
 func ptr(t time.Time) *time.Time { return &t }
+
+// A URL the click handler cannot parse is left untracked instead of becoming
+// a link that answers 404.
+func TestApplyUnparsableURLNotTracked(t *testing.T) {
+	o, _ := testOpts()
+	o.TrackClicks = true
+	in := `<body><a data-sl="1" href="https://a.com/50%off">bad</a><a data-sl="2" href="https://a.com:80a/">port</a></body>`
+	out := Apply(in, o)
+	if strings.Contains(out, "/t/c/") || !strings.Contains(out, `href="https://a.com/50%off"`) {
+		t.Errorf("unparsable URL tracked or changed: %s", out)
+	}
+}
+
+// The "/" ending an unquoted href is part of the URL, not a self-closing slash.
+func TestNumberLinksUnquotedTrailingSlash(t *testing.T) {
+	out := NumberLinks(`<a href=https://x.com/path/>x</a><a href="https://y.com"/>y</a>`)
+	if !strings.Contains(out, `href=https://x.com/path/ data-sl="1">`) {
+		t.Errorf("unquoted href lost its slash: %s", out)
+	}
+	if !strings.Contains(out, `href="https://y.com" data-sl="2"/>`) {
+		t.Errorf("self-closing tag: %s", out)
+	}
+}
+
+// "<a" inside attribute values, textarea and title is text, not a link; an
+// empty comment "<!-->" does not hide the rest of the document.
+func TestFindATagsSkipsNonMarkup(t *testing.T) {
+	in := `<p title="<a href='https://in-attr.com'>">t</p><textarea><a href="https://in-textarea.com">x</a></textarea>` +
+		`<!--><a href="https://after-empty-comment.com">ok</a><!---><a href="https://after-dash-comment.com">ok2</a>`
+	out := NumberLinks(in)
+	if strings.Contains(out, `in-attr.com" data-sl`) || strings.Contains(out, `'https://in-attr.com' data-sl`) || strings.Contains(out, `in-textarea.com" data-sl`) {
+		t.Errorf("link numbered inside non-markup: %s", out)
+	}
+	if !strings.Contains(out, `href="https://after-empty-comment.com" data-sl="1"`) ||
+		!strings.Contains(out, `href="https://after-dash-comment.com" data-sl="2"`) {
+		t.Errorf("links after empty comments not numbered: %s", out)
+	}
+}

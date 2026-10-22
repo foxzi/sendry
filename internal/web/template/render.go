@@ -5,6 +5,7 @@ import (
 	"fmt"
 	htmltpl "html/template"
 	"regexp"
+	"strconv"
 	"strings"
 	texttpl "text/template"
 )
@@ -118,7 +119,8 @@ func RenderHTML(name, src string, data map[string]any) (string, error) {
 	if src == "" {
 		return "", nil
 	}
-	t, err := htmltpl.New(name).Option("missingkey=zero").Parse(Preprocess(src))
+	protected, markers := protectConditionalComments(src)
+	t, err := htmltpl.New(name).Option("missingkey=zero").Parse(Preprocess(protected))
 	if err != nil {
 		return "", fmt.Errorf("parse %s: %w", name, err)
 	}
@@ -127,7 +129,80 @@ func RenderHTML(name, src string, data map[string]any) (string, error) {
 	if err := t.Execute(&buf, data); err != nil {
 		return "", fmt.Errorf("execute %s: %w", name, err)
 	}
-	return buf.String(), nil
+	return restoreConditionalComments(buf.String(), markers), nil
+}
+
+// html/template drops HTML comments, and with them Outlook conditional
+// comments (<!--[if mso]> ... <![endif]-->) that carry bulletproof buttons.
+// Their markers are swapped for placeholders before parsing and put back
+// after rendering: literal template text passes through unchanged, while
+// the markup between the markers is still rendered and escaped as usual.
+// Plain comments are still dropped.
+const (
+	ccOpen  = "\ue000"
+	ccClose = "\ue001"
+)
+
+func ccPlaceholder(i int) string { return ccOpen + strconv.Itoa(i) + ccClose }
+
+// protectConditionalComments replaces the markers of conditional comments
+// with placeholders and returns the markers in placeholder order.
+func protectConditionalComments(src string) (string, []string) {
+	if !strings.Contains(src, "<!--") {
+		return src, nil
+	}
+	var b strings.Builder
+	var markers []string
+	keep := func(m string) {
+		b.WriteString(ccPlaceholder(len(markers)))
+		markers = append(markers, m)
+	}
+	i := 0
+	for {
+		k := strings.Index(src[i:], "<!--")
+		if k < 0 {
+			break
+		}
+		start := i + k
+		e := strings.Index(src[start+4:], "-->")
+		if e < 0 {
+			break
+		}
+		bodyStart, bodyEnd, end := start+4, start+4+e, start+4+e+3
+		body := src[bodyStart:bodyEnd]
+		lower := strings.ToLower(body)
+		switch {
+		case strings.HasPrefix(lower, "[if") && strings.HasSuffix(body, "<!"),
+			strings.HasPrefix(lower, "<![endif]"):
+			// downlevel-revealed <!--[if !mso]><!--> and its <!--<![endif]-->
+			b.WriteString(src[i:start])
+			keep(src[start:end])
+		case strings.HasPrefix(lower, "[if") && strings.HasSuffix(lower, "<![endif]"):
+			// downlevel-hidden <!--[if mso]> markup <![endif]-->
+			gt := strings.IndexByte(body, '>')
+			closeAt := bodyEnd - len("<![endif]")
+			if gt < 0 || bodyStart+gt+1 > closeAt {
+				b.WriteString(src[i:end])
+				break
+			}
+			b.WriteString(src[i:start])
+			keep(src[start : bodyStart+gt+1])
+			b.WriteString(src[bodyStart+gt+1 : closeAt])
+			keep(src[closeAt:end])
+		default:
+			b.WriteString(src[i:end])
+		}
+		i = end
+	}
+	b.WriteString(src[i:])
+	return b.String(), markers
+}
+
+func restoreConditionalComments(out string, markers []string) string {
+	for i := len(markers) - 1; i >= 0; i-- {
+		out = strings.Replace(out, ccPlaceholder(i), markers[i], 1)
+	}
+	return out
 }
 
 func ensureNestedKeys(src string, data map[string]any) map[string]any {

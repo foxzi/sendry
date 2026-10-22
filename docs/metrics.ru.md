@@ -30,10 +30,12 @@ metrics:
 
 Эндпоинт `/health` всегда доступен (полезно для балансировщиков).
 
-Порядок определения IP клиента:
-1. Заголовок `X-Forwarded-For` (первый IP)
-2. Заголовок `X-Real-IP`
+IP клиента это адрес соединения. Заголовки `X-Forwarded-For` и `X-Real-IP` учитываются, только если соединение пришло с loopback (обратный прокси на том же сервере). С любого другого адреса они игнорируются, иначе кто угодно прошёл бы `allowed_ips` поддельным заголовком. За локальным прокси IP берётся в таком порядке:
+1. `X-Forwarded-For`: самый правый адрес, который не loopback (его дописал прокси)
+2. `X-Real-IP`
 3. `RemoteAddr`
+
+То же правило действует для `api.allowed_ips`.
 
 ## Доступные метрики
 
@@ -88,6 +90,8 @@ metrics:
 | `sendry_api_requests_total` | method, path, status | counter | Всего API запросов |
 | `sendry_api_request_duration_seconds` | method, path | histogram | Время запроса |
 | `sendry_api_errors_total` | error_type | counter | Ошибки API |
+
+`path` это шаблон маршрута (`/api/v1/status/{id}`). Запросы, которые не попали ни в один маршрут, получают `path="unmatched"`.
 
 **Типы ошибок:**
 - `server_error` - Ошибки 5xx

@@ -68,29 +68,34 @@ func (t TrustedProxies) contains(ip net.IP) bool {
 	return false
 }
 
-// ClientIP returns the reader's address. X-Real-IP and X-Forwarded-For are
+// ClientIP returns the reader's address. X-Forwarded-For and X-Real-IP are
 // honoured only when the direct peer is a trusted proxy (otherwise anyone
-// could forge them): X-Real-IP wins unless it names a trusted proxy itself
-// (an inner proxy of a chain overwrote it), then the right-most
-// X-Forwarded-For entry that is not a trusted proxy. Without a trusted peer
-// the peer address is returned. The port is stripped.
+// could forge them). X-Forwarded-For wins: the right-most entry that is not a
+// trusted proxy is the address the outermost trusted proxy saw. Proxies append
+// to X-Forwarded-For but some (Caddy, HAProxy) pass a client-supplied
+// X-Real-IP through unchanged, so X-Real-IP is used only when there is no
+// X-Forwarded-For. Without a trusted peer the peer address is returned. The
+// port is stripped.
 func (t TrustedProxies) ClientIP(r *http.Request) string {
 	peer := stripPort(r.RemoteAddr)
 	if !t.contains(net.ParseIP(peer)) {
 		return peer
 	}
-	if ip := parseIPLoose(r.Header.Get("X-Real-IP")); ip != nil && !t.contains(ip) {
-		return ip.String()
+	if xff := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); xff != "" {
+		parts := strings.Split(xff, ",")
+		for i := len(parts) - 1; i >= 0; i-- {
+			ip := parseIPLoose(parts[i])
+			if ip == nil {
+				continue
+			}
+			if !t.contains(ip) || i == 0 {
+				return ip.String()
+			}
+		}
+		return peer
 	}
-	parts := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
-	for i := len(parts) - 1; i >= 0; i-- {
-		ip := parseIPLoose(parts[i])
-		if ip == nil {
-			continue
-		}
-		if !t.contains(ip) || i == 0 {
-			return ip.String()
-		}
+	if ip := parseIPLoose(r.Header.Get("X-Real-IP")); ip != nil {
+		return ip.String()
 	}
 	return peer
 }

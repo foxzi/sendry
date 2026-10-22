@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -307,5 +308,60 @@ func TestJobRepository_FreezeVariantTemplate(t *testing.T) {
 	snaps, err := NewTrackingRepository(db).GetSnapshots(jobID)
 	if err != nil || len(snaps) != 1 || snaps[0].HTML != "rendered" || len(snaps[0].Links) != 1 || snaps[0].TemplateVersion != 2 {
 		t.Errorf("snapshot = %+v, %v", snaps, err)
+	}
+}
+
+// Retry drops the frozen template of a variant that sent nothing (a broken
+// template the user has fixed meanwhile) and keeps it once mail went out.
+func TestJobRepository_RetryDropsUnusedFrozenTemplate(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		items [][2]string
+		keep  bool
+	}{
+		{"all failed", [][2]string{{"failed", "render html: boom"}, {"failed", "render html: boom"}}, false},
+		{"some sent", [][2]string{{"sent", ""}, {"failed", "smtp: 550"}}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := setupTestDB(t)
+			jobID := setupJobWithItems(t, db, tc.items)
+			repo := NewJobRepository(db)
+			// Render failures never reach the MTA: the worker stores an empty message id
+			mustExec(t, db, `UPDATE send_job_items SET sendry_msg_id = '' WHERE status = 'failed'`)
+			snap := &models.JobVariantSnapshot{JobID: jobID, VariantID: "v1", VariantName: "A", HTML: "<p>x</p>"}
+			if err := repo.FreezeVariantTemplate(snap, &models.JobVariantTemplate{TemplateID: "t1", HTML: "{{broken"}); err != nil {
+				t.Fatal(err)
+			}
+			if n, err := repo.RetryFailedItems(jobID); err != nil || n == 0 {
+				t.Fatalf("retry: %d %v", n, err)
+			}
+			frozen, err := repo.GetVariantTemplates(jobID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := frozen["v1"] != nil; got != tc.keep {
+				t.Errorf("frozen template kept = %v, want %v", got, tc.keep)
+			}
+		})
+	}
+}
+
+// Resume and retry set the job running again but keep when it first started.
+func TestJobRepository_UpdateStatusKeepsStartedAt(t *testing.T) {
+	db := setupTestDB(t)
+	jobID := setupJobWithItems(t, db, nil)
+	mustExec(t, db, `UPDATE send_jobs SET started_at = '2026-01-01 10:00:00' WHERE id = ?`, jobID)
+	repo := NewJobRepository(db)
+	for _, st := range []string{"paused", "running", "completed", "running"} {
+		if err := repo.UpdateStatus(jobID, st); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var started string
+	if err := db.QueryRow(`SELECT started_at FROM send_jobs WHERE id = ?`, jobID).Scan(&started); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(started, "2026-01-01") {
+		t.Errorf("started_at = %s, want the first start", started)
 	}
 }

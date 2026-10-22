@@ -123,9 +123,11 @@ func (r *RecipientRepository) UpdateList(list *models.RecipientList) error {
 }
 
 // DeleteList deletes a recipient list and all its recipients
+// DeleteList deletes a list with its recipients. Returns ErrInUse if
+// campaign jobs were sent to the list.
 func (r *RecipientRepository) DeleteList(id string) error {
 	_, err := r.db.Exec("DELETE FROM recipient_lists WHERE id = ?", id)
-	return err
+	return inUse(err)
 }
 
 // UpdateListCounts updates the total and active counts for a list
@@ -143,8 +145,16 @@ func (r *RecipientRepository) UpdateListCounts(listID string) error {
 
 // NormalizeEmail returns the stored form of a recipient email: trimmed and
 // lower-cased, so one address is one recipient per list whatever its case.
+// Only ASCII letters are lowered, like SQLite lower(): the unique index on
+// (list_id, lower(email)), the upgrade migration and the lookups must agree,
+// or "Ä@x.com" and "ä@x.com" would be two recipients.
 func NormalizeEmail(email string) string {
-	return strings.ToLower(strings.TrimSpace(email))
+	return strings.Map(func(r rune) rune {
+		if r >= 'A' && r <= 'Z' {
+			return r + ('a' - 'A')
+		}
+		return r
+	}, strings.TrimSpace(email))
 }
 
 // AddRecipient adds a single recipient to a list. An address already in the
@@ -250,7 +260,7 @@ func (r *RecipientRepository) ListRecipients(filter models.RecipientFilter) ([]m
 func (r *RecipientRepository) DeleteRecipient(id string, listID string) error {
 	_, err := r.db.Exec("DELETE FROM recipients WHERE id = ?", id)
 	if err != nil {
-		return err
+		return inUse(err)
 	}
 	return r.UpdateListCounts(listID)
 }

@@ -224,7 +224,7 @@ func (r *TemplateRepository) Update(t *models.Template, changeNote, updatedBy st
 // Delete deletes a template
 func (r *TemplateRepository) Delete(id string) error {
 	_, err := r.db.Exec("DELETE FROM templates WHERE id = ?", id)
-	return err
+	return inUse(err)
 }
 
 // GetVersions returns all versions of a template

@@ -40,7 +40,9 @@ http://mail.example.com {
         file_server
     }
 
-    reverse_proxy 127.0.0.1:8080
+    reverse_proxy 127.0.0.1:8080 {
+        header_up X-Real-IP {remote_host}
+    }
 }
 ```
 

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"math/rand/v2"
 	"net/http"
 	"regexp"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/foxzi/sendry/internal/web/middleware"
 	"github.com/foxzi/sendry/internal/web/models"
+	"github.com/foxzi/sendry/internal/web/repository"
 	"github.com/foxzi/sendry/internal/web/tracking"
 )
 
@@ -330,7 +332,10 @@ func (h *Handlers) CampaignVariantDelete(w http.ResponseWriter, r *http.Request)
 	campaignID := r.PathValue("id")
 	variantID := r.PathValue("variantId")
 
-	if err := h.campaigns.DeleteVariant(variantID); err != nil {
+	if err := h.campaigns.DeleteVariant(variantID); errors.Is(err, repository.ErrInUse) {
+		h.error(w, http.StatusConflict, "Cannot delete the variant: jobs of this campaign used it.")
+		return
+	} else if err != nil {
 		h.logger.Error("failed to delete variant", "error", err)
 		h.error(w, http.StatusInternalServerError, "Failed to delete variant")
 		return
@@ -485,15 +490,19 @@ func (h *Handlers) CampaignSend(w http.ResponseWriter, r *http.Request) {
 		Strategy:        strategy,
 		DryRun:          dryRun,
 		DryRunLimit:     dryRunLimit,
+		TrackOpens:      c.TrackOpens,
 	}
 
 	// Handle scheduled_at
 	if scheduledAt := r.FormValue("scheduled_at"); scheduledAt != "" {
 		t, err := parseScheduledAt(scheduledAt, r.FormValue("tz"), r.FormValue("tz_offset"))
-		if err == nil {
-			job.ScheduledAt = &t
-			job.Status = "scheduled"
+		if err != nil {
+			// Never fall back to sending right away
+			h.error(w, http.StatusBadRequest, "Invalid schedule time")
+			return
 		}
+		job.ScheduledAt = &t
+		job.Status = "scheduled"
 	}
 
 	if err := h.jobs.Create(job); err != nil {

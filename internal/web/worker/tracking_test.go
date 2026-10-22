@@ -17,7 +17,7 @@ const tplHTML = `<html><body><a href="https://shop.example.com/{{name}}">Shop</a
 func buildFor(t *testing.T, campaign *models.Campaign, env *trackingEnv) (string, error) {
 	t.Helper()
 	vars := map[string]any{"name": "bob"}
-	vars["unsubscribe_url"] = env.unsubscribeURL("item1")
+	vars["unsubscribe_url"] = env.unsubscribeURL("item1", "rcpt1")
 	return buildCampaignHTML(tracking.NumberLinks(tplHTML), vars, env, campaign, "item1")
 }
 
@@ -95,7 +95,7 @@ func TestBuildCampaignHTML_UTMOnlyWhenEnabled(t *testing.T) {
 }
 
 func TestCampaignHeaders(t *testing.T) {
-	h := campaignHeaders(&models.Campaign{ReplyTo: "r@example.com"}, testEnv(), "item1")
+	h := campaignHeaders(&models.Campaign{ReplyTo: "r@example.com"}, testEnv(), "item1", "rcpt1")
 	if h["Reply-To"] != "r@example.com" {
 		t.Errorf("Reply-To lost: %v", h)
 	}
@@ -106,7 +106,7 @@ func TestCampaignHeaders(t *testing.T) {
 		t.Errorf("List-Unsubscribe-Post: %q", h["List-Unsubscribe-Post"])
 	}
 
-	if h := campaignHeaders(&models.Campaign{}, nil, "item1"); h != nil {
+	if h := campaignHeaders(&models.Campaign{}, nil, "item1", "rcpt1"); h != nil {
 		t.Errorf("expected no headers without env and reply-to, got %v", h)
 	}
 }
@@ -146,5 +146,23 @@ func TestSnapshotVarsHaveNoRecipientData(t *testing.T) {
 	}
 	if !strings.Contains(html, "Hi {{name}} ({{email}}), SALE Kazan") || !strings.Contains(html, `href="#"`) {
 		t.Errorf("snapshot = %s", html)
+	}
+}
+
+// An Outlook button in a conditional comment reaches the mail and is tracked
+// with the same link number as its regular twin.
+func TestBuildCampaignHTML_MSOButtonTracked(t *testing.T) {
+	src := `<html><body><!--[if mso]><v:roundrect href="https://shop.example.com/sale">Sale</v:roundrect><![endif]-->` +
+		`<!--[if !mso]><!--><a href="https://shop.example.com/sale" class="btn">Sale</a><!--<![endif]--></body></html>`
+	c := &models.Campaign{ID: "c1", TrackClicks: true}
+	html, err := buildCampaignHTML(tracking.NumberLinks(src), map[string]any{}, testEnv(), c, "item1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(html, "<!--[if mso]><v:roundrect href=\"https://lnk.example.com/t/c/") {
+		t.Errorf("MSO button missing or not tracked: %s", html)
+	}
+	if strings.Count(html, "/t/c/") != 2 || strings.Contains(html, "shop.example.com/sale\"") {
+		t.Errorf("expected both links tracked: %s", html)
 	}
 }

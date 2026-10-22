@@ -50,9 +50,10 @@
         });
     }
 
-    // Flash messages auto-hide
+    // Success flash messages auto-hide. Errors, warnings and blocks marked
+    // alert-persistent (e.g. a new API key shown once) stay.
     function initFlashMessages() {
-        var alerts = document.querySelectorAll('.alert:not(.alert-error)');
+        var alerts = document.querySelectorAll('.alert-success:not(.alert-persistent)');
         alerts.forEach(function(alert) {
             setTimeout(function() {
                 alert.style.opacity = '0';

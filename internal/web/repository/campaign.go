@@ -182,7 +182,7 @@ func (r *CampaignRepository) GetVariants(campaignID string) ([]models.CampaignVa
 // DeleteVariant deletes a variant
 func (r *CampaignRepository) DeleteVariant(id string) error {
 	_, err := r.db.Exec("DELETE FROM campaign_variants WHERE id = ?", id)
-	return err
+	return inUse(err)
 }
 
 // UpdateVariables updates campaign variables

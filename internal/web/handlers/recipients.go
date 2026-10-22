@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -198,7 +199,11 @@ func (h *Handlers) RecipientListUpdate(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) RecipientListDelete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	if err := h.recipients.DeleteList(id); err != nil {
+	if err := h.recipients.DeleteList(id); errors.Is(err, repository.ErrInUse) {
+		h.error(w, http.StatusConflict, "Cannot delete the list: campaigns were sent to it. "+
+			"Delete those campaigns first (their statistics are deleted too).")
+		return
+	} else if err != nil {
 		h.logger.Error("failed to delete recipient list", "error", err)
 		h.error(w, http.StatusInternalServerError, "Failed to delete recipient list")
 		return
@@ -307,7 +312,11 @@ func (h *Handlers) RecipientDelete(w http.ResponseWriter, r *http.Request) {
 	listID := r.PathValue("id")
 	recipientID := r.PathValue("recipientId")
 
-	if err := h.recipients.DeleteRecipient(recipientID, listID); err != nil {
+	if err := h.recipients.DeleteRecipient(recipientID, listID); errors.Is(err, repository.ErrInUse) {
+		h.error(w, http.StatusConflict, "Cannot delete the recipient: campaigns were sent to this address. "+
+			"Set the status to unsubscribed to stop sending to it.")
+		return
+	} else if err != nil {
 		h.logger.Error("failed to delete recipient", "error", err)
 		h.error(w, http.StatusInternalServerError, "Failed to delete recipient")
 		return

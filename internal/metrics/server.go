@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	"github.com/foxzi/sendry/internal/ipfilter"
 )
 
 // Server serves Prometheus metrics over HTTP
@@ -129,35 +131,10 @@ func (s *Server) ipFilterMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// getClientIP extracts the client IP from the request
+// getClientIP returns the client IP; forwarded headers count only from a
+// loopback proxy (see ipfilter.GetClientIP).
 func (s *Server) getClientIP(r *http.Request) net.IP {
-	// Check X-Forwarded-For header first
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		// Take the first IP (original client)
-		parts := strings.Split(xff, ",")
-		if len(parts) > 0 {
-			ip := net.ParseIP(strings.TrimSpace(parts[0]))
-			if ip != nil {
-				return ip
-			}
-		}
-	}
-
-	// Check X-Real-IP header
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		ip := net.ParseIP(strings.TrimSpace(xri))
-		if ip != nil {
-			return ip
-		}
-	}
-
-	// Fall back to RemoteAddr
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		// Maybe no port?
-		return net.ParseIP(r.RemoteAddr)
-	}
-	return net.ParseIP(host)
+	return ipfilter.GetClientIP(r)
 }
 
 // isIPAllowed checks if the IP is in the allowed list

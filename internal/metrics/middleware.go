@@ -2,7 +2,6 @@ package metrics
 
 import (
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -54,46 +53,18 @@ func HTTPMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// normalizePath extracts route pattern from chi router to avoid high cardinality
+// unmatchedPath is the path label of requests that matched no route
+// (scanners probing /wp-login.php, /.env, ...): the raw path would add a
+// series per probe, and the counters are persisted across restarts.
+const unmatchedPath = "unmatched"
+
+// normalizePath returns the chi route pattern of the request, so the path
+// label has one value per route, or unmatchedPath.
 func normalizePath(r *http.Request) string {
-	// Try to get the route pattern from chi
-	rctx := chi.RouteContext(r.Context())
-	if rctx != nil && rctx.RoutePattern() != "" {
+	if rctx := chi.RouteContext(r.Context()); rctx != nil && rctx.RoutePattern() != "" {
 		return rctx.RoutePattern()
 	}
-
-	// Fallback: normalize the path manually
-	path := r.URL.Path
-
-	// Replace UUIDs with placeholder
-	parts := strings.Split(path, "/")
-	for i, part := range parts {
-		if isUUID(part) {
-			parts[i] = "{id}"
-		}
-	}
-
-	return strings.Join(parts, "/")
-}
-
-// isUUID checks if a string looks like a UUID
-func isUUID(s string) bool {
-	if len(s) != 36 {
-		return false
-	}
-	// Simple check for UUID format: 8-4-4-4-12
-	if s[8] != '-' || s[13] != '-' || s[18] != '-' || s[23] != '-' {
-		return false
-	}
-	for i, c := range s {
-		if i == 8 || i == 13 || i == 18 || i == 23 {
-			continue
-		}
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
-			return false
-		}
-	}
-	return true
+	return unmatchedPath
 }
 
 // categorizeStatus categorizes HTTP status codes into error types

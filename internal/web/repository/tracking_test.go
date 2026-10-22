@@ -1,7 +1,9 @@
 package repository
 
 import (
+	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -376,6 +378,13 @@ func TestTracking_StatsBase(t *testing.T) {
 	if st.UniqueOpens != 0 || st.TotalOpens != 0 || st.UniqueClicks != 1 || st.TotalClicks != 1 {
 		t.Errorf("no-pixel stats = %+v", st)
 	}
+	// The job remembers the setting it was sent with: turning the pixel off
+	// in the campaign afterwards does not erase the job's opens
+	mustExec(t, db, `UPDATE send_jobs SET track_opens = 1 WHERE id = 'job-1'`)
+	if st, _ = repo.JobStats("job-1"); st.UniqueOpens != 1 {
+		t.Errorf("opens of a job sent with the pixel = %+v", st)
+	}
+	mustExec(t, db, `UPDATE send_jobs SET track_opens = NULL WHERE id = 'job-1'`)
 	mustExec(t, db, `UPDATE campaigns SET track_opens = 1 WHERE id = 'c1'`)
 
 	// Dry-run jobs do not count in campaign stats; a recipient skipped as
@@ -476,5 +485,66 @@ func TestTracking_DeleteEvents(t *testing.T) {
 	}
 	if err := repo.DeleteCampaignEvents("c1"); err != nil || left() != 1 {
 		t.Fatalf("after campaign delete: %d, %v", left(), err)
+	}
+}
+
+// Concurrent events must all be written: a deferred transaction that reads
+// (dedup check) and then writes fails with "database is locked" when another
+// connection commits in between.
+func TestTracking_RecordEventConcurrent(t *testing.T) {
+	db := setupTestDB(t)
+	setupJobWithItems(t, db, [][2]string{{"sent", ""}, {"sent", ""}})
+	repo := NewTrackingRepository(db)
+	ids := jobItemIDs(t, NewJobRepository(db), "job-1")
+
+	const n = 40
+	var wg sync.WaitGroup
+	errs := make(chan error, n)
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			e := jobEvent(models.EventOpen, ids[i%2], nil, false)
+			e.IP = fmt.Sprintf("203.0.113.%d", i)
+			errs <- repo.RecordEvent(e)
+		}(i)
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("RecordEvent: %v", err)
+		}
+	}
+	var events, opens int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM email_events`).Scan(&events); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT SUM(open_count) FROM send_job_items`).Scan(&opens); err != nil {
+		t.Fatal(err)
+	}
+	if events != n || opens != n {
+		t.Fatalf("events = %d, open_count sum = %d, want %d", events, opens, n)
+	}
+}
+
+// A machine click must not hide a human click from the same IP on the same link.
+func TestTracking_DedupKeepsHumanAfterMachine(t *testing.T) {
+	db := setupTestDB(t)
+	setupJobWithItems(t, db, [][2]string{{"sent", ""}})
+	repo := NewTrackingRepository(db)
+	ids := jobItemIDs(t, NewJobRepository(db), "job-1")
+
+	machine := jobEvent(models.EventClick, ids[0], intp(1), true)
+	machine.IP = "203.0.113.1"
+	human := jobEvent(models.EventClick, ids[0], intp(1), false)
+	human.IP = "203.0.113.1"
+	for _, e := range []*models.EmailEvent{machine, human} {
+		if err := repo.RecordEvent(e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if human.ID == 0 {
+		t.Fatal("human click was dropped as a duplicate of the machine click")
 	}
 }

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/foxzi/sendry/internal/web/middleware"
 	"github.com/foxzi/sendry/internal/web/models"
+	"github.com/foxzi/sendry/internal/web/repository"
 	"github.com/foxzi/sendry/internal/web/sendry"
 	smtpclient "github.com/foxzi/sendry/internal/web/smtp"
 	emailtpl "github.com/foxzi/sendry/internal/web/template"
@@ -258,7 +260,10 @@ func (h *Handlers) TemplateUpdate(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) TemplateDelete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	if err := h.templates.Delete(id); err != nil {
+	if err := h.templates.Delete(id); errors.Is(err, repository.ErrInUse) {
+		h.error(w, http.StatusConflict, "Cannot delete the template: campaign variants use it. Remove those variants first.")
+		return
+	} else if err != nil {
 		h.logger.Error("failed to delete template", "error", err)
 		h.error(w, http.StatusInternalServerError, "Failed to delete template")
 		return

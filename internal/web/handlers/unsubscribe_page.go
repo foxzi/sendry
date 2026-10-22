@@ -16,6 +16,7 @@ const (
 	unsubResubscribed
 	unsubInvalid
 	unsubError
+	unsubNotInList
 )
 
 // unsubView is what the public unsubscribe page shows. Unsubscribing is per
@@ -49,6 +50,7 @@ func renderUnsubPage(w http.ResponseWriter, status int, v unsubView) {
 		"Resubscribed": v.State == unsubResubscribed,
 		"Invalid":      v.State == unsubInvalid,
 		"Error":        v.State == unsubError,
+		"NotInList":    v.State == unsubNotInList,
 	})
 }
 
@@ -74,19 +76,22 @@ button:hover{opacity:.9}
 <main class="card">
 {{if .Ask}}
 <h1>Отписка от рассылки</h1>
-<p>Адрес {{.V.Email}} будет отписан от этого списка рассылки {{.V.Sender}}. Другие рассылки, на которые вы подписаны, продолжат приходить.</p>
+<p>Адрес {{.V.Email}} будет отписан от этого списка рассылки{{with .V.Sender}} {{.}}{{end}}. Другие рассылки, на которые вы подписаны, продолжат приходить.</p>
 <form method="post"><input type="hidden" name="action" value="unsubscribe"><button type="submit">Отписаться</button></form>
 {{else if .Already}}
 <h1>Вы уже отписаны</h1>
-<p>Адрес {{.V.Email}} уже отписан от этого списка рассылки {{.V.Sender}}.</p>
+<p>Адрес {{.V.Email}} уже отписан от этого списка рассылки{{with .V.Sender}} {{.}}{{end}}.</p>
 <form method="post"><input type="hidden" name="action" value="resubscribe"><button type="submit" class="secondary">Вернуть подписку</button></form>
 {{else if .Done}}
 <h1>Вы отписались</h1>
-<p>Адрес {{.V.Email}} больше не будет получать письма из этого списка рассылки {{.V.Sender}}.</p>
+<p>Адрес {{.V.Email}} больше не будет получать письма из этого списка рассылки{{with .V.Sender}} {{.}}{{end}}.</p>
 <form method="post"><input type="hidden" name="action" value="resubscribe"><button type="submit" class="secondary">Вернуть подписку</button></form>
 {{else if .Resubscribed}}
 <h1>Подписка восстановлена</h1>
-<p>Адрес {{.V.Email}} снова будет получать письма из этого списка рассылки {{.V.Sender}}.</p>
+<p>Адрес {{.V.Email}} снова будет получать письма из этого списка рассылки{{with .V.Sender}} {{.}}{{end}}.</p>
+{{else if .NotInList}}
+<h1>Адреса нет в списке</h1>
+<p>Адрес {{.V.Email}} уже удалён из этого списка рассылки{{with .V.Sender}} {{.}}{{end}}, письма на него больше не придут.</p>
 {{else if .Invalid}}
 <h1>Ссылка недействительна</h1>
 <p>Возможно, она устарела или была скопирована не полностью.</p>

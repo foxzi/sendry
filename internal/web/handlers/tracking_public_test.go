@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -340,6 +341,49 @@ func TestUnsubscribeOneClick(t *testing.T) {
 	}
 	if n := e.count(t, "unsubscribe"); n != 1 {
 		t.Fatalf("events = %d", n)
+	}
+}
+
+// RFC 8058 recommends multipart/form-data for the one-click POST.
+func TestUnsubscribeOneClickMultipart(t *testing.T) {
+	e := newTrackEnv(t)
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	_ = mw.WriteField("List-Unsubscribe", "One-Click")
+	_ = mw.Close()
+	req := httptest.NewRequest("POST", "/u/"+e.token(tracking.KindUnsubscribe, "job_item", "i1"), &body)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	w := httptest.NewRecorder()
+	e.mux.ServeHTTP(w, req)
+	if w.Code != 200 {
+		t.Fatalf("code=%d body=%s", w.Code, w.Body.String())
+	}
+	if e.status(t, "r1") != "unsubscribed" {
+		t.Fatalf("r1 status = %s", e.status(t, "r1"))
+	}
+}
+
+// The job item is deleted (cleanup, campaign deletion): the recipient id in
+// the token still resolves the address book.
+func TestUnsubscribeAfterItemDeleted(t *testing.T) {
+	e := newTrackEnv(t)
+	tok := e.signer.Encode(tracking.Payload{Kind: tracking.KindUnsubscribe, SourceType: "job_item", SourceID: "i1", RecipientID: "r1"})
+	oldTok := e.token(tracking.KindUnsubscribe, "job_item", "i1")
+	if _, err := e.db.Exec(`DELETE FROM send_job_items WHERE id = 'i1'`); err != nil {
+		t.Fatal(err)
+	}
+	if w := e.do("GET", "/u/"+oldTok, ""); w.Code != 404 {
+		t.Fatalf("token without recipient: code=%d", w.Code)
+	}
+	w := e.do("GET", "/u/"+tok, "")
+	if w.Code != 200 || !strings.Contains(strings.ToLower(w.Body.String()), "user@example.com") {
+		t.Fatalf("GET code=%d body=%s", w.Code, w.Body.String())
+	}
+	if w := e.do("POST", "/u/"+tok, "List-Unsubscribe=One-Click"); w.Code != 200 {
+		t.Fatalf("one-click code=%d", w.Code)
+	}
+	if e.status(t, "r1") != "unsubscribed" || e.status(t, "r2") != "active" {
+		t.Fatalf("status r1=%s r2=%s", e.status(t, "r1"), e.status(t, "r2"))
 	}
 }
 

@@ -86,3 +86,55 @@ func mustExec(t *testing.T, d *sql.DB, q string, args ...any) {
 		t.Fatalf("%s: %v", q, err)
 	}
 }
+
+func TestJobView_NoPublicURLWarning(t *testing.T) {
+	h, d := newCampaignTestHandlers(t, "https://panel.example.com")
+	if rec := postCampaignSend(h, url.Values{"recipient_list_id": {"l1"}, "servers": {"mx1"}}); rec.Code != http.StatusSeeOther {
+		t.Fatalf("send: %d %s", rec.Code, rec.Body.String())
+	}
+	var jobID string
+	if err := d.QueryRow(`SELECT id FROM send_jobs`).Scan(&jobID); err != nil {
+		t.Fatal(err)
+	}
+	const warn = "Sending is on hold"
+	if body := jobRequest(h, h.JobView, http.MethodGet, "/jobs/"+jobID, jobID).Body.String(); strings.Contains(body, warn) {
+		t.Error("warning shown with a public URL")
+	}
+	// The public URL was removed after the job started (e.g. an upgrade)
+	h.cfg.Server.PublicURL = ""
+	if body := jobRequest(h, h.JobView, http.MethodGet, "/jobs/"+jobID, jobID).Body.String(); !strings.Contains(body, warn) {
+		t.Error("no warning for a job that cannot send")
+	}
+	mustExec(t, d, `UPDATE send_jobs SET status = 'cancelled'`)
+	if body := jobRequest(h, h.JobView, http.MethodGet, "/jobs/"+jobID, jobID).Body.String(); strings.Contains(body, warn) {
+		t.Error("warning shown for a cancelled job")
+	}
+}
+
+// A list, recipient, variant or template a job used cannot be deleted (foreign
+// keys): the user gets a 409 with an explanation, not a 500.
+func TestDeleteInUse_Conflict(t *testing.T) {
+	h, _ := newCampaignTestHandlers(t, "https://panel.example.com")
+	if rec := postCampaignSend(h, url.Values{"recipient_list_id": {"l1"}, "servers": {"mx1"}}); rec.Code != http.StatusSeeOther {
+		t.Fatalf("send: %d %s", rec.Code, rec.Body.String())
+	}
+	del := func(handler http.HandlerFunc, target string, vals map[string]string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodDelete, target, nil)
+		for k, v := range vals {
+			req.SetPathValue(k, v)
+		}
+		rec := httptest.NewRecorder()
+		handler(rec, req)
+		return rec
+	}
+	for name, rec := range map[string]*httptest.ResponseRecorder{
+		"list":      del(h.RecipientListDelete, "/recipients/l1", map[string]string{"id": "l1"}),
+		"recipient": del(h.RecipientDelete, "/recipients/l1/recipients/ra", map[string]string{"id": "l1", "recipientId": "ra"}),
+		"variant":   del(h.CampaignVariantDelete, "/campaigns/c1/variants/v1", map[string]string{"id": "c1", "variantId": "v1"}),
+		"template":  del(h.TemplateDelete, "/templates/t1", map[string]string{"id": "t1"}),
+	} {
+		if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "Cannot delete") {
+			t.Errorf("%s: %d %s", name, rec.Code, rec.Body.String())
+		}
+	}
+}

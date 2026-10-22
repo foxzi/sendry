@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"mime"
 	"net/http"
 	"net/url"
 	"strings"
@@ -140,7 +141,9 @@ func (h *Handlers) TrackClick(w http.ResponseWriter, r *http.Request) {
 }
 
 // unsubscribeSource decodes an unsubscribe token and resolves it. Only job
-// items are unsubscribable at this stage.
+// items are unsubscribable at this stage. When the job item is gone (cleanup,
+// campaign deletion) the recipient id from the token gives the address book
+// and email; the sender is unknown then.
 func (h *Handlers) unsubscribeSource(token string) (*models.TrackingSource, bool) {
 	p, err := h.decodeToken(token, tracking.KindUnsubscribe)
 	if err != nil || p.SourceType != models.SourceJobItem {
@@ -151,7 +154,20 @@ func (h *Handlers) unsubscribeSource(token string) (*models.TrackingSource, bool
 		h.logger.Error("tracking: resolve source (unsubscribe)", "error", err)
 		return nil, false
 	}
-	if src == nil {
+	if (src == nil || src.ListID == "" || src.Email == "") && p.RecipientID != "" {
+		rcpt, err := h.tracking.ResolveRecipient(p.RecipientID)
+		if err != nil {
+			h.logger.Error("tracking: resolve recipient (unsubscribe)", "error", err)
+			return nil, false
+		}
+		if rcpt != nil {
+			if src == nil {
+				src = &models.TrackingSource{SourceType: p.SourceType, SourceID: p.SourceID}
+			}
+			src.ListID, src.Email, src.RecipientID = rcpt.ListID, rcpt.Email, rcpt.RecipientID
+		}
+	}
+	if src == nil || src.ListID == "" || src.Email == "" {
 		return nil, false
 	}
 	return src, true
@@ -184,13 +200,22 @@ func (h *Handlers) UnsubscribeConfirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
-	if err := r.ParseForm(); err != nil {
+	// RFC 8058 recommends multipart/form-data for one-click; ParseForm reads
+	// only urlencoded bodies.
+	var perr error
+	if mt, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); mt == "multipart/form-data" {
+		perr = r.ParseMultipartForm(64 << 10)
+	} else {
+		perr = r.ParseForm()
+	}
+	if perr != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
 
 	if r.PostForm.Get("List-Unsubscribe") == "One-Click" {
-		if _, err := h.unsubscribe(r, src, models.UnsubSourceOneClick); err != nil {
+		// Not in the book any more: nothing to send to, report success
+		if _, err := h.unsubscribe(r, src, models.UnsubSourceOneClick); err != nil && !errors.Is(err, repository.ErrRecipientNotInList) {
 			http.Error(w, "error", http.StatusInternalServerError)
 			return
 		}
@@ -208,7 +233,10 @@ func (h *Handlers) UnsubscribeConfirm(w http.ResponseWriter, r *http.Request) {
 		}
 		renderUnsubPage(w, http.StatusOK, newUnsubView(unsubResubscribed, src))
 	case "unsubscribe":
-		if _, err := h.unsubscribe(r, src, models.UnsubSourceLink); err != nil {
+		if _, err := h.unsubscribe(r, src, models.UnsubSourceLink); errors.Is(err, repository.ErrRecipientNotInList) {
+			renderUnsubPage(w, http.StatusOK, newUnsubView(unsubNotInList, src))
+			return
+		} else if err != nil {
 			renderUnsubPage(w, http.StatusInternalServerError, unsubView{State: unsubError})
 			return
 		}
@@ -220,7 +248,8 @@ func (h *Handlers) UnsubscribeConfirm(w http.ResponseWriter, r *http.Request) {
 
 // unsubscribe marks the address unsubscribed in the address book the job was
 // sent to (other books are untouched) and records the event when the status
-// actually changed.
+// actually changed. Returns repository.ErrRecipientNotInList when the address
+// is no longer in the book.
 func (h *Handlers) unsubscribe(r *http.Request, src *models.TrackingSource, sourceType string) (bool, error) {
 	changed, err := h.unsubs.Add(&models.Unsubscribe{
 		ListID:      src.ListID,
@@ -232,8 +261,7 @@ func (h *Handlers) unsubscribe(r *http.Request, src *models.TrackingSource, sour
 		SourceID:    src.SourceID,
 	})
 	if errors.Is(err, repository.ErrRecipientNotInList) {
-		// The recipient was deleted from the book: nothing to send to anyway.
-		return false, nil
+		return false, err
 	}
 	if err != nil {
 		h.logger.Error("tracking: unsubscribe", "error", err)

@@ -24,8 +24,12 @@ func New(path string) (*DB, error) {
 	}
 
 	// Foreign keys are enabled in the DSN: PRAGMA foreign_keys is per
-	// connection, and the DSN applies it to every connection of the pool
-	db, err := sql.Open("sqlite3", path+"?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on")
+	// connection, and the DSN applies it to every connection of the pool.
+	// _txlock=immediate: a transaction takes the write lock at BEGIN and waits
+	// for it (busy_timeout). A deferred transaction that reads and then writes
+	// fails at once with "database is locked" when another connection
+	// committed in between, and busy_timeout does not help there.
+	db, err := sql.Open("sqlite3", path+"?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on&_txlock=immediate")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
@@ -104,6 +108,9 @@ func (db *DB) Migrate() error {
 		"ALTER TABLE api_keys ADD COLUMN track_opens INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE api_keys ADD COLUMN track_clicks INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE send_jobs ADD COLUMN skipped_unsubscribed INTEGER NOT NULL DEFAULT 0",
+		// Whether the campaign tracked opens when the job was created; NULL
+		// for older jobs (statistics then use the campaign setting)
+		"ALTER TABLE send_jobs ADD COLUMN track_opens INTEGER",
 		"ALTER TABLE send_job_items ADD COLUMN opened_at TIMESTAMP",
 		"ALTER TABLE send_job_items ADD COLUMN open_count INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE send_job_items ADD COLUMN clicked_at TIMESTAMP",

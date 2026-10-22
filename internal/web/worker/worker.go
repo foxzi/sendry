@@ -465,7 +465,7 @@ func (w *Worker) processItem(
 	}
 
 	// Built-in unsubscribe link; set last so recipient or campaign variables cannot override it
-	vars["unsubscribe_url"] = env.unsubscribeURL(item.ID)
+	vars["unsubscribe_url"] = env.unsubscribeURL(item.ID, item.RecipientID)
 
 	// Build email subject with variable substitution
 	subjectSrc := tmpl.Subject
@@ -499,7 +499,7 @@ func (w *Worker) processItem(
 		HTML:    html,
 	}
 
-	req.Headers = campaignHeaders(campaign, env, item.ID)
+	req.Headers = campaignHeaders(campaign, env, item.ID, item.RecipientID)
 
 	// Send email
 	resp, err := client.Send(w.ctx, req)
@@ -596,12 +596,13 @@ func (w *Worker) loadTrackingEnv() (*trackingEnv, error) {
 	return &trackingEnv{baseURL: base, signer: tracking.NewSigner([]byte(ts.Secret))}, nil
 }
 
-// unsubscribeURL returns the signed unsubscribe link of a job item, or "" without env
-func (e *trackingEnv) unsubscribeURL(itemID string) string {
+// unsubscribeURL returns the signed unsubscribe link of a job item, or "" without env.
+// The recipient id keeps the link working after the item is deleted.
+func (e *trackingEnv) unsubscribeURL(itemID, recipientID string) string {
 	if e == nil {
 		return ""
 	}
-	return tracking.UnsubscribeURL(e.baseURL, e.signer, models.SourceJobItem, itemID)
+	return tracking.UnsubscribeURL(e.baseURL, e.signer, models.SourceJobItem, itemID, recipientID)
 }
 
 // buildCampaignHTML renders numbered template HTML with the recipient variables
@@ -635,13 +636,13 @@ func buildCampaignHTML(numbered string, vars map[string]any, env *trackingEnv, c
 
 // campaignHeaders returns the extra headers of campaign mail: Reply-To and the
 // List-Unsubscribe pair. Returns nil when there are none.
-func campaignHeaders(campaign *models.Campaign, env *trackingEnv, itemID string) map[string]string {
+func campaignHeaders(campaign *models.Campaign, env *trackingEnv, itemID, recipientID string) map[string]string {
 	headers := map[string]string{}
 	if campaign.ReplyTo != "" {
 		headers["Reply-To"] = campaign.ReplyTo
 	}
 	if env != nil {
-		for k, v := range tracking.ListUnsubscribeHeaders(env.unsubscribeURL(itemID)) {
+		for k, v := range tracking.ListUnsubscribeHeaders(env.unsubscribeURL(itemID, recipientID)) {
 			headers[k] = v
 		}
 	}

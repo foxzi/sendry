@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/go-chi/chi/v5"
 )
 
 func TestResponseWriter(t *testing.T) {
@@ -86,24 +88,25 @@ func TestHTTPMiddlewareNoMetrics(t *testing.T) {
 	}
 }
 
-func TestIsUUID(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected bool
-	}{
-		{"550e8400-e29b-41d4-a716-446655440000", true},
-		{"550E8400-E29B-41D4-A716-446655440000", true},
-		{"not-a-uuid", false},
-		{"550e8400e29b41d4a716446655440000", false}, // missing dashes
-		{"", false},
-		{"550e8400-e29b-41d4-a716-44665544000", false},   // too short
-		{"550e8400-e29b-41d4-a716-4466554400000", false}, // too long
+// Requests that match no route share one path label instead of one series
+// per probed URL; matched requests use the route pattern.
+func TestNormalizePath(t *testing.T) {
+	r := chi.NewRouter()
+	var got []string
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			next.ServeHTTP(w, req)
+			got = append(got, normalizePath(req))
+		})
+	})
+	r.Get("/api/v1/status/{id}", func(w http.ResponseWriter, r *http.Request) {})
+	for _, p := range []string{"/api/v1/status/123", "/wp-login.php", "/.env"} {
+		r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", p, nil))
 	}
-
-	for _, tt := range tests {
-		result := isUUID(tt.input)
-		if result != tt.expected {
-			t.Errorf("isUUID(%q) = %v, expected %v", tt.input, result, tt.expected)
+	want := []string{"/api/v1/status/{id}", unmatchedPath, unmatchedPath}
+	for i := range want {
+		if i >= len(got) || got[i] != want[i] {
+			t.Fatalf("paths = %v, want %v", got, want)
 		}
 	}
 }

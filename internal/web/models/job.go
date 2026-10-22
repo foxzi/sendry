@@ -24,9 +24,12 @@ type SendJob struct {
 	DryRunLimit     int        `json:"dry_run_limit"`
 	// SkippedUnsubscribed is how many recipients of the job were not sent to
 	// because they unsubscribed in the list (at job start or while it ran)
-	SkippedUnsubscribed int       `json:"skipped_unsubscribed"`
-	CreatedAt           time.Time `json:"created_at"`
-	UpdatedAt           time.Time `json:"updated_at"`
+	SkippedUnsubscribed int `json:"skipped_unsubscribed"`
+	// TrackOpens is the campaign's open tracking when the job was created, so
+	// a later change of the campaign does not rewrite the job's open rate
+	TrackOpens bool      `json:"track_opens"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 // SendJobItem represents a single email in a send job

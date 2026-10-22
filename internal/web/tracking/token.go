@@ -54,6 +54,10 @@ type Payload struct {
 	LinkID     int    // click only: data-sl number
 	URL        string // click only: final destination URL
 	IssuedAt   int64  // unix seconds; Encode fills the current time when 0
+	// RecipientID is recipients.id, unsubscribe only and optional. The
+	// recipient row outlives the job item (cleanup and campaign deletion
+	// remove items), so the link keeps working after the item is gone.
+	RecipientID string
 }
 
 // Signer encodes and verifies tokens with HMAC-SHA256. Tokens are signed
@@ -117,6 +121,40 @@ func formatUUID(b []byte) string {
 	return h[0:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:32]
 }
 
+// appendID appends an id: flag 1 and 16 bytes for a canonical UUID, otherwise
+// flag 0, uvarint length and the bytes.
+func appendID(buf []byte, id string) []byte {
+	if raw, ok := uuidBytes(id); ok {
+		buf = append(buf, 1)
+		return append(buf, raw...)
+	}
+	buf = append(buf, 0)
+	buf = binary.AppendUvarint(buf, uint64(len(id)))
+	return append(buf, id...)
+}
+
+// readID reads an id written by appendID and returns it with the rest of buf.
+func readID(buf []byte) (string, []byte, bool) {
+	if len(buf) < 1 {
+		return "", nil, false
+	}
+	rest := buf[1:]
+	switch buf[0] {
+	case 1:
+		if len(rest) < 16 {
+			return "", nil, false
+		}
+		return formatUUID(rest[:16]), rest[16:], true
+	case 0:
+		n, k := binary.Uvarint(rest)
+		if k <= 0 || n > uint64(len(rest)-k) {
+			return "", nil, false
+		}
+		return string(rest[k : k+int(n)]), rest[k+int(n):], true
+	}
+	return "", nil, false
+}
+
 func sign(key, payload []byte) []byte {
 	m := hmac.New(sha256.New, key)
 	m.Write(payload)
@@ -137,7 +175,8 @@ func (s *Signer) verify(payload, sig []byte) bool {
 
 // Encode returns a URL-safe token: base64url(payload) "." base64url(truncated HMAC).
 // The payload is kind, source type, issue time (uvarint unix seconds), source
-// id and, for clicks, link id and URL.
+// id and, for clicks, link id and URL; for unsubscribes, the optional
+// recipient id.
 // It returns "" when the payload has an unknown kind or source type.
 func (s *Signer) Encode(p Payload) string {
 	switch p.Kind {
@@ -155,13 +194,9 @@ func (s *Signer) Encode(p Payload) string {
 	}
 	buf := []byte{byte(p.Kind), sb}
 	buf = binary.AppendUvarint(buf, uint64(iat))
-	if raw, ok := uuidBytes(p.SourceID); ok {
-		buf = append(buf, 1)
-		buf = append(buf, raw...)
-	} else {
-		buf = append(buf, 0)
-		buf = binary.AppendUvarint(buf, uint64(len(p.SourceID)))
-		buf = append(buf, p.SourceID...)
+	buf = appendID(buf, p.SourceID)
+	if p.Kind == KindUnsubscribe && p.RecipientID != "" {
+		buf = appendID(buf, p.RecipientID)
 	}
 	if p.Kind == KindClick {
 		id := p.LinkID
@@ -212,23 +247,15 @@ func (s *Signer) Decode(token string) (Payload, error) {
 		return zero, ErrBadToken
 	}
 	p.IssuedAt = int64(iat)
-	rest := buf[2+k+1:]
-	switch buf[2+k] {
-	case 1:
-		if len(rest) < 16 {
-			return zero, ErrBadToken
-		}
-		p.SourceID = formatUUID(rest[:16])
-		rest = rest[16:]
-	case 0:
-		n, k := binary.Uvarint(rest)
-		if k <= 0 || n > uint64(len(rest)-k) {
-			return zero, ErrBadToken
-		}
-		p.SourceID = string(rest[k : k+int(n)])
-		rest = rest[k+int(n):]
-	default:
+	var rest []byte
+	if p.SourceID, rest, ok = readID(buf[2+k:]); !ok {
 		return zero, ErrBadToken
+	}
+	// Unsubscribe tokens issued before the recipient id was added end here
+	if p.Kind == KindUnsubscribe && len(rest) > 0 {
+		if p.RecipientID, rest, ok = readID(rest); !ok {
+			return zero, ErrBadToken
+		}
 	}
 	if p.Kind == KindClick {
 		id, k := binary.Uvarint(rest)

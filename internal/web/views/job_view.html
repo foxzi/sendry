@@ -28,6 +28,12 @@
 </div>
 
 {{if .Success}}<div class="alert alert-success">{{.Success}}</div>{{end}}
+{{if .NoPublicURL}}
+<div class="alert alert-error">
+    <strong>Sending is on hold:</strong> the public URL for unsubscribe links is not configured, pending emails are not sent.
+    Set the tracking domain in <a href="/settings/tracking">Settings &gt; Tracking</a> or <code>server.public_url</code> in the config: the job continues by itself.
+</div>
+{{end}}
 
 <div class="tabs" style="margin-bottom: 1rem">
     <a href="/jobs/{{.Job.ID}}" class="tab active" data-i18n="trk.tab_overview">Overview</a>

@@ -76,6 +76,24 @@ func tagEnd(s string, i int) int {
 	return -1
 }
 
+// commentBodyEnd returns the end of the body of the comment starting at i
+// (s[i:] starts with "<!--") and the index just after the comment; ok is
+// false if it is unterminated. "<!-->" and "<!--->" are empty comments.
+func commentBodyEnd(s string, i int) (bodyEnd, next int, ok bool) {
+	b := i + 4
+	switch {
+	case strings.HasPrefix(s[b:], ">"):
+		return b, b + 1, true
+	case strings.HasPrefix(s[b:], "->"):
+		return b, b + 2, true
+	}
+	e := strings.Index(s[b:], "-->")
+	if e < 0 {
+		return 0, 0, false
+	}
+	return b + e, b + e + 3, true
+}
+
 // isConditionalComment reports whether body (the text between "<!--" and
 // "-->") is a downlevel-hidden conditional comment such as [if mso]>...<![endif].
 // The downlevel-revealed opener <!--[if !mso]><!--> is a plain comment.
@@ -119,19 +137,17 @@ func findATags(s string) []aTag {
 		i += k
 		switch {
 		case strings.HasPrefix(s[i:], "<!--"):
-			e := strings.Index(s[i+4:], "-->")
-			if e < 0 {
+			be, next, ok := commentBodyEnd(s, i)
+			if !ok {
 				return res
 			}
-			if isConditionalComment(s[i+4 : i+4+e]) {
-				res = append(res, findMSOTags(s, i+4, i+4+e)...)
+			if isConditionalComment(s[i+4 : be]) {
+				res = append(res, findMSOTags(s, i+4, be)...)
 			}
-			i += 4 + e + 3
-		case strings.HasPrefix(low[i:], "<script") || strings.HasPrefix(low[i:], "<style"):
-			name := "</script"
-			if low[i+2] == 't' {
-				name = "</style"
-			}
+			i = next
+		case rawTextStart(low, i) != "":
+			// script, style, textarea, title: their text is not markup
+			name := "</" + rawTextStart(low, i)
 			e := strings.Index(low[i:], name)
 			if e < 0 {
 				return res
@@ -144,11 +160,40 @@ func findATags(s string) []aTag {
 			}
 			res = append(res, aTag{start: i, end: e})
 			i = e
+		case len(s) > i+1 && isTagNameStart(s[i+1]):
+			// another tag: skip it whole, so "<a" inside its attribute
+			// values (title="<a href=...>") is not taken for a link
+			if e := tagEnd(s, i); e > 0 {
+				i = e
+			} else {
+				i++
+			}
 		default:
 			i++
 		}
 	}
 	return res
+}
+
+// rawTextElements hold text, not markup, up to their end tag
+var rawTextElements = []string{"script", "style", "textarea", "title"}
+
+// rawTextStart returns the name of the raw text element whose start tag is at
+// low[i:] (low is lower-cased), or "".
+func rawTextStart(low string, i int) string {
+	for _, name := range rawTextElements {
+		if strings.HasPrefix(low[i+1:], name) {
+			if j := i + 1 + len(name); j >= len(low) || isSpace(low[j]) || low[j] == '>' || low[j] == '/' {
+				return name
+			}
+		}
+	}
+	return ""
+}
+
+// isTagNameStart reports whether c can follow '<' in a start or end tag.
+func isTagNameStart(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '/'
 }
 
 // parseAttrs parses the attributes of a start tag (text like `<a href="x">`).
@@ -258,7 +303,9 @@ func editTag(tag string, edits map[string]*string) string {
 	}
 	if add.Len() > 0 {
 		cut := len(out) - 1 // before '>'
-		if cut > 0 && out[cut-1] == '/' {
+		// before the "/" of a self-closing tag, but not the last "/" of an
+		// unquoted value such as href=https://x.com/path/
+		if cut > 1 && out[cut-1] == '/' && strings.ContainsRune(" \t\r\n\"'", rune(out[cut-2])) {
 			cut--
 		}
 		out = out[:cut] + add.String() + out[cut:]
@@ -370,11 +417,11 @@ var stripTagsBuf = func(s string) string {
 			continue
 		}
 		if strings.HasPrefix(s[i:], "<!--") {
-			e := strings.Index(s[i+4:], "-->")
-			if e < 0 {
+			_, next, ok := commentBodyEnd(s, i)
+			if !ok {
 				break
 			}
-			i += 4 + e + 3
+			i = next
 			continue
 		}
 		e := tagEnd(s, i)
@@ -572,13 +619,13 @@ func addUTM(rawURL string, u *UTM, linkID int) string {
 
 func isHTTPURL(s string) bool {
 	l := strings.ToLower(s)
-	if strings.HasPrefix(l, "http://") {
-		return len(l) > len("http://")
+	if !strings.HasPrefix(l, "http://") && !strings.HasPrefix(l, "https://") {
+		return false
 	}
-	if strings.HasPrefix(l, "https://") {
-		return len(l) > len("https://")
-	}
-	return false
+	// The click handler redirects only to URLs that parse: a link a browser
+	// would still open (e.g. a stray "%") is left untracked rather than broken
+	u, err := url.Parse(s)
+	return err == nil && u.Host != ""
 }
 
 // Apply post-processes rendered HTML before it goes to the MTA:
@@ -653,11 +700,11 @@ func lastBodyClose(s string) int {
 		}
 		i += k
 		if strings.HasPrefix(s[i:], "<!--") {
-			e := strings.Index(s[i+4:], "-->")
-			if e < 0 {
+			_, next, ok := commentBodyEnd(s, i)
+			if !ok {
 				break
 			}
-			i += 4 + e + 3
+			i = next
 			continue
 		}
 		if strings.HasPrefix(low[i:], "</body") {
@@ -689,12 +736,13 @@ func PixelURL(baseURL string, s *Signer, sourceType, sourceID string) string {
 	return baseURL + "/t/o/" + tok + ".gif"
 }
 
-// UnsubscribeURL returns <BaseURL>/u/<token>
-func UnsubscribeURL(baseURL string, s *Signer, sourceType, sourceID string) string {
+// UnsubscribeURL returns <BaseURL>/u/<token>. recipientID (recipients.id,
+// may be empty) keeps the link working after the source row is deleted.
+func UnsubscribeURL(baseURL string, s *Signer, sourceType, sourceID, recipientID string) string {
 	if s == nil {
 		return ""
 	}
-	tok := s.Encode(Payload{Kind: KindUnsubscribe, SourceType: sourceType, SourceID: sourceID})
+	tok := s.Encode(Payload{Kind: KindUnsubscribe, SourceType: sourceType, SourceID: sourceID, RecipientID: recipientID})
 	if tok == "" {
 		return ""
 	}

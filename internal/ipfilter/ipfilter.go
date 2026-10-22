@@ -99,36 +99,43 @@ func (f *Filter) IsAllowedAddr(addr string) bool {
 	return f.IsAllowedString(host)
 }
 
-// GetClientIP extracts the client IP from an HTTP request
-// Checks X-Forwarded-For and X-Real-IP headers before RemoteAddr
+// GetClientIP returns the client IP of an HTTP request. X-Forwarded-For and
+// X-Real-IP are honoured only when the request comes from loopback (a reverse
+// proxy on the same host): from any other peer they are client-supplied and
+// would let anyone pass allowed_ips. From a proxy, the right-most
+// X-Forwarded-For entry that is not loopback wins (proxies append to it),
+// then X-Real-IP, then the peer itself.
 func GetClientIP(r *http.Request) net.IP {
-	// Check X-Forwarded-For header first
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		// Take the first IP (original client)
-		parts := strings.Split(xff, ",")
-		if len(parts) > 0 {
-			ip := net.ParseIP(strings.TrimSpace(parts[0]))
-			if ip != nil {
-				return ip
-			}
-		}
-	}
-
-	// Check X-Real-IP header
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		ip := net.ParseIP(strings.TrimSpace(xri))
-		if ip != nil {
-			return ip
-		}
-	}
-
-	// Fall back to RemoteAddr
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		// Maybe no port?
-		return net.ParseIP(r.RemoteAddr)
+		host = r.RemoteAddr // no port
 	}
-	return net.ParseIP(host)
+	peer := net.ParseIP(host)
+	if peer == nil || !peer.IsLoopback() {
+		return peer
+	}
+
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		var first net.IP
+		for i := len(parts) - 1; i >= 0; i-- {
+			ip := net.ParseIP(strings.TrimSpace(parts[i]))
+			if ip == nil {
+				continue
+			}
+			if !ip.IsLoopback() {
+				return ip
+			}
+			first = ip
+		}
+		if first != nil {
+			return first
+		}
+	}
+	if ip := net.ParseIP(strings.TrimSpace(r.Header.Get("X-Real-IP"))); ip != nil {
+		return ip
+	}
+	return peer
 }
 
 // HTTPMiddleware returns an HTTP middleware that filters requests by IP
