@@ -8,18 +8,10 @@ import (
 
 	"github.com/foxzi/sendry/internal/web/middleware"
 	"github.com/foxzi/sendry/internal/web/models"
+	"github.com/foxzi/sendry/internal/web/tracking"
 )
 
 // Panel pages for tracking: settings, click map.
-
-// trackingOrigin returns the origin used for tracking links: the configured
-// tracking base URL or, when empty, the panel public URL.
-func (h *Handlers) trackingOrigin(s *models.TrackingSettings) string {
-	if s != nil && s.BaseURL != "" {
-		return s.BaseURL
-	}
-	return strings.TrimRight(h.cfg.Server.PublicURL, "/")
-}
 
 // validateTrackingBaseURL normalises the proxying domain to an origin. The
 // operator may type a bare domain ("lnk.example.com", https is assumed) or a
@@ -50,7 +42,8 @@ func (h *Handlers) renderTrackingSettings(w http.ResponseWriter, r *http.Request
 		"User":     h.getUserFromContext(r),
 		"Settings": s,
 		"Fallback": strings.TrimRight(h.cfg.Server.PublicURL, "/"),
-		"Origin":   h.trackingOrigin(s),
+		"Origin":   tracking.ResolveBaseURL(s.BaseURL, h.cfg.Server.PublicURL),
+		"Rotated":  s.PreviousSecret != "",
 		"Error":    errMsg,
 		"Success":  okMsg,
 	}
@@ -66,8 +59,11 @@ func (h *Handlers) TrackingSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ok := ""
-	if r.URL.Query().Get("saved") == "1" {
+	switch {
+	case r.URL.Query().Get("saved") == "1":
 		ok = "Settings saved"
+	case r.URL.Query().Get("rotated") == "1":
+		ok = "Secret rotated"
 	}
 	h.renderTrackingSettings(w, r, s, "", ok)
 }
@@ -107,6 +103,20 @@ func (h *Handlers) TrackingSettingsSave(w http.ResponseWriter, r *http.Request) 
 	http.Redirect(w, r, "/settings/tracking?saved=1", http.StatusSeeOther)
 }
 
+// TrackingSecretRotate handles POST /settings/tracking/rotate-secret. New mail
+// is signed with a fresh secret; links signed with the current one keep
+// working (it becomes the previous secret), links signed with the one before
+// it stop working.
+func (h *Handlers) TrackingSecretRotate(w http.ResponseWriter, r *http.Request) {
+	if err := h.settings.RotateTrackingSecret(); err != nil {
+		h.logger.Error("failed to rotate tracking secret", "error", err)
+		h.error(w, http.StatusInternalServerError, "Failed to rotate tracking secret")
+		return
+	}
+	h.settings.LogAction(r, middleware.GetUserID(r), middleware.GetUserEmail(r), "rotate_secret", "tracking_settings", "tracking", "{}")
+	http.Redirect(w, r, "/settings/tracking?rotated=1", http.StatusSeeOther)
+}
+
 // clickMapRow is a link row of the click map table
 type clickMapRow struct {
 	models.LinkStat
@@ -140,7 +150,7 @@ func (h *Handlers) JobClickMap(w http.ResponseWriter, r *http.Request) {
 	var rows []clickMapRow
 	var links []models.LinkStat
 	if current != nil {
-		links, err = h.tracking.JobLinkStats(id, variant)
+		links, err = h.tracking.JobLinkStats(id, variant, snaps)
 		if err != nil {
 			h.logger.Error("failed to load link stats", "error", err)
 		}
@@ -203,7 +213,10 @@ func (h *Handlers) JobClickMapSnapshot(w http.ResponseWriter, r *http.Request) {
 	}
 	hd := w.Header()
 	hd.Set("Content-Type", "text/html; charset=utf-8")
-	hd.Set("Content-Security-Policy", "default-src 'none'; img-src * data:; style-src 'unsafe-inline' *; font-src *")
+	// Snapshot HTML is user content: no scripts, no forms, no <base>, and it
+	// may only be framed by the panel itself.
+	hd.Set("Content-Security-Policy", "default-src 'none'; img-src * data:; style-src 'unsafe-inline' *; font-src *; "+
+		"form-action 'none'; base-uri 'none'; frame-ancestors 'self'")
 	hd.Set("X-Frame-Options", "SAMEORIGIN")
 	hd.Set("X-Content-Type-Options", "nosniff")
 	hd.Set("Cache-Control", "no-store")

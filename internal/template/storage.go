@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	bucketTemplates    = []byte("templates")
+	bucketTemplates     = []byte("templates")
 	bucketTemplateNames = []byte("template_names")
 )
 
@@ -235,22 +235,4 @@ func (s *Storage) Delete(ctx context.Context, id string) error {
 
 		return templates.Delete([]byte(id))
 	})
-}
-
-// Stats returns template statistics
-func (s *Storage) Stats(ctx context.Context) (*Stats, error) {
-	stats := &Stats{}
-
-	err := s.db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket(bucketTemplates)
-		c := bucket.Cursor()
-
-		for k, _ := c.First(); k != nil; k, _ = c.Next() {
-			stats.Total++
-		}
-
-		return nil
-	})
-
-	return stats, err
 }

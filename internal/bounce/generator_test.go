@@ -41,9 +41,9 @@ func TestGenerateDSN(t *testing.T) {
 	}
 
 	tests := []struct {
-		name      string
-		errorMsg  string
-		permanent bool
+		name       string
+		errorMsg   string
+		permanent  bool
 		wantAction string
 		wantStatus string
 	}{

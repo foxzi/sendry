@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{if .Title}}{{.Title}} - {{end}}Sendry Web</title>
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <link rel="stylesheet" href="/static/css/style.css">
     <script>
         (function() {
@@ -91,7 +90,8 @@
 </body>
 </html>
 
-{{/* Engagement stat cards. Dot is models.TrackingStats. */}}
+{{/* Engagement stat cards. Dot is *models.TrackingStats. Rates are over
+     Delivered = messages accepted by the MTA (queued or sent). */}}
 {{define "tracking_cards"}}
 <div class="stats-grid" style="margin-bottom: 1.5rem">
     <div class="stat-card">

@@ -677,16 +677,7 @@ func (m *ManagementServer) handleDomainsCreate(w http.ResponseWriter, r *http.Re
 		_ = m.domainManager.ReloadSigner(req.Domain)
 	}
 
-	sendJSON(w, http.StatusCreated, DomainResponse{
-		Domain:      req.Domain,
-		DKIM:        req.DKIM,
-		TLS:         req.TLS,
-		RateLimit:   req.RateLimit,
-		Mode:        req.Mode,
-		DefaultFrom: req.DefaultFrom,
-		RedirectTo:  req.RedirectTo,
-		BCCTo:       req.BCCTo,
-	})
+	sendJSON(w, http.StatusCreated, DomainResponse(req))
 }
 
 // handleDomainsGet handles GET /api/v1/domains/{domain}
@@ -970,11 +961,7 @@ func (m *ManagementServer) handleRateLimitsUpdate(w http.ResponseWriter, r *http
 	}
 	m.config.Domains[domainName] = dc
 
-	sendJSON(w, http.StatusOK, DomainRL{
-		MessagesPerHour:      req.MessagesPerHour,
-		MessagesPerDay:       req.MessagesPerDay,
-		RecipientsPerMessage: req.RecipientsPerMessage,
-	})
+	sendJSON(w, http.StatusOK, DomainRL(req))
 }
 
 // Helper functions

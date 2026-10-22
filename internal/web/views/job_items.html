@@ -19,6 +19,7 @@
                 <option value="queued" {{if eq .Status "queued"}}selected{{end}}>Queued</option>
                 <option value="sent" {{if eq .Status "sent"}}selected{{end}}>Sent</option>
                 <option value="failed" {{if eq .Status "failed"}}selected{{end}}>Failed</option>
+                <option value="skipped" {{if eq .Status "skipped"}}selected{{end}}>Skipped</option>
             </select>
             <select name="error_type" class="input">
                 <option value="">All Errors</option>
@@ -68,7 +69,7 @@
                     <td>{{if .SendryMsgID}}<code>{{.SendryMsgID}}</code>{{else}}<span class="text-muted">-</span>{{end}}</td>
                     <td>{{if .OpenedAt}}{{.OpenedAt.Format "2006-01-02 15:04"}}{{if gt .OpenCount 0}} <span class="text-muted">&times;{{.OpenCount}}</span>{{end}}{{else}}<span class="text-muted">-</span>{{end}}</td>
                     <td>{{if .ClickCount}}{{.ClickCount}}{{else}}<span class="text-muted">-</span>{{end}}</td>
-                    <td>{{if .Error}}<span class="badge">{{(errorType .Error).Label}}</span> <span class="text-error">{{.Error}}</span>{{else}}<span class="text-muted">-</span>{{end}}</td>
+                    <td>{{if eq .Status "skipped"}}<span class="text-muted">{{.Error}}</span>{{else if .Error}}<span class="badge">{{(errorType .Error).Label}}</span> <span class="text-error">{{.Error}}</span>{{else}}<span class="text-muted">-</span>{{end}}</td>
                 </tr>
                 {{end}}
             </tbody>

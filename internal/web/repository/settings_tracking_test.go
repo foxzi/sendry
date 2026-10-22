@@ -67,3 +67,33 @@ func TestTrackingSettings_SecretStableConcurrent(t *testing.T) {
 		}
 	}
 }
+
+func TestTrackingSettings_RotateSecret(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewSettingsRepository(db)
+
+	// Rotation works before the secret was ever generated
+	if err := repo.RotateTrackingSecret(); err != nil {
+		t.Fatal(err)
+	}
+	s1, err := repo.GetTrackingSettings()
+	if err != nil || len(s1.Secret) != 64 || len(s1.PreviousSecret) != 64 || s1.Secret == s1.PreviousSecret {
+		t.Fatalf("after first rotation = %+v, %v", s1, err)
+	}
+
+	if err := repo.RotateTrackingSecret(); err != nil {
+		t.Fatal(err)
+	}
+	s2, _ := repo.GetTrackingSettings()
+	if s2.PreviousSecret != s1.Secret || s2.Secret == s1.Secret || s2.Secret == s1.PreviousSecret {
+		t.Errorf("after second rotation: prev=%q (want %q), cur=%q", s2.PreviousSecret, s1.Secret, s2.Secret)
+	}
+
+	// Saving the other settings keeps both secrets
+	if err := repo.SaveTrackingSettings(&models.TrackingSettings{BaseURL: "https://lnk.example.com"}); err != nil {
+		t.Fatal(err)
+	}
+	if s3, _ := repo.GetTrackingSettings(); s3.Secret != s2.Secret || s3.PreviousSecret != s2.PreviousSecret {
+		t.Errorf("save changed secrets: %+v", s3)
+	}
+}

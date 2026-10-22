@@ -348,8 +348,7 @@ func (r *SendRepository) ErrorCounts() ([]models.ErrorCount, error) {
 // It also returns the rowid of the last send, to be passed as afterRowID on the next call.
 func (r *SendRepository) GetQueuedSends(afterRowID int64, limit int) ([]models.Send, int64, error) {
 	rows, err := r.db.Query(`
-		SELECT rowid, id, server_name, server_msg_id, status, COALESCE(error_message, ''),
-			opened_at, COALESCE(open_count, 0), clicked_at, COALESCE(click_count, 0)
+		SELECT rowid, id, server_name, server_msg_id, status, COALESCE(error_message, '')
 		FROM sends
 		WHERE status = 'queued' AND COALESCE(server_msg_id, '') != '' AND rowid > ?
 		ORDER BY rowid
@@ -364,16 +363,8 @@ func (r *SendRepository) GetQueuedSends(afterRowID int64, limit int) ([]models.S
 	lastRowID := afterRowID
 	for rows.Next() {
 		var s models.Send
-		var openedAt, clickedAt sql.NullTime
-		if err := rows.Scan(&lastRowID, &s.ID, &s.ServerName, &s.ServerMsgID, &s.Status, &s.ErrorMessage,
-			&openedAt, &s.OpenCount, &clickedAt, &s.ClickCount); err != nil {
+		if err := rows.Scan(&lastRowID, &s.ID, &s.ServerName, &s.ServerMsgID, &s.Status, &s.ErrorMessage); err != nil {
 			return nil, 0, err
-		}
-		if openedAt.Valid {
-			s.OpenedAt = &openedAt.Time
-		}
-		if clickedAt.Valid {
-			s.ClickedAt = &clickedAt.Time
 		}
 		sends = append(sends, s)
 	}

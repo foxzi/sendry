@@ -31,6 +31,9 @@ sudo systemctl start sendry-web
 ```yaml
 server:
   listen_addr: ":8088"
+  allowed_ips: []        # IP/CIDR, с которых можно открыть панель; пусто = всем
+  # trusted_proxies:     # прокси, чьим X-Real-IP / X-Forwarded-For верим
+  #   - "127.0.0.0/8"    # по умолчанию: loopback + частные сети
   tls:
     enabled: false
     cert_file: "/etc/sendry/certs/web.crt"
@@ -43,6 +46,8 @@ logging:
   level: info    # debug, info, warn, error
   format: json   # json, text
 ```
+
+IP клиента для `allowed_ips`, журнала аудита, отправок через API и событий трекинга берётся из `X-Real-IP` / `X-Forwarded-For`, только если запрос пришёл с адреса из `trusted_proxies`; иначе используется адрес TCP-соединения, поэтому подделкой этих заголовков `allowed_ips` не обойти. По умолчанию (опция не задана): `127.0.0.0/8`, `::1/128`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7`. Пустой список `[]` не доверяет никому. Подробнее в [tracking.ru.md](tracking.ru.md#ip-читателя-и-доверенные-прокси).
 
 ### Авторизация
 
@@ -103,16 +108,18 @@ sendry:
       env: "stage"
 
   multi_send:
-    strategy: weighted_round_robin  # round_robin, weighted_round_robin, domain_affinity
+    strategy: weighted  # round_robin (по умолчанию), weighted, first_healthy, domain_affinity
     weights:
       mta-prod-1: 3
       mta-stage: 1
-    domain_affinity:
+    domain_affinity:    # пока не реализовано: стратегия domain_affinity работает как round_robin
       "example.com": "mta-prod-1"
     failover:
       enabled: true
       max_retries: 2
 ```
+
+Стратегии: `round_robin` — по очереди, `weighted` — по весам из `weights`, `first_healthy` — всегда первый сервер из списка. `domain_affinity` пока не реализована: значение принимается, но работает как `round_robin` (в логе при старте будет предупреждение). Старое имя `weighted_round_robin` считается устаревшим синонимом `weighted`. Неизвестное значение — ошибка конфигурации.
 
 ## CLI команды
 

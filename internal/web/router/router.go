@@ -92,6 +92,14 @@ type RouterConfig struct {
 
 // NewEmailRouter creates a new email router
 func NewEmailRouter(cfg RouterConfig) *EmailRouter {
+	if cfg.MultiSend != nil && cfg.Logger != nil {
+		switch cfg.MultiSend.Strategy {
+		case config.StrategyDomainAffinity:
+			cfg.Logger.Warn("multi_send strategy domain_affinity is not implemented yet, falling back to round_robin")
+		case config.StrategyWeightedRoundRobin:
+			cfg.Logger.Warn("multi_send strategy weighted_round_robin is deprecated, use weighted")
+		}
+	}
 	return &EmailRouter{
 		domains:         cfg.Domains,
 		templates:       cfg.Templates,
@@ -394,17 +402,18 @@ func (r *EmailRouter) selectServer(domain string, servers []ServerInfo) *ServerI
 		return &servers[0]
 	}
 
-	strategy := "round_robin"
+	strategy := config.StrategyRoundRobin
 	if r.cfg != nil && r.cfg.Strategy != "" {
 		strategy = r.cfg.Strategy
 	}
 
 	switch strategy {
-	case "weighted":
-		return r.weightedSelect(servers)
-	case "first_healthy":
+	case config.StrategyWeighted, config.StrategyWeightedRoundRobin:
+		return r.weightedSelect(domain, servers)
+	case config.StrategyFirstHealthy:
 		return r.firstHealthySelect(servers)
 	default:
+		// round_robin; domain_affinity is not implemented yet and falls back here
 		return r.roundRobinSelect(domain, servers)
 	}
 }
@@ -421,10 +430,16 @@ func (r *EmailRouter) roundRobinSelect(domain string, servers []ServerInfo) *Ser
 }
 
 // weightedSelect selects server based on weights
-func (r *EmailRouter) weightedSelect(servers []ServerInfo) *ServerInfo {
+func (r *EmailRouter) weightedSelect(domain string, servers []ServerInfo) *ServerInfo {
 	totalWeight := 0
 	for _, s := range servers {
-		totalWeight += s.Weight
+		if s.Weight > 0 {
+			totalWeight += s.Weight
+		}
+	}
+	if totalWeight == 0 {
+		// All weights are zero: nothing to weigh, spread evenly
+		return r.roundRobinSelect(domain, servers)
 	}
 
 	// Simple weighted selection (deterministic for now)
@@ -436,6 +451,9 @@ func (r *EmailRouter) weightedSelect(servers []ServerInfo) *ServerInfo {
 
 	cumulative := 0
 	for i := range servers {
+		if servers[i].Weight <= 0 {
+			continue
+		}
 		cumulative += servers[i].Weight
 		if counter < cumulative {
 			return &servers[i]

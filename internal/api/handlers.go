@@ -503,7 +503,7 @@ func (s *Server) sendError(w http.ResponseWriter, status int, message string) {
 
 // DLQResponse is the response for GET /api/v1/dlq
 type DLQResponse struct {
-	Stats    *queue.DLQStats  `json:"stats"`
+	Stats    *queue.DLQStats   `json:"stats"`
 	Messages []*MessageSummary `json:"messages,omitempty"`
 }
 

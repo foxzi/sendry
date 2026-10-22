@@ -572,16 +572,6 @@ function replaceExistingImage(oldUrl) {
     openImagePicker('replaceImg');
 }
 
-function promptReplaceVar(varName) {
-    var val = prompt('Enter value for ' + LP + '.' + varName + '}}:');
-    if (val === null) return;
-    var textarea = document.getElementById('html');
-    var pattern = LP + '.' + varName + '}}';
-    textarea.value = textarea.value.split(pattern).join(val);
-    textarea.dispatchEvent(new Event('input'));
-    openVariablesPanel(); // refresh
-}
-
 // --- Upload from modal ---
 var uploadArea = document.getElementById('modal-upload-area');
 var fileInput = document.getElementById('modal-file-input');

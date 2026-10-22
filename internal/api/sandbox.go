@@ -229,12 +229,6 @@ func (s *SandboxServer) handleDelete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// SandboxClearRequest is the request for DELETE /api/v1/sandbox/messages
-type SandboxClearRequest struct {
-	Domain   string `json:"domain,omitempty"`
-	OlderThan string `json:"older_than,omitempty"` // Duration string like "7d", "24h"
-}
-
 // handleClear handles DELETE /api/v1/sandbox/messages
 func (s *SandboxServer) handleClear(w http.ResponseWriter, r *http.Request) {
 	if s.storage == nil {

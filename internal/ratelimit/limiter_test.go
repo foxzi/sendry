@@ -912,7 +912,7 @@ func TestGetRecipientDomainLimit(t *testing.T) {
 		{"gmail.com", 50},
 		{"yahoo.com", 75},
 		{"outlook.com", 100}, // uses default
-		{"mail.ru", 100},    // uses default
+		{"mail.ru", 100},     // uses default
 	}
 
 	for _, tt := range tests {

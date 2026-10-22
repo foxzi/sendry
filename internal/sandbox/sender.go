@@ -29,11 +29,11 @@ type RealSender interface {
 
 // Sender wraps a real sender and intercepts messages based on domain mode
 type Sender struct {
-	realSender       RealSender
-	domainProvider   DomainModeProvider
-	storage          *Storage
-	logger           *slog.Logger
-	headerProcessor  *headers.Processor
+	realSender      RealSender
+	domainProvider  DomainModeProvider
+	storage         *Storage
+	logger          *slog.Logger
+	headerProcessor *headers.Processor
 
 	mu               sync.RWMutex
 	simulateErrors   bool

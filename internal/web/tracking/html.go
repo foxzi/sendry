@@ -27,9 +27,11 @@ type attr struct {
 	valEnd   int
 }
 
-// aTag is a located <a ...> start tag
+// aTag is a located link start tag: <a ...>, or <a>/VML shape (<v:roundrect
+// href=...>) inside an Outlook conditional comment
 type aTag struct {
-	start, end int // span in the document
+	start, end int  // span in the document
+	mso        bool // inside <!--[if ...]> ... <![endif]-->
 }
 
 func isSpace(c byte) bool {
@@ -74,7 +76,37 @@ func tagEnd(s string, i int) int {
 	return -1
 }
 
-// findATags returns all <a> start tags outside comments, script and style.
+// isConditionalComment reports whether body (the text between "<!--" and
+// "-->") is a downlevel-hidden conditional comment such as [if mso]>...<![endif].
+// The downlevel-revealed opener <!--[if !mso]><!--> is a plain comment.
+func isConditionalComment(body string) bool {
+	return strings.HasPrefix(lowerASCII(body), "[if") && !strings.HasSuffix(body, "<!")
+}
+
+// findMSOTags returns the <a> and VML (<v:...>) start tags in s[from:to], the
+// body of a conditional comment. Bulletproof buttons keep their href there.
+func findMSOTags(s string, from, to int) []aTag {
+	var res []aTag
+	for i := from; i+2 < to; i++ {
+		if s[i] != '<' {
+			continue
+		}
+		c, d := s[i+1]|0x20, s[i+2]
+		if !(c == 'a' && (isSpace(d) || d == '>' || d == '/')) && !(c == 'v' && d == ':') {
+			continue
+		}
+		e := tagEnd(s[:to], i)
+		if e < 0 {
+			break
+		}
+		res = append(res, aTag{start: i, end: e, mso: true})
+		i = e - 1
+	}
+	return res
+}
+
+// findATags returns all <a> start tags outside comments, script and style,
+// and the link tags inside Outlook conditional comments (see findMSOTags).
 func findATags(s string) []aTag {
 	var res []aTag
 	low := lowerASCII(s)
@@ -90,6 +122,9 @@ func findATags(s string) []aTag {
 			e := strings.Index(s[i+4:], "-->")
 			if e < 0 {
 				return res
+			}
+			if isConditionalComment(s[i+4 : i+4+e]) {
+				res = append(res, findMSOTags(s, i+4, i+4+e)...)
 			}
 			i += 4 + e + 3
 		case strings.HasPrefix(low[i:], "<script") || strings.HasPrefix(low[i:], "<style"):
@@ -107,7 +142,7 @@ func findATags(s string) []aTag {
 			if e < 0 {
 				return res
 			}
-			res = append(res, aTag{i, e})
+			res = append(res, aTag{start: i, end: e})
 			i = e
 		default:
 			i++
@@ -119,8 +154,11 @@ func findATags(s string) []aTag {
 // parseAttrs parses the attributes of a start tag (text like `<a href="x">`).
 func parseAttrs(tag string) []attr {
 	var res []attr
-	i := 2 // after "<a"
 	n := len(tag)
+	i := 1 // skip the tag name
+	for i < n && !isSpace(tag[i]) && tag[i] != '>' && tag[i] != '/' {
+		i++
+	}
 	for i < n {
 		ws := i
 		for i < n && (isSpace(tag[i]) || tag[i] == '/') {
@@ -276,20 +314,49 @@ func mapATags(s string, fn func(tag string, idx int) string) string {
 // a template's source HTML, before variables are rendered. Skipped: mailto:,
 // tel:, sms:, "#..." anchors, links with data-notrack, and links whose href is
 // the {{unsubscribe_url}} variable. Existing data-sl attributes are renumbered.
+// Links inside Outlook conditional comments (VML buttons) reuse the number of
+// the regular link with the same href, or get the next free number.
 func NumberLinks(src string) string {
-	n := 0
-	return mapATags(src, func(tag string, _ int) string {
-		attrs := parseAttrs(tag)
+	tags := findATags(src)
+	ids := make([]int, len(tags)) // 0 = not tracked
+	hrefOf := func(t aTag) (string, bool) {
+		attrs := parseAttrs(src[t.start:t.end])
 		href, ok := getAttr(attrs, "href")
 		_, noTrack := getAttr(attrs, "data-notrack")
 		if !ok || !href.hasVal || noTrack || skipHref(href.val) {
-			if _, has := getAttr(attrs, LinkAttr); has {
+			return "", false
+		}
+		return strings.TrimSpace(href.val), true
+	}
+	n := 0
+	byHref := map[string]int{}
+	for i, t := range tags {
+		if h, ok := hrefOf(t); ok && !t.mso {
+			n++
+			ids[i] = n
+			if _, seen := byHref[h]; !seen {
+				byHref[h] = n
+			}
+		}
+	}
+	for i, t := range tags {
+		if h, ok := hrefOf(t); ok && t.mso {
+			if id, seen := byHref[h]; seen {
+				ids[i] = id
+			} else {
+				n++
+				ids[i] = n
+			}
+		}
+	}
+	return mapATags(src, func(tag string, idx int) string {
+		if ids[idx] == 0 {
+			if _, has := getAttr(parseAttrs(tag), LinkAttr); has {
 				return editTag(tag, map[string]*string{LinkAttr: nil})
 			}
 			return tag
 		}
-		n++
-		return editTag(tag, map[string]*string{LinkAttr: strp(strconv.Itoa(n))})
+		return editTag(tag, map[string]*string{LinkAttr: strp(strconv.Itoa(ids[idx]))})
 	})
 }
 
@@ -349,11 +416,22 @@ func looksLikeButton(attrs []attr) bool {
 
 // ExtractLinks lists the numbered links of HTML produced by NumberLinks, with a
 // human label (link text, image alt, or a generic name) and a kind
-// (text | image | button).
+// (text | image | button). A link of an Outlook conditional comment is listed
+// only when no regular link has its number.
 func ExtractLinks(numberedHTML string) []models.LinkInfo {
 	var res []models.LinkInfo
 	low := lowerASCII(numberedHTML)
-	for _, t := range findATags(numberedHTML) {
+	tags := findATags(numberedHTML)
+	regular := map[int]bool{}
+	for _, t := range tags {
+		if sl, ok := getAttr(parseAttrs(numberedHTML[t.start:t.end]), LinkAttr); ok && !t.mso {
+			if id, err := strconv.Atoi(strings.TrimSpace(sl.val)); err == nil {
+				regular[id] = true
+			}
+		}
+	}
+	seen := map[int]bool{}
+	for _, t := range tags {
 		tag := numberedHTML[t.start:t.end]
 		attrs := parseAttrs(tag)
 		sl, ok := getAttr(attrs, LinkAttr)
@@ -361,12 +439,17 @@ func ExtractLinks(numberedHTML string) []models.LinkInfo {
 			continue
 		}
 		id, err := strconv.Atoi(strings.TrimSpace(sl.val))
-		if err != nil || id <= 0 {
+		if err != nil || id <= 0 || (t.mso && (regular[id] || seen[id])) {
 			continue
 		}
+		seen[id] = true
 		href, _ := getAttr(attrs, "href")
+		closing := "</a"
+		if t.mso && strings.HasPrefix(low[t.start:], "<v:") {
+			closing = "</v:"
+		}
 		inner := ""
-		if e := strings.Index(low[t.end:], "</a"); e >= 0 {
+		if e := strings.Index(low[t.end:], closing); e >= 0 {
 			inner = numberedHTML[t.end : t.end+e]
 		} else {
 			inner = numberedHTML[t.end:]
@@ -384,7 +467,7 @@ func ExtractLinks(numberedHTML string) []models.LinkInfo {
 			info.Label = alt
 		} else {
 			info.Kind = "text"
-			if looksLikeButton(attrs) {
+			if t.mso || looksLikeButton(attrs) {
 				info.Kind = "button"
 			}
 			info.Label = cleanLabel(inner)
@@ -440,7 +523,7 @@ type Options struct {
 	SourceID    string
 	TrackOpens  bool
 	TrackClicks bool
-	UTM         *UTM // nil = do not touch destination URLs
+	UTM         *UTM // nil = do not touch destination URLs; applied also without click tracking
 }
 
 // addUTM appends the UTM parameters to rawURL, keeping the existing query and
@@ -502,16 +585,21 @@ func isHTTPURL(s string) bool {
 //   - with TrackClicks, each <a data-sl="N" href="URL"> gets href=<BaseURL>/t/c/<token>
 //     where the token carries N and URL (with UTM params added if set);
 //     links whose rendered href is not http(s) are left as is;
+//   - without TrackClicks, UTM params (if set) are added to the href itself;
 //   - all data-sl attributes are removed (also when click tracking is off);
-//   - with TrackOpens, an open pixel <img> is inserted before </body>
-//     (or appended when there is no body).
+//   - with TrackOpens, an open pixel <img> is inserted before the last </body>
+//     outside comments (or appended when there is no body).
 //
 // If HTML has no data-sl attributes (e.g. raw API HTML), Apply numbers the
-// links itself first so raw HTML can be click-tracked too.
+// links itself first so raw HTML can be click-tracked too. Empty (or
+// whitespace-only) HTML is returned as "": there is nothing to track.
 func Apply(src string, opts Options) string {
+	if strings.TrimSpace(src) == "" {
+		return ""
+	}
 	active := opts.Signer != nil && opts.BaseURL != ""
 	clicks := active && opts.TrackClicks
-	if clicks && !hasLinkAttr(src) {
+	if (clicks || opts.UTM != nil) && !hasLinkAttr(src) {
 		src = NumberLinks(src)
 	}
 	out := mapATags(src, func(tag string, _ int) string {
@@ -521,18 +609,19 @@ func Apply(src string, opts Options) string {
 			return tag
 		}
 		edits := map[string]*string{LinkAttr: nil}
-		if clicks {
+		if clicks || opts.UTM != nil {
 			id, err := strconv.Atoi(strings.TrimSpace(sl.val))
 			href, hok := getAttr(attrs, "href")
 			if err == nil && id > 0 && hok {
 				dest := strings.TrimSpace(html.UnescapeString(href.val))
-				if isHTTPURL(dest) && !strings.HasPrefix(dest, opts.BaseURL+"/u/") {
+				if isHTTPURL(dest) && (opts.BaseURL == "" || !strings.HasPrefix(dest, opts.BaseURL+"/u/")) {
 					dest = addUTM(dest, opts.UTM, id)
-					tok := opts.Signer.Encode(Payload{
+					if !clicks {
+						edits["href"] = strp(dest)
+					} else if tok := opts.Signer.Encode(Payload{
 						Kind: KindClick, SourceType: opts.SourceType, SourceID: opts.SourceID,
 						LinkID: id, URL: dest,
-					})
-					if tok != "" {
+					}); tok != "" {
 						edits["href"] = strp(opts.BaseURL + "/t/c/" + tok)
 					}
 				}
@@ -543,7 +632,7 @@ func Apply(src string, opts Options) string {
 	if active && opts.TrackOpens {
 		if u := PixelURL(opts.BaseURL, opts.Signer, opts.SourceType, opts.SourceID); u != "" {
 			pixel := `<img src="` + html.EscapeString(u) + `" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0" />`
-			if i := strings.LastIndex(lowerASCII(out), "</body"); i >= 0 {
+			if i := lastBodyClose(out); i >= 0 {
 				out = out[:i] + pixel + out[i:]
 			} else {
 				out += pixel
@@ -551,6 +640,32 @@ func Apply(src string, opts Options) string {
 		}
 	}
 	return out
+}
+
+// lastBodyClose returns the index of the last </body outside comments, or -1.
+func lastBodyClose(s string) int {
+	low := lowerASCII(s)
+	last := -1
+	for i := 0; i < len(s); {
+		k := strings.IndexByte(s[i:], '<')
+		if k < 0 {
+			break
+		}
+		i += k
+		if strings.HasPrefix(s[i:], "<!--") {
+			e := strings.Index(s[i+4:], "-->")
+			if e < 0 {
+				break
+			}
+			i += 4 + e + 3
+			continue
+		}
+		if strings.HasPrefix(low[i:], "</body") {
+			last = i
+		}
+		i++
+	}
+	return last
 }
 
 func hasLinkAttr(s string) bool {

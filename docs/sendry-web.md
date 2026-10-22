@@ -31,6 +31,9 @@ Configuration file: `/etc/sendry/web.yaml`
 ```yaml
 server:
   listen_addr: ":8088"
+  allowed_ips: []        # IPs/CIDRs allowed to open the panel; empty = all
+  # trusted_proxies:     # proxies whose X-Real-IP / X-Forwarded-For are believed
+  #   - "127.0.0.0/8"    # default: loopback + private networks
   tls:
     enabled: false
     cert_file: "/etc/sendry/certs/web.crt"
@@ -43,6 +46,8 @@ logging:
   level: info    # debug, info, warn, error
   format: json   # json, text
 ```
+
+The client IP for `allowed_ips`, the audit log, API sends and tracking events is taken from `X-Real-IP` / `X-Forwarded-For` only when the direct peer is listed in `trusted_proxies`; otherwise the TCP peer address is used, so these headers cannot be forged to bypass `allowed_ips`. Default when the option is omitted: `127.0.0.0/8`, `::1/128`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7`. An empty list `[]` trusts nobody. See [tracking.md](tracking.md#reader-ip-and-trusted-proxies).
 
 ### Authentication
 
@@ -103,16 +108,18 @@ sendry:
       env: "stage"
 
   multi_send:
-    strategy: weighted_round_robin  # round_robin, weighted_round_robin, domain_affinity
+    strategy: weighted  # round_robin (default), weighted, first_healthy, domain_affinity
     weights:
       mta-prod-1: 3
       mta-stage: 1
-    domain_affinity:
+    domain_affinity:    # not implemented yet: the domain_affinity strategy works as round_robin
       "example.com": "mta-prod-1"
     failover:
       enabled: true
       max_retries: 2
 ```
+
+Strategies: `round_robin` sends to servers in turn, `weighted` follows `weights`, `first_healthy` always uses the first server in the list. `domain_affinity` is not implemented yet: the value is accepted but works as `round_robin` (a warning is logged at startup). The old name `weighted_round_robin` is a deprecated alias of `weighted`. An unknown value is a configuration error.
 
 ## CLI Commands
 

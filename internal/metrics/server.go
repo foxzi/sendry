@@ -20,11 +20,6 @@ type Server struct {
 	allowedIPs []*net.IPNet
 }
 
-// NewServer creates a new metrics HTTP server
-func NewServer(m *Metrics, addr, path string, logger *slog.Logger) *Server {
-	return NewServerWithAllowedIPs(m, addr, path, nil, logger)
-}
-
 // NewServerWithAllowedIPs creates a new metrics HTTP server with IP filtering
 func NewServerWithAllowedIPs(m *Metrics, addr, path string, allowedIPs []string, logger *slog.Logger) *Server {
 	if addr == "" {

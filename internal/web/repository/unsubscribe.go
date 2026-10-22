@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/foxzi/sendry/internal/web/models"
@@ -16,7 +15,9 @@ var ErrRecipientNotInList = errors.New("recipient is not in this list")
 // UnsubscribeRepository manages unsubscribes per address book (recipient
 // list). An unsubscribe sets recipients.status = 'unsubscribed' for that list
 // only (campaign jobs take active recipients only) and writes a journal row
-// in the unsubscribes table. Emails are matched case-insensitively.
+// in the unsubscribes table. Emails are matched case-insensitively: stored
+// emails are normalized (NormalizeEmail), and lookups compare lower(email),
+// which the (list_id, lower(email)) index covers.
 type UnsubscribeRepository struct {
 	db *sql.DB
 }
@@ -25,32 +26,21 @@ func NewUnsubscribeRepository(db *sql.DB) *UnsubscribeRepository {
 	return &UnsubscribeRepository{db: db}
 }
 
-// refreshListCounts recomputes the list counters inside tx (same as
-// RecipientRepository.UpdateListCounts).
-func refreshListCounts(tx *sql.Tx, listID string) error {
-	_, err := tx.Exec(`
-		UPDATE recipient_lists SET
-			total_count = (SELECT COUNT(*) FROM recipients WHERE list_id = ?),
-			active_count = (SELECT COUNT(*) FROM recipients WHERE list_id = ? AND status = 'active'),
-			updated_at = ?
-		WHERE id = ?`,
-		listID, listID, time.Now(), listID,
-	)
-	return err
-}
-
-func nullIfEmpty(s string) sql.NullString {
-	return sql.NullString{String: s, Valid: s != ""}
+// updateListCounts recomputes the cached counters of the list. They are
+// derived data, so doing it after the commit is safe.
+func (r *UnsubscribeRepository) updateListCounts(listID string) error {
+	return (&RecipientRepository{db: r.db}).UpdateListCounts(listID)
 }
 
 // Add unsubscribes u.Email in list u.ListID in one transaction: sets the
 // recipient status to unsubscribed, upserts the journal row (latest campaign,
 // job, source and time win), and refreshes the list counters. changed reports
 // whether the recipient status actually changed (it was not unsubscribed
-// before). Returns ErrRecipientNotInList if the list has no such address.
+// before). The list counters are refreshed right after the commit.
+// Returns ErrRecipientNotInList if the list has no such address.
 // CreatedAt defaults to now; RecipientID is filled from the recipients row.
 func (r *UnsubscribeRepository) Add(u *models.Unsubscribe) (changed bool, err error) {
-	email := strings.ToLower(strings.TrimSpace(u.Email))
+	email := NormalizeEmail(u.Email)
 	if u.CreatedAt.IsZero() {
 		u.CreatedAt = time.Now().UTC()
 	}
@@ -63,7 +53,7 @@ func (r *UnsubscribeRepository) Add(u *models.Unsubscribe) (changed bool, err er
 
 	var recipientID string
 	err = tx.QueryRow(
-		`SELECT id FROM recipients WHERE list_id = ? AND lower(email) = lower(?) ORDER BY created_at LIMIT 1`,
+		`SELECT id FROM recipients WHERE list_id = ? AND lower(email) = ? ORDER BY created_at LIMIT 1`,
 		u.ListID, email,
 	).Scan(&recipientID)
 	if err == sql.ErrNoRows {
@@ -76,7 +66,7 @@ func (r *UnsubscribeRepository) Add(u *models.Unsubscribe) (changed bool, err er
 	u.Email = email
 
 	res, err := tx.Exec(
-		`UPDATE recipients SET status = ? WHERE list_id = ? AND lower(email) = lower(?) AND status != ?`,
+		`UPDATE recipients SET status = ? WHERE list_id = ? AND lower(email) = ? AND status != ?`,
 		models.RecipientStatusUnsubscribed, u.ListID, email, models.RecipientStatusUnsubscribed,
 	)
 	if err != nil {
@@ -98,27 +88,24 @@ func (r *UnsubscribeRepository) Add(u *models.Unsubscribe) (changed bool, err er
 			source_type = excluded.source_type,
 			source_id = excluded.source_id,
 			created_at = excluded.created_at`,
-		u.ListID, recipientID, email, nullIfEmpty(u.CampaignID), nullIfEmpty(u.JobID),
-		u.SourceType, nullIfEmpty(u.SourceID), u.CreatedAt,
+		u.ListID, recipientID, email, nullString(u.CampaignID), nullString(u.JobID),
+		u.SourceType, nullString(u.SourceID), u.CreatedAt,
 	)
 	if err != nil {
 		return false, fmt.Errorf("failed to write unsubscribe journal: %w", err)
 	}
 
-	if err := refreshListCounts(tx, u.ListID); err != nil {
-		return false, err
-	}
 	if err := tx.Commit(); err != nil {
 		return false, err
 	}
-	return changed, nil
+	return changed, r.updateListCounts(u.ListID)
 }
 
 // Remove resubscribes email in listID: status back to active (only if it is
-// unsubscribed), journal row deleted, list counters refreshed. No error if
-// the address is not unsubscribed.
+// unsubscribed), journal row deleted, list counters refreshed after commit.
+// No error if the address is not unsubscribed.
 func (r *UnsubscribeRepository) Remove(listID, email string) error {
-	email = strings.ToLower(strings.TrimSpace(email))
+	email = NormalizeEmail(email)
 
 	tx, err := r.db.Begin()
 	if err != nil {
@@ -127,7 +114,7 @@ func (r *UnsubscribeRepository) Remove(listID, email string) error {
 	defer tx.Rollback()
 
 	if _, err := tx.Exec(
-		`UPDATE recipients SET status = 'active' WHERE list_id = ? AND lower(email) = lower(?) AND status = ?`,
+		`UPDATE recipients SET status = 'active' WHERE list_id = ? AND lower(email) = ? AND status = ?`,
 		listID, email, models.RecipientStatusUnsubscribed,
 	); err != nil {
 		return fmt.Errorf("failed to restore recipient status: %w", err)
@@ -135,28 +122,18 @@ func (r *UnsubscribeRepository) Remove(listID, email string) error {
 	if _, err := tx.Exec(`DELETE FROM unsubscribes WHERE list_id = ? AND email = ?`, listID, email); err != nil {
 		return fmt.Errorf("failed to delete unsubscribe journal row: %w", err)
 	}
-	if err := refreshListCounts(tx, listID); err != nil {
+	if err := tx.Commit(); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return r.updateListCounts(listID)
 }
 
 // IsUnsubscribed reports whether email has status unsubscribed in listID.
 func (r *UnsubscribeRepository) IsUnsubscribed(listID, email string) (bool, error) {
 	var n int
 	err := r.db.QueryRow(
-		`SELECT COUNT(*) FROM recipients WHERE list_id = ? AND lower(email) = lower(?) AND status = ?`,
-		listID, strings.TrimSpace(email), models.RecipientStatusUnsubscribed,
+		`SELECT COUNT(*) FROM recipients WHERE list_id = ? AND lower(email) = ? AND status = ?`,
+		listID, NormalizeEmail(email), models.RecipientStatusUnsubscribed,
 	).Scan(&n)
 	return n > 0, err
-}
-
-// CountInList returns how many recipients of listID are unsubscribed.
-func (r *UnsubscribeRepository) CountInList(listID string) (int, error) {
-	var n int
-	err := r.db.QueryRow(
-		`SELECT COUNT(*) FROM recipients WHERE list_id = ? AND status = ?`,
-		listID, models.RecipientStatusUnsubscribed,
-	).Scan(&n)
-	return n, err
 }

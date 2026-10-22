@@ -22,12 +22,18 @@ func TestTokenRoundTrip(t *testing.T) {
 		{Kind: KindOpen, SourceType: models.SourceSend, SourceID: ""},
 		{Kind: KindClick, SourceType: models.SourceSend, SourceID: strings.ToUpper(uid), LinkID: 1, URL: ""},
 	}
+	now := time.Now().Unix()
 	for _, p := range cases {
 		tok := s.Encode(p)
 		if tok == "" || strings.ContainsAny(tok, "+/=") {
 			t.Fatalf("bad token %q", tok)
 		}
 		got, err := s.Decode(tok)
+		// Encode stamps the issue time
+		if got.IssuedAt < now-5 || got.IssuedAt > now+5 {
+			t.Errorf("IssuedAt = %d, want ~%d", got.IssuedAt, now)
+		}
+		p.IssuedAt = got.IssuedAt
 		if err != nil || got != p {
 			t.Errorf("roundtrip %+v -> %+v, %v", p, got, err)
 		}
@@ -61,11 +67,62 @@ func TestTokenInvalid(t *testing.T) {
 		}
 	}
 	// correctly signed but malformed payloads
-	for _, raw := range [][]byte{{}, {'o'}, {'o', 'j'}, {'x', 'j', 0, 0}, {'o', 'q', 0, 0}, {'o', 'j', 1, 1, 2}, {'o', 'j', 0, 200}, {'o', 'j', 9, 0}, {'c', 'j', 0, 0}, {'o', 'j', 0, 0, 5}} {
+	iat := byte(1) // uvarint issue time 1 (1970): only checked after parsing
+	for _, raw := range [][]byte{{}, {'o'}, {'o', 'j'}, {'o', 'j', iat}, {'o', 'j', 0, 0, 0}, {'x', 'j', iat, 0, 0}, {'o', 'q', iat, 0, 0},
+		{'o', 'j', iat, 1, 1, 2}, {'o', 'j', iat, 0, 200}, {'o', 'j', iat, 9, 0}, {'c', 'j', iat, 0, 0}, {'o', 'j', iat, 0, 0, 5}, {'o', 'j', 0x80}} {
 		tk := b64.EncodeToString(raw) + "." + b64.EncodeToString(s.sign(raw))
 		if _, err := s.Decode(tk); err == nil {
 			t.Errorf("malformed payload %v accepted", raw)
 		}
+	}
+}
+
+func TestTokenExpiry(t *testing.T) {
+	s := NewSigner([]byte("secret"))
+	issued := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	for _, c := range []struct {
+		p      Payload
+		maxAge time.Duration
+	}{
+		{Payload{Kind: KindOpen, SourceType: models.SourceSend, SourceID: uid}, MaxAgeOpenClick},
+		{Payload{Kind: KindClick, SourceType: models.SourceSend, SourceID: uid, LinkID: 1, URL: "https://x.y"}, MaxAgeOpenClick},
+		{Payload{Kind: KindUnsubscribe, SourceType: models.SourceJobItem, SourceID: uid}, MaxAgeUnsubscribe},
+	} {
+		c.p.IssuedAt = issued.Unix()
+		tok := s.Encode(c.p)
+		s.now = func() time.Time { return issued.Add(c.maxAge) }
+		if _, err := s.Decode(tok); err != nil {
+			t.Errorf("%c at max age: %v", c.p.Kind, err)
+		}
+		s.now = func() time.Time { return issued.Add(c.maxAge + time.Second) }
+		if _, err := s.Decode(tok); err != ErrExpiredToken {
+			t.Errorf("%c past max age: err = %v, want ErrExpiredToken", c.p.Kind, err)
+		}
+	}
+	if MaxAgeUnsubscribe <= MaxAgeOpenClick {
+		t.Error("unsubscribe links must outlive click links")
+	}
+}
+
+func TestTokenSecretRotation(t *testing.T) {
+	oldS := NewSigner([]byte("old"))
+	p := Payload{Kind: KindClick, SourceType: models.SourceSend, SourceID: uid, LinkID: 4, URL: "https://x.y/"}
+	oldTok := oldS.Encode(p)
+
+	rotated := NewSigner([]byte("new"), []byte("old"), nil)
+	if got, err := rotated.Decode(oldTok); err != nil || got.URL != p.URL {
+		t.Fatalf("token of the previous secret rejected: %v", err)
+	}
+	newTok := rotated.Encode(p)
+	if _, err := NewSigner([]byte("new")).Decode(newTok); err != nil {
+		t.Fatalf("new tokens must be signed with the current secret: %v", err)
+	}
+	if _, err := oldS.Decode(newTok); err == nil {
+		t.Fatal("new token verified by the old secret alone")
+	}
+	// After a second rotation the oldest secret is gone
+	if _, err := NewSigner([]byte("newer"), []byte("new")).Decode(oldTok); err == nil {
+		t.Fatal("token of a dropped secret accepted")
 	}
 }
 
@@ -100,7 +157,11 @@ func TestNumberLinks(t *testing.T) {
 		{"variables", `<a href="{{product_url}}">p</a><a href="{{.Url}}?x=1">q</a>`,
 			`<a href="{{product_url}}" data-sl="1">p</a><a href="{{.Url}}?x=1" data-sl="2">q</a>`},
 		{"comments and mso", `<!--[if mso]><a href="https://hidden.com">h</a><![endif]--><a href="https://a.com">A</a><style>a{}</style>`,
-			`<!--[if mso]><a href="https://hidden.com">h</a><![endif]--><a href="https://a.com" data-sl="1">A</a><style>a{}</style>`},
+			`<!--[if mso]><a href="https://hidden.com" data-sl="2">h</a><![endif]--><a href="https://a.com" data-sl="1">A</a><style>a{}</style>`},
+		{"plain comment", `<!-- <a href="https://c.com">c</a> --><!--[if !mso]><!--><a href="https://a.com">A</a><!--<![endif]-->`,
+			`<!-- <a href="https://c.com">c</a> --><!--[if !mso]><!--><a href="https://a.com" data-sl="1">A</a><!--<![endif]-->`},
+		{"vml button", `<!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="https://b.com" style="h"><center>Go</center></v:roundrect><![endif]--><a href="https://a.com">A</a><a href="https://b.com">B</a>`,
+			`<!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="https://b.com" style="h" data-sl="2"><center>Go</center></v:roundrect><![endif]--><a href="https://a.com" data-sl="1">A</a><a href="https://b.com" data-sl="2">B</a>`},
 		{"unquoted and selfclose", `<a href=https://a.com>A</a><a href="https://b.com"/>`,
 			`<a href=https://a.com data-sl="1">A</a><a href="https://b.com" data-sl="2"/>`},
 		{"not a tag", `<abbr title="x">t</abbr><b>x</b> a < b`, `<abbr title="x">t</abbr><b>x</b> a < b`},
@@ -190,6 +251,39 @@ func TestExtractLinks(t *testing.T) {
 	}
 }
 
+func TestExtractLinksMSO(t *testing.T) {
+	in := NumberLinks(`<!--[if mso]><v:roundrect href="https://b.com"><center>Go</center></v:roundrect><v:rect href="https://v.com"><center> Only VML </center></v:rect><![endif]--><a href="https://b.com">B</a>`)
+	got := ExtractLinks(in)
+	want := []models.LinkInfo{
+		{ID: 2, URL: "https://v.com", Label: "Only VML", Kind: "button"},
+		{ID: 1, URL: "https://b.com", Label: "B", Kind: "text"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %+v", got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("link %d: got %+v want %+v", i, got[i], want[i])
+		}
+	}
+}
+
+func TestApplyMSOLinks(t *testing.T) {
+	o, s := testOpts()
+	o.TrackClicks = true
+	numbered := NumberLinks(`<!--[if mso]><v:roundrect href="https://b.com" arcsize="10%"><center>Go</center></v:roundrect><![endif]--><!--[if !mso]><!--><a href="https://b.com">B</a><!--<![endif]-->`)
+	out := Apply(numbered, o)
+	if strings.Count(out, `href="https://t.io/t/c/`) != 2 || strings.Contains(out, LinkAttr) {
+		t.Fatalf("mso link not tracked: %s", out)
+	}
+	if p := firstClick(t, s, out); p.LinkID != 1 || p.URL != "https://b.com" {
+		t.Errorf("vml payload %+v", p)
+	}
+	if !strings.Contains(out, `<v:roundrect href="https://t.io/t/c/`) || !strings.Contains(out, `arcsize="10%"`) {
+		t.Errorf("vml tag broken: %s", out)
+	}
+}
+
 func testOpts() (Options, *Signer) {
 	s := NewSigner([]byte("k"))
 	return Options{BaseURL: "https://t.io", Signer: s, SourceType: models.SourceJobItem, SourceID: uid}, s
@@ -276,15 +370,36 @@ func TestApplyUTM(t *testing.T) {
 	}
 }
 
+func TestApplyUTMWithoutClickTracking(t *testing.T) {
+	utm := &UTM{Source: "email", Campaign: "c", AddSL: true}
+	in := `<a data-sl="1" href="https://a.com/?x=1&amp;y=2">A</a><a data-sl="2" href="mailto:a@b.c">m</a><a href="https://n.com">n</a>`
+	want := `<a href="https://a.com/?x=1&amp;y=2&amp;utm_source=email&amp;utm_campaign=c&amp;sl=1">A</a><a href="mailto:a@b.c">m</a><a href="https://n.com">n</a>`
+	// clicks off, and also no tracking origin at all
+	o, _ := testOpts()
+	o.UTM = utm
+	for _, opts := range []Options{o, {UTM: utm}} {
+		if got := Apply(in, opts); got != want {
+			t.Errorf("got  %s\nwant %s", got, want)
+		}
+	}
+	// raw HTML without data-sl is numbered first
+	if got := Apply(`<a href="https://a.com">A</a>`, Options{UTM: utm}); got != `<a href="https://a.com?utm_source=email&amp;utm_campaign=c&amp;sl=1">A</a>` {
+		t.Error(got)
+	}
+}
+
 func TestApplyPixel(t *testing.T) {
 	o, s := testOpts()
 	o.TrackOpens = true
 	pix := `<img src="` + PixelURL(o.BaseURL, s, o.SourceType, o.SourceID) + `" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0" />`
 	cases := []struct{ name, in, want string }{
 		{"body", "<html><BODY>x</BODY></html>", "<html><BODY>x" + pix + "</BODY></html>"},
-		{"last body", "<body>a</body><!-- </body> -->", "<body>a</body><!-- " + pix + "</body> -->"},
+		{"body in comment", "<body>a</body><!-- </body> -->", "<body>a" + pix + "</body><!-- </body> -->"},
+		{"two bodies", "<body>a</body>b</body>", "<body>a</body>b" + pix + "</body>"},
 		{"no body", "<p>hi</p>", "<p>hi</p>" + pix},
-		{"empty", "", pix},
+		{"only commented body", "<p>hi</p><!-- </body> -->", "<p>hi</p><!-- </body> -->" + pix},
+		{"empty", "", ""},
+		{"whitespace", " \n\t", ""},
 	}
 	for _, c := range cases {
 		if got := Apply(c.in, o); got != c.want {
@@ -352,16 +467,24 @@ func req(remote string, hdr map[string]string) *http.Request {
 }
 
 func TestClientIP(t *testing.T) {
+	trusted, err := ParseTrustedProxies([]string{"10.0.0.0/8", "192.0.2.7", "127.0.0.0/8", "::1/128"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	cases := []struct {
 		name string
 		r    *http.Request
 		want string
 	}{
 		{"peer only", req("1.2.3.4:5555", nil), "1.2.3.4"},
-		{"real ip from proxying domain", req("10.1.2.3:80", map[string]string{"X-Real-IP": "6.6.6.6"}), "6.6.6.6"},
+		{"untrusted peer: headers ignored", req("1.2.3.4:5555", map[string]string{"X-Real-IP": "6.6.6.6", "X-Forwarded-For": "5.5.5.5"}), "1.2.3.4"},
+		{"real ip from proxy", req("10.1.2.3:80", map[string]string{"X-Real-IP": "6.6.6.6"}), "6.6.6.6"},
+		{"single trusted ip", req("192.0.2.7:80", map[string]string{"X-Real-IP": "6.6.6.6"}), "6.6.6.6"},
 		{"real ip beats xff", req("127.0.0.1:80", map[string]string{"X-Real-IP": "6.6.6.6", "X-Forwarded-For": "5.5.5.5"}), "6.6.6.6"},
-		{"xff left-most", req("10.1.2.3:80", map[string]string{"X-Forwarded-For": "9.9.9.9, 10.1.2.3"}), "9.9.9.9"},
-		{"skip invalid xff", req("127.0.0.1:80", map[string]string{"X-Forwarded-For": "unknown, 7.7.7.7"}), "7.7.7.7"},
+		{"xff right-most untrusted", req("10.1.2.3:80", map[string]string{"X-Forwarded-For": "1.1.1.1, 9.9.9.9, 10.1.2.3"}), "9.9.9.9"},
+		{"proxy chain: real ip is the outer proxy", req("127.0.0.1:80", map[string]string{"X-Real-IP": "10.5.5.5", "X-Forwarded-For": "8.8.8.8, 10.5.5.5"}), "8.8.8.8"},
+		{"xff all trusted", req("10.1.2.3:80", map[string]string{"X-Forwarded-For": "10.9.9.9, 10.1.2.3"}), "10.9.9.9"},
+		{"skip invalid xff", req("127.0.0.1:80", map[string]string{"X-Forwarded-For": "7.7.7.7, unknown"}), "7.7.7.7"},
 		{"xff with port", req("127.0.0.1:80", map[string]string{"X-Forwarded-For": "7.7.7.7:1234"}), "7.7.7.7"},
 		{"garbage headers", req("127.0.0.1:80", map[string]string{"X-Forwarded-For": "x,y", "X-Real-IP": "z"}), "127.0.0.1"},
 		{"ipv6 peer", req("[2001:db8::1]:443", nil), "2001:db8::1"},
@@ -369,9 +492,20 @@ func TestClientIP(t *testing.T) {
 		{"no port", req("1.2.3.4", nil), "1.2.3.4"},
 	}
 	for _, c := range cases {
-		if got := ClientIP(c.r); got != c.want {
+		if got := trusted.ClientIP(c.r); got != c.want {
 			t.Errorf("%s: got %q want %q", c.name, got, c.want)
 		}
+	}
+	// No trusted proxies: always the peer
+	var none TrustedProxies
+	if got := none.ClientIP(req("127.0.0.1:80", map[string]string{"X-Real-IP": "6.6.6.6"})); got != "127.0.0.1" {
+		t.Errorf("no proxies: got %q", got)
+	}
+	if _, err := ParseTrustedProxies([]string{"not-an-ip"}); err == nil {
+		t.Error("invalid proxy accepted")
+	}
+	if _, err := ParseTrustedProxies([]string{"10.0.0.0/99"}); err == nil {
+		t.Error("invalid CIDR accepted")
 	}
 }
 
@@ -401,7 +535,7 @@ func TestMachine(t *testing.T) {
 		}
 	}
 	now := time.Now()
-	recent := now.Add(-time.Second)
+	recent := now.Add(-20 * time.Second)
 	old := now.Add(-time.Minute)
 	clicks := []struct {
 		name string
@@ -415,7 +549,7 @@ func TestMachine(t *testing.T) {
 		{"spaces ua", "  ", nil, true},
 		{"scanner", "Mozilla/5.0 Proofpoint URL Defense", &old, true},
 		{"too fast", chrome, &recent, true},
-		{"exactly 2s", chrome, ptr(now.Add(-2 * time.Second)), false},
+		{"exactly the window", chrome, ptr(now.Add(-MachineClickWindow)), false},
 		{"proxy ua click", "GoogleImageProxy", &old, false},
 	}
 	for _, c := range clicks {

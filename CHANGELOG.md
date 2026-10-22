@@ -21,6 +21,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `release.yml` can be started on an existing tag via `workflow_dispatch` (used by `Release (button)`, since tags pushed with `GITHUB_TOKEN` do not trigger it)
+- sendry-web: `server.trusted_proxies` defaults to loopback and private networks (`127.0.0.0/8`, `::1/128`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7`) so a proxy in front of a Docker container keeps working; set the list explicitly if untrusted hosts of a private network can reach the panel directly
+- sendry-web: `sendry.multi_send.strategy` is validated at startup: `round_robin`, `weighted`, `first_healthy`; `weighted_round_robin` (the name the docs used) is accepted as a deprecated alias of `weighted` and now really uses `weights` (before it silently fell back to `round_robin`); `domain_affinity` is accepted but not implemented yet and falls back to `round_robin` with a warning; any other value is a config error
+- `make build-web-linux` / `build-web-linux-arm64` build a static binary on `golang:1.24-alpine` (musl), the same way as the release workflow
+- go.mod: `go-oidc`, `oauth2`, `go-sqlite3`, `x/term`, `client_model` listed as direct dependencies (`go mod tidy`)
+
+### Fixed
+- Security: sendry-web `server.allowed_ips` could be bypassed by sending a forged `X-Forwarded-For` / `X-Real-IP` header; the panel IP filter and the audit log IP now honour these headers only from `server.trusted_proxies`
+- Metrics persistence: counters incremented by the MTA (messages, SMTP connections/auth, rate limits, API requests/errors) were never written to BoltDB, so they reset on restart despite `docs/metrics.md`; they are now persisted and restored
+- `sendry_smtp_tls_connections_total` is now incremented when an SMTP session runs over TLS (STARTTLS or implicit TLS)
+- sendry-web: expired sessions are purged from the database every hour; session expiry is compared in the same time zone as it is stored
+- sendry-web: `weighted` strategy no longer panics when all weights are zero
+- sendry-web: broken links on the API keys page (`/settings/domains` → `/domains`) and the domain form (`/settings/dkim/new` → `/dkim/new`)
+- Docs: `POST /api/v1/dkim/upload` documented; `analytics.md` points to the tracking docs; `domains.<d>.tls`, `default_from`, `recipients_per_message` and `domain_affinity` marked as not implemented yet
+
+### Removed
+- sendry-web: unused htmx script (loaded from unpkg on every page), the timezone selector in Settings (it only affected elements that no page renders), unused route `POST /domains/import`, the unrouted `ServerDomains` handler with its `server_domains.html` template, dead builder JS and CSS
+- Unused Go code: unreachable functions and types reported by `deadcode`/`staticcheck` (sendry-web MTA client methods for templates, sandbox, DKIM generate/verify and DNSBL list; `queue.DeliveryAttempt`; `api.NewServer`, `smtp.NewServer`, `metrics.NewServer`, etc.)
 
 ## [0.4.20] - 2026-09-09
 

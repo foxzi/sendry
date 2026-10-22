@@ -16,10 +16,10 @@ var cleanupCmd = &cobra.Command{
 }
 
 var (
-	cleanupJobsDays       int
-	cleanupAuditDays      int
-	cleanupVersionsKeep   int
-	cleanupDryRun         bool
+	cleanupJobsDays     int
+	cleanupAuditDays    int
+	cleanupVersionsKeep int
+	cleanupDryRun       bool
 )
 
 func init() {

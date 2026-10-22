@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"time"
+	"unicode/utf8"
 
 	"github.com/foxzi/sendry/internal/web/models"
 )
@@ -21,23 +22,25 @@ func NewTrackingRepository(db *sql.DB) *TrackingRepository {
 }
 
 // ResolveSource loads the context of a tracked message: recipient email and,
-// for job items, campaign/job/variant ids, campaign name and from fields.
+// for job items, campaign/job/variant ids and from fields. SentAt is when the
+// message was handed to the MTA: queued_at of a job item, created_at of a
+// send (API sends are handed over synchronously).
 // For sends Email is the first "to" address. Returns (nil, nil) if not found.
 func (r *TrackingRepository) ResolveSource(sourceType, sourceID string) (*models.TrackingSource, error) {
 	switch sourceType {
 	case models.SourceJobItem:
 		src := &models.TrackingSource{SourceType: sourceType, SourceID: sourceID}
-		var email, campaignName, fromName, fromEmail, campaignID, variantID, listID, recipientID sql.NullString
+		var email, fromName, fromEmail, campaignID, variantID, listID, recipientID sql.NullString
 		var sentAt sql.NullTime
 		err := r.db.QueryRow(`
-			SELECT rc.email, j.campaign_id, c.name, c.from_name, c.from_email, i.job_id, i.variant_id, i.sent_at,
+			SELECT rc.email, j.campaign_id, c.from_name, c.from_email, i.job_id, i.variant_id, i.queued_at,
 				j.recipient_list_id, i.recipient_id
 			FROM send_job_items i
 			JOIN send_jobs j ON j.id = i.job_id
 			LEFT JOIN recipients rc ON rc.id = i.recipient_id
 			LEFT JOIN campaigns c ON c.id = j.campaign_id
 			WHERE i.id = ?`, sourceID,
-		).Scan(&email, &campaignID, &campaignName, &fromName, &fromEmail, &src.JobID, &variantID, &sentAt, &listID, &recipientID)
+		).Scan(&email, &campaignID, &fromName, &fromEmail, &src.JobID, &variantID, &sentAt, &listID, &recipientID)
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -46,7 +49,6 @@ func (r *TrackingRepository) ResolveSource(sourceType, sourceID string) (*models
 		}
 		src.Email = email.String
 		src.CampaignID = campaignID.String
-		src.CampaignName = campaignName.String
 		src.FromName = fromName.String
 		src.FromEmail = fromEmail.String
 		src.VariantID = variantID.String
@@ -62,7 +64,7 @@ func (r *TrackingRepository) ResolveSource(sourceType, sourceID string) (*models
 		var to string
 		var sentAt sql.NullTime
 		err := r.db.QueryRow(
-			`SELECT from_address, to_addresses, sent_at FROM sends WHERE id = ?`, sourceID,
+			`SELECT from_address, to_addresses, created_at FROM sends WHERE id = ?`, sourceID,
 		).Scan(&src.FromEmail, &to, &sentAt)
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -84,6 +86,29 @@ func (r *TrackingRepository) ResolveSource(sourceType, sourceID string) (*models
 	return nil, nil
 }
 
+// Limits of stored request data: the public endpoints take whatever the
+// client sends, so long values are cut before they reach the database.
+const (
+	maxEventUserAgent = 512
+	maxEventURL       = 2048
+)
+
+// EventDedupWindow: a repeat of the same event (same message, type, link and
+// IP) within this window is dropped, so reloads and hammering the public
+// endpoints neither fill the disk nor inflate statistics.
+const EventDedupWindow = 30 * time.Second
+
+// truncateUTF8 cuts s to at most n bytes without splitting a UTF-8 sequence.
+func truncateUTF8(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
+}
+
 // RecordEvent inserts e into email_events (CreatedAt defaults to now) and, in
 // the same transaction, updates the counters of the source row
 // (send_job_items or sends) unless e.IsMachine:
@@ -91,16 +116,45 @@ func (r *TrackingRepository) ResolveSource(sourceType, sourceID string) (*models
 //   - click: click_count++, clicked_at set if NULL; a click also implies an
 //     open, so opened_at is set if NULL (open_count unchanged)
 //   - unsubscribe: unsubscribed_at set if NULL (send_job_items only)
+//
+// UserAgent and URL are truncated. If the same event (source, type, link_id,
+// IP) was already recorded within EventDedupWindow, nothing is written:
+// neither the event nor the counters; e.ID stays 0 in that case.
 func (r *TrackingRepository) RecordEvent(e *models.EmailEvent) error {
 	if e.CreatedAt.IsZero() {
-		e.CreatedAt = time.Now().UTC()
+		e.CreatedAt = time.Now()
 	}
+	e.CreatedAt = e.CreatedAt.UTC()
+	e.UserAgent = truncateUTF8(e.UserAgent, maxEventUserAgent)
+	e.URL = truncateUTF8(e.URL, maxEventURL)
 
 	tx, err := r.db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
+
+	if e.IP != "" {
+		var linkID any
+		if e.LinkID != nil {
+			linkID = *e.LinkID
+		}
+		var dup int
+		err := tx.QueryRow(`
+			SELECT COUNT(*) FROM (
+				SELECT 1 FROM email_events
+				WHERE source_type = ? AND source_id = ? AND type = ? AND created_at >= ?
+					AND link_id IS ? AND ip = ?
+				LIMIT 1)`,
+			e.SourceType, e.SourceID, e.Type, e.CreatedAt.Add(-EventDedupWindow), linkID, e.IP,
+		).Scan(&dup)
+		if err != nil {
+			return fmt.Errorf("failed to check duplicate event: %w", err)
+		}
+		if dup > 0 {
+			return nil
+		}
+	}
 
 	res, err := tx.Exec(`
 		INSERT INTO email_events (type, source_type, source_id, campaign_id, job_id, variant_id,
@@ -117,36 +171,50 @@ func (r *TrackingRepository) RecordEvent(e *models.EmailEvent) error {
 	}
 
 	if !e.IsMachine {
-		var table string
-		switch e.SourceType {
-		case models.SourceJobItem:
-			table = "send_job_items"
-		case models.SourceSend:
-			table = "sends"
-		}
-		var query string
-		switch {
-		case table == "":
-		case e.Type == models.EventOpen:
-			query = "UPDATE " + table + " SET open_count = open_count + 1, opened_at = COALESCE(opened_at, ?) WHERE id = ?"
-		case e.Type == models.EventClick:
-			query = "UPDATE " + table + " SET click_count = click_count + 1, clicked_at = COALESCE(clicked_at, ?), opened_at = COALESCE(opened_at, ?) WHERE id = ?"
-		case e.Type == models.EventUnsubscribe && table == "send_job_items":
-			query = "UPDATE " + table + " SET unsubscribed_at = COALESCE(unsubscribed_at, ?) WHERE id = ?"
-		}
-		if query != "" {
-			args := []any{e.CreatedAt}
-			if e.Type == models.EventClick {
-				args = append(args, e.CreatedAt)
-			}
-			args = append(args, e.SourceID)
-			if _, err := tx.Exec(query, args...); err != nil {
-				return fmt.Errorf("failed to update counters: %w", err)
-			}
+		if err := updateEventCounters(tx, e); err != nil {
+			return fmt.Errorf("failed to update counters: %w", err)
 		}
 	}
 
 	return tx.Commit()
+}
+
+// updateEventCounters applies a human event to the counters of its source row.
+func updateEventCounters(tx *sql.Tx, e *models.EmailEvent) error {
+	var err error
+	at := e.CreatedAt
+	switch e.SourceType {
+	case models.SourceJobItem:
+		switch e.Type {
+		case models.EventOpen:
+			_, err = tx.Exec(`UPDATE send_job_items SET open_count = open_count + 1, opened_at = COALESCE(opened_at, ?) WHERE id = ?`,
+				at, e.SourceID)
+		case models.EventClick:
+			_, err = tx.Exec(`UPDATE send_job_items SET click_count = click_count + 1, clicked_at = COALESCE(clicked_at, ?),
+				opened_at = COALESCE(opened_at, ?) WHERE id = ?`, at, at, e.SourceID)
+		case models.EventUnsubscribe:
+			_, err = tx.Exec(`UPDATE send_job_items SET unsubscribed_at = COALESCE(unsubscribed_at, ?) WHERE id = ?`,
+				at, e.SourceID)
+		}
+	case models.SourceSend:
+		switch e.Type {
+		case models.EventOpen:
+			_, err = tx.Exec(`UPDATE sends SET open_count = open_count + 1, opened_at = COALESCE(opened_at, ?) WHERE id = ?`,
+				at, e.SourceID)
+		case models.EventClick:
+			_, err = tx.Exec(`UPDATE sends SET click_count = click_count + 1, clicked_at = COALESCE(clicked_at, ?),
+				opened_at = COALESCE(opened_at, ?) WHERE id = ?`, at, at, e.SourceID)
+		}
+	}
+	return err
+}
+
+// DeleteCampaignEvents removes the engagement events of all jobs of a
+// campaign. Call it when a campaign is deleted: email_events has no foreign
+// keys.
+func (r *TrackingRepository) DeleteCampaignEvents(campaignID string) error {
+	_, err := r.db.Exec(`DELETE FROM email_events WHERE campaign_id = ?`, campaignID)
+	return err
 }
 
 // SourceEvents returns events of one message, newest first.
@@ -184,75 +252,68 @@ func (r *TrackingRepository) SourceEvents(sourceType, sourceID string, limit int
 	return events, rows.Err()
 }
 
-// stats aggregates engagement for the jobs matched by jobWhere (alias j)
-// and the events matched by eventWhere.
-func (r *TrackingRepository) stats(jobWhere, eventWhere string, arg string) (models.TrackingStats, error) {
+// stats aggregates engagement over the job items matched by jobWhere
+// (aliases i = send_job_items, j = send_jobs, c = campaigns). Everything is
+// counted over the same base, items accepted by the MTA (status queued or
+// sent), so rates never exceed 100%. Opens are counted only when the
+// campaign tracks opens: a click implies an open, but without the pixel an
+// open rate would be made of clicks alone. Totals come from the per-item
+// counters, which hold human events only. Skipped items are not messages:
+// they are left out of Total, and the unsubscribed ones are counted as
+// distinct recipients in SkippedUnsub.
+func (r *TrackingRepository) stats(jobWhere string, arg string) (models.TrackingStats, error) {
 	var st models.TrackingStats
 	err := r.db.QueryRow(`
-		SELECT COUNT(*),
-			COALESCE(SUM(CASE WHEN i.status = 'sent' THEN 1 ELSE 0 END), 0),
-			COALESCE(SUM(CASE WHEN i.opened_at IS NOT NULL THEN 1 ELSE 0 END), 0),
-			COALESCE(SUM(CASE WHEN i.clicked_at IS NOT NULL THEN 1 ELSE 0 END), 0),
-			COALESCE(SUM(CASE WHEN i.unsubscribed_at IS NOT NULL THEN 1 ELSE 0 END), 0)
-		FROM send_job_items i JOIN send_jobs j ON j.id = i.job_id
-		WHERE `+jobWhere, arg,
-	).Scan(&st.Total, &st.Delivered, &st.UniqueOpens, &st.UniqueClicks, &st.Unsubscribed)
+		SELECT COALESCE(SUM(CASE WHEN status != 'skipped' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(acc), 0),
+			COALESCE(SUM(CASE WHEN acc = 1 AND opens = 1 AND opened_at IS NOT NULL THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN acc = 1 AND opens = 1 THEN open_count ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN acc = 1 AND clicked_at IS NOT NULL THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN acc = 1 THEN click_count ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN acc = 1 AND unsubscribed_at IS NOT NULL THEN 1 ELSE 0 END), 0),
+			COUNT(DISTINCT CASE WHEN status = 'skipped' AND error = ? THEN recipient_id END)
+		FROM (
+			SELECT CASE WHEN i.status IN ('queued', 'sent') THEN 1 ELSE 0 END AS acc,
+				COALESCE(c.track_opens, 1) AS opens, i.status, i.error, i.recipient_id,
+				i.opened_at, i.open_count, i.clicked_at, i.click_count, i.unsubscribed_at
+			FROM send_job_items i
+			JOIN send_jobs j ON j.id = i.job_id
+			LEFT JOIN campaigns c ON c.id = j.campaign_id
+			WHERE `+jobWhere+`
+		)`, models.SkipReasonUnsubscribed, arg,
+	).Scan(&st.Total, &st.Delivered, &st.UniqueOpens, &st.TotalOpens, &st.UniqueClicks, &st.TotalClicks, &st.Unsubscribed, &st.SkippedUnsub)
 	if err != nil {
 		return st, err
 	}
 
-	rows, err := r.db.Query(`
-		SELECT type, COUNT(*) FROM email_events
-		WHERE `+eventWhere+` AND is_machine = 0 AND source_type = ? GROUP BY type`, arg, models.SourceJobItem)
-	if err != nil {
-		return st, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var typ string
-		var n int
-		if err := rows.Scan(&typ, &n); err != nil {
-			return st, err
-		}
-		switch typ {
-		case models.EventOpen:
-			st.TotalOpens = n
-		case models.EventClick:
-			st.TotalClicks = n
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return st, err
-	}
-
-	err = r.db.QueryRow(
-		`SELECT COALESCE(SUM(skipped_unsubscribed), 0) FROM send_jobs j WHERE `+jobWhere, arg,
-	).Scan(&st.SkippedUnsub)
+	err = r.db.QueryRow(`SELECT COUNT(*) FROM send_jobs j WHERE `+jobWhere, arg).Scan(&st.Jobs)
 	return st, err
 }
 
-// JobStats aggregates engagement of one job from send_job_items counters
-// (unique = rows with opened_at / clicked_at / unsubscribed_at set) and
-// email_events (totals, is_machine = 0). Delivered = items with status 'sent'.
-// SkippedUnsub comes from send_jobs.skipped_unsubscribed.
+// JobStats aggregates engagement of one job (see stats).
 func (r *TrackingRepository) JobStats(jobID string) (models.TrackingStats, error) {
-	return r.stats("j.id = ?", "job_id = ?", jobID)
+	return r.stats("j.id = ?", jobID)
 }
 
-// CampaignStats is JobStats summed over all jobs of a campaign.
+// CampaignStats aggregates engagement over the real (not dry-run) jobs of a
+// campaign. SkippedUnsub counts distinct recipients: an address skipped by
+// several jobs counts once.
 func (r *TrackingRepository) CampaignStats(campaignID string) (models.TrackingStats, error) {
-	return r.stats("j.campaign_id = ?", "campaign_id = ?", campaignID)
+	return r.stats("j.campaign_id = ? AND COALESCE(j.dry_run, 0) = 0", campaignID)
 }
 
 // JobLinkStats returns click counts per link_id for a job, optionally for one
 // variant (variantID == "" = all). Labels/kinds/urls are taken from the job's
 // snapshot links; links without clicks are included with zeros; clicks on
 // link ids missing from the snapshot are included with the event URL.
-// Ordered by link_id. Machine clicks are excluded.
-func (r *TrackingRepository) JobLinkStats(jobID, variantID string) ([]models.LinkStat, error) {
-	snaps, err := r.GetSnapshots(jobID)
-	if err != nil {
-		return nil, err
+// Ordered by link_id. Machine clicks are excluded. snaps are the job's
+// snapshots if the caller already loaded them; nil loads them.
+func (r *TrackingRepository) JobLinkStats(jobID, variantID string, snaps []models.JobVariantSnapshot) ([]models.LinkStat, error) {
+	if snaps == nil {
+		var err error
+		if snaps, err = r.GetSnapshots(jobID); err != nil {
+			return nil, err
+		}
 	}
 	byID := map[int]*models.LinkStat{}
 	for _, s := range snaps {

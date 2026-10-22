@@ -22,7 +22,9 @@ func NewJobRepository(db *sql.DB) *JobRepository {
 // Create creates a new send job
 func (r *JobRepository) Create(job *models.SendJob) error {
 	job.ID = uuid.New().String()
-	job.Status = "draft"
+	if job.Status == "" {
+		job.Status = "draft"
+	}
 	job.CreatedAt = time.Now()
 	job.UpdatedAt = job.CreatedAt
 
@@ -203,27 +205,22 @@ func (r *JobRepository) UpdateStats(id string, stats models.JobStats) error {
 	return err
 }
 
-// Delete deletes a job
-func (r *JobRepository) Delete(id string) error {
-	_, err := r.db.Exec("DELETE FROM send_jobs WHERE id = ?", id)
-	return err
-}
-
-// CreateItem creates a job item
-func (r *JobRepository) CreateItem(item *models.SendJobItem) error {
-	item.ID = uuid.New().String()
-	item.Status = "pending"
-	item.CreatedAt = time.Now()
-
-	_, err := r.db.Exec(`
-		INSERT INTO send_job_items (id, job_id, recipient_id, variant_id, server_name, status, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		item.ID, item.JobID, item.RecipientID, item.VariantID, item.ServerName, item.Status, item.CreatedAt,
+// RetryFailedItems puts the failed items of a job back to pending, clearing
+// their delivery state, and returns how many were reset.
+func (r *JobRepository) RetryFailedItems(jobID string) (int64, error) {
+	res, err := r.db.Exec(`
+		UPDATE send_job_items SET status = ?, error = NULL, sendry_msg_id = NULL, queued_at = NULL, sent_at = NULL
+		WHERE job_id = ? AND status = ?`,
+		models.JobItemStatusPending, jobID, models.JobItemStatusFailed,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }
 
-// CreateItems creates multiple job items in a batch
+// CreateItems creates multiple job items in a batch. Items are pending unless
+// Status is set (skipped items carry their reason in Error).
 func (r *JobRepository) CreateItems(items []models.SendJobItem) error {
 	tx, err := r.db.Begin()
 	if err != nil {
@@ -232,8 +229,8 @@ func (r *JobRepository) CreateItems(items []models.SendJobItem) error {
 	defer tx.Rollback()
 
 	stmt, err := tx.Prepare(`
-		INSERT INTO send_job_items (id, job_id, recipient_id, variant_id, server_name, status, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`)
+		INSERT INTO send_job_items (id, job_id, recipient_id, variant_id, server_name, status, error, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return err
 	}
@@ -242,10 +239,13 @@ func (r *JobRepository) CreateItems(items []models.SendJobItem) error {
 	now := time.Now()
 	for i := range items {
 		items[i].ID = uuid.New().String()
-		items[i].Status = "pending"
+		if items[i].Status == "" {
+			items[i].Status = models.JobItemStatusPending
+		}
 		items[i].CreatedAt = now
 
-		_, err := stmt.Exec(items[i].ID, items[i].JobID, items[i].RecipientID, items[i].VariantID, items[i].ServerName, items[i].Status, items[i].CreatedAt)
+		_, err := stmt.Exec(items[i].ID, items[i].JobID, items[i].RecipientID, items[i].VariantID, items[i].ServerName,
+			items[i].Status, nullString(items[i].Error), items[i].CreatedAt)
 		if err != nil {
 			return err
 		}
@@ -265,19 +265,21 @@ func (r *JobRepository) ListItems(filter models.JobItemFilter) ([]models.SendJob
 		args = append(args, filter.Status)
 	}
 	if filter.ErrorType != "" {
-		where += " AND COALESCE(i.error, '') != ''"
+		// the error of a skipped item is the skip reason, not a delivery error
+		where += " AND COALESCE(i.error, '') != '' AND i.status != 'skipped'"
 	}
+	// skipped items were never sent, so they are neither opened nor not opened
 	switch filter.Opened {
 	case "yes":
 		where += " AND i.opened_at IS NOT NULL"
 	case "no":
-		where += " AND i.opened_at IS NULL"
+		where += " AND i.opened_at IS NULL AND i.status != 'skipped'"
 	}
 	switch filter.Clicked {
 	case "yes":
 		where += " AND i.clicked_at IS NOT NULL"
 	case "no":
-		where += " AND i.clicked_at IS NULL"
+		where += " AND i.clicked_at IS NULL AND i.status != 'skipped'"
 	}
 
 	// Count total
@@ -365,7 +367,7 @@ func (r *JobRepository) ErrorCounts(jobID string) ([]models.ErrorCount, error) {
 	rows, err := r.db.Query(`
 		SELECT error, status, COUNT(*)
 		FROM send_job_items
-		WHERE job_id = ? AND COALESCE(error, '') != ''
+		WHERE job_id = ? AND COALESCE(error, '') != '' AND status != 'skipped'
 		GROUP BY error, status`, jobID,
 	)
 	if err != nil {
@@ -416,9 +418,10 @@ func (r *JobRepository) GetStats(jobID string) (models.JobStats, error) {
 			SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
 			SUM(CASE WHEN status = 'queued' THEN 1 ELSE 0 END) as queued,
 			SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) as sent,
-			SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
+			SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
+			SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END) as skipped
 		FROM send_job_items WHERE job_id = ?`, jobID,
-	).Scan(&stats.Total, &stats.Pending, &stats.Queued, &stats.Sent, &stats.Failed)
+	).Scan(&stats.Total, &stats.Pending, &stats.Queued, &stats.Sent, &stats.Failed, &stats.Skipped)
 
 	return stats, err
 }
@@ -523,12 +526,35 @@ func (r *JobRepository) GetScheduledJobsDue() ([]models.SendJob, error) {
 	return jobs, nil
 }
 
-// GetPendingItems returns pending items for processing
+// GetPendingItems returns up to limit pending items whose recipient is still
+// active in the list. Pending items of recipients that unsubscribed, bounced or
+// were deleted after the job was created are marked skipped on the way, so
+// they are never sent.
 func (r *JobRepository) GetPendingItems(jobID string, limit int) ([]models.SendJobItem, error) {
+	for {
+		items, skipped, err := r.pendingBatch(jobID, limit)
+		if err != nil {
+			return nil, err
+		}
+		if len(skipped) == 0 {
+			return items, nil
+		}
+		if err := r.skipItems(jobID, skipped); err != nil {
+			return nil, err
+		}
+		if len(items) > 0 {
+			return items, nil
+		}
+		// the whole batch was skipped: look at the next one
+	}
+}
+
+// pendingBatch reads the next limit pending items of a job and splits them into
+// items to send and skip reasons by item id (recipient no longer active).
+func (r *JobRepository) pendingBatch(jobID string, limit int) ([]models.SendJobItem, map[string]string, error) {
 	rows, err := r.db.Query(`
-		SELECT i.id, i.job_id, i.recipient_id, r.email, COALESCE(r.name, ''), COALESCE(r.variables, ''),
-			i.variant_id, i.server_name, i.status, i.created_at,
-			i.opened_at, COALESCE(i.open_count, 0), i.clicked_at, COALESCE(i.click_count, 0), i.unsubscribed_at
+		SELECT i.id, i.job_id, i.recipient_id, r.id, r.email, COALESCE(r.name, ''), COALESCE(r.variables, ''),
+			COALESCE(r.status, 'active'), i.variant_id, i.server_name, i.status, i.created_at
 		FROM send_job_items i
 		LEFT JOIN recipients r ON i.recipient_id = r.id
 		WHERE i.job_id = ? AND i.status = 'pending'
@@ -536,35 +562,65 @@ func (r *JobRepository) GetPendingItems(jobID string, limit int) ([]models.SendJ
 		LIMIT ?`, jobID, limit,
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer rows.Close()
 
 	items := []models.SendJobItem{}
+	skipped := map[string]string{}
 	for rows.Next() {
 		var item models.SendJobItem
-		var email, name, variables sql.NullString
-		var openedAt, clickedAt, unsubAt sql.NullTime
-		err := rows.Scan(&item.ID, &item.JobID, &item.RecipientID, &email, &name, &variables,
-			&item.VariantID, &item.ServerName, &item.Status, &item.CreatedAt,
-			&openedAt, &item.OpenCount, &clickedAt, &item.ClickCount, &unsubAt)
+		var recipientID, email, name, variables sql.NullString
+		var recipientStatus string
+		err := rows.Scan(&item.ID, &item.JobID, &item.RecipientID, &recipientID, &email, &name, &variables,
+			&recipientStatus, &item.VariantID, &item.ServerName, &item.Status, &item.CreatedAt)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		if email.Valid {
-			item.Email = email.String
+		if !recipientID.Valid {
+			skipped[item.ID] = models.SkipReasonDeleted
+			continue
 		}
-		if name.Valid {
-			item.RecipientName = name.String
+		if reason := models.SkipReason(recipientStatus); reason != "" {
+			skipped[item.ID] = reason
+			continue
 		}
-		if variables.Valid {
-			item.RecipientVariables = variables.String
-		}
-		setItemEngagement(&item, openedAt, clickedAt, unsubAt)
+		item.Email = email.String
+		item.RecipientName = name.String
+		item.RecipientVariables = variables.String
 		items = append(items, item)
 	}
 
-	return items, nil
+	return items, skipped, rows.Err()
+}
+
+// skipItems marks pending items of a job skipped with their reason and adds
+// the unsubscribed ones to send_jobs.skipped_unsubscribed.
+func (r *JobRepository) skipItems(jobID string, reasons map[string]string) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	unsubscribed := int64(0)
+	for id, reason := range reasons {
+		res, err := tx.Exec(`UPDATE send_job_items SET status = ?, error = ? WHERE id = ? AND status = 'pending'`,
+			models.JobItemStatusSkipped, reason, id)
+		if err != nil {
+			return err
+		}
+		if n, err := res.RowsAffected(); err == nil && reason == models.SkipReasonUnsubscribed {
+			unsubscribed += n
+		}
+	}
+	if unsubscribed > 0 {
+		if _, err := tx.Exec(`UPDATE send_jobs SET skipped_unsubscribed = skipped_unsubscribed + ?, updated_at = ? WHERE id = ?`,
+			unsubscribed, time.Now(), jobID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 // GetQueuedItems returns items with status 'queued' for status tracking, starting after the given rowid.
@@ -573,8 +629,7 @@ func (r *JobRepository) GetPendingItems(jobID string, limit int) ([]models.SendJ
 func (r *JobRepository) GetQueuedItems(afterRowID int64, limit int) ([]models.SendJobItem, int64, error) {
 	rows, err := r.db.Query(`
 		SELECT i.rowid, i.id, i.job_id, i.recipient_id, r.email, i.variant_id, i.server_name,
-			i.status, i.sendry_msg_id, COALESCE(i.error, ''), i.created_at,
-			i.opened_at, COALESCE(i.open_count, 0), i.clicked_at, COALESCE(i.click_count, 0), i.unsubscribed_at
+			i.status, i.sendry_msg_id, COALESCE(i.error, ''), i.created_at
 		FROM send_job_items i
 		LEFT JOIN recipients r ON i.recipient_id = r.id
 		WHERE i.status = 'queued' AND i.sendry_msg_id != '' AND i.rowid > ?
@@ -591,17 +646,14 @@ func (r *JobRepository) GetQueuedItems(afterRowID int64, limit int) ([]models.Se
 	for rows.Next() {
 		var item models.SendJobItem
 		var email sql.NullString
-		var openedAt, clickedAt, unsubAt sql.NullTime
 		err := rows.Scan(&lastRowID, &item.ID, &item.JobID, &item.RecipientID, &email, &item.VariantID,
-			&item.ServerName, &item.Status, &item.SendryMsgID, &item.Error, &item.CreatedAt,
-			&openedAt, &item.OpenCount, &clickedAt, &item.ClickCount, &unsubAt)
+			&item.ServerName, &item.Status, &item.SendryMsgID, &item.Error, &item.CreatedAt)
 		if err != nil {
 			return nil, 0, err
 		}
 		if email.Valid {
 			item.Email = email.String
 		}
-		setItemEngagement(&item, openedAt, clickedAt, unsubAt)
 		items = append(items, item)
 	}
 

@@ -55,15 +55,6 @@ type ServerOptions struct {
 	TLSConfig       *tls.Config
 }
 
-// NewServer creates a new API server
-func NewServer(q queue.Queue, cfg *config.APIConfig, logger *slog.Logger) *Server {
-	return NewServerWithOptions(ServerOptions{
-		Queue:  q,
-		Config: cfg,
-		Logger: logger,
-	})
-}
-
 // NewServerWithOptions creates a new API server with full options
 func NewServerWithOptions(opts ServerOptions) *Server {
 	s := &Server{

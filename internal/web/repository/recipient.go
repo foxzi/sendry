@@ -141,9 +141,17 @@ func (r *RecipientRepository) UpdateListCounts(listID string) error {
 	return err
 }
 
-// AddRecipient adds a single recipient to a list
+// NormalizeEmail returns the stored form of a recipient email: trimmed and
+// lower-cased, so one address is one recipient per list whatever its case.
+func NormalizeEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
+}
+
+// AddRecipient adds a single recipient to a list. An address already in the
+// list (in any case) gets its name, variables and tags updated; its status is kept.
 func (r *RecipientRepository) AddRecipient(recipient *models.Recipient) error {
 	recipient.ID = uuid.New().String()
+	recipient.Email = NormalizeEmail(recipient.Email)
 	recipient.CreatedAt = time.Now()
 	if recipient.Status == "" {
 		recipient.Status = "active"
@@ -163,23 +171,6 @@ func (r *RecipientRepository) AddRecipient(recipient *models.Recipient) error {
 	}
 
 	return r.UpdateListCounts(recipient.ListID)
-}
-
-// GetRecipient returns a recipient by ID
-func (r *RecipientRepository) GetRecipient(id string) (*models.Recipient, error) {
-	recipient := &models.Recipient{}
-	err := r.db.QueryRow(`
-		SELECT id, list_id, email, name, variables, tags, status, created_at
-		FROM recipients WHERE id = ?`, id,
-	).Scan(&recipient.ID, &recipient.ListID, &recipient.Email, &recipient.Name, &recipient.Variables, &recipient.Tags, &recipient.Status, &recipient.CreatedAt)
-
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return recipient, nil
 }
 
 // ListRecipients returns recipients with filtering
@@ -253,19 +244,6 @@ func (r *RecipientRepository) ListRecipients(filter models.RecipientFilter) ([]m
 	}
 
 	return recipients, total, nil
-}
-
-// UpdateRecipient updates a recipient
-func (r *RecipientRepository) UpdateRecipient(recipient *models.Recipient) error {
-	_, err := r.db.Exec(`
-		UPDATE recipients SET email = ?, name = ?, variables = ?, tags = ?, status = ?
-		WHERE id = ?`,
-		recipient.Email, recipient.Name, recipient.Variables, recipient.Tags, recipient.Status, recipient.ID,
-	)
-	if err != nil {
-		return err
-	}
-	return r.UpdateListCounts(recipient.ListID)
 }
 
 // DeleteRecipient deletes a recipient

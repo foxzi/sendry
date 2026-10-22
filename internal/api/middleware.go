@@ -44,9 +44,7 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Parse Bearer token
-		if strings.HasPrefix(auth, "Bearer ") {
-			auth = strings.TrimPrefix(auth, "Bearer ")
-		}
+		auth = strings.TrimPrefix(auth, "Bearer ")
 
 		if auth != s.config.APIKey {
 			s.logger.Warn("unauthorized API request",

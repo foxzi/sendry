@@ -268,32 +268,6 @@ func (r *APIKeyRepository) UpdateLastUsed(id string) error {
 	return err
 }
 
-// Deactivate deactivates an API key
-func (r *APIKeyRepository) Deactivate(id string) error {
-	result, err := r.db.Exec("UPDATE api_keys SET active = 0 WHERE id = ?", id)
-	if err != nil {
-		return err
-	}
-	affected, _ := result.RowsAffected()
-	if affected == 0 {
-		return fmt.Errorf("API key not found")
-	}
-	return nil
-}
-
-// Activate activates an API key
-func (r *APIKeyRepository) Activate(id string) error {
-	result, err := r.db.Exec("UPDATE api_keys SET active = 1 WHERE id = ?", id)
-	if err != nil {
-		return err
-	}
-	affected, _ := result.RowsAffected()
-	if affected == 0 {
-		return fmt.Errorf("API key not found")
-	}
-	return nil
-}
-
 // ToggleActive toggles the active status of an API key
 func (r *APIKeyRepository) ToggleActive(id string) (bool, error) {
 	// Get current status

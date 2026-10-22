@@ -47,8 +47,8 @@ var funcs = template.FuncMap{
 }
 
 type Engine struct {
-	templates   map[string]*template.Template
-	standalone  map[string]*template.Template
+	templates  map[string]*template.Template
+	standalone map[string]*template.Template
 }
 
 func New() (*Engine, error) {
@@ -116,16 +116,7 @@ func (e *Engine) Render(w io.Writer, name string, data any) error {
 	}
 
 	// Try to parse on the fly
-	tmpl, err := template.New(name + ".html").Funcs(funcs).ParseFS(templatesFS, name+".html")
-	if err != nil {
-		return err
-	}
-	return tmpl.Execute(w, data)
-}
-
-// RenderPartial renders a template without layout (for HTMX responses)
-func (e *Engine) RenderPartial(w io.Writer, name string, data any) error {
-	tmpl, err := template.New(name + ".html").Funcs(funcs).ParseFS(templatesFS, name+".html")
+	tmpl, err := template.New(name+".html").Funcs(funcs).ParseFS(templatesFS, name+".html")
 	if err != nil {
 		return err
 	}

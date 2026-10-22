@@ -2,9 +2,14 @@ package middleware
 
 import (
 	"context"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/foxzi/sendry/internal/web/tracking"
 )
 
 func TestGetUserEmail(t *testing.T) {
@@ -81,6 +86,71 @@ func TestMethodOverride(t *testing.T) {
 
 			if gotMethod != tt.wantMethod {
 				t.Errorf("MethodOverride() method = %q, want %q", gotMethod, tt.wantMethod)
+			}
+		})
+	}
+}
+
+func TestMethodOverride_SkipsPublicTrackingPaths(t *testing.T) {
+	for _, path := range []string{"/u/token", "/t/c/token"} {
+		var gotMethod string
+		var formParsed bool
+		handler := MethodOverride(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			gotMethod = r.Method
+			formParsed = r.Form != nil
+		}))
+		r := httptest.NewRequest("POST", path, strings.NewReader("_method=DELETE"))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		handler.ServeHTTP(httptest.NewRecorder(), r)
+		// The body must be left for the handler, which limits its size
+		if gotMethod != "POST" || formParsed {
+			t.Errorf("%s: method = %q, form parsed = %v", path, gotMethod, formParsed)
+		}
+	}
+	if !IsPublicTrackingPath("/t/o/x.gif") || !IsPublicTrackingPath("/u/x") || IsPublicTrackingPath("/templates/u/") {
+		t.Error("IsPublicTrackingPath")
+	}
+}
+
+func TestIPFilter_TrustedProxies(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	proxies, err := tracking.ParseTrustedProxies([]string{"127.0.0.1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := IPFilter([]string{"203.0.113.0/24"}, proxies, logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	tests := []struct {
+		name       string
+		remoteAddr string
+		xff        string
+		xRealIP    string
+		want       int
+	}{
+		{"allowed peer", "203.0.113.5:1234", "", "", http.StatusOK},
+		{"denied peer", "198.51.100.7:1234", "", "", http.StatusForbidden},
+		{"spoofed X-Forwarded-For from untrusted peer", "198.51.100.7:1234", "203.0.113.5", "", http.StatusForbidden},
+		{"spoofed X-Real-IP from untrusted peer", "198.51.100.7:1234", "", "203.0.113.5", http.StatusForbidden},
+		{"trusted proxy forwards allowed client", "127.0.0.1:1234", "203.0.113.5", "", http.StatusOK},
+		{"trusted proxy forwards denied client", "127.0.0.1:1234", "198.51.100.7", "", http.StatusForbidden},
+		{"trusted proxy X-Real-IP", "127.0.0.1:1234", "", "203.0.113.5", http.StatusOK},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.RemoteAddr = tt.remoteAddr
+			if tt.xff != "" {
+				req.Header.Set("X-Forwarded-For", tt.xff)
+			}
+			if tt.xRealIP != "" {
+				req.Header.Set("X-Real-IP", tt.xRealIP)
+			}
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			if rec.Code != tt.want {
+				t.Errorf("status = %d, want %d", rec.Code, tt.want)
 			}
 		})
 	}

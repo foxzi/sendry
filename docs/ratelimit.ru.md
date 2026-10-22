@@ -79,7 +79,7 @@ domains:
     rate_limit:
       messages_per_hour: 5000
       messages_per_day: 50000
-      recipients_per_message: 100
+      recipients_per_message: 100  # пока не реализовано: сохраняется, но не применяется
 
   newsletter.example.com:
     rate_limit:
@@ -219,6 +219,8 @@ curl -X PUT http://localhost:8080/api/v1/ratelimits/example.com \
     "recipients_per_message": 50
   }'
 ```
+
+`recipients_per_message` пока не реализовано: значение сохраняется и возвращается, но не применяется.
 
 ## Ответы об ошибках
 

@@ -179,39 +179,6 @@ func (r *CampaignRepository) GetVariants(campaignID string) ([]models.CampaignVa
 	return variants, nil
 }
 
-// GetVariant returns a variant by ID
-func (r *CampaignRepository) GetVariant(id string) (*models.CampaignVariant, error) {
-	v := &models.CampaignVariant{}
-	var templateName sql.NullString
-	err := r.db.QueryRow(`
-		SELECT v.id, v.campaign_id, v.name, v.template_id, t.name, v.subject_override, v.weight, v.created_at
-		FROM campaign_variants v
-		LEFT JOIN templates t ON v.template_id = t.id
-		WHERE v.id = ?`, id,
-	).Scan(&v.ID, &v.CampaignID, &v.Name, &v.TemplateID, &templateName, &v.SubjectOverride, &v.Weight, &v.CreatedAt)
-
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	if templateName.Valid {
-		v.TemplateName = templateName.String
-	}
-	return v, nil
-}
-
-// UpdateVariant updates a variant
-func (r *CampaignRepository) UpdateVariant(v *models.CampaignVariant) error {
-	_, err := r.db.Exec(`
-		UPDATE campaign_variants SET name = ?, template_id = ?, subject_override = ?, weight = ?
-		WHERE id = ?`,
-		v.Name, v.TemplateID, v.SubjectOverride, v.Weight, v.ID,
-	)
-	return err
-}
-
 // DeleteVariant deletes a variant
 func (r *CampaignRepository) DeleteVariant(id string) error {
 	_, err := r.db.Exec("DELETE FROM campaign_variants WHERE id = ?", id)

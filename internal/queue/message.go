@@ -31,15 +31,6 @@ type Message struct {
 	AuthUser    string        `json:"auth_user,omitempty"`
 }
 
-// DeliveryAttempt represents a delivery attempt record
-type DeliveryAttempt struct {
-	Timestamp time.Time `json:"timestamp"`
-	MXHost    string    `json:"mx_host"`
-	Success   bool      `json:"success"`
-	Error     string    `json:"error,omitempty"`
-	Response  string    `json:"response,omitempty"`
-}
-
 // QueueStats represents queue statistics
 type QueueStats struct {
 	Pending   int64 `json:"pending"`

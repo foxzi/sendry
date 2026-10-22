@@ -11,6 +11,15 @@
 </div>
 {{else}}
 
+{{if .Error}}
+<div class="alert alert-error">{{.Error}}</div>
+{{else if .NoPublicURL}}
+<div class="alert alert-error">
+    <strong>Cannot send:</strong> the public URL for unsubscribe links is not configured.
+    Set the tracking domain in <a href="/settings/tracking">Settings &gt; Tracking</a> or <code>server.public_url</code> in the config.
+</div>
+{{end}}
+
 {{if .NoUnsubscribeLink}}
 <div class="alert alert-warning">
     В шаблоне нет ссылки отписки {{"{{unsubscribe_url}}"}}. Почтовые сервисы покажут свою кнопку отписки, но добавьте ссылку в футер письма.
@@ -45,7 +54,7 @@
             <select id="strategy" name="strategy" class="input">
                 <option value="round-robin">Round Robin</option>
                 <option value="random">Random</option>
-                <option value="weighted">Weighted (by server capacity)</option>
+                <option value="weighted">Weighted (multi_send.weights from config)</option>
             </select>
         </div>
 
@@ -53,7 +62,9 @@
         <div class="form-group">
             <label for="scheduled_at">Schedule Send</label>
             <input type="datetime-local" id="scheduled_at" name="scheduled_at" class="input">
-            <small class="form-help">Leave empty to send immediately</small>
+            <input type="hidden" id="tz" name="tz">
+            <input type="hidden" id="tz_offset" name="tz_offset">
+            <small class="form-help">Leave empty to send immediately. Time zone: <span id="tz_label">UTC</span></small>
         </div>
 
         <h3 style="margin-top: 1.5rem">4. Test Mode (Optional)</h3>
@@ -82,7 +93,7 @@
 
     <div class="card-footer">
         <a href="/campaigns/{{.Campaign.ID}}" class="btn btn-secondary">Cancel</a>
-        <button type="submit" class="btn btn-primary" onclick="return confirm('Are you sure you want to send this campaign?')">
+        <button type="submit" class="btn btn-primary"{{if .NoPublicURL}} disabled{{end}} onclick="return confirm('Are you sure you want to send this campaign?')">
             Send Campaign
         </button>
     </div>
@@ -92,6 +103,25 @@
 
 
 <script>
+// The schedule is entered in the browser's time zone; the server needs it to convert to UTC
+(function () {
+    let tz = '';
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
+    const tzInput = document.getElementById('tz');
+    if (!tzInput) return;
+    tzInput.value = tz;
+    const offset = -new Date().getTimezoneOffset();
+    const sign = offset >= 0 ? '+' : '-';
+    const hh = String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0');
+    const mm = String(Math.abs(offset) % 60).padStart(2, '0');
+    document.getElementById('tz_label').textContent = (tz ? tz + ' ' : '') + '(UTC' + sign + hh + ':' + mm + ')';
+    tzInput.form.addEventListener('submit', function () {
+        const v = document.getElementById('scheduled_at').value;
+        // offset at the scheduled date, in case daylight saving time changes before it
+        document.getElementById('tz_offset').value = String((v ? new Date(v) : new Date()).getTimezoneOffset());
+    });
+})();
+
 function toggleDryRunLimit() {
     const checkbox = document.getElementById('dry_run');
     const limitGroup = document.getElementById('dry_run_limit_group');

@@ -84,11 +84,11 @@ func TestUnsubscribe_AddPerList(t *testing.T) {
 		t.Errorf("journal: n=%d campaign=%s source=%s", n, camp, src)
 	}
 
-	_, err = repo.Add(&models.Unsubscribe{ListID: "l2", Email: "nobody@example.org", SourceType: models.UnsubSourceManual})
+	_, err = repo.Add(&models.Unsubscribe{ListID: "l2", Email: "nobody@example.org", SourceType: models.UnsubSourceLink})
 	if !errors.Is(err, ErrRecipientNotInList) {
 		t.Errorf("missing recipient err = %v", err)
 	}
-	_, err = repo.Add(&models.Unsubscribe{ListID: "l1", Email: "third@example.org", SourceType: models.UnsubSourceManual})
+	_, err = repo.Add(&models.Unsubscribe{ListID: "l1", Email: "third@example.org", SourceType: models.UnsubSourceLink})
 	if !errors.Is(err, ErrRecipientNotInList) {
 		t.Errorf("address of another list err = %v", err)
 	}
@@ -128,27 +128,5 @@ func TestUnsubscribe_RemoveAndIsUnsubscribed(t *testing.T) {
 	}
 	if ok, _ := repo.IsUnsubscribed("l1", "user@example.org"); ok {
 		t.Error("still unsubscribed")
-	}
-}
-
-func TestUnsubscribe_CountInList(t *testing.T) {
-	db := setupTestDB(t)
-	setupUnsubLists(t, db)
-	repo := NewUnsubscribeRepository(db)
-
-	if _, err := repo.Add(&models.Unsubscribe{ListID: "l1", Email: "user@example.org", CampaignID: "c1", JobID: "j1", SourceType: models.UnsubSourceLink}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := repo.Add(&models.Unsubscribe{ListID: "l2", Email: "third@example.org", CampaignID: "c2", SourceType: models.UnsubSourceManual}); err != nil {
-		t.Fatal(err)
-	}
-	// Set by hand: no journal row.
-	mustExec(t, db, `UPDATE recipients SET status = 'unsubscribed' WHERE id = 'r2'`)
-
-	if n, err := repo.CountInList("l1"); err != nil || n != 2 {
-		t.Errorf("CountInList l1 = %d, %v", n, err)
-	}
-	if n, err := repo.CountInList("l2"); err != nil || n != 1 {
-		t.Errorf("CountInList l2 = %d, %v", n, err)
 	}
 }

@@ -260,51 +260,6 @@ func (r *DomainRepository) GetDeployments(domainID string) ([]models.DomainDeplo
 	return deployments, rows.Err()
 }
 
-// GetDeployment returns a specific deployment
-func (r *DomainRepository) GetDeployment(domainID, serverName string) (*models.DomainDeployment, error) {
-	var d models.DomainDeployment
-	err := r.db.QueryRow(`
-		SELECT id, domain_id, server_name, deployed_at, status, COALESCE(error, ''), COALESCE(config_hash, '')
-		FROM domain_deployments WHERE domain_id = ? AND server_name = ?`, domainID, serverName,
-	).Scan(&d.ID, &d.DomainID, &d.ServerName, &d.DeployedAt, &d.Status, &d.Error, &d.ConfigHash)
-
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &d, nil
-}
-
-// DeleteDeployment removes a deployment record
-func (r *DomainRepository) DeleteDeployment(domainID, serverName string) error {
-	_, err := r.db.Exec("DELETE FROM domain_deployments WHERE domain_id = ? AND server_name = ?", domainID, serverName)
-	return err
-}
-
-// GetOutdatedDeployments returns all deployments that need sync
-func (r *DomainRepository) GetOutdatedDeployments(domainID string) ([]models.DomainDeployment, error) {
-	rows, err := r.db.Query(`
-		SELECT id, domain_id, server_name, deployed_at, status, COALESCE(error, ''), COALESCE(config_hash, '')
-		FROM domain_deployments WHERE domain_id = ? AND status = 'outdated'
-		ORDER BY server_name`, domainID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var deployments []models.DomainDeployment
-	for rows.Next() {
-		var d models.DomainDeployment
-		if err := rows.Scan(&d.ID, &d.DomainID, &d.ServerName, &d.DeployedAt, &d.Status, &d.Error, &d.ConfigHash); err != nil {
-			return nil, err
-		}
-		deployments = append(deployments, d)
-	}
-	return deployments, rows.Err()
-}
-
 // helper function for nullable strings
 func nullString(s string) sql.NullString {
 	if s == "" {

@@ -41,6 +41,13 @@ func NewSession(b *Backend, c *smtp.Conn) *Session {
 	// Track connection metrics
 	metrics.IncSMTPConnections(s.serverType)
 
+	// go-smtp creates a new session after a successful STARTTLS handshake
+	// (and for implicit TLS the handshake is done before HELO), so a TLS
+	// connection state here means the TLS handshake has completed.
+	if state, ok := c.TLSConnectionState(); ok && state.HandshakeComplete {
+		metrics.IncSMTPTLS()
+	}
+
 	return s
 }
 

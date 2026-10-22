@@ -15,20 +15,26 @@ import (
 // Public tracking endpoints: open pixel, click redirect, unsubscribe page.
 // They have no authentication: the signed token in the URL is the capability.
 
-// decodeToken verifies a token of the expected kind using the stored secret.
-func (h *Handlers) decodeToken(token string, kind tracking.Kind) (tracking.Payload, *models.TrackingSettings, bool) {
+// decodeToken verifies a token of the expected kind using the stored secret
+// (or the previous one, kept after a rotation). err is tracking.ErrBadToken,
+// tracking.ErrExpiredToken or a settings load error.
+func (h *Handlers) decodeToken(token string, kind tracking.Kind) (tracking.Payload, error) {
 	ts, err := h.settings.GetTrackingSettings()
 	if err != nil || ts == nil || ts.Secret == "" {
 		if err != nil {
 			h.logger.Error("tracking: load settings", "error", err)
+			return tracking.Payload{}, err
 		}
-		return tracking.Payload{}, nil, false
+		return tracking.Payload{}, tracking.ErrBadToken
 	}
-	p, err := tracking.NewSigner([]byte(ts.Secret)).Decode(token)
-	if err != nil || p.Kind != kind {
-		return tracking.Payload{}, ts, false
+	p, err := tracking.NewSigner([]byte(ts.Secret), []byte(ts.PreviousSecret)).Decode(token)
+	if err != nil {
+		return tracking.Payload{}, err
 	}
-	return p, ts, true
+	if p.Kind != kind {
+		return tracking.Payload{}, tracking.ErrBadToken
+	}
+	return p, nil
 }
 
 // TrackOpen handles GET /t/o/{token} (token may end with ".gif").
@@ -51,8 +57,8 @@ func (h *Handlers) TrackOpen(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodHead {
 		return
 	}
-	p, _, ok := h.decodeToken(token, tracking.KindOpen)
-	if !ok {
+	p, err := h.decodeToken(token, tracking.KindOpen)
+	if err != nil {
 		return
 	}
 	src, err := h.tracking.ResolveSource(p.SourceType, p.SourceID)
@@ -72,7 +78,7 @@ func (h *Handlers) TrackOpen(w http.ResponseWriter, r *http.Request) {
 		JobID:      src.JobID,
 		VariantID:  src.VariantID,
 		Email:      src.Email,
-		IP:         tracking.ClientIP(r),
+		IP:         h.proxies.ClientIP(r),
 		UserAgent:  ua,
 		IsMachine:  tracking.IsMachineOpen(ua),
 	}
@@ -81,10 +87,17 @@ func (h *Handlers) TrackOpen(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// TrackClick handles GET /t/c/{token}.
+// TrackClick handles GET /t/c/{token}. An expired token answers 410 and does
+// not redirect: a click token is a signed redirect to any URL, so it must not
+// work forever.
 func (h *Handlers) TrackClick(w http.ResponseWriter, r *http.Request) {
-	p, _, ok := h.decodeToken(r.PathValue("token"), tracking.KindClick)
-	if !ok {
+	p, err := h.decodeToken(r.PathValue("token"), tracking.KindClick)
+	if errors.Is(err, tracking.ErrExpiredToken) {
+		w.Header().Set("Cache-Control", "no-store")
+		http.Error(w, "This link has expired", http.StatusGone)
+		return
+	}
+	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
@@ -112,7 +125,7 @@ func (h *Handlers) TrackClick(w http.ResponseWriter, r *http.Request) {
 				Email:      src.Email,
 				LinkID:     &linkID,
 				URL:        p.URL,
-				IP:         tracking.ClientIP(r),
+				IP:         h.proxies.ClientIP(r),
 				UserAgent:  ua,
 				IsMachine:  tracking.IsMachineClick(ua, src.SentAt, time.Now()),
 			}
@@ -129,8 +142,8 @@ func (h *Handlers) TrackClick(w http.ResponseWriter, r *http.Request) {
 // unsubscribeSource decodes an unsubscribe token and resolves it. Only job
 // items are unsubscribable at this stage.
 func (h *Handlers) unsubscribeSource(token string) (*models.TrackingSource, bool) {
-	p, _, ok := h.decodeToken(token, tracking.KindUnsubscribe)
-	if !ok || p.SourceType != models.SourceJobItem {
+	p, err := h.decodeToken(token, tracking.KindUnsubscribe)
+	if err != nil || p.SourceType != models.SourceJobItem {
 		return nil, false
 	}
 	src, err := h.tracking.ResolveSource(p.SourceType, p.SourceID)
@@ -235,7 +248,7 @@ func (h *Handlers) unsubscribe(r *http.Request, src *models.TrackingSource, sour
 			JobID:      src.JobID,
 			VariantID:  src.VariantID,
 			Email:      src.Email,
-			IP:         tracking.ClientIP(r),
+			IP:         h.proxies.ClientIP(r),
 			UserAgent:  r.UserAgent(),
 		}
 		if err := h.tracking.RecordEvent(ev); err != nil {

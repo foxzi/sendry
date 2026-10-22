@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"testing"
 
 	"github.com/foxzi/sendry/internal/web/config"
@@ -101,7 +102,7 @@ func TestOIDCProvider_DisabledConfig(t *testing.T) {
 		Enabled: false,
 	}
 
-	provider, err := NewOIDCProvider(nil, cfg)
+	provider, err := NewOIDCProvider(context.TODO(), cfg)
 	if err != nil {
 		t.Fatalf("NewOIDCProvider() error = %v", err)
 	}

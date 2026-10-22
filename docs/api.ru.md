@@ -660,6 +660,8 @@ POST /api/v1/domains
 
 **Ответ (201 Created):** Объект домена.
 
+Пока не реализовано: `default_from`, `tls` (сертификат домена) и `rate_limit.recipients_per_message` сохраняются и возвращаются, но MTA их не применяет.
+
 ### Получить домен
 
 ```
@@ -707,6 +709,36 @@ POST /api/v1/dkim/generate
 ```
 
 **Ответ (201 Created):**
+```json
+{
+  "domain": "example.com",
+  "selector": "default",
+  "dns_name": "default._domainkey.example.com",
+  "dns_record": "v=DKIM1; k=rsa; p=MIIBIjANBgkq...",
+  "key_file": "/var/lib/sendry/dkim/example.com/default.key"
+}
+```
+
+### Загрузить DKIM ключ
+
+```
+POST /api/v1/dkim/upload
+```
+
+Сохраняет готовый приватный ключ (PEM, RSA в PKCS#1 или PKCS#8) в `/var/lib/sendry/dkim/<domain>/<selector>.key`, перезаписывая ключ с тем же селектором. Настройки DKIM домена не меняются: включите DKIM для домена отдельно (`PUT /api/v1/domains/{domain}`).
+
+**Запрос:**
+```json
+{
+  "domain": "example.com",
+  "selector": "default",
+  "private_key": "-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----\n"
+}
+```
+
+`domain` и `private_key` обязательны, `selector` по умолчанию `default`. `domain` и `selector` должны быть безопасны для пути к файлу. Неверный ключ — ответ `400 invalid private key format`.
+
+**Ответ (201 Created):** такой же, как у generate:
 ```json
 {
   "domain": "example.com",
@@ -901,6 +933,8 @@ PUT /api/v1/ratelimits/{domain}
 ```
 
 **Ответ:** Обновленный объект лимитов.
+
+`recipients_per_message` пока не реализовано: сохраняется, но не применяется.
 
 ---
 

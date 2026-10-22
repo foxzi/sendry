@@ -14,12 +14,28 @@ If an external system calls the MTA API (port 8080) directly, the panel does not
 
 Public endpoints need no authentication and bypass `server.allowed_ips`. All other panel paths are protected as before.
 
-Tokens are HMAC-signed. The destination URL is inside the token, so it cannot be tampered with and there is no open redirect. The domain is not part of the token: links work through any domain that proxies to the panel.
+Tokens are HMAC-signed. The destination URL is inside the token, so it cannot be tampered with and the redirect cannot be pointed elsewhere. The domain is not part of the token: links work through any domain that proxies to the panel.
 
-Behaviour on an invalid token:
+### Token lifetime
+
+Every token carries its issue time. Old tokens stop working:
+
+| Token | Lifetime |
+|---|---|
+| Open pixel, click | 180 days |
+| Unsubscribe | 2 years |
+
+A click token is a signed redirect to an external address, so it must not live forever. Unsubscribe links must keep working in old mail for much longer.
+
+Behaviour on an invalid or expired token:
 
 - the pixel still returns a 1x1 GIF (no event recorded), with `Cache-Control: no-store`;
-- a click returns 404.
+- a click returns 404 for an invalid token and 410 for an expired one, without a redirect;
+- the unsubscribe page says the link is invalid.
+
+### Secret rotation
+
+Tokens are signed with a secret stored in the database (generated on first use). **Settings → Tracking → Rotate secret** creates a new one. The current secret becomes the previous one and is still accepted, so links in mail already sent keep working. The secret before the previous one is dropped: links signed with it stop working. Rotate if the secret may have leaked (for example, a database backup got out), and do not rotate twice in a row without a reason.
 
 ## How to enable
 
@@ -33,7 +49,9 @@ Behaviour on an invalid token:
 | Opens enabled by default | Whether new campaigns track opens |
 | Clicks enabled by default | Same for clicks |
 
-If neither a proxying domain nor `server.public_url` is set, tracking is off. Emails go out without pixel, tracked links and unsubscribe link.
+If the proxying domain is empty, tracking links and redirects go through the panel address (`server.public_url`). The settings page warns about it: a separate domain is recommended, see [Separate tracking domain](#separate-tracking-domain-proxy).
+
+If neither a proxying domain nor `server.public_url` is set, a campaign cannot be sent: every campaign message must carry an unsubscribe link, and there is no public address for it. API mail goes out without pixel and tracked links.
 
 ### Campaign
 
@@ -43,7 +61,7 @@ The campaign form has three options:
 - **Track clicks**;
 - **Add UTM tags**.
 
-Defaults for a new campaign come from Settings. Unsubscribe is always on.
+Defaults for a new campaign come from Settings. Unsubscribe is always on and does not depend on these options: a campaign with opens and clicks off still gets the unsubscribe link and `List-Unsubscribe` headers.
 
 UTM tags are added to the URL on redirect:
 
@@ -104,7 +122,7 @@ If the template lacks it, the job start page shows a warning.
 
 1. The reader opens `/u/{token}` and sees a page with the address and an "Unsubscribe" button.
 2. The unsubscribe happens only after the button is pressed (POST). Antivirus software opens every link in a message, so unsubscribing on a plain visit would unsubscribe people without their knowledge.
-3. The page says "You are unsubscribing from the <sender> mailing at <email>". After the click it says "You are unsubscribed" and offers "Resubscribe".
+3. The page says that <email> is being unsubscribed from this mailing list of <sender>, and that other mailings the reader is subscribed to keep coming. The internal address book name is not shown. After the click it says "You are unsubscribed" and offers "Resubscribe".
 4. A one-click request from a mail client (via `List-Unsubscribe-Post`) unsubscribes immediately, without a page.
 
 ### Unsubscribe applies to one address book
@@ -114,9 +132,10 @@ An unsubscribe applies to one address book: the book the job was sent to. The re
 - If the same address is in another book, a campaign sent to that book still reaches it.
 - Re-importing a CSV into the book does not resubscribe the address.
 - Unsubscribed recipients of the book are not added to a job at start. The job page shows "Skipped (unsubscribed in this book)": the number of unsubscribed recipients of the book at job start.
+
 There is no separate Unsubscribes section. Unsubscribed addresses are visible in the address book (`/recipients/{id}`): the status filter "Unsubscribed" lists them. The status can be changed back in the recipient editor.
 
-The `unsubscribes` table is a journal per (book, email). Sending decisions use the recipient status.
+The `unsubscribes` table is a journal per (book, email): when, from which campaign and how (link or one-click) the address unsubscribed. The panel only writes it; sending decisions use the recipient status.
 
 ## Click map
 
@@ -145,22 +164,38 @@ Links hidden by a condition and not visible in the preview appear only in the ta
 
 | Metric | Formula |
 |---|---|
-| Delivered | Messages with status "delivered" |
-| Unique opens | Recipients who opened at least once |
-| Total opens | All opens |
+| Delivered | Messages accepted by the MTA: status "queued" or "sent". Failed, skipped and not yet sent messages are not counted |
+| Unique opens | Delivered messages opened at least once |
+| Total opens | Sum of open counters of delivered messages |
 | Open Rate | unique opens / delivered |
-| Unique clicks | Recipients who clicked at least once |
-| Total clicks | All clicks |
+| Unique clicks | Delivered messages clicked at least once |
+| Total clicks | Sum of click counters of delivered messages |
 | CTR | unique clicks / delivered |
 | CTOR | unique clicks / unique opens |
-| Unsubscribes | Number of unsubscribed recipients |
+| Unsubscribes | Delivered messages that led to an unsubscribe |
 | Unsubscribe % | unsubscribes / delivered |
+
+All counts use the same base (delivered messages), so no rate exceeds 100%.
+
+A click implies an open: a message clicked with images blocked counts as opened. If the campaign does not track opens, open metrics are 0 (otherwise Open Rate would consist of clicks only) and CTOR is not computed.
+
+Campaign metrics sum all jobs of the campaign except dry runs. "Skipped as unsubscribed" counts distinct recipients: an address skipped by two jobs counts once.
+
+The engagement cards are hidden when the campaign tracks neither opens nor clicks and there are no unsubscribes.
 
 Metrics appear on the job and campaign pages. The job item list has "Opened" and "Clicks" columns. Send History has an "Opened" column and an event feed in the message card.
 
 ### Machine events
 
-Events from scanners, bots, and clicks within 2 seconds after sending are stored with the `is_machine` flag and excluded from statistics. Raw data is not discarded.
+Events from scanners, bots, clicks with an empty User-Agent, and clicks within 30 seconds after the message was handed to the MTA (link scanners of the receiving side) are stored with the `is_machine` flag and excluded from statistics. Raw data is not discarded.
+
+### Repeats and limits
+
+The public endpoints accept requests from anyone, so the panel limits what gets stored:
+
+- a repeat of the same event (message, type, link, IP) within 30 seconds is not recorded and does not change the counters: reloading the pixel or double-clicking counts once;
+- User-Agent is cut to 512 bytes and the URL to 2048 bytes;
+- request headers are limited to 16 KB, the unsubscribe form body to 64 KB.
 
 Gmail and Yandex image proxies count as real opens.
 
@@ -170,7 +205,7 @@ Gmail and Yandex image proxies count as real opens.
 - Some clients block images. Those opens are not seen.
 - An API message with several recipients (`to`, `cc`, `bcc`) has one pixel. An open counts for the message, not for a specific recipient.
 - No unsubscribe for API mail yet.
-- Raw events are kept forever (table `email_events`). Retention will be decided later.
+- Raw events are kept until the job or campaign is deleted (table `email_events`). Retention will be decided later.
 - User-Agent parsing, GeoIP, hourly charts, spam complaints and bounces are out of scope. User-Agent and IP are stored.
 
 ## Privacy
@@ -217,7 +252,25 @@ server {
 }
 ```
 
-`$remote_addr` here is the reader IP. The panel reads it from `X-Real-IP`, then `X-Forwarded-For`. The headers are not verified: forging them only changes the IP in statistics.
+`$remote_addr` here is the reader IP.
+
+### Reader IP and trusted proxies
+
+The panel takes the reader IP from `X-Real-IP` and `X-Forwarded-For` only if the request came from a trusted proxy listed in `server.trusted_proxies` of `web.yaml`. Otherwise anyone could put any IP into these headers, and the TCP peer address is used instead.
+
+```yaml
+server:
+  trusted_proxies:
+    - "127.0.0.0/8"     # nginx on the panel host
+    - "::1/128"
+    - "203.0.113.10"    # the lnk.example.com proxy server
+```
+
+If the option is omitted, loopback and private networks are trusted: `127.0.0.0/8`, `::1/128`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7` (a reverse proxy on the same host or a Docker bridge). An empty list `[]` trusts nobody. If hosts of your private network can reach the panel directly, list only the real proxies.
+
+With a chain of proxies (lnk proxy, then nginx on the panel host) list all of them. If `X-Real-IP` names a trusted proxy (the inner nginx overwrote it), the panel takes the right-most `X-Forwarded-For` address that is not a trusted proxy.
+
+The same rule applies to the client IP of panel API sends, the `server.allowed_ips` check and the audit log.
 
 ### Setup steps
 

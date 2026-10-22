@@ -903,19 +903,6 @@ td.actions form {
     font-size: 0.875rem;
 }
 
-/* Stats Overview */
-.stats-overview {
-    display: flex;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-    flex-wrap: wrap;
-}
-
-.stats-overview .stat-card {
-    min-width: 150px;
-    flex: 1;
-}
-
 /* Info List (description list) */
 .info-list {
     display: grid;
@@ -966,10 +953,6 @@ td.actions form {
 /* Text colors */
 .text-danger {
     color: var(--error);
-}
-
-.text-success {
-    color: var(--success);
 }
 
 /* Diff view */

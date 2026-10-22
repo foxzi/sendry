@@ -113,7 +113,7 @@ sendry_domains:
     rate_limit:
       messages_per_hour: 1000
       messages_per_day: 10000
-      recipients_per_message: 100
+      recipients_per_message: 100  # not implemented yet: stored, not enforced
 
   staging.example.com:
     dkim_enabled: true

@@ -66,7 +66,14 @@ func TestValidateTrackingBaseURL(t *testing.T) {
 func TestTrackingSettingsSave(t *testing.T) {
 	h := newTrackingTestHandlers(t)
 
-	rec := postForm(h.TrackingSettingsSave, "/settings/tracking", url.Values{
+	// Without a proxying domain the page warns that the panel address is used
+	rec := httptest.NewRecorder()
+	h.TrackingSettings(rec, httptest.NewRequest(http.MethodGet, "/settings/tracking", nil))
+	if !strings.Contains(rec.Body.String(), "trk.no_base_url_warn") {
+		t.Errorf("no warning without base_url")
+	}
+
+	rec = postForm(h.TrackingSettingsSave, "/settings/tracking", url.Values{
 		"base_url":      {"lnk.example.com"},
 		"opens_default": {"1"},
 	})
@@ -84,7 +91,8 @@ func TestTrackingSettingsSave(t *testing.T) {
 	// The page shows the effective origin
 	rec = httptest.NewRecorder()
 	h.TrackingSettings(rec, httptest.NewRequest(http.MethodGet, "/settings/tracking", nil))
-	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "https://lnk.example.com/t/c/") {
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "https://lnk.example.com/t/c/") ||
+		strings.Contains(rec.Body.String(), "trk.no_base_url_warn") {
 		t.Errorf("settings page: %d %s", rec.Code, rec.Body.String())
 	}
 
@@ -103,9 +111,30 @@ func TestTrackingSettingsSave(t *testing.T) {
 	}
 }
 
+func TestTrackingSecretRotate(t *testing.T) {
+	h := newTrackingTestHandlers(t)
+	before, err := h.settings.GetTrackingSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := postForm(h.TrackingSecretRotate, "/settings/tracking/rotate-secret", url.Values{})
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/settings/tracking?rotated=1" {
+		t.Fatalf("code = %d loc = %q", rec.Code, rec.Header().Get("Location"))
+	}
+	after, _ := h.settings.GetTrackingSettings()
+	if after.Secret == before.Secret || after.PreviousSecret != before.Secret {
+		t.Errorf("rotation: before %q, after %+v", before.Secret, after)
+	}
+}
+
 func seedJob(t *testing.T, h *Handlers) *models.SendJob {
 	t.Helper()
-	c := &models.Campaign{Name: "camp", FromEmail: "a@example.com"}
+	return seedJobTracked(t, h, true)
+}
+
+func seedJobTracked(t *testing.T, h *Handlers, trackOpens bool) *models.SendJob {
+	t.Helper()
+	c := &models.Campaign{Name: "camp", FromEmail: "a@example.com", TrackOpens: trackOpens}
 	if err := h.campaigns.Create(c); err != nil {
 		t.Fatal(err)
 	}
@@ -166,6 +195,11 @@ func TestClickMapSnapshot(t *testing.T) {
 	if !strings.Contains(csp, "default-src 'none'") || strings.Contains(csp, "script-src") {
 		t.Errorf("csp = %q", csp)
 	}
+	for _, d := range []string{"form-action 'none'", "base-uri 'none'", "frame-ancestors 'self'"} {
+		if !strings.Contains(csp, d) {
+			t.Errorf("csp lacks %q: %q", d, csp)
+		}
+	}
 	if rec.Header().Get("X-Frame-Options") != "SAMEORIGIN" || !strings.HasPrefix(rec.Header().Get("Content-Type"), "text/html") {
 		t.Errorf("headers: %v", rec.Header())
 	}
@@ -195,6 +229,14 @@ func TestJobViewRendersTrackingStats(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("job view lacks %q", want)
 		}
+	}
+
+	// A campaign without open/click tracking shows no engagement cards
+	off := seedJobTracked(t, h, false)
+	rec = httptest.NewRecorder()
+	h.JobView(rec, withID(httptest.NewRequest(http.MethodGet, "/jobs/"+off.ID, nil), off.ID))
+	if rec.Code != 200 || strings.Contains(rec.Body.String(), "Opened (unique)") {
+		t.Errorf("untracked job view: %d, cards shown", rec.Code)
 	}
 
 	rec = httptest.NewRecorder()

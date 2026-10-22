@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -25,8 +26,6 @@ type Worker struct {
 	campaigns *repository.CampaignRepository
 	templates *repository.TemplateRepository
 	settings  *repository.SettingsRepository
-	tracking  *repository.TrackingRepository
-	unsubs    *repository.UnsubscribeRepository
 	sendry    *sendry.Manager
 
 	batchSize    int
@@ -70,8 +69,6 @@ func New(cfg *config.Config, db *sql.DB, logger *slog.Logger, workerCfg Config) 
 		campaigns:    repository.NewCampaignRepository(db),
 		templates:    repository.NewTemplateRepository(db),
 		settings:     repository.NewSettingsRepository(db),
-		tracking:     repository.NewTrackingRepository(db),
-		unsubs:       repository.NewUnsubscribeRepository(db),
 		sendry:       sendry.NewManager(cfg.Sendry.Servers),
 		batchSize:    workerCfg.BatchSize,
 		pollInterval: workerCfg.PollInterval,
@@ -323,6 +320,20 @@ func (w *Worker) processJob(job *models.SendJob) {
 		return
 	}
 
+	// Campaign mail always carries an unsubscribe link, which needs the public
+	// origin and the token secret. Without them nothing is sent: the items stay
+	// pending and are retried on the next tick.
+	env, err := w.loadTrackingEnv()
+	if err != nil {
+		w.logger.Error("failed to load tracking settings, job items stay pending", "job_id", job.ID, "error", err)
+		return
+	}
+	if env == nil {
+		w.logger.Error("public URL is not configured (tracking base URL or server.public_url), "+
+			"unsubscribe links cannot be built; job items stay pending", "job_id", job.ID)
+		return
+	}
+
 	// Get campaign data for email sending
 	campaign, err := w.campaigns.GetByID(job.CampaignID)
 	if err != nil || campaign == nil {
@@ -342,19 +353,6 @@ func (w *Worker) processJob(job *models.SendJob) {
 		variantMap[variants[i].ID] = &variants[i]
 	}
 
-	// Load templates for variants
-	templateMap := make(map[string]*models.Template)
-	for _, v := range variants {
-		if _, exists := templateMap[v.TemplateID]; !exists {
-			tmpl, err := w.templates.GetByID(v.TemplateID)
-			if err != nil {
-				w.logger.Error("failed to get template", "template_id", v.TemplateID, "error", err)
-				continue
-			}
-			templateMap[v.TemplateID] = tmpl
-		}
-	}
-
 	// Get global variables
 	globalVars, err := w.settings.GetGlobalVariablesMap()
 	if err != nil {
@@ -370,18 +368,25 @@ func (w *Worker) processJob(job *models.SendJob) {
 		}
 	}
 
-	// Tracking environment is loaded once per batch
-	env := w.loadTrackingEnv()
-
-	// Number template links once; the numbers are stable across recipients
-	numberedMap := make(map[string]string, len(templateMap))
-	for id, tmpl := range templateMap {
-		if tmpl != nil {
-			numberedMap[id] = tracking.NumberLinks(tmpl.HTML)
+	// Templates are frozen per job when a variant sends its first message, so
+	// an edit of the template mid-job changes neither the mail nor the data-sl
+	// link numbers the click map snapshot was built with
+	frozen, err := w.jobs.GetVariantTemplates(job.ID)
+	if err != nil {
+		w.logger.Error("failed to load frozen templates", "job_id", job.ID, "error", err)
+		return
+	}
+	tried := map[string]bool{}
+	for _, item := range items {
+		variant := variantMap[item.VariantID]
+		if variant == nil || frozen[variant.ID] != nil || tried[variant.ID] {
+			continue
+		}
+		tried[variant.ID] = true
+		if t := w.freezeVariant(job, variant, globalVars, campaignVars); t != nil {
+			frozen[variant.ID] = t
 		}
 	}
-
-	w.saveSnapshots(job, items, variantMap, templateMap, numberedMap, globalVars, campaignVars)
 
 	// Process items concurrently
 	sem := make(chan struct{}, w.concurrency)
@@ -403,7 +408,7 @@ func (w *Worker) processJob(job *models.SendJob) {
 				wg.Done()
 			}()
 
-			w.processItem(&item, campaign, variantMap, templateMap, numberedMap, env, globalVars, campaignVars)
+			w.processItem(&item, campaign, variantMap, frozen, env, globalVars, campaignVars)
 		}(item)
 	}
 
@@ -422,8 +427,7 @@ func (w *Worker) processItem(
 	item *models.SendJobItem,
 	campaign *models.Campaign,
 	variantMap map[string]*models.CampaignVariant,
-	templateMap map[string]*models.Template,
-	numberedMap map[string]string,
+	frozen map[string]*models.JobVariantTemplate,
 	env *trackingEnv,
 	globalVars map[string]string,
 	campaignVars map[string]string,
@@ -435,8 +439,8 @@ func (w *Worker) processItem(
 		return
 	}
 
-	// Get template
-	tmpl, ok := templateMap[variant.TemplateID]
+	// Get the template frozen for this job
+	tmpl, ok := frozen[variant.ID]
 	if !ok || tmpl == nil {
 		w.updateItemFailed(item.ID, "template not found")
 		return
@@ -474,12 +478,8 @@ func (w *Worker) processItem(
 		return
 	}
 
-	// Render HTML and text with variable substitution
-	numbered, ok := numberedMap[variant.TemplateID]
-	if !ok {
-		numbered = tmpl.HTML
-	}
-	html, err := buildCampaignHTML(numbered, vars, env, campaign, item.ID)
+	// Render HTML (links already numbered) and text with variable substitution
+	html, err := buildCampaignHTML(tmpl.HTML, vars, env, campaign, item.ID)
 	if err != nil {
 		w.updateItemFailed(item.ID, "render html: "+err.Error())
 		return
@@ -571,27 +571,29 @@ func formatFrom(email, name string) string {
 	return name + " <" + email + ">"
 }
 
-// trackingEnv is what the worker needs to build tracked mail. A nil env means
-// tracking is unavailable and mail is sent as is.
+// trackingEnv is the public origin and token signer of campaign mail: the
+// unsubscribe link always needs it, opens/clicks tracking when enabled.
 type trackingEnv struct {
 	baseURL string
 	signer  *tracking.Signer
 }
 
-// loadTrackingEnv loads tracking settings and the token signer. It returns nil
-// (and logs) when they are unavailable: a send must never fail because of tracking.
-func (w *Worker) loadTrackingEnv() *trackingEnv {
+// loadTrackingEnv loads tracking settings and the token signer. It returns
+// (nil, nil) when no public origin (tracking base URL or server.public_url)
+// is configured.
+func (w *Worker) loadTrackingEnv() (*trackingEnv, error) {
 	ts, err := w.settings.GetTrackingSettings()
-	if err != nil || ts == nil || ts.Secret == "" {
-		w.logger.Error("tracking settings unavailable, sending without tracking", "error", err)
-		return nil
+	if err != nil {
+		return nil, err
+	}
+	if ts == nil || ts.Secret == "" {
+		return nil, errors.New("tracking secret is missing")
 	}
 	base := tracking.ResolveBaseURL(ts.BaseURL, w.cfg.Server.PublicURL)
 	if base == "" {
-		w.logger.Warn("tracking base URL is not configured, sending without tracking")
-		return nil
+		return nil, nil
 	}
-	return &trackingEnv{baseURL: base, signer: tracking.NewSigner([]byte(ts.Secret))}
+	return &trackingEnv{baseURL: base, signer: tracking.NewSigner([]byte(ts.Secret))}, nil
 }
 
 // unsubscribeURL returns the signed unsubscribe link of a job item, or "" without env
@@ -603,24 +605,20 @@ func (e *trackingEnv) unsubscribeURL(itemID string) string {
 }
 
 // buildCampaignHTML renders numbered template HTML with the recipient variables
-// and applies open/click tracking (and UTM when the campaign asks for it).
+// and applies open/click tracking and UTM, as the campaign asks. UTM does not
+// depend on click tracking. A nil env only strips the numbering (and adds UTM).
 func buildCampaignHTML(numbered string, vars map[string]any, env *trackingEnv, campaign *models.Campaign, itemID string) (string, error) {
 	html, err := renderTemplate("html", numbered, vars)
 	if err != nil {
 		return "", err
 	}
-	if env == nil {
-		// Without tracking only strip the numbering attributes
-		return tracking.Apply(html, tracking.Options{}), nil
-	}
 
-	opts := tracking.Options{
-		BaseURL:     env.baseURL,
-		Signer:      env.signer,
-		SourceType:  models.SourceJobItem,
-		SourceID:    itemID,
-		TrackOpens:  campaign.TrackOpens,
-		TrackClicks: campaign.TrackClicks,
+	opts := tracking.Options{SourceType: models.SourceJobItem, SourceID: itemID}
+	if env != nil {
+		opts.BaseURL = env.baseURL
+		opts.Signer = env.signer
+		opts.TrackOpens = campaign.TrackOpens
+		opts.TrackClicks = campaign.TrackClicks
 	}
 	if campaign.AddUTM {
 		opts.UTM = &tracking.UTM{
@@ -653,70 +651,58 @@ func campaignHeaders(campaign *models.Campaign, env *trackingEnv, itemID string)
 	return headers
 }
 
-// saveSnapshots stores, for every variant used by this batch that has no
-// snapshot yet, the numbered HTML and its link list. The first item of the batch
-// for the variant supplies the recipient variables. Failures are only logged.
-func (w *Worker) saveSnapshots(
+// freezeVariant loads the current template of a variant, numbers its links
+// and stores it as the job's frozen source together with the click map
+// snapshot. Returns nil if the template is missing. A failed save is only
+// logged: the batch is still sent with this source.
+func (w *Worker) freezeVariant(
 	job *models.SendJob,
-	items []models.SendJobItem,
-	variantMap map[string]*models.CampaignVariant,
-	templateMap map[string]*models.Template,
-	numberedMap map[string]string,
+	variant *models.CampaignVariant,
 	globalVars map[string]string,
 	campaignVars map[string]string,
-) {
-	existing, err := w.tracking.GetSnapshots(job.ID)
-	if err != nil {
-		w.logger.Error("failed to load snapshots", "job_id", job.ID, "error", err)
-		return
-	}
-	done := make(map[string]bool, len(existing))
-	for _, sn := range existing {
-		done[sn.VariantID] = true
+) *models.JobVariantTemplate {
+	tmpl, err := w.templates.GetByID(variant.TemplateID)
+	if err != nil || tmpl == nil {
+		w.logger.Error("failed to get template", "job_id", job.ID, "template_id", variant.TemplateID, "error", err)
+		return nil
 	}
 
-	for _, item := range items {
-		if done[item.VariantID] {
-			continue
-		}
-		done[item.VariantID] = true // try once per batch
-
-		variant := variantMap[item.VariantID]
-		if variant == nil {
-			continue
-		}
-		tmpl := templateMap[variant.TemplateID]
-		numbered, ok := numberedMap[variant.TemplateID]
-		if tmpl == nil || !ok {
-			continue
-		}
-
-		vars := mergeVariables(globalVars, campaignVars, item.RecipientVariables)
-		vars["email"] = item.Email
-		vars["recipient_email"] = item.Email
-		if item.RecipientName != "" {
-			vars["name"] = item.RecipientName
-			vars["recipient_name"] = item.RecipientName
-		}
-		vars["unsubscribe_url"] = "#"
-
-		html, err := renderTemplate("html", numbered, vars)
-		if err != nil {
-			w.logger.Error("failed to render snapshot", "job_id", job.ID, "variant_id", variant.ID, "error", err)
-			continue
-		}
-
-		snap := &models.JobVariantSnapshot{
-			JobID:           job.ID,
-			VariantID:       variant.ID,
-			VariantName:     variant.Name,
-			TemplateID:      tmpl.ID,
-			TemplateVersion: tmpl.CurrentVersion,
-			HTML:            html,
-			Links:           tracking.ExtractLinks(numbered),
-		}
-		if err := w.tracking.SaveSnapshot(snap); err != nil {
-			w.logger.Error("failed to save snapshot", "job_id", job.ID, "variant_id", variant.ID, "error", err)
-		}
+	t := &models.JobVariantTemplate{
+		VariantID:       variant.ID,
+		TemplateID:      tmpl.ID,
+		TemplateVersion: tmpl.CurrentVersion,
+		Subject:         tmpl.Subject,
+		HTML:            tracking.NumberLinks(tmpl.HTML),
+		Text:            tmpl.Text,
 	}
+
+	snap := &models.JobVariantSnapshot{
+		JobID:       job.ID,
+		VariantID:   variant.ID,
+		VariantName: variant.Name,
+		HTML:        t.HTML,
+		Links:       tracking.ExtractLinks(t.HTML),
+	}
+	if html, err := renderTemplate("html", t.HTML, snapshotVars(globalVars, campaignVars)); err != nil {
+		w.logger.Error("failed to render snapshot", "job_id", job.ID, "variant_id", variant.ID, "error", err)
+	} else {
+		snap.HTML = html
+	}
+
+	if err := w.jobs.FreezeVariantTemplate(snap, t); err != nil {
+		w.logger.Error("failed to save snapshot", "job_id", job.ID, "variant_id", variant.ID, "error", err)
+	}
+	return t
+}
+
+// snapshotVars are the variables the click map snapshot is rendered with:
+// global and campaign variables, and placeholders instead of recipient data,
+// so no personal data of a real recipient is stored.
+func snapshotVars(global, campaign map[string]string) map[string]any {
+	vars := mergeVariables(global, campaign, "")
+	for _, k := range []string{"email", "recipient_email", "name", "recipient_name"} {
+		vars[k] = "{{" + k + "}}"
+	}
+	vars["unsubscribe_url"] = "#"
+	return vars
 }

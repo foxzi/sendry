@@ -660,6 +660,8 @@ POST /api/v1/domains
 
 **Response (201 Created):** Domain object.
 
+Not implemented yet: `default_from`, `tls` (per-domain certificate) and `rate_limit.recipients_per_message` are stored and returned, but the MTA does not apply them.
+
 ### Get Domain
 
 ```
@@ -707,6 +709,36 @@ POST /api/v1/dkim/generate
 ```
 
 **Response (201 Created):**
+```json
+{
+  "domain": "example.com",
+  "selector": "default",
+  "dns_name": "default._domainkey.example.com",
+  "dns_record": "v=DKIM1; k=rsa; p=MIIBIjANBgkq...",
+  "key_file": "/var/lib/sendry/dkim/example.com/default.key"
+}
+```
+
+### Upload DKIM Key
+
+```
+POST /api/v1/dkim/upload
+```
+
+Stores an existing private key (PEM, PKCS#1 or PKCS#8 RSA) as `/var/lib/sendry/dkim/<domain>/<selector>.key`, overwriting a key with the same selector. The domain DKIM settings are not changed: enable DKIM for the domain separately (`PUT /api/v1/domains/{domain}`).
+
+**Request:**
+```json
+{
+  "domain": "example.com",
+  "selector": "default",
+  "private_key": "-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----\n"
+}
+```
+
+`domain` and `private_key` are required, `selector` defaults to `default`. `domain` and `selector` must be safe for a file path. An invalid key returns `400 invalid private key format`.
+
+**Response (201 Created):** same as for generate:
 ```json
 {
   "domain": "example.com",
@@ -901,6 +933,8 @@ PUT /api/v1/ratelimits/{domain}
 ```
 
 **Response:** Updated rate limit object.
+
+`recipients_per_message` is not implemented yet: stored, not enforced.
 
 ---
 

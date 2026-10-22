@@ -19,8 +19,6 @@ const (
 const (
 	UnsubSourceLink     = "link"      // confirmed on the unsubscribe page
 	UnsubSourceOneClick = "one_click" // RFC 8058 POST from the mail client
-	UnsubSourceManual   = "manual"    // added by an operator in the panel
-	UnsubSourceImport   = "import"    // bulk import
 )
 
 // RecipientStatusUnsubscribed is the recipients.status value of an address
@@ -47,24 +45,23 @@ type EmailEvent struct {
 
 // TrackingSource is the context a tracking token resolves to
 type TrackingSource struct {
-	SourceType   string
-	SourceID     string
-	Email        string
-	CampaignID   string
-	CampaignName string
-	FromName     string
-	FromEmail    string
-	JobID        string
-	VariantID    string
-	ListID       string     // address book the job was sent to (job items only)
-	RecipientID  string     // recipients.id (job items only)
-	SentAt       *time.Time // when the message was handed to the MTA, if known
+	SourceType  string
+	SourceID    string
+	Email       string
+	CampaignID  string
+	FromName    string
+	FromEmail   string
+	JobID       string
+	VariantID   string
+	ListID      string     // address book the job was sent to (job items only)
+	RecipientID string     // recipients.id (job items only)
+	SentAt      *time.Time // when the message was handed to the MTA (queued), if known
 }
 
-// Unsubscribe is an unsubscribed address of one address book (recipient list).
-// Entries listed in the panel come from recipients with status unsubscribed,
-// joined with the unsubscribes journal; an address set to unsubscribed by hand
-// in the recipient editor has no journal data (zero CreatedAt, empty source).
+// Unsubscribe is a row of the unsubscribes journal: when, from which campaign
+// and how an address unsubscribed from one address book (recipient list).
+// The journal is write-only for now (nothing reads it back); whether an
+// address gets mail is decided by recipients.status alone.
 type Unsubscribe struct {
 	ID          int64     `json:"id"`
 	ListID      string    `json:"list_id"`
@@ -85,6 +82,9 @@ type TrackingSettings struct {
 	OpensDefault  bool   `json:"opens_default"`
 	ClicksDefault bool   `json:"clicks_default"`
 	Secret        string `json:"-"` // HMAC key for tokens, generated on first use
+	// PreviousSecret is the key before the last rotation, still accepted
+	// when verifying tokens. Empty if the secret was never rotated.
+	PreviousSecret string `json:"-"`
 }
 
 // LinkInfo describes one numbered link of a template snapshot
@@ -107,16 +107,19 @@ type JobVariantSnapshot struct {
 	CreatedAt       time.Time  `json:"created_at"`
 }
 
-// TrackingStats aggregates engagement for a job or a campaign
+// TrackingStats aggregates engagement for a job or a campaign. Unique and
+// total counts are taken over the Delivered items only, so every rate is at
+// most 100%.
 type TrackingStats struct {
-	Total        int `json:"total"`         // messages in scope
-	Delivered    int `json:"delivered"`     // status sent (accepted by recipient MX)
-	UniqueOpens  int `json:"unique_opens"`  // messages opened at least once
-	TotalOpens   int `json:"total_opens"`   // all non-machine open events
+	Total        int `json:"total"`         // messages in scope (skipped items excluded)
+	Delivered    int `json:"delivered"`     // accepted by the MTA: status queued or sent
+	UniqueOpens  int `json:"unique_opens"`  // messages opened at least once (0 if opens are not tracked)
+	TotalOpens   int `json:"total_opens"`   // sum of per-message human open counters
 	UniqueClicks int `json:"unique_clicks"` // messages clicked at least once
-	TotalClicks  int `json:"total_clicks"`  // all non-machine click events
+	TotalClicks  int `json:"total_clicks"`  // sum of per-message human click counters
 	Unsubscribed int `json:"unsubscribed"`  // messages that led to an unsubscribe
-	SkippedUnsub int `json:"skipped_unsub"` // recipients skipped at job start (stop list)
+	SkippedUnsub int `json:"skipped_unsub"` // distinct recipients skipped as unsubscribed
+	Jobs         int `json:"jobs"`          // jobs in scope
 }
 
 func pct(a, b int) float64 {

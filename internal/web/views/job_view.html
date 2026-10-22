@@ -14,6 +14,11 @@
             <button type="submit" class="btn btn-primary">Resume</button>
         </form>
         {{end}}
+        {{if and (or (eq .Job.Status "completed") (eq .Job.Status "failed")) (gt .Stats.Failed 0)}}
+        <form method="post" action="/jobs/{{.Job.ID}}/retry" style="display:inline" onsubmit="return confirm('Retry failed items?')">
+            <button type="submit" class="btn btn-primary">Retry failed</button>
+        </form>
+        {{end}}
         {{if or (eq .Job.Status "running") (eq .Job.Status "paused") (eq .Job.Status "scheduled")}}
         <form method="post" action="/jobs/{{.Job.ID}}/cancel" style="display:inline" onsubmit="return confirm('Cancel this job?')">
             <button type="submit" class="btn btn-danger">Cancel</button>
@@ -21,6 +26,8 @@
         {{end}}
     </div>
 </div>
+
+{{if .Success}}<div class="alert alert-success">{{.Success}}</div>{{end}}
 
 <div class="tabs" style="margin-bottom: 1rem">
     <a href="/jobs/{{.Job.ID}}" class="tab active" data-i18n="trk.tab_overview">Overview</a>
@@ -48,6 +55,10 @@
     <div class="stat-card">
         <div class="stat-value" style="color: var(--error)">{{.Stats.Failed}}</div>
         <div class="stat-label">Failed</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: var(--text-muted)">{{.Stats.Skipped}}</div>
+        <div class="stat-label">Skipped</div>
     </div>
 </div>
 

@@ -110,3 +110,41 @@ func TestCampaignHeaders(t *testing.T) {
 		t.Errorf("expected no headers without env and reply-to, got %v", h)
 	}
 }
+
+func TestBuildCampaignHTML_UTMWithoutClickTracking(t *testing.T) {
+	c := &models.Campaign{ID: "c1", Name: "Spring", AddUTM: true}
+	html, err := buildFor(t, c, testEnv())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(html, "/t/c/") || strings.Contains(html, "data-sl") {
+		t.Errorf("no click tracking expected: %s", html)
+	}
+	if !strings.Contains(html, `href="https://shop.example.com/bob?utm_source=email&amp;utm_medium=email&amp;utm_campaign=Spring&amp;sc=c1&amp;sr=item1&amp;sl=1"`) {
+		t.Errorf("UTM missing: %s", html)
+	}
+	if !strings.Contains(html, `href="https://lnk.example.com/u/`) || strings.Contains(html, "/u/?utm") {
+		t.Errorf("unsubscribe link must stay without UTM: %s", html)
+	}
+}
+
+func TestBuildCampaignHTML_Empty(t *testing.T) {
+	c := &models.Campaign{ID: "c1", TrackOpens: true, TrackClicks: true}
+	for _, src := range []string{"", "  \n"} {
+		html, err := buildCampaignHTML(src, map[string]any{}, testEnv(), c, "item1")
+		if err != nil || html != "" {
+			t.Errorf("%q: got %q, %v; want empty HTML without a pixel", src, html, err)
+		}
+	}
+}
+
+func TestSnapshotVarsHaveNoRecipientData(t *testing.T) {
+	src := tracking.NumberLinks(`<p>Hi {{name}} ({{email}}), {{promo}} {{city}}</p><a href="{{unsubscribe_url}}">u</a>`)
+	html, err := renderTemplate("html", src, snapshotVars(map[string]string{"promo": "SALE"}, map[string]string{"city": "Kazan"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(html, "Hi {{name}} ({{email}}), SALE Kazan") || !strings.Contains(html, `href="#"`) {
+		t.Errorf("snapshot = %s", html)
+	}
+}

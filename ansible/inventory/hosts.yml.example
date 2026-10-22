@@ -127,12 +127,12 @@ all:
         sendry_web_multi_send_failover_max_retries: 2
 
         # Optional: weighted balancing
-        # sendry_web_multi_send_strategy: weighted_round_robin
+        # sendry_web_multi_send_strategy: weighted
         # sendry_web_multi_send_weights:
         #   mta-1: 3
         #   mta-2: 1
 
-        # Optional: domain affinity (specific domains to specific servers)
+        # Optional: domain affinity (specific domains to specific servers) - not implemented yet, works as round_robin
         # sendry_web_multi_send_strategy: domain_affinity
         # sendry_web_multi_send_domain_affinity:
         #   "example.com": "mta-1"

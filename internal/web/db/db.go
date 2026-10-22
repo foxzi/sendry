@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -22,28 +23,17 @@ func New(path string) (*DB, error) {
 		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}
 
-	db, err := sql.Open("sqlite3", path+"?_journal_mode=WAL&_busy_timeout=5000")
+	// Foreign keys are enabled in the DSN: PRAGMA foreign_keys is per
+	// connection, and the DSN applies it to every connection of the pool
+	db, err := sql.Open("sqlite3", path+"?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
-	}
-
-	// Enable foreign keys
-	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
-		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
 	}
 
 	return &DB{db}, nil
 }
 
 func (db *DB) Migrate() error {
-	// The first draft of the tracking branch had a global stop list without
-	// list_id. It was never released; drop it so the per-list schema applies.
-	if db.tableExists("unsubscribes") && !db.columnExists("unsubscribes", "list_id") {
-		if _, err := db.Exec("DROP TABLE unsubscribes"); err != nil {
-			return fmt.Errorf("drop draft unsubscribes table: %w", err)
-		}
-	}
-
 	migrations := []string{
 		migrationUsers,
 		migrationSessions,
@@ -107,8 +97,9 @@ func (db *DB) Migrate() error {
 		"ALTER TABLE templates ADD COLUMN container_radius_bottom INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE template_block_refs ADD COLUMN condition TEXT NOT NULL DEFAULT ''",
 		// Open/click tracking and unsubscribes
-		"ALTER TABLE campaigns ADD COLUMN track_opens INTEGER NOT NULL DEFAULT 1",
-		"ALTER TABLE campaigns ADD COLUMN track_clicks INTEGER NOT NULL DEFAULT 1",
+		// Existing campaigns keep sending untracked; new ones take the defaults from settings
+		"ALTER TABLE campaigns ADD COLUMN track_opens INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE campaigns ADD COLUMN track_clicks INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE campaigns ADD COLUMN add_utm INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE api_keys ADD COLUMN track_opens INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE api_keys ADD COLUMN track_clicks INTEGER NOT NULL DEFAULT 0",
@@ -122,9 +113,31 @@ func (db *DB) Migrate() error {
 		"ALTER TABLE sends ADD COLUMN open_count INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE sends ADD COLUMN clicked_at TIMESTAMP",
 		"ALTER TABLE sends ADD COLUMN click_count INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE job_variant_snapshots ADD COLUMN template_subject TEXT",
+		"ALTER TABLE job_variant_snapshots ADD COLUMN template_html TEXT",
+		"ALTER TABLE job_variant_snapshots ADD COLUMN template_text TEXT",
 	}
 	for _, m := range alterMigrations {
 		db.Exec(m) // Ignore errors (column may already exist)
+	}
+
+	// Indexes added after the tables were created, and ones no query uses
+	indexMigrations := []string{
+		"DROP INDEX IF EXISTS idx_email_events_email",
+		"DROP INDEX IF EXISTS idx_email_events_created",
+		"DROP INDEX IF EXISTS idx_unsubscribes_campaign",
+		"DROP INDEX IF EXISTS idx_unsubscribes_created",
+		"CREATE INDEX IF NOT EXISTS idx_email_events_job_stats ON email_events(job_id, type, is_machine)",
+		"CREATE INDEX IF NOT EXISTS idx_email_events_dedup ON email_events(source_type, source_id, type, created_at)",
+	}
+	for _, m := range indexMigrations {
+		if _, err := db.Exec(m); err != nil {
+			return fmt.Errorf("index migration failed: %w", err)
+		}
+	}
+
+	if err := db.normalizeRecipientEmails(); err != nil {
+		return fmt.Errorf("normalize recipient emails: %w", err)
 	}
 
 	if err := db.dropColumnIfExists("templates", "container_background"); err != nil {
@@ -140,6 +153,59 @@ func (db *DB) Migrate() error {
 	return nil
 }
 
+// normalizeRecipientEmails lower-cases recipient emails once and adds the
+// unique index on (list_id, lower(email)), so the same address in different
+// case is one recipient. Addresses that collide after lower-casing are merged
+// into one row: a non-active one wins (an unsubscribe must not be lost), then
+// the oldest. Job items and unsubscribe journal rows are moved to that row.
+func (db *DB) normalizeRecipientEmails() error {
+	var n int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_recipients_list_email'`,
+	).Scan(&n); err != nil {
+		return err
+	}
+	if n > 0 {
+		return nil
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	steps := []string{
+		`CREATE TEMP TABLE recipient_dups (id TEXT PRIMARY KEY, keep_id TEXT NOT NULL)`,
+		`INSERT INTO recipient_dups (id, keep_id)
+		SELECT id, keep_id FROM (
+			SELECT id, FIRST_VALUE(id) OVER (
+				PARTITION BY list_id, lower(trim(email))
+				ORDER BY CASE WHEN COALESCE(status, 'active') = 'active' THEN 1 ELSE 0 END, created_at, id
+			) AS keep_id
+			FROM recipients
+		) WHERE id != keep_id`,
+		`UPDATE send_job_items SET recipient_id = (SELECT keep_id FROM recipient_dups d WHERE d.id = send_job_items.recipient_id)
+		WHERE recipient_id IN (SELECT id FROM recipient_dups)`,
+		`UPDATE unsubscribes SET recipient_id = (SELECT keep_id FROM recipient_dups d WHERE d.id = unsubscribes.recipient_id)
+		WHERE recipient_id IN (SELECT id FROM recipient_dups)`,
+		`DELETE FROM recipients WHERE id IN (SELECT id FROM recipient_dups)`,
+		`UPDATE recipients SET email = lower(trim(email)) WHERE email != lower(trim(email))`,
+		`UPDATE recipient_lists SET
+			total_count = (SELECT COUNT(*) FROM recipients WHERE list_id = recipient_lists.id),
+			active_count = (SELECT COUNT(*) FROM recipients WHERE list_id = recipient_lists.id AND status = 'active')
+		WHERE id IN (SELECT DISTINCT r.list_id FROM recipients r JOIN recipient_dups d ON d.keep_id = r.id)`,
+		`DROP TABLE recipient_dups`,
+		`CREATE UNIQUE INDEX idx_recipients_list_email ON recipients(list_id, lower(email))`,
+	}
+	for _, s := range steps {
+		if _, err := tx.Exec(s); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 func (db *DB) dropColumnIfExists(table, column string) error {
 	if !db.columnExists(table, column) {
 		return nil
@@ -147,12 +213,21 @@ func (db *DB) dropColumnIfExists(table, column string) error {
 	if _, err := db.Exec(fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s", table, column)); err == nil {
 		return nil
 	}
-	if _, err := db.Exec("PRAGMA foreign_keys = OFF"); err != nil {
+
+	// The pragma is per connection (and ignored inside a transaction), so the
+	// whole rebuild runs on one connection with foreign keys off
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, "PRAGMA foreign_keys = OFF"); err != nil {
 		return fmt.Errorf("disable fk: %w", err)
 	}
-	defer db.Exec("PRAGMA foreign_keys = ON")
+	defer conn.ExecContext(ctx, "PRAGMA foreign_keys = ON")
 
-	tx, err := db.Begin()
+	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -187,14 +262,6 @@ func (db *DB) dropColumnIfExists(table, column string) error {
 		return fmt.Errorf("rename: %w", err)
 	}
 	return tx.Commit()
-}
-
-func (db *DB) tableExists(table string) bool {
-	var n int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&n); err != nil {
-		return false
-	}
-	return n > 0
 }
 
 func (db *DB) columnExists(table, column string) bool {
@@ -655,8 +722,6 @@ CREATE TABLE IF NOT EXISTS email_events (
 CREATE INDEX IF NOT EXISTS idx_email_events_source ON email_events(source_type, source_id);
 CREATE INDEX IF NOT EXISTS idx_email_events_job ON email_events(job_id, type);
 CREATE INDEX IF NOT EXISTS idx_email_events_campaign ON email_events(campaign_id, type);
-CREATE INDEX IF NOT EXISTS idx_email_events_email ON email_events(email);
-CREATE INDEX IF NOT EXISTS idx_email_events_created ON email_events(created_at);
 `
 
 // unsubscribes is the journal of unsubscribes per address book (recipient
@@ -676,13 +741,13 @@ CREATE TABLE IF NOT EXISTS unsubscribes (
     created_at TIMESTAMP NOT NULL,
     UNIQUE(list_id, email)
 );
-CREATE INDEX IF NOT EXISTS idx_unsubscribes_campaign ON unsubscribes(campaign_id);
-CREATE INDEX IF NOT EXISTS idx_unsubscribes_created ON unsubscribes(created_at);
 `
 
 // job_variant_snapshots keeps the HTML of each variant as it was when the job
 // started, with data-sl link numbers, so the click map stays correct after
-// the template is edited.
+// the template is edited. html is rendered with placeholder variables for the
+// click map; template_* is the frozen template source (html with data-sl) the
+// worker renders for every recipient of the job.
 const migrationJobVariantSnapshots = `
 CREATE TABLE IF NOT EXISTS job_variant_snapshots (
     job_id TEXT NOT NULL REFERENCES send_jobs(id) ON DELETE CASCADE,
@@ -692,6 +757,9 @@ CREATE TABLE IF NOT EXISTS job_variant_snapshots (
     template_version INTEGER,
     html TEXT NOT NULL,
     links JSON NOT NULL DEFAULT '[]',
+    template_subject TEXT,
+    template_html TEXT,
+    template_text TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (job_id, variant_id)
 );

@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/foxzi/sendry/internal/web/models"
 )
@@ -26,6 +27,25 @@ const (
 // ErrBadToken is returned for malformed tokens or a bad signature
 var ErrBadToken = errors.New("tracking: bad token")
 
+// ErrExpiredToken is returned for a correctly signed token older than MaxAge
+var ErrExpiredToken = errors.New("tracking: token expired")
+
+// Token lifetimes counted from the issue time. A click token is a signed
+// redirect to an arbitrary URL, so it must not live forever; unsubscribe
+// links have to keep working for old mail much longer.
+const (
+	MaxAgeOpenClick   = 180 * 24 * time.Hour
+	MaxAgeUnsubscribe = 2 * 365 * 24 * time.Hour
+)
+
+// MaxAge returns the lifetime of tokens of kind k.
+func MaxAge(k Kind) time.Duration {
+	if k == KindUnsubscribe {
+		return MaxAgeUnsubscribe
+	}
+	return MaxAgeOpenClick
+}
+
 // Payload is what a token carries. SourceType is models.SourceJobItem or models.SourceSend.
 type Payload struct {
 	Kind       Kind
@@ -33,16 +53,27 @@ type Payload struct {
 	SourceID   string
 	LinkID     int    // click only: data-sl number
 	URL        string // click only: final destination URL
+	IssuedAt   int64  // unix seconds; Encode fills the current time when 0
 }
 
-// Signer encodes and verifies tokens with HMAC-SHA256.
+// Signer encodes and verifies tokens with HMAC-SHA256. Tokens are signed
+// with the first key; any key verifies, so after a secret rotation links in
+// mail signed with the previous secret keep working.
 type Signer struct {
-	key []byte
+	keys [][]byte
+	now  func() time.Time
 }
 
 // NewSigner returns a signer for the given secret (must be non-empty).
-func NewSigner(secret []byte) *Signer {
-	return &Signer{key: append([]byte(nil), secret...)}
+// previous are older secrets still accepted by Decode; empty ones are skipped.
+func NewSigner(secret []byte, previous ...[]byte) *Signer {
+	s := &Signer{keys: [][]byte{append([]byte(nil), secret...)}, now: time.Now}
+	for _, p := range previous {
+		if len(p) > 0 {
+			s.keys = append(s.keys, append([]byte(nil), p...))
+		}
+	}
+	return s
 }
 
 const sigLen = 10
@@ -86,13 +117,27 @@ func formatUUID(b []byte) string {
 	return h[0:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:32]
 }
 
-func (s *Signer) sign(payload []byte) []byte {
-	m := hmac.New(sha256.New, s.key)
+func sign(key, payload []byte) []byte {
+	m := hmac.New(sha256.New, key)
 	m.Write(payload)
 	return m.Sum(nil)[:sigLen]
 }
 
+func (s *Signer) sign(payload []byte) []byte { return sign(s.keys[0], payload) }
+
+// verify reports whether sig matches payload under any of the keys.
+func (s *Signer) verify(payload, sig []byte) bool {
+	for _, k := range s.keys {
+		if hmac.Equal(sig, sign(k, payload)) {
+			return true
+		}
+	}
+	return false
+}
+
 // Encode returns a URL-safe token: base64url(payload) "." base64url(truncated HMAC).
+// The payload is kind, source type, issue time (uvarint unix seconds), source
+// id and, for clicks, link id and URL.
 // It returns "" when the payload has an unknown kind or source type.
 func (s *Signer) Encode(p Payload) string {
 	switch p.Kind {
@@ -104,7 +149,12 @@ func (s *Signer) Encode(p Payload) string {
 	if !ok {
 		return ""
 	}
+	iat := p.IssuedAt
+	if iat <= 0 {
+		iat = s.now().Unix()
+	}
 	buf := []byte{byte(p.Kind), sb}
+	buf = binary.AppendUvarint(buf, uint64(iat))
 	if raw, ok := uuidBytes(p.SourceID); ok {
 		buf = append(buf, 1)
 		buf = append(buf, raw...)
@@ -124,7 +174,8 @@ func (s *Signer) Encode(p Payload) string {
 	return b64.EncodeToString(buf) + "." + b64.EncodeToString(s.sign(buf))
 }
 
-// Decode verifies the signature and returns the payload, or ErrBadToken.
+// Decode verifies the signature and returns the payload, ErrBadToken or,
+// for a token older than MaxAge of its kind, ErrExpiredToken.
 func (s *Signer) Decode(token string) (Payload, error) {
 	var zero Payload
 	if s == nil {
@@ -139,10 +190,10 @@ func (s *Signer) Decode(token string) (Payload, error) {
 		return zero, ErrBadToken
 	}
 	sig, err := b64.DecodeString(token[dot+1:])
-	if err != nil || !hmac.Equal(sig, s.sign(buf)) {
+	if err != nil || !s.verify(buf, sig) {
 		return zero, ErrBadToken
 	}
-	if len(buf) < 3 {
+	if len(buf) < 4 {
 		return zero, ErrBadToken
 	}
 	p := Payload{Kind: Kind(buf[0])}
@@ -156,8 +207,13 @@ func (s *Signer) Decode(token string) (Payload, error) {
 		return zero, ErrBadToken
 	}
 	p.SourceType = st
-	rest := buf[3:]
-	switch buf[2] {
+	iat, k := binary.Uvarint(buf[2:])
+	if k <= 0 || iat == 0 || iat > 1<<40 || len(buf) < 2+k+1 {
+		return zero, ErrBadToken
+	}
+	p.IssuedAt = int64(iat)
+	rest := buf[2+k+1:]
+	switch buf[2+k] {
 	case 1:
 		if len(rest) < 16 {
 			return zero, ErrBadToken
@@ -183,6 +239,9 @@ func (s *Signer) Decode(token string) (Payload, error) {
 		p.URL = string(rest[k:])
 	} else if len(rest) != 0 {
 		return zero, ErrBadToken
+	}
+	if s.now().Sub(time.Unix(p.IssuedAt, 0)) > MaxAge(p.Kind) {
+		return zero, ErrExpiredToken
 	}
 	return p, nil
 }

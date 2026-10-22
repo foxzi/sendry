@@ -1,8 +1,10 @@
 package repository
 
 import (
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/foxzi/sendry/internal/web/models"
 )
@@ -128,18 +130,28 @@ func TestTracking_ResolveSourceJobItem(t *testing.T) {
 	if err != nil || src == nil {
 		t.Fatalf("ResolveSource = %v, %v", src, err)
 	}
-	if src.Email != "user0@example.org" || src.CampaignID != "c1" || src.CampaignName != "camp" ||
+	if src.Email != "user0@example.org" || src.CampaignID != "c1" ||
 		src.JobID != "job-1" || src.VariantID != "v1" || src.ListID != "l1" || src.RecipientID != "r0" || src.FromEmail != "a@example.com" || src.SentAt != nil {
 		t.Errorf("src = %+v", src)
 	}
 	if s, err := repo.ResolveSource(models.SourceJobItem, "nope"); s != nil || err != nil {
 		t.Errorf("missing: %v %v", s, err)
 	}
+
+	// SentAt is the hand-over to the MTA (queued_at), not the delivery report
+	queuedAt := time.Date(2026, 5, 1, 10, 0, 0, 0, time.UTC)
+	mustExec(t, db, `UPDATE send_job_items SET status = 'sent', queued_at = ?, sent_at = ? WHERE id = ?`,
+		queuedAt, queuedAt.Add(time.Hour), ids[0])
+	src, err = repo.ResolveSource(models.SourceJobItem, ids[0])
+	if err != nil || src.SentAt == nil || !src.SentAt.Equal(queuedAt) {
+		t.Errorf("SentAt = %v, %v; want %v", src.SentAt, err, queuedAt)
+	}
 }
 
 func TestTracking_JobAndCampaignStats(t *testing.T) {
 	db := setupTestDB(t)
 	setupJobWithItems(t, db, [][2]string{{"sent", ""}, {"sent", ""}, {"sent", ""}, {"failed", "boom"}})
+	mustExec(t, db, `UPDATE campaigns SET track_opens = 1, track_clicks = 1 WHERE id = 'c1'`)
 	jobs := NewJobRepository(db)
 	repo := NewTrackingRepository(db)
 	ids := jobItemIDs(t, jobs, "job-1")
@@ -157,12 +169,15 @@ func TestTracking_JobAndCampaignStats(t *testing.T) {
 	rec(jobEvent(models.EventClick, ids[0], intp(1), false))
 	rec(jobEvent(models.EventClick, ids[1], intp(2), false))
 	rec(jobEvent(models.EventUnsubscribe, ids[2], nil, false))
-	if err := jobs.SetSkippedUnsubscribed("job-1", 5); err != nil {
-		t.Fatal(err)
-	}
+	// skipped items are not messages; unsubscribed ones are counted per recipient
+	mustExec(t, db, `INSERT INTO recipients (id, list_id, email) VALUES ('rs', 'l1', 'skipped@example.org')`)
+	mustExec(t, db, `INSERT INTO send_job_items (id, job_id, recipient_id, variant_id, server_name, status, error) VALUES ('sk-1', 'job-1', 'rs', 'v1', 'mx1', 'skipped', ?)`,
+		models.SkipReasonUnsubscribed)
+	mustExec(t, db, `INSERT INTO send_job_items (id, job_id, recipient_id, variant_id, server_name, status, error) VALUES ('sk-2', 'job-1', 'r3', 'v1', 'mx1', 'skipped', ?)`,
+		models.SkipReasonDeleted)
 
 	want := models.TrackingStats{Total: 4, Delivered: 3, UniqueOpens: 2, TotalOpens: 2,
-		UniqueClicks: 2, TotalClicks: 3, Unsubscribed: 1, SkippedUnsub: 5}
+		UniqueClicks: 2, TotalClicks: 3, Unsubscribed: 1, SkippedUnsub: 1, Jobs: 1}
 	got, err := repo.JobStats("job-1")
 	if err != nil || got != want {
 		t.Errorf("JobStats = %+v, %v; want %+v", got, err, want)
@@ -247,7 +262,7 @@ func TestTracking_JobLinkStats(t *testing.T) {
 	// the unknown link carries an URL
 	mustExec(t, db, `UPDATE email_events SET url = 'https://gone.example' WHERE link_id = 9`)
 
-	stats, err := repo.JobLinkStats("job-1", "")
+	stats, err := repo.JobLinkStats("job-1", "", nil)
 	if err != nil || len(stats) != 4 {
 		t.Fatalf("stats = %+v, %v", stats, err)
 	}
@@ -265,7 +280,7 @@ func TestTracking_JobLinkStats(t *testing.T) {
 	}
 
 	// Variant scope: events carry v1, so v2 sees only its snapshot links with zeros
-	stats, err = repo.JobLinkStats("job-1", "v2")
+	stats, err = repo.JobLinkStats("job-1", "v2", nil)
 	if err != nil || len(stats) != 2 || stats[0].Label != "Other" || stats[0].TotalClicks != 0 {
 		t.Errorf("v2 stats = %+v, %v", stats, err)
 	}
@@ -322,5 +337,144 @@ func TestCampaignAndAPIKeyTrackingFlags(t *testing.T) {
 	klist, _, err := keys.List(models.APIKeyFilter{})
 	if err != nil || len(klist) != 1 || klist[0].TrackOpens || !klist[0].TrackClicks {
 		t.Fatalf("keys list = %+v, %v", klist, err)
+	}
+}
+
+func TestTracking_StatsBase(t *testing.T) {
+	db := setupTestDB(t)
+	setupJobWithItems(t, db, [][2]string{{"queued", ""}, {"sent", ""}, {"failed", "boom"}, {"pending", ""}})
+	mustExec(t, db, `UPDATE campaigns SET track_opens = 1, track_clicks = 1 WHERE id = 'c1'`)
+	jobs := NewJobRepository(db)
+	repo := NewTrackingRepository(db)
+	byRecipient := map[string]string{}
+	items, _, _ := jobs.ListItems(models.JobItemFilter{JobID: "job-1"})
+	for _, it := range items {
+		byRecipient[it.RecipientID] = it.ID
+	}
+	queued, failed, pending := byRecipient["r0"], byRecipient["r2"], byRecipient["r3"]
+
+	// Opens on items the MTA has not accepted are outside the base
+	for _, id := range []string{queued, failed, pending} {
+		if err := repo.RecordEvent(jobEvent(models.EventOpen, id, nil, false)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	st, err := repo.JobStats("job-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Total != 4 || st.Delivered != 2 || st.UniqueOpens != 1 || st.TotalOpens != 1 || st.OpenRate() > 100 {
+		t.Errorf("stats = %+v, open rate %v", st, st.OpenRate())
+	}
+
+	// A campaign without the pixel has no opens, even though clicks imply them
+	if err := repo.RecordEvent(jobEvent(models.EventClick, queued, intp(1), false)); err != nil {
+		t.Fatal(err)
+	}
+	mustExec(t, db, `UPDATE campaigns SET track_opens = 0 WHERE id = 'c1'`)
+	st, _ = repo.JobStats("job-1")
+	if st.UniqueOpens != 0 || st.TotalOpens != 0 || st.UniqueClicks != 1 || st.TotalClicks != 1 {
+		t.Errorf("no-pixel stats = %+v", st)
+	}
+	mustExec(t, db, `UPDATE campaigns SET track_opens = 1 WHERE id = 'c1'`)
+
+	// Dry-run jobs do not count in campaign stats; a recipient skipped as
+	// unsubscribed by several jobs counts once
+	skip := models.SkipReasonUnsubscribed
+	mustExec(t, db, `INSERT INTO send_jobs (id, campaign_id, recipient_list_id, status, dry_run)
+		VALUES ('job-dry', 'c1', 'l1', 'completed', 1)`)
+	mustExec(t, db, `INSERT INTO send_job_items (id, job_id, recipient_id, status) VALUES ('dry-1', 'job-dry', 'r0', 'sent')`)
+	mustExec(t, db, `INSERT INTO send_job_items (id, job_id, recipient_id, variant_id, server_name, status, error) VALUES ('dry-2', 'job-dry', 'r1', 'v1', 'mx1', 'skipped', ?)`, skip)
+	mustExec(t, db, `INSERT INTO send_jobs (id, campaign_id, recipient_list_id, status)
+		VALUES ('job-2', 'c1', 'l1', 'completed')`)
+	mustExec(t, db, `INSERT INTO recipients (id, list_id, email) VALUES ('r4', 'l1', 'user4@example.org')`)
+	mustExec(t, db, `INSERT INTO recipients (id, list_id, email) VALUES ('r5', 'l1', 'user5@example.org')`)
+	mustExec(t, db, `INSERT INTO send_job_items (id, job_id, recipient_id, variant_id, server_name, status, error) VALUES ('s1', 'job-1', 'r4', 'v1', 'mx1', 'skipped', ?)`, skip)
+	mustExec(t, db, `INSERT INTO send_job_items (id, job_id, recipient_id, variant_id, server_name, status, error) VALUES ('s2', 'job-2', 'r4', 'v1', 'mx1', 'skipped', ?)`, skip)
+	mustExec(t, db, `INSERT INTO send_job_items (id, job_id, recipient_id, variant_id, server_name, status, error) VALUES ('s3', 'job-2', 'r5', 'v1', 'mx1', 'skipped', ?)`, skip)
+	cs, err := repo.CampaignStats("c1")
+	if err != nil || cs.Total != 4 || cs.Delivered != 2 || cs.Jobs != 2 || cs.SkippedUnsub != 2 {
+		t.Errorf("campaign stats = %+v, %v", cs, err)
+	}
+	if ds, _ := repo.JobStats("job-dry"); ds.Total != 1 || ds.Delivered != 1 {
+		t.Errorf("dry-run job stats = %+v", ds)
+	}
+}
+
+func TestTracking_RecordEventDedupAndTruncate(t *testing.T) {
+	db := setupTestDB(t)
+	setupJobWithItems(t, db, [][2]string{{"sent", ""}})
+	jobs := NewJobRepository(db)
+	repo := NewTrackingRepository(db)
+	id := jobItemIDs(t, jobs, "job-1")[0]
+
+	at := time.Now().UTC()
+	ev := func(typ string, link *int, ip string, d time.Duration) *models.EmailEvent {
+		e := jobEvent(typ, id, link, false)
+		e.IP = ip
+		e.CreatedAt = at.Add(d)
+		return e
+	}
+	count := func() int {
+		var n int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM email_events`).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	for _, e := range []*models.EmailEvent{
+		ev(models.EventOpen, nil, "1.1.1.1", 0),
+		ev(models.EventOpen, nil, "1.1.1.1", 5*time.Second),                // dup
+		ev(models.EventOpen, nil, "2.2.2.2", 6*time.Second),                // other IP
+		ev(models.EventOpen, nil, "1.1.1.1", EventDedupWindow+time.Second), // window passed
+		ev(models.EventClick, intp(1), "1.1.1.1", 7*time.Second),           // other type
+		ev(models.EventClick, intp(1), "1.1.1.1", 8*time.Second),           // dup
+		ev(models.EventClick, intp(2), "1.1.1.1", 9*time.Second),           // other link
+	} {
+		if err := repo.RecordEvent(e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := count(); n != 5 {
+		t.Errorf("events = %d, want 5", n)
+	}
+	items, _, _ := jobs.ListItems(models.JobItemFilter{JobID: "job-1"})
+	if it := items[0]; it.OpenCount != 3 || it.ClickCount != 2 {
+		t.Errorf("counters must skip duplicates: open=%d click=%d", it.OpenCount, it.ClickCount)
+	}
+
+	// Long user agent and URL are cut, without splitting a UTF-8 rune
+	e := ev(models.EventClick, intp(3), "3.3.3.3", 0)
+	e.UserAgent = strings.Repeat("я", 400) // 800 bytes
+	e.URL = "https://x.example/" + strings.Repeat("a", 5000)
+	if err := repo.RecordEvent(e); err != nil {
+		t.Fatal(err)
+	}
+	var ua, u string
+	if err := db.QueryRow(`SELECT user_agent, url FROM email_events WHERE id = ?`, e.ID).Scan(&ua, &u); err != nil {
+		t.Fatal(err)
+	}
+	if len(ua) != 512 || !utf8.ValidString(ua) || len(u) != 2048 {
+		t.Errorf("stored ua=%d bytes (valid %v), url=%d bytes", len(ua), utf8.ValidString(ua), len(u))
+	}
+}
+
+func TestTracking_DeleteEvents(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewTrackingRepository(db)
+	for _, ids := range [][2]string{{"c1", "j1"}, {"c1", "j2"}, {"c2", "j3"}} {
+		e := &models.EmailEvent{Type: models.EventOpen, SourceType: models.SourceJobItem, SourceID: ids[1] + "-i",
+			CampaignID: ids[0], JobID: ids[1], Email: "a@b.c"}
+		if err := repo.RecordEvent(e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	left := func() int {
+		var n int
+		_ = db.QueryRow(`SELECT COUNT(*) FROM email_events`).Scan(&n)
+		return n
+	}
+	if err := repo.DeleteCampaignEvents("c1"); err != nil || left() != 1 {
+		t.Fatalf("after campaign delete: %d, %v", left(), err)
 	}
 }

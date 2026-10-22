@@ -2,7 +2,6 @@ package metrics
 
 import (
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -50,53 +49,9 @@ func HTTPMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(wrapped, r)
 
-		duration := time.Since(start).Seconds()
-		status := strconv.Itoa(wrapped.status)
-
 		// Normalize path to avoid high cardinality
-		path := normalizePath(r)
-
-		m.APIRequestsTotal.WithLabelValues(r.Method, path, status).Inc()
-		m.APIRequestDurationSeconds.WithLabelValues(r.Method, path).Observe(duration)
-
-		// Track errors
-		if wrapped.status >= 400 {
-			errorType := categorizeStatus(wrapped.status)
-			m.APIErrorsTotal.WithLabelValues(errorType).Inc()
-		}
+		m.observeAPIRequest(r.Method, normalizePath(r), wrapped.status, time.Since(start).Seconds())
 	})
-}
-
-// HTTPMiddlewareWithCollector creates a middleware that uses the collector for persistence
-func HTTPMiddlewareWithCollector(c *Collector) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if c == nil {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			start := time.Now()
-			wrapped := wrapResponseWriter(w)
-
-			next.ServeHTTP(wrapped, r)
-
-			duration := time.Since(start).Seconds()
-			status := strconv.Itoa(wrapped.status)
-
-			// Normalize path to avoid high cardinality
-			path := normalizePath(r)
-
-			c.TrackAPIRequest(r.Method, path, status)
-			c.metrics.APIRequestDurationSeconds.WithLabelValues(r.Method, path).Observe(duration)
-
-			// Track errors
-			if wrapped.status >= 400 {
-				errorType := categorizeStatus(wrapped.status)
-				c.TrackAPIError(errorType)
-			}
-		})
-	}
 }
 
 // normalizePath extracts route pattern from chi router to avoid high cardinality

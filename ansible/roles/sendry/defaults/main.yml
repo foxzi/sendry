@@ -249,7 +249,7 @@ sendry_web_servers: []
 #     env: "prod"
 
 # Multi-send strategy
-sendry_web_multi_send_strategy: round_robin  # round_robin, weighted_round_robin, domain_affinity
+sendry_web_multi_send_strategy: round_robin  # round_robin, weighted, first_healthy, domain_affinity (пока не реализовано, работает как round_robin)
 sendry_web_multi_send_weights: {}
 sendry_web_multi_send_domain_affinity: {}
 sendry_web_multi_send_failover_enabled: true

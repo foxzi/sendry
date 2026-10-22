@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/foxzi/sendry/internal/web/db"
 	"github.com/foxzi/sendry/internal/web/repository"
@@ -119,8 +120,9 @@ func TestTrackOpen(t *testing.T) {
 			t.Fatalf("missing no-store")
 		}
 	}
-	if n := e.count(t, "open"); n != 2 {
-		t.Fatalf("open events = %d, want 2", n)
+	// The second load from the same IP within the dedup window is dropped
+	if n := e.count(t, "open"); n != 1 {
+		t.Fatalf("open events = %d, want 1", n)
 	}
 	var email, camp, job string
 	if err := e.db.QueryRow(`SELECT email, campaign_id, job_id FROM email_events WHERE type='open' LIMIT 1`).Scan(&email, &camp, &job); err != nil {
@@ -139,8 +141,83 @@ func TestTrackOpen(t *testing.T) {
 	}
 	// Unknown source: GIF, nothing recorded.
 	e.do("GET", "/t/o/"+e.token(tracking.KindOpen, "job_item", "nope"), "")
-	if n := e.count(t, "open"); n != 2 {
-		t.Fatalf("open events = %d, want 2", n)
+	if n := e.count(t, "open"); n != 1 {
+		t.Fatalf("open events = %d, want 1", n)
+	}
+}
+
+func TestTrackOpenClientIP(t *testing.T) {
+	e := newTrackEnv(t)
+	tok := e.token(tracking.KindOpen, "job_item", "i1")
+	open := func(remote, realIP string) {
+		req := httptest.NewRequest("GET", "/t/o/"+tok, nil)
+		req.RemoteAddr = remote
+		req.Header.Set("X-Real-IP", realIP)
+		e.mux.ServeHTTP(httptest.NewRecorder(), req)
+	}
+	lastIP := func() string {
+		var ip string
+		if err := e.db.QueryRow(`SELECT ip FROM email_events ORDER BY id DESC LIMIT 1`).Scan(&ip); err != nil {
+			t.Fatal(err)
+		}
+		return ip
+	}
+
+	// Without trusted proxies the header is ignored
+	open("203.0.113.5:1000", "6.6.6.6")
+	if ip := lastIP(); ip != "203.0.113.5" {
+		t.Fatalf("ip = %s, want the peer", ip)
+	}
+	e.h.proxies, _ = tracking.ParseTrustedProxies([]string{"127.0.0.1"})
+	open("127.0.0.1:1000", "6.6.6.6")
+	if ip := lastIP(); ip != "6.6.6.6" {
+		t.Fatalf("ip = %s, want the header from a trusted proxy", ip)
+	}
+	open("203.0.113.9:1000", "7.7.7.7")
+	if ip := lastIP(); ip != "203.0.113.9" {
+		t.Fatalf("ip = %s, want the untrusted peer", ip)
+	}
+}
+
+func TestTrackTokenExpiryAndRotation(t *testing.T) {
+	e := newTrackEnv(t)
+	click := func(s *tracking.Signer, issued int64) string {
+		return "/t/c/" + s.Encode(tracking.Payload{Kind: tracking.KindClick, SourceType: "job_item", SourceID: "i1",
+			LinkID: 1, URL: "https://shop.example.com/", IssuedAt: issued})
+	}
+
+	// Expired click token: no redirect, nothing recorded
+	old := time.Now().Add(-tracking.MaxAgeOpenClick - time.Hour).Unix()
+	if w := e.do("GET", click(e.signer, old), ""); w.Code != http.StatusGone || w.Header().Get("Location") != "" {
+		t.Fatalf("expired click: code=%d loc=%q", w.Code, w.Header().Get("Location"))
+	}
+	if n := e.count(t, "click"); n != 0 {
+		t.Fatalf("expired click recorded")
+	}
+	// An unsubscribe link of the same age still works
+	unsub := e.signer.Encode(tracking.Payload{Kind: tracking.KindUnsubscribe, SourceType: "job_item", SourceID: "i1", IssuedAt: old})
+	if w := e.do("GET", "/u/"+unsub, ""); w.Code != 200 {
+		t.Fatalf("old unsubscribe link: code=%d", w.Code)
+	}
+
+	// After a rotation mail signed with the previous secret keeps working
+	before := click(e.signer, 0)
+	if err := e.h.settings.RotateTrackingSecret(); err != nil {
+		t.Fatal(err)
+	}
+	if w := e.do("GET", before, ""); w.Code != http.StatusFound {
+		t.Fatalf("previous-secret click after rotation: code=%d", w.Code)
+	}
+	ts, _ := e.h.settings.GetTrackingSettings()
+	if w := e.do("GET", click(tracking.NewSigner([]byte(ts.Secret)), 0), ""); w.Code != http.StatusFound {
+		t.Fatalf("current-secret click: code=%d", w.Code)
+	}
+	// A second rotation drops the oldest secret
+	if err := e.h.settings.RotateTrackingSecret(); err != nil {
+		t.Fatal(err)
+	}
+	if w := e.do("GET", before, ""); w.Code != http.StatusNotFound {
+		t.Fatalf("dropped-secret click: code=%d", w.Code)
 	}
 }
 
@@ -196,13 +273,14 @@ func TestUnsubscribeFlow(t *testing.T) {
 
 	w := e.do("GET", path, "")
 	body := w.Body.String()
-	if w.Code != 200 || !strings.Contains(strings.ToLower(body), "user@example.com") || !strings.Contains(body, "Example News") || !strings.Contains(body, "Отписаться") {
+	if w.Code != 200 || !strings.Contains(strings.ToLower(body), "user@example.com") || !strings.Contains(body, "Example News") ||
+		!strings.Contains(body, "Отписаться") || !strings.Contains(body, "этого списка рассылки") {
 		t.Fatalf("GET page code=%d body=%s", w.Code, body)
 	}
 	if strings.Contains(body, "всех рассылок") || strings.Contains(body, "Other list") || strings.Contains(body, ">List<") {
 		t.Fatalf("page must not mention all mailings or list names: %s", body)
 	}
-	if n1, _ := e.h.unsubs.CountInList("l1"); n1 != 0 {
+	if unsub, _ := e.h.unsubs.IsUnsubscribed("l1", "user@example.com"); unsub {
 		t.Fatalf("GET must not unsubscribe")
 	}
 

@@ -8,19 +8,20 @@ analytics, and proposes an architecture for a dedicated analytics service.
 - **Prometheus metrics** (`internal/metrics/`): counters for `sent`/`failed`/`bounced`/`deferred` per domain, SMTP connections, API requests, queue. In-memory plus a Bolt snapshot.
 - **Per-message status** in `internal/queue/storage.go`: `pending`/`sending`/`delivered`/`failed`/`deferred` in Bolt.
 - **`sendry-web`**: `send_jobs`, `send_job_items`, `sends` tables in SQLite for per-campaign aggregates.
+- **Open/click tracking and unsubscribes in `sendry-web`** (tracking pixel, link rewriting, `List-Unsubscribe`, per-address-book unsubscribe, Open Rate / CTR / CTOR per job and campaign, click map). See [tracking.md](tracking.md). Events are stored in the panel SQLite database; the MTA is unchanged.
 
 ## Fundamental Gaps
 
 1. **Event log** — no stream of events (`accepted`, `attempted`, `deferred`, `delivered`, `bounced`, `opened`, `clicked`, `unsubscribed`) with timestamp and context. Only the final status is stored.
-2. **Per-message attempt timeline** — attempts, MX, SMTP response. `queue.DeliveryAttempt` exists as a struct but is not persisted.
+2. **Per-message attempt timeline** — attempts, MX, SMTP response are not persisted.
 3. **Inbound bounces / NDRs** — no RFC 3464 parser; async bounces are invisible.
-4. **Open/click tracking** — no pixels, no link rewriter.
-5. **Unsubscribe / suppression list** — only a `recipient.status` field in web.
+4. **Open/click tracking** — implemented in `sendry-web` only (see [tracking.md](tracking.md)); mail sent straight to the MTA API/SMTP is not tracked.
+5. **Suppression list** — unsubscribes are per address book in `sendry-web` ([tracking.md](tracking.md)); there is no global suppression list in the MTA.
 6. **Recipient engagement history** — no per-address event table.
 7. **Reputation metrics** — no bounce-rate / complaint-rate aggregates per from-domain/IP.
 8. **Cohort / campaign analytics** — `send_job_items` in SQLite will not scale to per-event rows.
 9. **Long-term retention** — Prometheus retention is short, Bolt cleaner deletes `delivered`.
-10. **Funnel** `sent → delivered → opened → clicked → converted` — technically impossible without an event log.
+10. **Funnel** `sent → delivered → opened → clicked → converted` — `sendry-web` shows sent/opened/clicked per job, but `converted` and a cross-campaign funnel need an event log.
 
 Conclusion: the current stack answers "what is happening now" (monitoring), not "what happened to message X two weeks ago" or "what is the CTR of campaign Y" (analytics).
 

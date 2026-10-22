@@ -184,22 +184,22 @@ func (h *Handlers) BuilderCreate(w http.ResponseWriter, r *http.Request) {
 	cs := parseContainerSettings(r)
 	blockRefs := parseBlockRefs(r.FormValue("block_refs"))
 	t := &models.Template{
-		Name:                 name,
-		Description:          description,
-		Subject:              subject,
-		HTML:                 html,
-		Text:                 text,
-		Variables:            variables,
-		Folder:               folder,
-		UseBlocks:            len(blockRefs) > 0,
+		Name:                  name,
+		Description:           description,
+		Subject:               subject,
+		HTML:                  html,
+		Text:                  text,
+		Variables:             variables,
+		Folder:                folder,
+		UseBlocks:             len(blockRefs) > 0,
 		ContainerRadius:       cs.Radius,
 		ContainerRadiusTop:    cs.RadiusTop,
 		ContainerRadiusBottom: cs.RadiusBottom,
-		ContainerTransparent: cs.Transparent,
-		ContainerWidth:       cs.Width,
-		ContainerPaddingV:    cs.PaddingV,
-		ContainerPaddingH:    cs.PaddingH,
-		PageBackground:       cs.PageBG,
+		ContainerTransparent:  cs.Transparent,
+		ContainerWidth:        cs.Width,
+		ContainerPaddingV:     cs.PaddingV,
+		ContainerPaddingH:     cs.PaddingH,
+		PageBackground:        cs.PageBG,
 	}
 
 	user := h.getUserFromContext(r)

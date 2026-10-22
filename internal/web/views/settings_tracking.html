@@ -9,6 +9,10 @@
 {{if .Error}}<div class="alert alert-error">{{.Error}}</div>{{end}}
 {{if .Success}}<div class="alert alert-success" data-i18n="trk.saved">{{.Success}}</div>{{end}}
 
+{{if not .Settings.BaseURL}}
+<div class="alert alert-warning" data-i18n="trk.no_base_url_warn">No proxying domain is set: tracking links and redirects go through the panel address. Use a separate domain (e.g. lnk.example.com) that proxies only /t/ and /u/ to the panel, so the panel address is not exposed in mail and a blocked link domain does not block the panel.</div>
+{{end}}
+
 <div class="card" style="margin-bottom: 1.5rem">
     <div class="card-body">
         <form method="post" action="/settings/tracking">
@@ -48,6 +52,19 @@
         {{else}}
         <p class="text-muted" data-i18n="trk.no_origin">Neither a proxying domain nor server.public_url is set: tracking is off and emails go out without pixel, tracked links and unsubscribe link.</p>
         {{end}}
+    </div>
+</div>
+
+<div class="card" style="margin-top: 1.5rem">
+    <div class="card-header">
+        <h2 data-i18n="trk.secret">Link signing secret</h2>
+    </div>
+    <div class="card-body">
+        <p class="text-muted" data-i18n="trk.secret_help">Tracking and unsubscribe links are signed with a secret. Rotate it if it may have leaked. Links in mail already sent keep working until the next rotation: the previous secret is still accepted, the one before it is dropped. Click and open links expire after 180 days, unsubscribe links after 2 years.</p>
+        {{if .Rotated}}<p class="text-muted" data-i18n="trk.secret_prev">A previous secret is kept for verification.</p>{{end}}
+        <form method="post" action="/settings/tracking/rotate-secret" onsubmit="return confirm('Rotate the secret? Links signed with the secret before the previous one will stop working.')">
+            <button type="submit" class="btn btn-danger" data-i18n="trk.rotate">Rotate secret</button>
+        </form>
     </div>
 </div>
 {{end}}

@@ -96,7 +96,7 @@ func TestIsUUID(t *testing.T) {
 		{"not-a-uuid", false},
 		{"550e8400e29b41d4a716446655440000", false}, // missing dashes
 		{"", false},
-		{"550e8400-e29b-41d4-a716-44665544000", false}, // too short
+		{"550e8400-e29b-41d4-a716-44665544000", false},   // too short
 		{"550e8400-e29b-41d4-a716-4466554400000", false}, // too long
 	}
 

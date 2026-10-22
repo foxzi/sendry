@@ -2,13 +2,15 @@ package handlers
 
 import (
 	"encoding/json"
+	"math/rand/v2"
 	"net/http"
+	"regexp"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/foxzi/sendry/internal/web/middleware"
 	"github.com/foxzi/sendry/internal/web/models"
+	"github.com/foxzi/sendry/internal/web/tracking"
 )
 
 func (h *Handlers) CampaignList(w http.ResponseWriter, r *http.Request) {
@@ -135,7 +137,7 @@ func (h *Handlers) CampaignView(w http.ResponseWriter, r *http.Request) {
 		"Title":          c.Name,
 		"Active":         "campaigns",
 		"User":           h.getUserFromContext(r),
-		"Tracking":       trackingStats,
+		"Tracking":       trackingCards(c, trackingStats, err),
 		"Campaign":       c,
 		"Variants":       variants,
 		"RecipientLists": recipientLists,
@@ -211,6 +213,10 @@ func (h *Handlers) CampaignDelete(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("failed to delete campaign", "error", err)
 		h.error(w, http.StatusInternalServerError, "Failed to delete campaign")
 		return
+	}
+	// email_events has no foreign key to campaigns
+	if err := h.tracking.DeleteCampaignEvents(id); err != nil {
+		h.logger.Error("failed to delete campaign events", "campaign_id", id, "error", err)
 	}
 
 	h.settings.LogAction(r, middleware.GetUserID(r), middleware.GetUserEmail(r),
@@ -333,6 +339,61 @@ func (h *Handlers) CampaignVariantDelete(w http.ResponseWriter, r *http.Request)
 	http.Redirect(w, r, "/campaigns/"+campaignID+"/variants", http.StatusSeeOther)
 }
 
+// unsubscribeVarRE matches the {{unsubscribe_url}} template variable
+var unsubscribeVarRE = regexp.MustCompile(`\{\{-?\s*\.?unsubscribe_url\s*-?\}\}`)
+
+// publicOrigin returns the public origin of unsubscribe and tracking links:
+// the tracking base URL setting or server.public_url; "" if neither is set.
+func (h *Handlers) publicOrigin() (string, error) {
+	ts, err := h.settings.GetTrackingSettings()
+	if err != nil {
+		return "", err
+	}
+	return tracking.ResolveBaseURL(ts.BaseURL, h.cfg.Server.PublicURL), nil
+}
+
+// campaignSendData returns the data of the campaign send page
+func (h *Handlers) campaignSendData(r *http.Request, c *models.Campaign) map[string]any {
+	variants, _ := h.campaigns.GetVariants(c.ID)
+	recipientLists, _, _ := h.recipients.ListLists(models.RecipientListFilter{Limit: 100})
+
+	// Warn when no variant template contains the unsubscribe link variable
+	hasUnsubscribeLink := false
+	checked := map[string]bool{}
+	for _, v := range variants {
+		if checked[v.TemplateID] {
+			continue
+		}
+		checked[v.TemplateID] = true
+		tmpl, err := h.templates.GetByID(v.TemplateID)
+		if err != nil || tmpl == nil {
+			continue
+		}
+		if unsubscribeVarRE.MatchString(tmpl.HTML) || unsubscribeVarRE.MatchString(tmpl.Text) {
+			hasUnsubscribeLink = true
+			break
+		}
+	}
+
+	// Campaign mail cannot be sent without a public origin for unsubscribe links
+	origin, err := h.publicOrigin()
+	if err != nil {
+		h.logger.Error("failed to load tracking settings", "error", err)
+	}
+
+	return map[string]any{
+		"NoUnsubscribeLink": len(variants) > 0 && !hasUnsubscribeLink,
+		"NoPublicURL":       err == nil && origin == "",
+		"Title":             "Send " + c.Name,
+		"Active":            "campaigns",
+		"User":              h.getUserFromContext(r),
+		"Campaign":          c,
+		"Variants":          variants,
+		"RecipientLists":    recipientLists,
+		"Servers":           h.cfg.Sendry.Servers,
+	}
+}
+
 func (h *Handlers) CampaignSendPage(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
@@ -342,34 +403,7 @@ func (h *Handlers) CampaignSendPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	variants, _ := h.campaigns.GetVariants(id)
-	recipientLists, _, _ := h.recipients.ListLists(models.RecipientListFilter{Limit: 100})
-
-	// Warn when no variant template contains the unsubscribe link variable
-	hasUnsubscribeLink := false
-	for _, v := range variants {
-		tmpl, err := h.templates.GetByID(v.TemplateID)
-		if err != nil || tmpl == nil {
-			continue
-		}
-		if strings.Contains(tmpl.HTML, "unsubscribe_url") {
-			hasUnsubscribeLink = true
-			break
-		}
-	}
-
-	data := map[string]any{
-		"NoUnsubscribeLink": len(variants) > 0 && !hasUnsubscribeLink,
-		"Title":             "Send " + c.Name,
-		"Active":            "campaigns",
-		"User":              h.getUserFromContext(r),
-		"Campaign":          c,
-		"Variants":          variants,
-		"RecipientLists":    recipientLists,
-		"Servers":           h.cfg.Sendry.Servers,
-	}
-
-	h.render(w, "campaign_send", data)
+	h.render(w, "campaign_send", h.campaignSendData(r, c))
 }
 
 func (h *Handlers) CampaignSend(w http.ResponseWriter, r *http.Request) {
@@ -383,6 +417,22 @@ func (h *Handlers) CampaignSend(w http.ResponseWriter, r *http.Request) {
 	c, err := h.campaigns.GetByID(id)
 	if err != nil || c == nil {
 		h.error(w, http.StatusNotFound, "Campaign not found")
+		return
+	}
+
+	// Every campaign message carries an unsubscribe link (and List-Unsubscribe
+	// headers) built from the public origin: without it the job must not start
+	origin, err := h.publicOrigin()
+	if err != nil {
+		h.logger.Error("failed to load tracking settings", "error", err)
+		h.error(w, http.StatusInternalServerError, "Failed to load tracking settings")
+		return
+	}
+	if origin == "" {
+		data := h.campaignSendData(r, c)
+		data["Error"] = "Cannot send: the public URL for unsubscribe links is not configured. " +
+			"Set the tracking domain in Settings > Tracking or server.public_url in the config."
+		h.render(w, "campaign_send", data)
 		return
 	}
 
@@ -400,7 +450,11 @@ func (h *Handlers) CampaignSend(w http.ResponseWriter, r *http.Request) {
 
 	strategy := r.FormValue("strategy")
 	if strategy == "" {
-		strategy = "round-robin"
+		strategy = jobStrategyRoundRobin
+	}
+	if strategy != jobStrategyRoundRobin && strategy != jobStrategyRandom && strategy != jobStrategyWeighted {
+		h.error(w, http.StatusBadRequest, "Unknown distribution strategy")
+		return
 	}
 
 	// Get variants
@@ -435,7 +489,7 @@ func (h *Handlers) CampaignSend(w http.ResponseWriter, r *http.Request) {
 
 	// Handle scheduled_at
 	if scheduledAt := r.FormValue("scheduled_at"); scheduledAt != "" {
-		t, err := time.Parse("2006-01-02T15:04", scheduledAt)
+		t, err := parseScheduledAt(scheduledAt, r.FormValue("tz"), r.FormValue("tz_offset"))
 		if err == nil {
 			job.ScheduledAt = &t
 			job.Status = "scheduled"
@@ -448,51 +502,39 @@ func (h *Handlers) CampaignSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get recipients
-	recipientLimit := 100000 // Get all active recipients
-	if dryRun && dryRunLimit > 0 {
-		recipientLimit = dryRunLimit
-	}
-
-	recipients, _, err := h.recipients.ListRecipients(models.RecipientFilter{
-		ListID: recipientListID,
-		Status: "active",
-		Limit:  recipientLimit,
-	})
+	// Get recipients: active ones up to the dry-run limit (all without it)
+	recipients, unsubscribed, err := h.jobRecipients(recipientListID, dryRunLimit)
 	if err != nil {
 		h.logger.Error("failed to get recipients", "error", err)
 		h.error(w, http.StatusInternalServerError, "Failed to get recipients")
 		return
 	}
 
-	// Recipients unsubscribed in this address book are not in the job (only
-	// active ones are listed); count them for the job stats.
-	skipped, err := h.unsubs.CountInList(recipientListID)
-	if err != nil {
-		h.logger.Error("failed to count unsubscribed recipients", "error", err)
-		skipped = 0
-	}
-
 	// Create job items
-	items := make([]models.SendJobItem, len(recipients))
-	serverIdx := 0
-	variantIdx := 0
+	items := make([]models.SendJobItem, len(recipients), len(recipients)+len(unsubscribed))
+	nextServer := h.serverPicker(strategy, servers)
+	nextVariant := weightedPicker(variants)
 
 	for i, recipient := range recipients {
 		items[i] = models.SendJobItem{
 			JobID:       job.ID,
 			RecipientID: recipient.ID,
-			VariantID:   variants[variantIdx].ID,
-			ServerName:  servers[serverIdx],
+			VariantID:   variants[nextVariant()].ID,
+			ServerName:  servers[nextServer()],
 		}
+	}
 
-		// Round-robin server distribution
-		serverIdx = (serverIdx + 1) % len(servers)
-
-		// Simple variant rotation (TODO: implement weighted distribution)
-		if len(variants) > 1 {
-			variantIdx = (variantIdx + 1) % len(variants)
-		}
+	// Unsubscribed recipients get skipped items, so skips are counted per
+	// recipient like everything else (and campaign stats can count them once)
+	for _, recipient := range unsubscribed {
+		items = append(items, models.SendJobItem{
+			JobID:       job.ID,
+			RecipientID: recipient.ID,
+			VariantID:   variants[0].ID,
+			ServerName:  servers[0],
+			Status:      models.JobItemStatusSkipped,
+			Error:       models.SkipReasonUnsubscribed,
+		})
 	}
 
 	if err := h.jobs.CreateItems(items); err != nil {
@@ -501,16 +543,16 @@ func (h *Handlers) CampaignSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if skipped > 0 {
-		if err := h.jobs.SetSkippedUnsubscribed(job.ID, skipped); err != nil {
+	if len(unsubscribed) > 0 {
+		if err := h.jobs.SetSkippedUnsubscribed(job.ID, len(unsubscribed)); err != nil {
 			h.logger.Error("failed to store skipped count", "job_id", job.ID, "error", err)
 		}
 	}
 
 	// Start job if not scheduled
 	if job.ScheduledAt == nil {
+		// the background worker picks up running jobs
 		h.jobs.UpdateStatus(job.ID, "running")
-		// TODO: Start background worker to process items
 	}
 
 	h.settings.LogAction(r, middleware.GetUserID(r), middleware.GetUserEmail(r),
@@ -537,14 +579,10 @@ func (h *Handlers) CampaignJobs(w http.ResponseWriter, r *http.Request) {
 	jobsWithStats := make([]map[string]any, len(jobs))
 	for i, job := range jobs {
 		stats, _ := h.jobs.GetStats(job.ID)
-		progress := 0
-		if stats.Total > 0 {
-			progress = (stats.Sent + stats.Failed) * 100 / stats.Total
-		}
 		jobsWithStats[i] = map[string]any{
 			"Job":      job,
 			"Stats":    stats,
-			"Progress": progress,
+			"Progress": stats.Progress(),
 		}
 	}
 
@@ -557,4 +595,124 @@ func (h *Handlers) CampaignJobs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.render(w, "campaign_jobs", data)
+}
+
+// jobRecipients returns the active recipients of a list to send a job to, in
+// list order, at most limit of them (0 = all), and the recipients unsubscribed
+// in the list that were passed over to get them. With a dry-run limit only the
+// unsubscribed recipients met before the limit is reached are returned.
+func (h *Handlers) jobRecipients(listID string, limit int) ([]models.Recipient, []models.Recipient, error) {
+	rows, err := h.recipients.StreamRecipients(listID)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+
+	recipients := []models.Recipient{}
+	var unsubscribed []models.Recipient
+	for rows.Next() {
+		if limit > 0 && len(recipients) >= limit {
+			break
+		}
+		rec, err := h.recipients.ScanRecipient(rows)
+		if err != nil {
+			return nil, nil, err
+		}
+		switch models.SkipReason(rec.Status) {
+		case "":
+			recipients = append(recipients, *rec)
+		case models.SkipReasonUnsubscribed:
+			unsubscribed = append(unsubscribed, *rec)
+		}
+	}
+	return recipients, unsubscribed, rows.Err()
+}
+
+// Server distribution strategies of the campaign send form
+const (
+	jobStrategyRoundRobin = "round-robin"
+	jobStrategyRandom     = "random"
+	jobStrategyWeighted   = "weighted"
+)
+
+// serverPicker returns a function that yields server indexes for the job
+// items: plain rotation, uniformly random, or in proportion to the
+// sendry.multi_send.weights of the config.
+func (h *Handlers) serverPicker(strategy string, servers []string) func() int {
+	switch strategy {
+	case jobStrategyRandom:
+		return func() int { return rand.IntN(len(servers)) }
+	case jobStrategyWeighted:
+		weights := make([]int, len(servers))
+		for i, name := range servers {
+			weights[i] = h.cfg.Sendry.MultiSend.Weights[name]
+		}
+		return smoothWeightedPicker(weights)
+	default:
+		return smoothWeightedPicker(make([]int, len(servers)))
+	}
+}
+
+// weightedPicker returns a function that yields variant indexes in proportion
+// to the variant weights (see smoothWeightedPicker).
+func weightedPicker(variants []models.CampaignVariant) func() int {
+	weights := make([]int, len(variants))
+	for i, v := range variants {
+		weights[i] = v.Weight
+	}
+	return smoothWeightedPicker(weights)
+}
+
+// smoothWeightedPicker returns a function that yields indexes in proportion
+// to the weights, deterministically (smooth weighted round-robin):
+// weights 3:1 give 0,0,1,0, 0,0,1,0, ...; equal weights give plain rotation.
+// An index with weight <= 0 is never picked, unless no weight is positive,
+// then all are rotated equally.
+func smoothWeightedPicker(in []int) func() int {
+	weights := make([]int, len(in))
+	total := 0
+	for i, w := range in {
+		if w > 0 {
+			weights[i] = w
+			total += w
+		}
+	}
+	if total == 0 {
+		for i := range weights {
+			weights[i] = 1
+		}
+		total = len(weights)
+	}
+
+	current := make([]int, len(weights))
+	return func() int {
+		best := 0
+		for i, w := range weights {
+			current[i] += w
+			if current[i] > current[best] {
+				best = i
+			}
+		}
+		current[best] -= total
+		return best
+	}
+}
+
+// parseScheduledAt parses the datetime-local value of the send form, entered
+// in the browser's time zone: the IANA name tz, or else offset, the minutes
+// of JS getTimezoneOffset (UTC minus local time) at that date; UTC when
+// neither is usable. The result is in UTC, as scheduled jobs are compared
+// with the database's UTC clock.
+func parseScheduledAt(value, tz, offset string) (time.Time, error) {
+	loc := time.UTC
+	if l, err := time.LoadLocation(tz); tz != "" && tz != "Local" && err == nil {
+		loc = l
+	} else if m, err := strconv.Atoi(offset); err == nil && m > -16*60 && m < 16*60 {
+		loc = time.FixedZone("", -m*60)
+	}
+	t, err := time.ParseInLocation("2006-01-02T15:04", value, loc)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return t.UTC(), nil
 }
