@@ -611,3 +611,42 @@ func TestFindATagsSkipsNonMarkup(t *testing.T) {
 		t.Errorf("links after empty comments not numbered: %s", out)
 	}
 }
+
+func TestRemoveUnsubscribeLinks(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{`<p>Bye <a href="{{unsubscribe_url}}">unsubscribe</a>.</p>`, `<p>Bye .</p>`},
+		{`<a href="{{ .unsubscribe_url }}" style="x"><b>Out</b></a><a href="https://e.com">e</a>`, `<a href="https://e.com">e</a>`},
+		{`<A HREF='{{unsubscribe_url}}'>u</A> <a href="{{unsubscribe_url}}">v</a>`, ` `},
+		{`<a href="https://e.com/?u={{unsubscribe_url}}">keep</a>`, `<a href="https://e.com/?u={{unsubscribe_url}}">keep</a>`},
+		{`<a href="{{unsubscribe_url}}">unclosed`, `<a href="{{unsubscribe_url}}">unclosed`},
+		{`no links`, `no links`},
+	}
+	for _, c := range cases {
+		if got := RemoveUnsubscribeLinks(c.in); got != c.want {
+			t.Errorf("RemoveUnsubscribeLinks(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestRemoveUnsubscribeLines(t *testing.T) {
+	in := "Hello\nUnsubscribe: {{ unsubscribe_url }}\nBye"
+	if got, want := RemoveUnsubscribeLines(in), "Hello\nBye"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	if got := RemoveUnsubscribeLines("plain"); got != "plain" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestHasUnsubscribeVar(t *testing.T) {
+	for _, s := range []string{"{{unsubscribe_url}}", "{{ unsubscribe_url }}", "{{.unsubscribe_url}}", "{{- unsubscribe_url -}}"} {
+		if !HasUnsubscribeVar(s) {
+			t.Errorf("%q not matched", s)
+		}
+	}
+	for _, s := range []string{"unsubscribe_url", "{{unsubscribe_urls}}", "https://x.com/unsubscribe_url"} {
+		if HasUnsubscribeVar(s) {
+			t.Errorf("%q matched", s)
+		}
+	}
+}

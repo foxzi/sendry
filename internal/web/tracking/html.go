@@ -3,6 +3,7 @@ package tracking
 import (
 	"html"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
@@ -769,4 +770,62 @@ func ResolveBaseURL(settingBaseURL, publicURL string) string {
 		u = u[:len(u)-1]
 	}
 	return u
+}
+
+// RemoveUnsubscribeLinks drops from template HTML the <a> elements whose href
+// is the {{unsubscribe_url}} variable, together with their content. Campaign
+// mail is sent this way when no public origin is configured to build the
+// link with.
+func RemoveUnsubscribeLinks(src string) string {
+	low := lowerASCII(src)
+	var b strings.Builder
+	pos := 0
+	for _, t := range findATags(src) {
+		if t.mso || t.start < pos {
+			continue
+		}
+		href, ok := getAttr(parseAttrs(src[t.start:t.end]), "href")
+		if !ok || !href.hasVal || !isUnsubscribeVar(html.UnescapeString(href.val)) {
+			continue
+		}
+		k := strings.Index(low[t.end:], "</a")
+		if k < 0 {
+			continue
+		}
+		e := tagEnd(src, t.end+k)
+		if e < 0 {
+			continue
+		}
+		b.WriteString(src[pos:t.start])
+		pos = e
+	}
+	if pos == 0 {
+		return src
+	}
+	b.WriteString(src[pos:])
+	return b.String()
+}
+
+// unsubscribeVarRE matches the {{unsubscribe_url}} template variable
+var unsubscribeVarRE = regexp.MustCompile(`\{\{-?\s*\.?unsubscribe_url\s*-?\}\}`)
+
+// HasUnsubscribeVar reports whether template source uses {{unsubscribe_url}}.
+func HasUnsubscribeVar(src string) bool {
+	return unsubscribeVarRE.MatchString(src)
+}
+
+// RemoveUnsubscribeLines drops the lines of a plain text template that use the
+// {{unsubscribe_url}} variable (see RemoveUnsubscribeLinks).
+func RemoveUnsubscribeLines(src string) string {
+	if !HasUnsubscribeVar(src) {
+		return src
+	}
+	lines := strings.Split(src, "\n")
+	kept := lines[:0]
+	for _, l := range lines {
+		if !unsubscribeVarRE.MatchString(l) {
+			kept = append(kept, l)
+		}
+	}
+	return strings.Join(kept, "\n")
 }

@@ -43,18 +43,19 @@
 
         <div class="form-group">
             <label class="checkbox-label">
-                <input type="checkbox" name="track_opens" value="on"{{if .Campaign.TrackOpens}} checked{{end}}>
+                <input type="checkbox" name="track_opens" value="on"{{if and .Campaign.TrackOpens (not $.NoPublicURL)}} checked{{end}}{{if $.NoPublicURL}} disabled{{end}}>
                 <span data-i18n="trk.track_opens">Track opens</span>
             </label>
             <label class="checkbox-label">
-                <input type="checkbox" name="track_clicks" value="on"{{if .Campaign.TrackClicks}} checked{{end}}>
+                <input type="checkbox" name="track_clicks" value="on"{{if and .Campaign.TrackClicks (not $.NoPublicURL)}} checked{{end}}{{if $.NoPublicURL}} disabled{{end}}>
                 <span data-i18n="trk.track_clicks">Track clicks</span>
             </label>
             <label class="checkbox-label">
                 <input type="checkbox" name="add_utm" value="on"{{if .Campaign.AddUTM}} checked{{end}}>
                 <span data-i18n="trk.add_utm">Add UTM tags to links</span>
             </label>
-            <small class="form-help" data-i18n="trk.campaign_help">Opens are counted by a pixel, clicks by links through the panel. Tags: utm_source, utm_medium, utm_campaign, sc, sr, sl (needed to tie orders to the campaign). Campaign emails always get an unsubscribe link.</small>
+            <small class="form-help" data-i18n="trk.campaign_help">Opens are counted by a pixel, clicks by links through the panel. Tags: utm_source, utm_medium, utm_campaign, sc, sr, sl (needed to tie orders to the campaign). Campaign emails get an unsubscribe link when the proxying domain is set.</small>
+            {{if .NoPublicURL}}<small class="form-help"><span data-i18n="trk.no_domain_fields">Opens and clicks tracking needs the proxying domain.</span> {{if .User.IsAdmin}}<a href="/settings/tracking" data-i18n="trk.settings_link">Settings &gt; Tracking</a>{{else}}<span data-i18n="trk.ask_admin">Ask an administrator to set it in the tracking settings.</span>{{end}}</small>{{end}}
         </div>
     </div>
 

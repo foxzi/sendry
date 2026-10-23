@@ -211,3 +211,14 @@
     {{end}}
 </div>
 {{end}}
+
+{{/* Warning for pages of a campaign or its runs when no proxying domain (public
+origin) is set: mail goes without unsubscribe links and tracking. Takes the
+page data (.User). */}}
+{{define "no_public_url"}}
+<div class="alert alert-warning">
+    <strong data-i18n="trk.no_domain">The proxying domain is not set.</strong>
+    <span data-i18n="trk.no_domain_text">Emails are sent without an unsubscribe link, opens and clicks are not tracked.</span>
+    {{if .User.IsAdmin}}<span data-i18n="trk.set_domain_in">Set the domain in</span> <a href="/settings/tracking" data-i18n="trk.settings_link">Settings &gt; Tracking</a>.{{else}}<span data-i18n="trk.ask_admin">Ask an administrator to set it in the tracking settings.</span>{{end}}
+</div>
+{{end}}

@@ -116,8 +116,8 @@ func (h *Handlers) JobView(w http.ResponseWriter, r *http.Request) {
 	if n, _ := strconv.Atoi(r.URL.Query().Get("retried")); n > 0 {
 		data["Success"] = strconv.Itoa(n) + " failed items queued for retry"
 	}
-	// The worker sends nothing without the public origin (unsubscribe links):
-	// the items stay pending until it is configured, so say why
+	// Without the public origin the worker sends with no unsubscribe links and
+	// no tracking, so warn while the run still has mail to send
 	if stats.Pending > 0 && (job.Status == "running" || job.Status == "scheduled" || job.Status == "paused") {
 		if origin, err := h.publicOrigin(); err == nil && origin == "" {
 			data["NoPublicURL"] = true

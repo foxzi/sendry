@@ -28,12 +28,7 @@
 </div>
 
 {{if .Success}}<div class="alert alert-success">{{.Success}}</div>{{end}}
-{{if .NoPublicURL}}
-<div class="alert alert-error">
-    <strong data-i18n="trk.on_hold">Sending is on hold:</strong> <span data-i18n="trk.on_hold_text">the public URL for unsubscribe links is not configured, pending emails are not sent.</span>
-    <span data-i18n="trk.set_domain_in">Set the tracking domain in</span> <a href="/settings/tracking" data-i18n="trk.settings_link">Settings &gt; Tracking</a> <span data-i18n="trk.or_public_url">or server.public_url in the config.</span> <span data-i18n="trk.job_continues">The run continues by itself.</span>
-</div>
-{{end}}
+{{if .NoPublicURL}}{{template "no_public_url" .}}{{end}}
 
 <div class="tabs" style="margin-bottom: 1rem">
     <a href="/jobs/{{.Job.ID}}" class="tab active" data-i18n="trk.tab_overview">Overview</a>

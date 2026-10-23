@@ -14,10 +14,7 @@
 {{if .Error}}
 <div class="alert alert-error">{{.Error}}</div>
 {{else if .NoPublicURL}}
-<div class="alert alert-error">
-    <strong data-i18n="trk.cannot_send">Cannot send:</strong> <span data-i18n="trk.cannot_send_text">the public URL for unsubscribe links is not configured.</span>
-    <span data-i18n="trk.set_domain_in">Set the tracking domain in</span> <a href="/settings/tracking" data-i18n="trk.settings_link">Settings &gt; Tracking</a> <span data-i18n="trk.or_public_url">or server.public_url in the config.</span>
-</div>
+{{template "no_public_url" .}}
 {{end}}
 
 {{if .NoUnsubscribeLink}}
@@ -93,7 +90,7 @@
 
     <div class="card-footer">
         <a href="/campaigns/{{.Campaign.ID}}" class="btn btn-secondary" data-i18n="cancel">Cancel</a>
-        <button type="submit" class="btn btn-primary"{{if .NoPublicURL}} disabled{{end}} onclick="return confirm(I18n.t('cmp.confirm_send'))" data-i18n="cmp.send_campaign_btn">
+        <button type="submit" class="btn btn-primary" onclick="return confirm(I18n.t('cmp.confirm_send'))" data-i18n="cmp.send_campaign_btn">
             Send Campaign
         </button>
     </div>

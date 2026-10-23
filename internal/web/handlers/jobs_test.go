@@ -96,14 +96,14 @@ func TestJobView_NoPublicURLWarning(t *testing.T) {
 	if err := d.QueryRow(`SELECT id FROM send_jobs`).Scan(&jobID); err != nil {
 		t.Fatal(err)
 	}
-	const warn = "Sending is on hold"
+	const warn = "The proxying domain is not set."
 	if body := jobRequest(h, h.JobView, http.MethodGet, "/jobs/"+jobID, jobID).Body.String(); strings.Contains(body, warn) {
 		t.Error("warning shown with a public URL")
 	}
 	// The public URL was removed after the job started (e.g. an upgrade)
 	h.cfg.Server.PublicURL = ""
 	if body := jobRequest(h, h.JobView, http.MethodGet, "/jobs/"+jobID, jobID).Body.String(); !strings.Contains(body, warn) {
-		t.Error("no warning for a job that cannot send")
+		t.Error("no warning for a job sent without unsubscribe links")
 	}
 	mustExec(t, d, `UPDATE send_jobs SET status = 'cancelled'`)
 	if body := jobRequest(h, h.JobView, http.MethodGet, "/jobs/"+jobID, jobID).Body.String(); strings.Contains(body, warn) {

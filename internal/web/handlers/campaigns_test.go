@@ -66,29 +66,75 @@ func postCampaignSend(h *Handlers, form url.Values) *httptest.ResponseRecorder {
 	return rec
 }
 
-func TestCampaignSend_RequiresPublicURL(t *testing.T) {
+func TestCampaignSend_WithoutPublicURL(t *testing.T) {
 	h, d := newCampaignTestHandlers(t, "")
-
-	rec := postCampaignSend(h, url.Values{"recipient_list_id": {"l1"}, "servers": {"mx1"}})
-	if !strings.Contains(rec.Body.String(), "public URL for unsubscribe links is not configured") {
-		t.Errorf("expected an error on the send page, got %d: %s", rec.Code, rec.Body.String())
-	}
-	var n int
-	d.QueryRow(`SELECT COUNT(*) FROM send_jobs`).Scan(&n)
-	if n != 0 {
-		t.Errorf("job created without public URL")
+	if _, err := d.Exec(`UPDATE campaigns SET track_opens = 1`); err != nil {
+		t.Fatal(err)
 	}
 
-	// the page warns up-front and does not offer to send
+	// the page warns, but still offers to send
 	req := httptest.NewRequest(http.MethodGet, "/campaigns/c1/send", nil)
 	req.SetPathValue("id", "c1")
 	page := httptest.NewRecorder()
 	h.CampaignSendPage(page, req)
-	if body := page.Body.String(); !strings.Contains(body, "Cannot send:") || !strings.Contains(body, " disabled ") {
+	body := page.Body.String()
+	if !strings.Contains(body, "The proxying domain is not set.") {
 		t.Errorf("send page without warning: %s", body)
 	}
-	if strings.Contains(page.Body.String(), "unsubscribe_url}}. ") {
+	if strings.Contains(body, " disabled ") {
+		t.Errorf("send button disabled without public URL")
+	}
+
+	// the job is created, and opens are not counted: there is no pixel
+	rec := postCampaignSend(h, url.Values{"recipient_list_id": {"l1"}, "servers": {"mx1"}})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	var trackOpens bool
+	if err := d.QueryRow(`SELECT track_opens FROM send_jobs`).Scan(&trackOpens); err != nil {
+		t.Fatal(err)
+	}
+	if trackOpens {
+		t.Error("job tracks opens without public URL")
+	}
+}
+
+func TestCampaignSendPage_UnsubscribeLinkDetected(t *testing.T) {
+	h, _ := newCampaignTestHandlers(t, "https://panel.example.com")
+	req := httptest.NewRequest(http.MethodGet, "/campaigns/c1/send", nil)
+	req.SetPathValue("id", "c1")
+	page := httptest.NewRecorder()
+	h.CampaignSendPage(page, req)
+	body := page.Body.String()
+	if strings.Contains(body, "unsubscribe_url}}. ") {
 		t.Errorf("unsubscribe link with spaces not detected")
+	}
+	if strings.Contains(body, "The proxying domain is not set.") {
+		t.Errorf("warning shown with a public URL")
+	}
+}
+
+func TestCampaignForm_TrackingDisabledWithoutPublicURL(t *testing.T) {
+	h, d := newCampaignTestHandlers(t, "")
+	req := httptest.NewRequest(http.MethodGet, "/campaigns/new", nil)
+	rec := httptest.NewRecorder()
+	h.CampaignNew(rec, req)
+	body := rec.Body.String()
+	if !strings.Contains(body, `name="track_opens" value="on" disabled>`) || !strings.Contains(body, `name="track_clicks" value="on" disabled>`) {
+		t.Errorf("tracking checkboxes not disabled: %s", body)
+	}
+
+	// a crafted form cannot turn tracking on
+	form := url.Values{"name": {"c2"}, "from_email": {"a@example.com"}, "track_opens": {"on"}, "track_clicks": {"on"}}
+	post := httptest.NewRequest(http.MethodPost, "/campaigns", strings.NewReader(form.Encode()))
+	post.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	h.CampaignCreate(httptest.NewRecorder(), post)
+	var opens, clicks bool
+	if err := d.QueryRow(`SELECT track_opens, track_clicks FROM campaigns WHERE name = 'c2'`).Scan(&opens, &clicks); err != nil {
+		t.Fatal(err)
+	}
+	if opens || clicks {
+		t.Errorf("tracking saved without public URL: opens=%v clicks=%v", opens, clicks)
 	}
 }
 
@@ -185,19 +231,6 @@ func TestWeightedPicker(t *testing.T) {
 	}
 	if counts[0] != 700 || counts[1] != 200 || counts[2] != 100 {
 		t.Errorf("counts %v, want 700/200/100", counts)
-	}
-}
-
-func TestUnsubscribeVarRE(t *testing.T) {
-	for _, s := range []string{"{{unsubscribe_url}}", "{{ unsubscribe_url }}", "{{.unsubscribe_url}}", "{{- unsubscribe_url -}}"} {
-		if !unsubscribeVarRE.MatchString(s) {
-			t.Errorf("%q not matched", s)
-		}
-	}
-	for _, s := range []string{"unsubscribe_url", "{{unsubscribe_urls}}", "https://x.com/unsubscribe_url"} {
-		if unsubscribeVarRE.MatchString(s) {
-			t.Errorf("%q matched", s)
-		}
 	}
 }
 

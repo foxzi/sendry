@@ -12,6 +12,8 @@
     </div>
 </div>
 
+{{if .NoPublicURL}}{{template "no_public_url" .}}{{end}}
+
 {{if .Tracking}}
 {{template "tracking_cards" .Tracking}}
 {{end}}

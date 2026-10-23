@@ -320,18 +320,16 @@ func (w *Worker) processJob(job *models.SendJob) {
 		return
 	}
 
-	// Campaign mail always carries an unsubscribe link, which needs the public
-	// origin and the token secret. Without them nothing is sent: the items stay
-	// pending and are retried on the next tick.
+	// The unsubscribe link and opens/clicks tracking need the public origin.
+	// Without it mail is sent with no unsubscribe link and no tracking.
 	env, err := w.loadTrackingEnv()
 	if err != nil {
 		w.logger.Error("failed to load tracking settings, job items stay pending", "job_id", job.ID, "error", err)
 		return
 	}
 	if env == nil {
-		w.logger.Error("public URL is not configured (tracking base URL or server.public_url), "+
-			"unsubscribe links cannot be built; job items stay pending", "job_id", job.ID)
-		return
+		w.logger.Debug("public URL is not configured (tracking base URL or server.public_url), "+
+			"sending without unsubscribe links and tracking", "job_id", job.ID)
 	}
 
 	// Get campaign data for email sending
@@ -478,13 +476,21 @@ func (w *Worker) processItem(
 		return
 	}
 
+	// Without the public origin there is no unsubscribe link: drop the links
+	// and text lines that would carry it
+	htmlSrc, textSrc := tmpl.HTML, tmpl.Text
+	if env == nil {
+		htmlSrc = tracking.RemoveUnsubscribeLinks(htmlSrc)
+		textSrc = tracking.RemoveUnsubscribeLines(textSrc)
+	}
+
 	// Render HTML (links already numbered) and text with variable substitution
-	html, err := buildCampaignHTML(tmpl.HTML, vars, env, campaign, item.ID)
+	html, err := buildCampaignHTML(htmlSrc, vars, env, campaign, item.ID)
 	if err != nil {
 		w.updateItemFailed(item.ID, "render html: "+err.Error())
 		return
 	}
-	text, err := renderTextTemplate("text", tmpl.Text, vars)
+	text, err := renderTextTemplate("text", textSrc, vars)
 	if err != nil {
 		w.updateItemFailed(item.ID, "render text: "+err.Error())
 		return
@@ -572,7 +578,8 @@ func formatFrom(email, name string) string {
 }
 
 // trackingEnv is the public origin and token signer of campaign mail: the
-// unsubscribe link always needs it, opens/clicks tracking when enabled.
+// unsubscribe link and opens/clicks tracking need it; mail goes without them
+// when it is not configured.
 type trackingEnv struct {
 	baseURL string
 	signer  *tracking.Signer

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"math/rand/v2"
 	"net/http"
-	"regexp"
 	"strconv"
 	"time"
 
@@ -54,13 +53,16 @@ func (h *Handlers) CampaignList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) CampaignNew(w http.ResponseWriter, r *http.Request) {
-	// Tracking checkboxes are on by default for new campaigns
+	// Tracking checkboxes are on by default for new campaigns, and off and
+	// disabled without the public origin tracking links are built with
+	hasOrigin := h.hasPublicOrigin()
 	data := map[string]any{
 		"Title":       "New Campaign",
 		"Active":      "campaigns",
 		"User":        h.getUserFromContext(r),
-		"TrackOpens":  true,
-		"TrackClicks": true,
+		"TrackOpens":  hasOrigin,
+		"TrackClicks": hasOrigin,
+		"NoPublicURL": !hasOrigin,
 	}
 
 	h.render(w, "campaign_new", data)
@@ -83,6 +85,9 @@ func (h *Handlers) CampaignCreate(w http.ResponseWriter, r *http.Request) {
 		TrackOpens:  r.FormValue("track_opens") != "",
 		TrackClicks: r.FormValue("track_clicks") != "",
 		AddUTM:      r.FormValue("add_utm") != "",
+	}
+	if !h.hasPublicOrigin() {
+		c.TrackOpens, c.TrackClicks = false, false
 	}
 
 	if c.Name == "" || c.FromEmail == "" {
@@ -139,6 +144,7 @@ func (h *Handlers) CampaignView(w http.ResponseWriter, r *http.Request) {
 		"RecipientLists": recipientLists,
 		"Servers":        h.cfg.Sendry.Servers,
 		"Jobs":           h.jobsWithStats(recentJobs),
+		"NoPublicURL":    !h.hasPublicOrigin(),
 	}
 
 	h.render(w, "campaign_view", data)
@@ -159,10 +165,11 @@ func (h *Handlers) CampaignEdit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]any{
-		"Title":    "Edit " + c.Name,
-		"Active":   "campaigns",
-		"User":     h.getUserFromContext(r),
-		"Campaign": c,
+		"Title":       "Edit " + c.Name,
+		"Active":      "campaigns",
+		"User":        h.getUserFromContext(r),
+		"Campaign":    c,
+		"NoPublicURL": !h.hasPublicOrigin(),
 	}
 
 	h.render(w, "campaign_edit", data)
@@ -191,6 +198,9 @@ func (h *Handlers) CampaignUpdate(w http.ResponseWriter, r *http.Request) {
 	c.TrackOpens = r.FormValue("track_opens") != ""
 	c.TrackClicks = r.FormValue("track_clicks") != ""
 	c.AddUTM = r.FormValue("add_utm") != ""
+	if !h.hasPublicOrigin() {
+		c.TrackOpens, c.TrackClicks = false, false
+	}
 
 	if err := h.campaigns.Update(c); err != nil {
 		h.logger.Error("failed to update campaign", "error", err)
@@ -339,9 +349,6 @@ func (h *Handlers) CampaignVariantDelete(w http.ResponseWriter, r *http.Request)
 	http.Redirect(w, r, "/campaigns/"+campaignID+"/variants", http.StatusSeeOther)
 }
 
-// unsubscribeVarRE matches the {{unsubscribe_url}} template variable
-var unsubscribeVarRE = regexp.MustCompile(`\{\{-?\s*\.?unsubscribe_url\s*-?\}\}`)
-
 // publicOrigin returns the public origin of unsubscribe and tracking links:
 // the tracking base URL setting or server.public_url; "" if neither is set.
 func (h *Handlers) publicOrigin() (string, error) {
@@ -350,6 +357,17 @@ func (h *Handlers) publicOrigin() (string, error) {
 		return "", err
 	}
 	return tracking.ResolveBaseURL(ts.BaseURL, h.cfg.Server.PublicURL), nil
+}
+
+// hasPublicOrigin reports whether unsubscribe and tracking links can be built.
+// A settings load error is logged and counts as configured.
+func (h *Handlers) hasPublicOrigin() bool {
+	origin, err := h.publicOrigin()
+	if err != nil {
+		h.logger.Error("failed to load tracking settings", "error", err)
+		return true
+	}
+	return origin != ""
 }
 
 // campaignSendData returns the data of the campaign send page
@@ -369,21 +387,19 @@ func (h *Handlers) campaignSendData(r *http.Request, c *models.Campaign) map[str
 		if err != nil || tmpl == nil {
 			continue
 		}
-		if unsubscribeVarRE.MatchString(tmpl.HTML) || unsubscribeVarRE.MatchString(tmpl.Text) {
+		if tracking.HasUnsubscribeVar(tmpl.HTML) || tracking.HasUnsubscribeVar(tmpl.Text) {
 			hasUnsubscribeLink = true
 			break
 		}
 	}
 
-	// Campaign mail cannot be sent without a public origin for unsubscribe links
-	origin, err := h.publicOrigin()
-	if err != nil {
-		h.logger.Error("failed to load tracking settings", "error", err)
-	}
+	// Without a public origin mail goes with no unsubscribe link and no
+	// tracking; the missing {{unsubscribe_url}} warning is moot then
+	noOrigin := !h.hasPublicOrigin()
 
 	return map[string]any{
-		"NoUnsubscribeLink": len(variants) > 0 && !hasUnsubscribeLink,
-		"NoPublicURL":       err == nil && origin == "",
+		"NoUnsubscribeLink": len(variants) > 0 && !hasUnsubscribeLink && !noOrigin,
+		"NoPublicURL":       noOrigin,
 		"Title":             "Send " + c.Name,
 		"Active":            "campaigns",
 		"User":              h.getUserFromContext(r),
@@ -417,22 +433,6 @@ func (h *Handlers) CampaignSend(w http.ResponseWriter, r *http.Request) {
 	c, err := h.campaigns.GetByID(id)
 	if err != nil || c == nil {
 		h.error(w, http.StatusNotFound, "Campaign not found")
-		return
-	}
-
-	// Every campaign message carries an unsubscribe link (and List-Unsubscribe
-	// headers) built from the public origin: without it the job must not start
-	origin, err := h.publicOrigin()
-	if err != nil {
-		h.logger.Error("failed to load tracking settings", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load tracking settings")
-		return
-	}
-	if origin == "" {
-		data := h.campaignSendData(r, c)
-		data["Error"] = "Cannot send: the public URL for unsubscribe links is not configured. " +
-			"Set the tracking domain in Settings > Tracking or server.public_url in the config."
-		h.render(w, "campaign_send", data)
 		return
 	}
 
@@ -485,7 +485,7 @@ func (h *Handlers) CampaignSend(w http.ResponseWriter, r *http.Request) {
 		Strategy:        strategy,
 		DryRun:          dryRun,
 		DryRunLimit:     dryRunLimit,
-		TrackOpens:      c.TrackOpens,
+		TrackOpens:      c.TrackOpens && h.hasPublicOrigin(), // no pixel without the public origin
 	}
 
 	// Handle scheduled_at
