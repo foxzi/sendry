@@ -44,7 +44,7 @@ func (h *Handlers) APIKeysList(w http.ResponseWriter, r *http.Request) {
 
 	data := map[string]any{
 		"Title":      "API Keys",
-		"Active":     "settings",
+		"Active":     "apikeys",
 		"User":       h.getUserFromContext(r),
 		"APIKeys":    keys,
 		"Total":      total,

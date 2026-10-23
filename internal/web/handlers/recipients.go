@@ -36,7 +36,7 @@ func (h *Handlers) RecipientListList(w http.ResponseWriter, r *http.Request) {
 	totalPages := (total + limit - 1) / limit
 
 	data := map[string]any{
-		"Title":      "Recipients",
+		"Title":      "Audience",
 		"Active":     "recipients",
 		"User":       h.getUserFromContext(r),
 		"Lists":      lists,
@@ -51,7 +51,7 @@ func (h *Handlers) RecipientListList(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) RecipientListNew(w http.ResponseWriter, r *http.Request) {
 	data := map[string]any{
-		"Title":  "New Recipient List",
+		"Title":  "New recipient list",
 		"Active": "recipients",
 		"User":   h.getUserFromContext(r),
 	}
@@ -265,7 +265,7 @@ func (h *Handlers) RecipientImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]any{
-		"Title":  "Import Results",
+		"Title":  "Import results",
 		"Active": "recipients",
 		"User":   h.getUserFromContext(r),
 		"List":   list,

@@ -1,45 +1,47 @@
 {{define "content"}}
 <div class="page-header">
-    <h1>Dashboard</h1>
+    <h1 data-i18n="cmp.overview">Overview</h1>
 </div>
 
 <div class="stats-grid">
     <div class="stat-card">
-        <div class="stat-value">{{.Stats.Templates}}</div>
-        <div class="stat-label">Templates</div>
-        <a href="/templates" class="stat-link">View all</a>
+        <div class="stat-value">{{.Stats.Campaigns}}</div>
+        <div class="stat-label" data-i18n="campaigns">Campaigns</div>
+        <a href="/campaigns" class="stat-link" data-i18n="cmp.view_all">View all</a>
     </div>
     <div class="stat-card">
-        <div class="stat-value">{{.Stats.Campaigns}}</div>
-        <div class="stat-label">Campaigns</div>
-        <a href="/campaigns" class="stat-link">View all</a>
+        <div class="stat-value">{{.Stats.Templates}}</div>
+        <div class="stat-label" data-i18n="templates">Templates</div>
+        <a href="/templates" class="stat-link" data-i18n="cmp.view_all">View all</a>
     </div>
     <div class="stat-card">
         <div class="stat-value">{{.Stats.Recipients}}</div>
-        <div class="stat-label">Recipients</div>
-        <a href="/recipients" class="stat-link">View all</a>
+        <div class="stat-label" data-i18n="recipients">Recipients</div>
+        <a href="/recipients" class="stat-link" data-i18n="cmp.view_all">View all</a>
     </div>
     <div class="stat-card">
         <div class="stat-value">{{.Stats.ActiveJobs}}</div>
-        <div class="stat-label">Active Jobs</div>
-        <a href="/jobs?status=running" class="stat-link">View all</a>
+        <div class="stat-label" data-i18n="cmp.active_runs">Active runs</div>
+        <a href="/jobs?status=running" class="stat-link" data-i18n="cmp.view_all">View all</a>
     </div>
 </div>
 
 <div class="grid-2">
     <div class="card">
         <div class="card-header">
-            <h2>Servers Status</h2>
+            <h2 data-i18n="cmp.servers_status">Servers Status</h2>
+            <a href="/servers" class="btn btn-sm" data-i18n="cmp.all_servers">All servers</a>
         </div>
         <div class="card-body">
             {{if .Servers}}
+            <div class="table-scroll">
             <table class="table">
                 <thead>
                     <tr>
-                        <th>Name</th>
-                        <th>Env</th>
-                        <th>Status</th>
-                        <th>Queue</th>
+                        <th data-i18n="name">Name</th>
+                        <th data-i18n="cmp.env">Env</th>
+                        <th data-i18n="status">Status</th>
+                        <th data-i18n="cmp.queue">Queue</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -49,9 +51,9 @@
                         <td><span class="badge badge-{{.Env}}">{{.Env}}</span></td>
                         <td>
                             {{if .Online}}
-                            <span class="status status-online">Online</span>
+                            <span class="status status-online" data-i18n="online">Online</span>
                             {{else}}
-                            <span class="status status-offline">Offline</span>
+                            <span class="status status-offline" data-i18n="offline">Offline</span>
                             {{end}}
                         </td>
                         <td>{{.QueueSize}}</td>
@@ -59,44 +61,51 @@
                     {{end}}
                 </tbody>
             </table>
+            </div>
             {{else}}
-            <p class="empty-state">No servers configured</p>
+            <p class="empty-state" data-i18n="cmp.no_servers">No servers configured</p>
             {{end}}
         </div>
     </div>
 
     <div class="card">
         <div class="card-header">
-            <h2>Recent Jobs</h2>
+            <h2 data-i18n="cmp.recent_runs">Recent runs</h2>
+            <a href="/jobs" class="btn btn-sm" data-i18n="cmp.all_runs">All runs</a>
         </div>
         <div class="card-body">
             {{if .RecentJobs}}
+            <div class="table-scroll">
             <table class="table">
                 <thead>
                     <tr>
-                        <th>Campaign</th>
-                        <th>Status</th>
-                        <th>Progress</th>
-                        <th>Created</th>
+                        <th data-i18n="cmp.campaign">Campaign</th>
+                        <th data-i18n="status">Status</th>
+                        <th data-i18n="common.progress">Progress</th>
+                        <th data-i18n="common.created">Created</th>
                     </tr>
                 </thead>
                 <tbody>
                     {{range .RecentJobs}}
                     <tr>
-                        <td><a href="/jobs/{{.ID}}">{{.CampaignName}}</a></td>
-                        <td><span class="badge badge-{{.Status}}">{{.Status}}</span></td>
+                        <td><a href="/jobs/{{.Job.ID}}">{{.Job.CampaignName}}</a></td>
+                        <td><span class="badge badge-{{.Job.Status}}" data-i18n="status.{{.Job.Status}}">{{.Job.Status}}</span></td>
                         <td>
                             <div class="progress">
                                 <div class="progress-bar" style="width: {{.Progress}}%"></div>
                             </div>
                         </td>
-                        <td>{{.CreatedAt}}</td>
+                        <td>{{.Job.CreatedAt.Format "2006-01-02 15:04"}}</td>
                     </tr>
                     {{end}}
                 </tbody>
             </table>
+            </div>
             {{else}}
-            <p class="empty-state">No recent jobs</p>
+            <div class="empty-state">
+                <p data-i18n="cmp.no_runs_dash">No runs yet. Create a campaign and send it to see runs here.</p>
+                <a href="/campaigns/new" class="btn btn-primary" data-i18n="cmp.new_campaign">New campaign</a>
+            </div>
             {{end}}
         </div>
     </div>

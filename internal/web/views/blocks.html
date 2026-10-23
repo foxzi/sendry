@@ -1,24 +1,21 @@
 {{define "content"}}
 <div class="page-header">
-    <h1>Blocks</h1>
-    <div class="header-actions">
-        <a href="/templates" class="btn btn-secondary">Back to Templates</a>
-    </div>
+    <h1 data-i18n="sub.blocks">Blocks</h1>
 </div>
 
 <details class="card" style="margin-bottom:1rem;">
-    <summary style="padding:0.75rem 1rem; cursor:pointer; font-weight:600;">📘 How to write blocks &amp; use variables</summary>
+    <summary style="padding:0.75rem 1rem; cursor:pointer; font-weight:600;"><span data-i18n="tpl.help_title">📘 How to write blocks &amp; use variables</span></summary>
     <div class="card-body" style="font-size:0.9rem; line-height:1.6;">
-        <p style="margin-top:0;">A block is a fragment of email-safe HTML — usually one or more <code>&lt;tr&gt;...&lt;/tr&gt;</code> rows or a self-contained <code>&lt;table&gt;</code>. Blocks compose into templates via the visual builder.</p>
+        <p style="margin-top:0;"><span data-i18n="tpl.help_intro1">A block is a fragment of email-safe HTML — usually one or more</span> <code>&lt;tr&gt;...&lt;/tr&gt;</code> <span data-i18n="tpl.help_intro2">rows or a self-contained</span> <code>&lt;table&gt;</code>. <span data-i18n="tpl.help_intro3">Blocks compose into templates via the visual builder.</span></p>
 
-        <h3 style="margin:1rem 0 0.5rem;">Variables</h3>
-        <p style="margin:0 0 0.5rem;">Always use the dot-prefixed Go template syntax:</p>
+        <h3 style="margin:1rem 0 0.5rem;" data-i18n="template_variables">Variables</h3>
+        <p style="margin:0 0 0.5rem;" data-i18n="tpl.help_syntax">Always use the dot-prefixed Go template syntax:</p>
         <ul style="margin:0 0 0.75rem 1.25rem;">
-            <li><code>{{"{{.Variable}}"}}</code> — substitutes a value from the payload.</li>
-            <li><code>{{"{{if .Cond}}...{{end}}"}}</code> — renders the inside only when the value is truthy.</li>
-            <li><code>{{"{{range .Items}}{{.Name}}: {{.Price}}{{end}}"}}</code> — iterates over an array of objects.</li>
+            <li><code>{{"{{.Variable}}"}}</code> — <span data-i18n="tpl.help_var1">substitutes a value from the payload.</span></li>
+            <li><code>{{"{{if .Cond}}...{{end}}"}}</code> — <span data-i18n="tpl.help_var2">renders the inside only when the value is truthy.</span></li>
+            <li><code>{{"{{range .Items}}{{.Name}}: {{.Price}}{{end}}"}}</code> — <span data-i18n="tpl.help_var3">iterates over an array of objects.</span></li>
         </ul>
-        <p style="margin:0 0 0.75rem;">Example payload for a block using <code>{{"{{range .Items}}"}}</code>:</p>
+        <p style="margin:0 0 0.75rem;"><span data-i18n="tpl.help_example">Example payload for a block using</span> <code>{{"{{range .Items}}"}}</code>:</p>
         <pre class="code-preview" style="margin:0 0 1rem;"><code>{
   "OrderNumber": "12345",
   "Items": [
@@ -27,49 +24,50 @@
   ]
 }</code></pre>
 
-        <h3 style="margin:1rem 0 0.5rem;">HTML rules</h3>
+        <h3 style="margin:1rem 0 0.5rem;" data-i18n="tpl.help_html_rules">HTML rules</h3>
         <ul style="margin:0 0 0.75rem 1.25rem;">
-            <li>Use <strong>tables</strong> for layout — Outlook ignores flex/grid.</li>
-            <li>Inline styles only — <code>&lt;style&gt;</code> blocks are stripped by Gmail/Yandex.</li>
-            <li>Set explicit <code>width</code> on tables; cap visible content at <strong>600px</strong>.</li>
-            <li>Use <code>role="presentation"</code> on layout tables for accessibility.</li>
+            <li><span data-i18n="tpl.help_r1a">Use</span> <strong data-i18n="tpl.help_r1b">tables</strong> <span data-i18n="tpl.help_r1c">for layout — Outlook ignores flex/grid.</span></li>
+            <li><span data-i18n="tpl.help_r2a">Inline styles only —</span> <code>&lt;style&gt;</code> <span data-i18n="tpl.help_r2b">blocks are stripped by Gmail/Yandex.</span></li>
+            <li><span data-i18n="tpl.help_r3a">Set explicit</span> <code>width</code> <span data-i18n="tpl.help_r3b">on tables; cap visible content at</span> <strong>600px</strong>.</li>
+            <li><span data-i18n="tpl.help_r4a">Use</span> <code>role="presentation"</code> <span data-i18n="tpl.help_r4b">on layout tables for accessibility.</span></li>
         </ul>
 
-        <h3 style="margin:1rem 0 0.5rem;">Per-block appearance</h3>
-        <p style="margin:0;">Border-radius, padding, and background colour are set on the block's <em>view</em> page (Appearance card). They wrap the block at render time so the source HTML stays clean.</p>
+        <h3 style="margin:1rem 0 0.5rem;" data-i18n="tpl.help_appearance">Per-block appearance</h3>
+        <p style="margin:0;" data-i18n="tpl.help_appearance_text">Border-radius, padding, and background colour are set on the block's view page (Appearance card). They wrap the block at render time so the source HTML stays clean.</p>
 
-        <h3 style="margin:1rem 0 0.5rem;">Inline editing</h3>
-        <p style="margin:0;">Plain text inside blocks can be edited directly on the canvas in the builder. Variables and surrounding markup are protected — edit the placeholder names through the block's HTML source instead.</p>
+        <h3 style="margin:1rem 0 0.5rem;" data-i18n="tpl.help_inline">Inline editing</h3>
+        <p style="margin:0;" data-i18n="tpl.help_inline_text">Plain text inside blocks can be edited directly on the canvas in the builder. Variables and surrounding markup are protected — edit the placeholder names through the block's HTML source instead.</p>
     </div>
 </details>
 
 <div class="card">
     <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
         <form class="filter-form" method="get" action="/blocks" style="flex:1;">
-            <input type="text" name="search" placeholder="Search blocks..." value="{{.Search}}" class="input">
+            <input type="text" name="search" placeholder="Search blocks..." data-i18n-placeholder="tpl.search_blocks_ph" value="{{.Search}}" class="input">
             <select name="category" class="input">
-                <option value="">All Categories</option>
+                <option value="" data-i18n="tpl.all_categories">All Categories</option>
                 {{range .Categories}}
                 <option value="{{.}}" {{if eq . $.Category}}selected{{end}}>{{.}}</option>
                 {{end}}
             </select>
-            <button type="submit" class="btn">Filter</button>
+            <button type="submit" class="btn" data-i18n="filter">Filter</button>
             {{if or .Search .Category}}
-            <a href="/blocks" class="btn btn-secondary">Clear</a>
+            <a href="/blocks" class="btn btn-secondary" data-i18n="common.clear">Clear</a>
             {{end}}
         </form>
-        <a href="/blocks/new" class="btn btn-primary">New Block</a>
+        <a href="/blocks/new" class="btn btn-primary" data-i18n="tpl.new_block">New Block</a>
     </div>
     <div class="card-body">
         {{if .Blocks}}
+        <div class="table-scroll">
         <table class="table">
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Category</th>
-                    <th>Description</th>
-                    <th>Updated</th>
-                    <th>Actions</th>
+                    <th data-i18n="name">Name</th>
+                    <th data-i18n="tpl.category">Category</th>
+                    <th data-i18n="common.description">Description</th>
+                    <th data-i18n="common.updated">Updated</th>
+                    <th data-i18n="actions">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -90,31 +88,32 @@
                     </td>
                     <td>{{.UpdatedAt.Format "2006-01-02 15:04"}}</td>
                     <td class="actions">
-                        <a href="/blocks/{{.ID}}/edit" class="btn btn-sm">Edit</a>
-                        <form method="post" action="/blocks/{{.ID}}/delete" style="display:inline;" onsubmit="return confirm('Delete this block?')">
-                            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                        <a href="/blocks/{{.ID}}/edit" class="btn btn-sm" data-i18n="edit">Edit</a>
+                        <form method="post" action="/blocks/{{.ID}}/delete" style="display:inline;" onsubmit="return confirm(I18n.t('tpl.confirm_delete_block'))">
+                            <button type="submit" class="btn btn-sm btn-danger" data-i18n="delete">Delete</button>
                         </form>
                     </td>
                 </tr>
                 {{end}}
             </tbody>
         </table>
+        </div>
 
         {{if gt .TotalPages 1}}
         <div class="pagination">
             {{if gt .Page 1}}
-            <a href="/blocks?page={{sub .Page 1}}{{if .Search}}&search={{.Search}}{{end}}{{if .Category}}&category={{.Category}}{{end}}" class="btn btn-sm">&laquo; Prev</a>
+            <a href="/blocks?page={{sub .Page 1}}{{if .Search}}&search={{.Search}}{{end}}{{if .Category}}&category={{.Category}}{{end}}" class="btn btn-sm" data-i18n="tpl.prev">&laquo; Prev</a>
             {{end}}
-            <span class="pagination-info">Page {{.Page}} of {{.TotalPages}} ({{.Total}} total)</span>
+            <span class="pagination-info"><span data-i18n="common.page">Page</span> {{.Page}} <span data-i18n="common.of">of</span> {{.TotalPages}} ({{.Total}} <span data-i18n="tpl.total_lc">total</span>)</span>
             {{if lt .Page .TotalPages}}
-            <a href="/blocks?page={{add .Page 1}}{{if .Search}}&search={{.Search}}{{end}}{{if .Category}}&category={{.Category}}{{end}}" class="btn btn-sm">Next &raquo;</a>
+            <a href="/blocks?page={{add .Page 1}}{{if .Search}}&search={{.Search}}{{end}}{{if .Category}}&category={{.Category}}{{end}}" class="btn btn-sm" data-i18n="tpl.next">Next &raquo;</a>
             {{end}}
         </div>
         {{end}}
         {{else}}
         <div class="empty-state">
-            <p>No blocks found</p>
-            <a href="/blocks/new" class="btn btn-primary">Create your first block</a>
+            <p data-i18n="tpl.no_blocks">No blocks found</p>
+            <a href="/blocks/new" class="btn btn-primary" data-i18n="tpl.create_first_block">Create your first block</a>
         </div>
         {{end}}
     </div>

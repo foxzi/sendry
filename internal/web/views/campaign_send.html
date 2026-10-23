@@ -1,13 +1,13 @@
 {{define "content"}}
 <div class="page-header">
-    <h1>Send: {{.Campaign.Name}}</h1>
-    <a href="/campaigns/{{.Campaign.ID}}" class="btn btn-secondary">Back to Campaign</a>
+    <h1><span data-i18n="cmp.send_colon">Send:</span> {{.Campaign.Name}}</h1>
+    <a href="/campaigns/{{.Campaign.ID}}" class="btn btn-secondary" data-i18n="cmp.back_to_campaign">Back to campaign</a>
 </div>
 
 {{if not .Variants}}
 <div class="alert alert-error">
-    <strong>Cannot send:</strong> No template variants configured.
-    <a href="/campaigns/{{.Campaign.ID}}/variants">Add variants</a>
+    <strong data-i18n="cmp.cannot_send">Cannot send:</strong> <span data-i18n="cmp.no_variants_cfg">No template variants configured.</span>
+    <a href="/campaigns/{{.Campaign.ID}}/variants" data-i18n="cmp.add_variants">Add variants</a>
 </div>
 {{else}}
 
@@ -15,31 +15,31 @@
 <div class="alert alert-error">{{.Error}}</div>
 {{else if .NoPublicURL}}
 <div class="alert alert-error">
-    <strong>Cannot send:</strong> the public URL for unsubscribe links is not configured.
-    Set the tracking domain in <a href="/settings/tracking">Settings &gt; Tracking</a> or <code>server.public_url</code> in the config.
+    <strong data-i18n="trk.cannot_send">Cannot send:</strong> <span data-i18n="trk.cannot_send_text">the public URL for unsubscribe links is not configured.</span>
+    <span data-i18n="trk.set_domain_in">Set the tracking domain in</span> <a href="/settings/tracking" data-i18n="trk.settings_link">Settings &gt; Tracking</a> <span data-i18n="trk.or_public_url">or server.public_url in the config.</span>
 </div>
 {{end}}
 
 {{if .NoUnsubscribeLink}}
 <div class="alert alert-warning">
-    В шаблоне нет ссылки отписки {{"{{unsubscribe_url}}"}}. Почтовые сервисы покажут свою кнопку отписки, но добавьте ссылку в футер письма.
+    <span data-i18n="trk.no_unsub_link">The template has no unsubscribe link</span> <code>{{"{{unsubscribe_url}}"}}</code>. <span data-i18n="trk.no_unsub_link_text">Mail services will show their own unsubscribe button, but add the link to the email footer.</span>
 </div>
 {{end}}
 
 <form method="post" action="/campaigns/{{.Campaign.ID}}/send" class="card">
     <div class="card-body">
-        <h3>1. Select Recipients</h3>
+        <h3 data-i18n="cmp.step1">1. Select Recipients</h3>
         <div class="form-group">
-            <label for="recipient_list_id">Recipient List *</label>
+            <label for="recipient_list_id" data-i18n="cmp.recipient_list_req">Recipient List *</label>
             <select id="recipient_list_id" name="recipient_list_id" required class="input">
-                <option value="">Select list...</option>
+                <option value="" data-i18n="cmp.select_list">Select list...</option>
                 {{range .RecipientLists}}
                 <option value="{{.ID}}">{{.Name}} ({{.ActiveCount}} active)</option>
                 {{end}}
             </select>
         </div>
 
-        <h3 style="margin-top: 1.5rem">2. Select Servers</h3>
+        <h3 style="margin-top: 1.5rem" data-i18n="cmp.step2">2. Select Servers</h3>
         <div class="form-group">
             {{range .Servers}}
             <label class="checkbox-label">
@@ -50,50 +50,50 @@
         </div>
 
         <div class="form-group">
-            <label for="strategy">Distribution Strategy</label>
+            <label for="strategy" data-i18n="cmp.strategy">Distribution Strategy</label>
             <select id="strategy" name="strategy" class="input">
-                <option value="round-robin">Round Robin</option>
-                <option value="random">Random</option>
-                <option value="weighted">Weighted (multi_send.weights from config)</option>
+                <option value="round-robin" data-i18n="cmp.round_robin">Round Robin</option>
+                <option value="random" data-i18n="cmp.random">Random</option>
+                <option value="weighted" data-i18n="cmp.weighted">Weighted (multi_send.weights from config)</option>
             </select>
         </div>
 
-        <h3 style="margin-top: 1.5rem">3. Schedule (Optional)</h3>
+        <h3 style="margin-top: 1.5rem" data-i18n="cmp.step3">3. Schedule (Optional)</h3>
         <div class="form-group">
-            <label for="scheduled_at">Schedule Send</label>
+            <label for="scheduled_at" data-i18n="cmp.schedule_send">Schedule Send</label>
             <input type="datetime-local" id="scheduled_at" name="scheduled_at" class="input">
             <input type="hidden" id="tz" name="tz">
             <input type="hidden" id="tz_offset" name="tz_offset">
-            <small class="form-help">Leave empty to send immediately. Time zone: <span id="tz_label">UTC</span></small>
+            <small class="form-help"><span data-i18n="cmp.schedule_help">Leave empty to send immediately</span>. <span data-i18n="cmp.time_zone">Time zone</span>: <span id="tz_label">UTC</span></small>
         </div>
 
-        <h3 style="margin-top: 1.5rem">4. Test Mode (Optional)</h3>
+        <h3 style="margin-top: 1.5rem" data-i18n="cmp.step4">4. Test Mode (Optional)</h3>
         <div class="form-group">
             <label class="checkbox-label">
                 <input type="checkbox" name="dry_run" id="dry_run" onchange="toggleDryRunLimit()">
-                <strong>Dry-run mode</strong> - Send only to first N recipients for testing
+                <strong data-i18n="cmp.dry_run_mode">Dry-run mode</strong> <span data-i18n="cmp.dry_run_desc">- Send only to first N recipients for testing</span>
             </label>
         </div>
         <div class="form-group" id="dry_run_limit_group" style="display: none; margin-left: 1.5rem;">
-            <label for="dry_run_limit">Number of recipients</label>
+            <label for="dry_run_limit" data-i18n="cmp.num_recipients">Number of recipients</label>
             <input type="number" id="dry_run_limit" name="dry_run_limit" class="input" value="10" min="1" max="100" style="width: 100px;">
-            <small class="form-help">Max 100 recipients for dry-run</small>
+            <small class="form-help" data-i18n="cmp.dry_run_max">Max 100 recipients for dry-run</small>
         </div>
 
-        <h3 style="margin-top: 1.5rem">5. Confirm</h3>
+        <h3 style="margin-top: 1.5rem" data-i18n="cmp.step5">5. Confirm</h3>
         <div class="alert alert-warning">
-            <strong>Review before sending:</strong>
+            <strong data-i18n="cmp.review_before">Review before sending:</strong>
             <ul style="margin: 0.5rem 0 0 1.5rem">
-                <li>Campaign: {{.Campaign.Name}}</li>
-                <li>Variants: {{len .Variants}}</li>
-                <li>From: {{if .Campaign.FromName}}{{.Campaign.FromName}} &lt;{{.Campaign.FromEmail}}&gt;{{else}}{{.Campaign.FromEmail}}{{end}}</li>
+                <li><span data-i18n="cmp.campaign_colon">Campaign:</span> {{.Campaign.Name}}</li>
+                <li><span data-i18n="cmp.variants_colon">Variants:</span> {{len .Variants}}</li>
+                <li><span data-i18n="cmp.from_colon">From:</span> {{if .Campaign.FromName}}{{.Campaign.FromName}} &lt;{{.Campaign.FromEmail}}&gt;{{else}}{{.Campaign.FromEmail}}{{end}}</li>
             </ul>
         </div>
     </div>
 
     <div class="card-footer">
-        <a href="/campaigns/{{.Campaign.ID}}" class="btn btn-secondary">Cancel</a>
-        <button type="submit" class="btn btn-primary"{{if .NoPublicURL}} disabled{{end}} onclick="return confirm('Are you sure you want to send this campaign?')">
+        <a href="/campaigns/{{.Campaign.ID}}" class="btn btn-secondary" data-i18n="cancel">Cancel</a>
+        <button type="submit" class="btn btn-primary"{{if .NoPublicURL}} disabled{{end}} onclick="return confirm(I18n.t('cmp.confirm_send'))" data-i18n="cmp.send_campaign_btn">
             Send Campaign
         </button>
     </div>

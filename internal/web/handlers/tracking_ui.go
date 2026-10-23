@@ -38,7 +38,7 @@ func validateTrackingBaseURL(raw string) (string, string) {
 func (h *Handlers) renderTrackingSettings(w http.ResponseWriter, r *http.Request, s *models.TrackingSettings, errMsg, okMsg string) {
 	data := map[string]any{
 		"Title":    "Tracking Settings",
-		"Active":   "settings",
+		"Active":   "tracking",
 		"User":     h.getUserFromContext(r),
 		"Settings": s,
 		"Fallback": strings.TrimRight(h.cfg.Server.PublicURL, "/"),

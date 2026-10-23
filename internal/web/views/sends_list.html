@@ -1,29 +1,32 @@
 {{define "content"}}
 <div class="page-header">
-    <h1>Send History</h1>
+    <div>
+        <h1 data-i18n="cmp.api_sends">API sends</h1>
+        <p class="text-muted" data-i18n="cmp.api_sends_subtitle">Emails sent through the API</p>
+    </div>
 </div>
 
 {{if .Stats}}
-<div class="stats-row" style="margin-bottom: 1rem; display: flex; gap: 1rem; justify-content: space-between;">
-    <div class="stat-card" style="flex: 1;">
+<div class="stats-row">
+    <div class="stat-card">
         <div class="stat-value">{{.Stats.Total}}</div>
-        <div class="stat-label">Total</div>
+        <div class="stat-label" data-i18n="common.total">Total</div>
     </div>
-    <div class="stat-card" style="flex: 1;">
+    <div class="stat-card">
         <div class="stat-value" style="color: var(--primary)">{{.Stats.Queued}}</div>
-        <div class="stat-label">Queued</div>
+        <div class="stat-label" data-i18n="cmp.queued">Queued</div>
     </div>
-    <div class="stat-card" style="flex: 1;">
+    <div class="stat-card">
         <div class="stat-value" style="color: var(--success)">{{.Stats.Sent}}</div>
-        <div class="stat-label">Sent</div>
+        <div class="stat-label" data-i18n="cmp.sent">Sent</div>
     </div>
-    <div class="stat-card" style="flex: 1;">
+    <div class="stat-card">
         <div class="stat-value" style="color: var(--danger)">{{.Stats.Failed}}</div>
-        <div class="stat-label">Failed</div>
+        <div class="stat-label" data-i18n="cmp.failed_n">Failed</div>
     </div>
-    <div class="stat-card" style="flex: 1;">
+    <div class="stat-card">
         <div class="stat-value" style="color: var(--warning)">{{.Stats.Pending}}</div>
-        <div class="stat-label">Pending</div>
+        <div class="stat-label" data-i18n="cmp.pending">Pending</div>
     </div>
 </div>
 {{end}}
@@ -31,124 +34,131 @@
 {{if .Errors}}
 <div class="card" style="margin-bottom: 1rem">
     <div class="card-header">
-        <h2>Delivery Errors</h2>
+        <h2 data-i18n="cmp.delivery_errors">Delivery Errors</h2>
     </div>
     <div class="card-body">
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Error Type</th>
-                    <th>Failed</th>
-                    <th>Retrying</th>
-                </tr>
-            </thead>
-            <tbody>
-                {{range .Errors}}
-                <tr>
-                    <td>{{.Type.Label}}</td>
-                    <td>{{if .Failed}}<a href="/sends?status=failed&error_type={{.Type}}">{{.Failed}}</a>{{else}}<span class="text-muted">0</span>{{end}}</td>
-                    <td>{{if .Retrying}}<a href="/sends?status=queued&error_type={{.Type}}">{{.Retrying}}</a>{{else}}<span class="text-muted">0</span>{{end}}</td>
-                </tr>
-                {{end}}
-            </tbody>
-        </table>
-        <p class="text-muted">Retrying: messages still in the MTA queue after a failed delivery attempt.</p>
+        <script type="application/json" id="delivery-errors-data">{{toJSON .Errors}}</script>
+        <div class="err-panels" id="delivery-errors-panels"></div>
+        <noscript>
+            <div class="table-scroll">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Error Type</th>
+                        <th>Failed</th>
+                        <th>Retrying</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Errors}}
+                    <tr>
+                        <td>{{.Type.Label}}</td>
+                        <td>{{if .Failed}}<a href="/sends?status=failed&error_type={{.Type}}#results">{{.Failed}}</a>{{else}}<span class="text-muted">0</span>{{end}}</td>
+                        <td>{{if .Retrying}}<a href="/sends?status=queued&error_type={{.Type}}#results">{{.Retrying}}</a>{{else}}<span class="text-muted">0</span>{{end}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+            </div>
+        </noscript>
     </div>
+    <script src="/static/js/delivery-errors.js"></script>
 </div>
 {{end}}
 
-<div class="card">
+<div class="card scroll-target" id="results" hx-boost="true" hx-target="#results" hx-select="#results" hx-swap="outerHTML show:none" hx-push-url="true">
     <div class="card-header">
         <form class="filter-form" method="get" action="/sends">
-            <input type="text" name="search" value="{{.Search}}" placeholder="Search..." class="input">
+            <input type="text" name="search" value="{{.Search}}" placeholder="Search..." data-i18n-placeholder="cmp.search_ph" class="input">
             <select name="status" class="input">
-                <option value="">All Status</option>
-                <option value="pending" {{if eq .Status "pending"}}selected{{end}}>Pending</option>
-                <option value="queued" {{if eq .Status "queued"}}selected{{end}}>Queued</option>
-                <option value="sent" {{if eq .Status "sent"}}selected{{end}}>Sent</option>
-                <option value="failed" {{if eq .Status "failed"}}selected{{end}}>Failed</option>
+                <option value="" data-i18n="cmp.all_status">All Status</option>
+                <option value="pending" {{if eq .Status "pending"}}selected{{end}} data-i18n="cmp.pending">Pending</option>
+                <option value="queued" {{if eq .Status "queued"}}selected{{end}} data-i18n="cmp.queued">Queued</option>
+                <option value="sent" {{if eq .Status "sent"}}selected{{end}} data-i18n="cmp.sent">Sent</option>
+                <option value="failed" {{if eq .Status "failed"}}selected{{end}} data-i18n="cmp.failed">Failed</option>
             </select>
             <select name="domain" class="input">
-                <option value="">All Domains</option>
+                <option value="" data-i18n="cmp.all_domains">All Domains</option>
                 {{range .Domains}}
                 <option value="{{.}}" {{if eq $.Domain .}}selected{{end}}>{{.}}</option>
                 {{end}}
             </select>
             <select name="server" class="input">
-                <option value="">All Servers</option>
+                <option value="" data-i18n="cmp.all_servers_opt">All Servers</option>
                 {{range .Servers}}
                 <option value="{{.}}" {{if eq $.Server .}}selected{{end}}>{{.}}</option>
                 {{end}}
             </select>
             <select name="error_type" class="input">
-                <option value="">All Errors</option>
+                <option value="" data-i18n="cmp.all_errors">All Errors</option>
                 {{range .ErrorTypes}}
-                <option value="{{.}}" {{if eq . $.ErrorType}}selected{{end}}>{{.Label}}</option>
+                <option value="{{.}}" data-i18n="error_type.{{.}}" {{if eq . $.ErrorType}}selected{{end}}>{{.Label}}</option>
                 {{end}}
             </select>
-            <button type="submit" class="btn">Filter</button>
+            <button type="submit" class="btn" data-i18n="filter">Filter</button>
             {{if or .Search .Status .Domain .Server .ErrorType}}
-            <a href="/sends" class="btn btn-secondary">Clear</a>
+            <a href="/sends" class="btn btn-secondary" data-i18n="common.clear">Clear</a>
             {{end}}
         </form>
     </div>
     <div class="card-body">
         {{if .Sends}}
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>From</th>
-                    <th>To</th>
-                    <th>Subject</th>
-                    <th>Server</th>
-                    <th>Status</th>
-                    <th data-i18n="trk.col_opened">Opened</th>
-                    <th data-i18n="trk.col_clicks">Clicks</th>
-                    <th>Created</th>
-                </tr>
-            </thead>
-            <tbody>
-                {{range .Sends}}
-                <tr>
-                    <td><a href="/sends/{{.ID}}">{{slice .ID 0 8}}...</a></td>
-                    <td>{{.FromAddress}}</td>
-                    <td>{{.ToAddresses}}</td>
-                    <td>{{if .Subject}}{{if gt (len .Subject) 40}}{{slice .Subject 0 40}}...{{else}}{{.Subject}}{{end}}{{else}}<em>No subject</em>{{end}}</td>
-                    <td>{{.ServerName}}</td>
-                    <td>
-                        {{if eq .Status "sent"}}
-                        <span class="badge badge-completed">sent</span>
-                        {{else if eq .Status "failed"}}
-                        <span class="badge badge-failed">failed</span>
-                        {{else}}
-                        <span class="badge badge-scheduled">{{.Status}}</span>
-                        {{end}}
-                        {{if .ErrorMessage}}<span class="badge" title="{{.ErrorMessage}}">{{(errorType .ErrorMessage).Label}}</span>{{end}}
-                    </td>
-                    <td>{{if .OpenedAt}}{{.OpenedAt.Format "2006-01-02 15:04"}}{{if gt .OpenCount 0}} <span class="text-muted">&times;{{.OpenCount}}</span>{{end}}{{else}}<span class="text-muted">-</span>{{end}}</td>
-                    <td>{{if .ClickCount}}{{.ClickCount}}{{else}}<span class="text-muted">-</span>{{end}}</td>
-                    <td>{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
-                </tr>
-                {{end}}
-            </tbody>
-        </table>
+        <div class="table-scroll">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th data-i18n="common.id">ID</th>
+                        <th data-i18n="common.from">From</th>
+                        <th data-i18n="common.to">To</th>
+                        <th data-i18n="common.subject">Subject</th>
+                        <th data-i18n="common.server">Server</th>
+                        <th data-i18n="status">Status</th>
+                        <th data-i18n="cmp.error_col">Error</th>
+                        <th data-i18n="trk.col_read">Read</th>
+                        <th data-i18n="common.created">Created</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Sends}}
+                    <tr>
+                        <td><a href="/sends/{{.ID}}">{{slice .ID 0 8}}...</a></td>
+                        <td class="cell-break">{{emailBreak .FromAddress}}</td>
+                        <td class="cell-break">{{with jsonList .ToAddresses}}<span title="{{range $i, $a := .}}{{if $i}}, {{end}}{{$a}}{{end}}">{{emailBreak (index . 0)}}</span>{{if gt (len .) 1}} <span class="text-muted">+{{sub (len .) 1}}</span>{{end}}{{end}}</td>
+                        <td>{{if .Subject}}{{if gt (len .Subject) 40}}{{slice .Subject 0 40}}...{{else}}{{.Subject}}{{end}}{{else}}<em data-i18n="cmp.no_subject">No subject</em>{{end}}</td>
+                        <td>{{.ServerName}}</td>
+                        <td>
+                            {{if eq .Status "sent"}}
+                            <span class="badge badge-completed" data-i18n="status.sent">sent</span>
+                            {{else if eq .Status "failed"}}
+                            <span class="badge badge-failed" data-i18n="status.failed">failed</span>
+                            {{else}}
+                            <span class="badge badge-scheduled" data-i18n="status.{{.Status}}">{{.Status}}</span>
+                            {{end}}
+                        </td>
+                        <td>{{if .ErrorMessage}}<span class="text-muted" title="{{.ErrorMessage}}" data-i18n="error_type.{{errorType .ErrorMessage}}">{{(errorType .ErrorMessage).Label}}</span>{{else}}<span class="text-muted">–</span>{{end}}</td>
+                        <td>{{if .OpenedAt}}<span class="nowrap">{{.OpenedAt.Format "2006-01-02"}}</span> <span class="nowrap">{{.OpenedAt.Format "15:04"}}</span>{{else}}<span class="text-muted">-</span>{{end}}</td>
+                        <td><span class="nowrap">{{.CreatedAt.Format "2006-01-02"}}</span> <span class="nowrap">{{.CreatedAt.Format "15:04"}}</span></td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
 
         {{if gt .TotalPages 1}}
         <div class="pagination">
             {{if gt .Page 1}}
-            <a href="/sends?page={{sub .Page 1}}{{if .Search}}&search={{.Search}}{{end}}{{if .Status}}&status={{.Status}}{{end}}{{if .Domain}}&domain={{.Domain}}{{end}}{{if .Server}}&server={{.Server}}{{end}}{{if .ErrorType}}&error_type={{.ErrorType}}{{end}}" class="btn btn-sm">&laquo; Prev</a>
+            <a data-i18n="cmp.prev" href="/sends?page={{sub .Page 1}}{{if .Search}}&search={{.Search}}{{end}}{{if .Status}}&status={{.Status}}{{end}}{{if .Domain}}&domain={{.Domain}}{{end}}{{if .Server}}&server={{.Server}}{{end}}{{if .ErrorType}}&error_type={{.ErrorType}}{{end}}" class="btn btn-sm">&laquo; Prev</a>
             {{end}}
-            <span class="pagination-info">Page {{.Page}} of {{.TotalPages}} ({{.Total}} total)</span>
+            <span class="pagination-info"><span data-i18n="common.page">Page</span> {{.Page}} <span data-i18n="common.of">of</span> {{.TotalPages}} ({{.Total}} <span data-i18n="cmp.total_lc">total</span>)</span>
             {{if lt .Page .TotalPages}}
-            <a href="/sends?page={{add .Page 1}}{{if .Search}}&search={{.Search}}{{end}}{{if .Status}}&status={{.Status}}{{end}}{{if .Domain}}&domain={{.Domain}}{{end}}{{if .Server}}&server={{.Server}}{{end}}{{if .ErrorType}}&error_type={{.ErrorType}}{{end}}" class="btn btn-sm">Next &raquo;</a>
+            <a data-i18n="cmp.next" href="/sends?page={{add .Page 1}}{{if .Search}}&search={{.Search}}{{end}}{{if .Status}}&status={{.Status}}{{end}}{{if .Domain}}&domain={{.Domain}}{{end}}{{if .Server}}&server={{.Server}}{{end}}{{if .ErrorType}}&error_type={{.ErrorType}}{{end}}" class="btn btn-sm">Next &raquo;</a>
             {{end}}
         </div>
         {{end}}
         {{else}}
         <div class="empty-state">
-            <p>No sends found</p>
-            <p class="text-muted">Sends appear here when emails are sent via the API</p>
+            <p data-i18n="cmp.no_sends">No sends found</p>
+            <p class="text-muted" data-i18n="cmp.no_sends_hint">Sends appear here when emails are sent via the API</p>
         </div>
         {{end}}
     </div>

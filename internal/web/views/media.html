@@ -73,18 +73,15 @@
 </style>
 
 <div class="page-header">
-    <h1>Media</h1>
-    <div class="header-actions">
-        <a href="/templates" class="btn btn-secondary">Back to Templates</a>
-    </div>
+    <h1 data-i18n="sub.media">Media</h1>
 </div>
 
 <div class="card" style="margin-bottom:1rem;">
     <div class="card-body">
         <form id="upload-form" method="post" action="/media/upload" enctype="multipart/form-data">
             <div class="upload-area" id="upload-area" onclick="document.getElementById('file-input').click();">
-                <strong>Drop image here or click to upload</strong>
-                <p>PNG, JPEG, GIF, WebP, SVG — max 10 MB</p>
+                <strong data-i18n="tpl.drop_here">Drop image here or click to upload</strong>
+                <p data-i18n="tpl.upload_formats">PNG, JPEG, GIF, WebP, SVG — max 10 MB</p>
             </div>
             <input type="file" id="file-input" name="file" accept="image/*" style="display:none;" onchange="document.getElementById('upload-form').submit();">
         </form>
@@ -94,9 +91,9 @@
 <div class="card">
     <div class="card-header">
         <form class="filter-form" method="get" action="/media">
-            <input type="text" name="search" placeholder="Search..." value="{{.Search}}" class="input">
-            <button type="submit" class="btn">Search</button>
-            {{if .Search}}<a href="/media" class="btn btn-secondary">Clear</a>{{end}}
+            <input type="text" name="search" placeholder="Search..." data-i18n-placeholder="tpl.search_ph2" value="{{.Search}}" class="input">
+            <button type="submit" class="btn" data-i18n="search">Search</button>
+            {{if .Search}}<a href="/media" class="btn btn-secondary" data-i18n="common.clear">Clear</a>{{end}}
         </form>
     </div>
     <div class="card-body">
@@ -110,9 +107,9 @@
                     <div class="media-meta">{{.CreatedAt.Format "2006-01-02"}}</div>
                 </div>
                 <div class="media-actions">
-                    <button class="btn btn-sm" onclick="copyURL('{{.URL}}')">Copy URL</button>
-                    <form method="post" action="/media/{{.ID}}/delete" style="display:inline;" onsubmit="return confirm('Delete?')">
-                        <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                    <button class="btn btn-sm" onclick="copyURL('{{.URL}}')" data-i18n="tpl.copy_url">Copy URL</button>
+                    <form method="post" action="/media/{{.ID}}/delete" style="display:inline;" onsubmit="return confirm(I18n.t('tpl.confirm_delete_short'))">
+                        <button type="submit" class="btn btn-sm btn-danger" data-i18n="delete">Delete</button>
                     </form>
                 </div>
             </div>
@@ -122,23 +119,23 @@
         {{if gt .TotalPages 1}}
         <div class="pagination" style="margin-top:1rem;">
             {{if gt .Page 1}}
-            <a href="/media?page={{sub .Page 1}}{{if .Search}}&search={{.Search}}{{end}}" class="btn btn-sm">&laquo; Prev</a>
+            <a href="/media?page={{sub .Page 1}}{{if .Search}}&search={{.Search}}{{end}}" class="btn btn-sm" data-i18n="tpl.prev">&laquo; Prev</a>
             {{end}}
-            <span class="pagination-info">Page {{.Page}} of {{.TotalPages}} ({{.Total}} files)</span>
+            <span class="pagination-info"><span data-i18n="common.page">Page</span> {{.Page}} <span data-i18n="common.of">of</span> {{.TotalPages}} ({{.Total}} <span data-i18n="tpl.files_lc">files</span>)</span>
             {{if lt .Page .TotalPages}}
-            <a href="/media?page={{add .Page 1}}{{if .Search}}&search={{.Search}}{{end}}" class="btn btn-sm">Next &raquo;</a>
+            <a href="/media?page={{add .Page 1}}{{if .Search}}&search={{.Search}}{{end}}" class="btn btn-sm" data-i18n="tpl.next">Next &raquo;</a>
             {{end}}
         </div>
         {{end}}
         {{else}}
         <div class="empty-state">
-            <p>No media files uploaded yet</p>
+            <p data-i18n="tpl.no_media">No media files uploaded yet</p>
         </div>
         {{end}}
     </div>
 </div>
 
-<div class="copy-toast" id="copy-toast">URL copied!</div>
+<div class="copy-toast" id="copy-toast" data-i18n="tpl.url_copied">URL copied!</div>
 
 <script>
 function copyURL(url) {

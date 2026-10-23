@@ -1,19 +1,22 @@
 {{define "content"}}
 <div class="page-header">
-    <h1 data-i18n="queue.title">Queue</h1>
+    <div>
+        <h1 data-i18n="queue.title">Queue</h1>
+        <p class="text-muted" data-i18n="infra.messages_waiting_on_every_server_and_the_dead">Messages waiting on every server, and the dead letter queue</p>
+    </div>
 </div>
 
-<div class="stats-row" style="margin-bottom: 1.5rem;">
+<div class="stats-row">
     {{range .Servers}}
     <div class="stat-card">
         <div class="stat-value">{{.QueueSize}} / {{.DLQSize}}</div>
-        <div class="stat-label">{{.Name}}</div>
-        {{if .Error}}<div style="font-size: 0.8rem; color: var(--danger);">offline</div>{{end}}
+        <div class="stat-label">{{.Name}} <span class="stat-hint" data-i18n="queue.queue_dlq_hint">(queue / DLQ)</span></div>
+        {{if .Error}}<div class="stat-hint" style="color: var(--error);" data-i18n="infra.offline_lower">offline</div>{{end}}
     </div>
     {{end}}
     <div class="stat-card">
         <div class="stat-value">{{.TotalQueue}} / {{.TotalDLQ}}</div>
-        <div class="stat-label" data-i18n="queue.total">Total</div>
+        <div class="stat-label"><span data-i18n="queue.total">Total</span> <span class="stat-hint" data-i18n="queue.queue_dlq_hint">(queue / DLQ)</span></div>
     </div>
 </div>
 
@@ -35,23 +38,24 @@
     <div class="card-header">
         <span>{{.TotalQueue}} <span data-i18n="queue.messages_in_queue">messages in queue</span></span>
         {{if .QueueMessages}}
-        <input type="text" class="form-control tab-search" data-table="queue-table" placeholder="Search..."
+        <input type="text" class="form-control tab-search" data-table="queue-table" data-i18n-placeholder="infra.search" placeholder="Search..."
                style="max-width: 300px; display: inline-block; margin-left: 1rem;">
         {{end}}
     </div>
     <div class="card-body">
         {{if .QueueMessages}}
+        <div class="table-scroll">
         <table class="table sortable-table" id="queue-table">
             <thead>
                 <tr>
-                    <th class="sortable" data-col="0">ID</th>
-                    <th class="sortable" data-col="1">Server</th>
-                    <th class="sortable" data-col="2">From</th>
-                    <th class="sortable" data-col="3">To</th>
-                    <th class="sortable" data-col="4">Subject</th>
-                    <th class="sortable" data-col="5">Status</th>
-                    <th class="sortable" data-col="6">Created</th>
-                    <th>Actions</th>
+                    <th class="sortable" data-col="0" data-i18n="common.id">ID</th>
+                    <th class="sortable" data-col="1" data-i18n="common.server">Server</th>
+                    <th class="sortable" data-col="2" data-i18n="from">From</th>
+                    <th class="sortable" data-col="3" data-i18n="to">To</th>
+                    <th class="sortable" data-col="4" data-i18n="subject">Subject</th>
+                    <th class="sortable" data-col="5" data-i18n="status">Status</th>
+                    <th class="sortable" data-col="6" data-i18n="common.created">Created</th>
+                    <th data-i18n="actions">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -62,18 +66,19 @@
                     <td>{{.From}}</td>
                     <td>{{.To}}</td>
                     <td>{{.Subject}}</td>
-                    <td>{{.Status}}</td>
+                    <td data-i18n="status.{{.Status}}">{{.Status}}</td>
                     <td>{{.CreatedAt}}</td>
                     <td class="actions">
-                        <a href="/servers/{{.Server}}/queue/{{.ID}}" class="btn btn-sm">View</a>
+                        <a href="/servers/{{.Server}}/queue/{{.ID}}" class="btn btn-sm" data-i18n="view">View</a>
                         <form method="post" action="/servers/{{.Server}}/queue/{{.ID}}/delete" style="display: inline;">
-                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this message?')">Delete</button>
+                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm(I18n.t('infra.delete_this_message'))" data-i18n="delete">Delete</button>
                         </form>
                     </td>
                 </tr>
                 {{end}}
             </tbody>
         </table>
+        </div>
         {{else}}
         <div class="empty-state">
             <p data-i18n="queue.empty">Queue is empty</p>
@@ -90,23 +95,24 @@
     <div class="card-header">
         <span>{{.TotalDLQ}} <span data-i18n="queue.messages_in_dlq">messages in DLQ</span></span>
         {{if .DLQMessages}}
-        <input type="text" class="form-control tab-search" data-table="dlq-table" placeholder="Search..."
+        <input type="text" class="form-control tab-search" data-table="dlq-table" data-i18n-placeholder="infra.search" placeholder="Search..."
                style="max-width: 300px; display: inline-block; margin-left: 1rem;">
         {{end}}
     </div>
     <div class="card-body">
         {{if .DLQMessages}}
+        <div class="table-scroll">
         <table class="table sortable-table" id="dlq-table">
             <thead>
                 <tr>
-                    <th class="sortable" data-col="0">ID</th>
-                    <th class="sortable" data-col="1">Server</th>
-                    <th class="sortable" data-col="2">From</th>
-                    <th class="sortable" data-col="3">To</th>
-                    <th class="sortable" data-col="4">Subject</th>
-                    <th class="sortable" data-col="5">Status</th>
-                    <th class="sortable" data-col="6">Created</th>
-                    <th>Actions</th>
+                    <th class="sortable" data-col="0" data-i18n="common.id">ID</th>
+                    <th class="sortable" data-col="1" data-i18n="common.server">Server</th>
+                    <th class="sortable" data-col="2" data-i18n="from">From</th>
+                    <th class="sortable" data-col="3" data-i18n="to">To</th>
+                    <th class="sortable" data-col="4" data-i18n="subject">Subject</th>
+                    <th class="sortable" data-col="5" data-i18n="status">Status</th>
+                    <th class="sortable" data-col="6" data-i18n="common.created">Created</th>
+                    <th data-i18n="actions">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -117,20 +123,21 @@
                     <td>{{.From}}</td>
                     <td>{{.To}}</td>
                     <td>{{.Subject}}</td>
-                    <td>{{.Status}}</td>
+                    <td data-i18n="status.{{.Status}}">{{.Status}}</td>
                     <td>{{.CreatedAt}}</td>
                     <td class="actions">
                         <form method="post" action="/servers/{{.Server}}/dlq/{{.ID}}/retry" style="display: inline;">
-                            <button type="submit" class="btn btn-sm" onclick="return confirm('Retry this message?')">Retry</button>
+                            <button type="submit" class="btn btn-sm" onclick="return confirm(I18n.t('infra.retry_this_message'))" data-i18n="infra.retry">Retry</button>
                         </form>
                         <form method="post" action="/servers/{{.Server}}/dlq/{{.ID}}/delete" style="display: inline;">
-                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this message?')">Delete</button>
+                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm(I18n.t('infra.delete_this_message'))" data-i18n="delete">Delete</button>
                         </form>
                     </td>
                 </tr>
                 {{end}}
             </tbody>
         </table>
+        </div>
         {{else}}
         <div class="empty-state">
             <p data-i18n="queue.dlq_empty">DLQ is empty</p>

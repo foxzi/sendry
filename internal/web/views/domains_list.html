@@ -1,23 +1,26 @@
 {{define "content"}}
 <div class="page-header">
-    <h1>{{.ServerName}} - Domains</h1>
+    <h1>{{.ServerName}} - <span data-i18n="domains">Domains</span></h1>
     <div class="header-actions">
-        <a href="/servers/{{.ServerName}}/domains/new" class="btn btn-primary">Add Domain</a>
-        <a href="/servers/{{.ServerName}}" class="btn btn-secondary">Back to Server</a>
+        <a href="/servers/{{.ServerName}}/domains/new" class="btn btn-primary" data-i18n="infra.add_domain">Add domain</a>
+        <a href="/servers/{{.ServerName}}" class="btn btn-secondary" data-i18n="infra.back_to_server">Back to server</a>
     </div>
 </div>
+
+<p class="text-muted" style="margin-bottom: 1rem;"><span data-i18n="infra.server_local_domains">Server-local settings. To manage domains for all servers use</span> <a href="/domains" data-i18n="infra.infrastructure_domains">Infrastructure → Domains</a>.</p>
 
 <div class="card">
     <div class="card-body">
         {{if .Domains}}
+        <div class="table-scroll">
         <table class="table">
             <thead>
                 <tr>
-                    <th>Domain</th>
-                    <th>Mode</th>
+                    <th data-i18n="common.domain">Domain</th>
+                    <th data-i18n="common.mode">Mode</th>
                     <th>DKIM</th>
-                    <th>Rate Limit</th>
-                    <th>Actions</th>
+                    <th data-i18n="infra.rate_limit">Rate Limit</th>
+                    <th data-i18n="actions">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -27,7 +30,7 @@
                         <a href="/servers/{{$.ServerName}}/domains/{{.Domain}}">{{.Domain}}</a>
                     </td>
                     <td>
-                        <span class="badge badge-{{if eq .Mode "production"}}running{{else if eq .Mode "sandbox"}}draft{{else if eq .Mode "redirect"}}warning{{else}}info{{end}}">
+                        <span class="badge badge-{{if eq .Mode "production"}}running{{else if eq .Mode "sandbox"}}draft{{else if eq .Mode "redirect"}}warning{{else}}info{{end}}" data-i18n="infra.mode.{{if .Mode}}{{.Mode}}{{else}}production{{end}}">
                             {{if .Mode}}{{.Mode}}{{else}}production{{end}}
                         </span>
                     </td>
@@ -35,27 +38,28 @@
                         {{if and .DKIM .DKIM.Enabled}}
                         <span class="badge badge-running">{{.DKIM.Selector}}</span>
                         {{else}}
-                        <span class="badge badge-draft">Disabled</span>
+                        <span class="badge badge-draft" data-i18n="infra.disabled">Disabled</span>
                         {{end}}
                     </td>
                     <td>
                         {{if .RateLimit}}
                         {{.RateLimit.MessagesPerHour}}/h, {{.RateLimit.MessagesPerDay}}/d
                         {{else}}
-                        <span class="text-muted">Default</span>
+                        <span class="text-muted" data-i18n="infra.default">Default</span>
                         {{end}}
                     </td>
                     <td>
-                        <a href="/servers/{{$.ServerName}}/domains/{{.Domain}}/edit" class="btn btn-sm btn-secondary">Edit</a>
+                        <a href="/servers/{{$.ServerName}}/domains/{{.Domain}}/edit" class="btn btn-sm btn-secondary" data-i18n="edit">Edit</a>
                     </td>
                 </tr>
                 {{end}}
             </tbody>
         </table>
+        </div>
         {{else}}
         <div class="empty-state">
-            <p>No domains configured</p>
-            <a href="/servers/{{.ServerName}}/domains/new" class="btn btn-primary">Add First Domain</a>
+            <p data-i18n="infra.no_domains_configured">No domains configured</p>
+            <a href="/servers/{{.ServerName}}/domains/new" class="btn btn-primary" data-i18n="infra.add_first_domain">Add first domain</a>
         </div>
         {{end}}
     </div>

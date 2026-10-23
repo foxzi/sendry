@@ -256,7 +256,7 @@ func (h *Handlers) ServerDLQ(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]any{
-		"Title":      name + " - Dead Letter Queue",
+		"Title":      name + " - Dead letter queue",
 		"Active":     "servers",
 		"User":       h.getUserFromContext(r),
 		"ServerName": name,

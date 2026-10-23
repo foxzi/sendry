@@ -11,6 +11,7 @@ import (
 	"github.com/foxzi/sendry/internal/web/crypto"
 	"github.com/foxzi/sendry/internal/web/db"
 	"github.com/foxzi/sendry/internal/web/middleware"
+	"github.com/foxzi/sendry/internal/web/models"
 	"github.com/foxzi/sendry/internal/web/repository"
 	"github.com/foxzi/sendry/internal/web/router"
 	"github.com/foxzi/sendry/internal/web/sendry"
@@ -126,8 +127,10 @@ func (h *Handlers) Dashboard(w http.ResponseWriter, r *http.Request) {
 	h.db.QueryRow("SELECT COUNT(*) FROM recipients").Scan(&recipients)
 	h.db.QueryRow("SELECT COUNT(*) FROM send_jobs WHERE status = 'running'").Scan(&activeJobs)
 
+	recentJobs, _, _ := h.jobs.List(models.JobListFilter{Limit: 5})
+
 	data := map[string]any{
-		"Title":  "Dashboard",
+		"Title":  "Overview",
 		"Active": "dashboard",
 		"User":   h.getUserFromContext(r),
 		"Stats": map[string]int{
@@ -137,7 +140,7 @@ func (h *Handlers) Dashboard(w http.ResponseWriter, r *http.Request) {
 			"ActiveJobs": activeJobs,
 		},
 		"Servers":    h.getServersStatus(),
-		"RecentJobs": []any{},
+		"RecentJobs": h.jobsWithStats(recentJobs),
 	}
 
 	h.render(w, "dashboard", data)
