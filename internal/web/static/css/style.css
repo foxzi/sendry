@@ -549,6 +549,13 @@ body {
     scroll-margin-top: calc(var(--topbar-h) + 1rem);
 }
 
+/* Region being refetched in place (app.js initPartials) */
+.is-loading {
+    opacity: 0.6;
+    pointer-events: none;
+    transition: opacity 0.15s;
+}
+
 /* Cards */
 .card {
     background: var(--bg-card);

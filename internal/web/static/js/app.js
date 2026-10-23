@@ -26,6 +26,86 @@
         });
     }
 
+    // Partial reload: a [data-partial] region (filter form, pagination, results)
+    // is refetched and swapped in place instead of reloading the whole page.
+    // Links elsewhere on the page that point at it (href ending in #id) swap it too.
+    // Without JS the forms and links still work as plain navigation to the anchor.
+    function initPartials() {
+        var regions = document.querySelectorAll('[data-partial][id]');
+        if (!regions.length) return;
+        var path = location.pathname;
+        var pending = null;
+        var pushed = false; // history entries exist only after the first swap
+
+        function regionFor(el, url) {
+            var inside = el.closest('[data-partial][id]');
+            if (inside) return inside;
+            var target = url.hash && document.getElementById(url.hash.slice(1));
+            return target && target.hasAttribute('data-partial') ? target : null;
+        }
+
+        function load(region, url, opts) {
+            if (pending) pending.abort();
+            pending = new AbortController();
+            region.classList.add('is-loading');
+            fetch(url.pathname + url.search, { signal: pending.signal })
+                .then(function(r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.text();
+                })
+                .then(function(html) {
+                    var doc = new DOMParser().parseFromString(html, 'text/html');
+                    var fresh = doc.getElementById(region.id);
+                    if (!fresh) throw new Error('no #' + region.id + ' in response');
+                    region.replaceWith(fresh);
+                    I18n.apply();
+                    initAutoFilters(fresh);
+                    if (opts.push) {
+                        history.pushState({ partial: fresh.id }, '', url.pathname + url.search + '#' + fresh.id);
+                        pushed = true;
+                    }
+                    if (opts.scroll) {
+                        var top = fresh.getBoundingClientRect().top;
+                        if (top < 0 || top > window.innerHeight / 2) fresh.scrollIntoView({ behavior: 'smooth' });
+                    }
+                })
+                .catch(function(err) {
+                    if (err.name === 'AbortError') return;
+                    location.href = url.href; // fall back to a full page load
+                });
+        }
+
+        document.addEventListener('submit', function(e) {
+            var form = e.target;
+            if (!(form.method || '').match(/^get$/i)) return;
+            var url = new URL(form.action, location.href);
+            if (url.pathname !== path) return;
+            var region = regionFor(form, url);
+            if (!region) return;
+            e.preventDefault();
+            url.search = new URLSearchParams(new FormData(form)).toString();
+            load(region, url, { push: true });
+        });
+
+        document.addEventListener('click', function(e) {
+            if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+            var a = e.target.closest('a[href]');
+            if (!a || a.target) return;
+            var url = new URL(a.href, location.href);
+            if (url.origin !== location.origin || url.pathname !== path) return;
+            var region = regionFor(a, url);
+            if (!region) return;
+            e.preventDefault();
+            load(region, url, { push: true, scroll: !a.closest('[data-partial]') || a.closest('.pagination') });
+        });
+
+        window.addEventListener('popstate', function() {
+            if (!pushed) return;
+            var region = document.querySelector('[data-partial][id]');
+            if (region) load(region, new URL(location.href), {});
+        });
+    }
+
     // Desktop sidebar: collapse to icons, remembered per browser
     function initSidebarCollapse() {
         var btn = document.getElementById('sidebar-collapse');
@@ -143,6 +223,7 @@
         initNavToggle();
         initSidebarCollapse();
         initAutoFilters();
+        initPartials();
         initConfirmDialogs();
         initFlashMessages();
     }

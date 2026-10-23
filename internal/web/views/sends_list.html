@@ -66,9 +66,9 @@
 </div>
 {{end}}
 
-<div class="card scroll-target" id="results" hx-boost="true" hx-target="#results" hx-select="#results" hx-swap="outerHTML show:none" hx-push-url="true">
+<div class="card scroll-target" id="results" data-partial>
     <div class="card-header">
-        <form class="filter-form" method="get" action="/sends">
+        <form class="filter-form" method="get" action="/sends#results">
             <input type="text" name="search" value="{{.Search}}" placeholder="Search..." data-i18n-placeholder="cmp.search_ph" class="input">
             <select name="status" class="input">
                 <option value="" data-i18n="cmp.all_status">All Status</option>
@@ -97,7 +97,7 @@
             </select>
             <button type="submit" class="btn" data-i18n="filter">Filter</button>
             {{if or .Search .Status .Domain .Server .ErrorType}}
-            <a href="/sends" class="btn btn-secondary" data-i18n="common.clear">Clear</a>
+            <a href="/sends#results" class="btn btn-secondary" data-i18n="common.clear">Clear</a>
             {{end}}
         </form>
     </div>
@@ -147,11 +147,11 @@
         {{if gt .TotalPages 1}}
         <div class="pagination">
             {{if gt .Page 1}}
-            <a data-i18n="cmp.prev" href="/sends?page={{sub .Page 1}}{{if .Search}}&search={{.Search}}{{end}}{{if .Status}}&status={{.Status}}{{end}}{{if .Domain}}&domain={{.Domain}}{{end}}{{if .Server}}&server={{.Server}}{{end}}{{if .ErrorType}}&error_type={{.ErrorType}}{{end}}" class="btn btn-sm">&laquo; Prev</a>
+            <a data-i18n="cmp.prev" href="/sends?page={{sub .Page 1}}{{if .Search}}&search={{.Search}}{{end}}{{if .Status}}&status={{.Status}}{{end}}{{if .Domain}}&domain={{.Domain}}{{end}}{{if .Server}}&server={{.Server}}{{end}}{{if .ErrorType}}&error_type={{.ErrorType}}{{end}}#results" class="btn btn-sm">&laquo; Prev</a>
             {{end}}
             <span class="pagination-info"><span data-i18n="common.page">Page</span> {{.Page}} <span data-i18n="common.of">of</span> {{.TotalPages}} ({{.Total}} <span data-i18n="cmp.total_lc">total</span>)</span>
             {{if lt .Page .TotalPages}}
-            <a data-i18n="cmp.next" href="/sends?page={{add .Page 1}}{{if .Search}}&search={{.Search}}{{end}}{{if .Status}}&status={{.Status}}{{end}}{{if .Domain}}&domain={{.Domain}}{{end}}{{if .Server}}&server={{.Server}}{{end}}{{if .ErrorType}}&error_type={{.ErrorType}}{{end}}" class="btn btn-sm">Next &raquo;</a>
+            <a data-i18n="cmp.next" href="/sends?page={{add .Page 1}}{{if .Search}}&search={{.Search}}{{end}}{{if .Status}}&status={{.Status}}{{end}}{{if .Domain}}&domain={{.Domain}}{{end}}{{if .Server}}&server={{.Server}}{{end}}{{if .ErrorType}}&error_type={{.ErrorType}}{{end}}#results" class="btn btn-sm">Next &raquo;</a>
             {{end}}
         </div>
         {{end}}

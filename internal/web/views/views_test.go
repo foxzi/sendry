@@ -99,7 +99,8 @@ func TestRenderSendErrors(t *testing.T) {
 		`<a href="/sends?status=queued&error_type=technical#results">1</a>`,
 		`<option value="technical" data-i18n="error_type.technical" selected>`,
 		`>Temporary technical error</span>`,
-		`&error_type=technical" class="btn btn-sm">Next`,
+		`&error_type=technical#results" class="btn btn-sm">Next`,
+		`action="/sends#results"`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("sends_list has no %q", want)

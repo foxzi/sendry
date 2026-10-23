@@ -12,7 +12,7 @@
     <a href="/jobs/{{.Job.ID}}/clickmap" class="tab" data-i18n="trk.tab_clickmap">Click map</a>
 </div>
 
-<div class="card">
+<div class="card scroll-target" id="results" data-partial>
     <div class="card-header">
         <form class="filter-form" method="get" action="/jobs/{{.Job.ID}}/items">
             <select name="status" class="input">

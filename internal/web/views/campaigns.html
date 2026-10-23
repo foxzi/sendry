@@ -4,7 +4,7 @@
     <a href="/campaigns/new" class="btn btn-primary" data-i18n="cmp.new_campaign">New campaign</a>
 </div>
 
-<div class="card">
+<div class="card scroll-target" id="results" data-partial>
     <div class="card-header">
         <form class="filter-form" method="get" action="/campaigns">
             <input type="text" name="search" placeholder="Search campaigns..." data-i18n-placeholder="cmp.search_campaigns" value="{{.Search}}" class="input">

@@ -7,7 +7,7 @@
     <a href="/recipients/new" class="btn btn-primary" data-i18n="cmp.new_list">New list</a>
 </div>
 
-<div class="card">
+<div class="card scroll-target" id="results" data-partial>
     <div class="card-header">
         <form class="filter-form" method="get" action="/recipients">
             <input type="text" name="search" placeholder="Search lists..." data-i18n-placeholder="cmp.search_lists" value="{{.Search}}" class="input">
