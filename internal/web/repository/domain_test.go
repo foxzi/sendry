@@ -11,10 +11,10 @@ func TestDomainRepository_Create(t *testing.T) {
 	repo := NewDomainRepository(db)
 
 	domain := &models.Domain{
-		Domain:      "example.com",
-		Mode:        "production",
-		DefaultFrom: "noreply@example.com",
-		DKIMEnabled: true,
+		Domain:       "example.com",
+		Mode:         "production",
+		DefaultFrom:  "noreply@example.com",
+		DKIMEnabled:  true,
 		DKIMSelector: "mail",
 	}
 
@@ -285,45 +285,24 @@ func TestDomainRepository_Deployments(t *testing.T) {
 		t.Errorf("GetDeployments() ConfigHash = %v, want abc123", deployments[0].ConfigHash)
 	}
 
-	// Get specific deployment
-	dep, err := repo.GetDeployment(domain.ID, "server1")
-	if err != nil {
-		t.Fatalf("GetDeployment() error = %v", err)
-	}
-	if dep == nil {
-		t.Fatal("GetDeployment() returned nil")
-	}
-
 	// Update deployment (upsert)
 	err = repo.CreateDeployment(domain.ID, "server1", "outdated", "def456", "")
 	if err != nil {
 		t.Fatalf("CreateDeployment() upsert error = %v", err)
 	}
 
-	dep, err = repo.GetDeployment(domain.ID, "server1")
+	deployments, err = repo.GetDeployments(domain.ID)
 	if err != nil {
-		t.Fatalf("GetDeployment() error = %v", err)
+		t.Fatalf("GetDeployments() error = %v", err)
 	}
-
-	if dep.Status != "outdated" {
-		t.Errorf("GetDeployment() Status = %v, want outdated", dep.Status)
+	if len(deployments) != 1 {
+		t.Fatalf("GetDeployments() returned %d deployments after upsert, want 1", len(deployments))
 	}
-
-	if dep.ConfigHash != "def456" {
-		t.Errorf("GetDeployment() ConfigHash = %v, want def456", dep.ConfigHash)
+	if deployments[0].Status != "outdated" {
+		t.Errorf("GetDeployments() Status = %v, want outdated", deployments[0].Status)
 	}
-
-	// Delete deployment
-	if err := repo.DeleteDeployment(domain.ID, "server1"); err != nil {
-		t.Fatalf("DeleteDeployment() error = %v", err)
-	}
-
-	dep, err = repo.GetDeployment(domain.ID, "server1")
-	if err != nil {
-		t.Fatalf("GetDeployment() error = %v", err)
-	}
-	if dep != nil {
-		t.Error("GetDeployment() should return nil after deletion")
+	if deployments[0].ConfigHash != "def456" {
+		t.Errorf("GetDeployments() ConfigHash = %v, want def456", deployments[0].ConfigHash)
 	}
 }
 
@@ -355,35 +334,6 @@ func TestDomainRepository_DeploymentsCascadeDelete(t *testing.T) {
 	}
 	if len(deployments) != 0 {
 		t.Errorf("GetDeployments() returned %d deployments after cascade delete, want 0", len(deployments))
-	}
-}
-
-func TestDomainRepository_GetOutdatedDeployments(t *testing.T) {
-	db := setupTestDB(t)
-	repo := NewDomainRepository(db)
-
-	domain := &models.Domain{
-		Domain: "example.com",
-		Mode:   "production",
-	}
-	if err := repo.Create(domain); err != nil {
-		t.Fatalf("Create() error = %v", err)
-	}
-
-	// Create deployments with different statuses
-	repo.CreateDeployment(domain.ID, "server1", "deployed", "hash1", "")
-	repo.CreateDeployment(domain.ID, "server2", "outdated", "hash2", "")
-	repo.CreateDeployment(domain.ID, "server3", "outdated", "hash3", "")
-	repo.CreateDeployment(domain.ID, "server4", "failed", "hash4", "error")
-
-	// Get outdated
-	outdated, err := repo.GetOutdatedDeployments(domain.ID)
-	if err != nil {
-		t.Fatalf("GetOutdatedDeployments() error = %v", err)
-	}
-
-	if len(outdated) != 2 {
-		t.Errorf("GetOutdatedDeployments() returned %d, want 2", len(outdated))
 	}
 }
 
@@ -455,12 +405,12 @@ func TestDomainRepository_UpdateMarksDeploymentsOutdated(t *testing.T) {
 	}
 
 	// Check deployment is marked outdated
-	dep, err := repo.GetDeployment(domain.ID, "server1")
+	deployments, err := repo.GetDeployments(domain.ID)
 	if err != nil {
-		t.Fatalf("GetDeployment() error = %v", err)
+		t.Fatalf("GetDeployments() error = %v", err)
 	}
 
-	if dep.Status != "outdated" {
-		t.Errorf("GetDeployment() Status = %v, want outdated after domain update", dep.Status)
+	if len(deployments) != 1 || deployments[0].Status != "outdated" {
+		t.Errorf("GetDeployments() = %+v, want one outdated after domain update", deployments)
 	}
 }

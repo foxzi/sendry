@@ -14,6 +14,7 @@ import (
 	"github.com/foxzi/sendry/internal/web/repository"
 	"github.com/foxzi/sendry/internal/web/router"
 	"github.com/foxzi/sendry/internal/web/sendry"
+	"github.com/foxzi/sendry/internal/web/tracking"
 	"github.com/foxzi/sendry/internal/web/views"
 )
 
@@ -38,6 +39,9 @@ type Handlers struct {
 	userSMTP   *repository.UserSMTPRepository
 	cipher     *crypto.Cipher
 	router     *router.EmailRouter
+	tracking   *repository.TrackingRepository
+	unsubs     *repository.UnsubscribeRepository
+	proxies    tracking.TrustedProxies // reverse proxies allowed to set the client IP
 }
 
 func New(cfg *config.Config, db *db.DB, logger *slog.Logger, v *views.Engine, oidcProvider *auth.OIDCProvider) *Handlers {
@@ -56,9 +60,14 @@ func New(cfg *config.Config, db *db.DB, logger *slog.Logger, v *views.Engine, oi
 	} else {
 		logger.Error("failed to load encryption key", "error", err)
 	}
+	proxies, err := tracking.ParseTrustedProxies(cfg.Server.TrustedProxies)
+	if err != nil {
+		logger.Error("invalid server.trusted_proxies, client IP headers are ignored", "error", err)
+	}
 	sendryMgr := sendry.NewManager(cfg.Sendry.Servers)
 	templates := repository.NewTemplateRepository(db.DB)
 	settings := repository.NewSettingsRepository(db.DB)
+	settings.SetTrustedProxies(proxies)
 	domains := repository.NewDomainRepository(db.DB)
 	sends := repository.NewSendRepository(db.DB)
 	apiKeys := repository.NewAPIKeyRepository(db.DB)
@@ -96,6 +105,9 @@ func New(cfg *config.Config, db *db.DB, logger *slog.Logger, v *views.Engine, oi
 		userSMTP:   repository.NewUserSMTPRepository(db.DB),
 		cipher:     ciph,
 		router:     emailRouter,
+		tracking:   repository.NewTrackingRepository(db.DB),
+		unsubs:     repository.NewUnsubscribeRepository(db.DB),
+		proxies:    proxies,
 	}
 }
 
@@ -212,22 +224,4 @@ func (h *Handlers) NavStats(w http.ResponseWriter, r *http.Request) {
 	h.json(w, 200, map[string]any{
 		"queue": totalQueue,
 	})
-}
-
-// Get servers status with actual health checks (slow, makes API calls)
-func (h *Handlers) getServersStatusLive(r *http.Request) []map[string]any {
-	statuses := h.sendry.GetAllStatus(r.Context())
-	servers := make([]map[string]any, 0, len(statuses))
-	for _, s := range statuses {
-		servers = append(servers, map[string]any{
-			"Name":      s.Name,
-			"Env":       s.Env,
-			"Online":    s.Online,
-			"Version":   s.Version,
-			"Uptime":    s.Uptime,
-			"QueueSize": s.QueueSize,
-			"Error":     s.Error,
-		})
-	}
-	return servers
 }

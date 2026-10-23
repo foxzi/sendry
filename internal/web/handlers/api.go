@@ -26,10 +26,7 @@ func (h *Handlers) APISend(w http.ResponseWriter, r *http.Request) {
 
 	// Get API key from context
 	apiKey := middleware.GetAPIKeyFromContext(r)
-	apiKeyID := ""
 	if apiKey != nil {
-		apiKeyID = apiKey.ID
-
 		// Check domain permissions
 		if len(apiKey.AllowedDomains) > 0 && req.From != "" {
 			senderDomain := extractDomainFromEmail(req.From)
@@ -40,14 +37,11 @@ func (h *Handlers) APISend(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Get client IP
-	clientIP := r.RemoteAddr
-	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-		clientIP = forwarded
-	}
+	// Client IP: proxy headers count only from server.trusted_proxies
+	clientIP := h.proxies.ClientIP(r)
 
 	// Send through router
-	resp, err := h.router.Send(r.Context(), &req, apiKeyID, clientIP)
+	resp, err := h.router.Send(r.Context(), &req, apiKey, clientIP)
 	if err != nil {
 		switch {
 		case errors.Is(err, router.ErrDomainNotFound):
@@ -125,11 +119,6 @@ func (h *Handlers) apiError(w http.ResponseWriter, status int, message, code str
 		Error: message,
 		Code:  code,
 	})
-}
-
-// GetAPIKeysRepository returns the API keys repository for middleware
-func (h *Handlers) GetAPIKeysRepository() interface{} {
-	return h.apiKeys
 }
 
 // extractDomainFromEmail extracts domain from email address

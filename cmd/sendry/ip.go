@@ -11,10 +11,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	ipCheckAll     bool
-	ipCheckTimeout int
-)
+var ipCheckTimeout int
 
 // Popular DNSBL services
 var defaultDNSBLs = []dnsblInfo{

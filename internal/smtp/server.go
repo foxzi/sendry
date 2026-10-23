@@ -29,22 +29,12 @@ type ServerOptions struct {
 	Queue          queue.Queue
 	Logger         *slog.Logger
 	TLSConfig      *tls.Config
-	Implicit       bool     // true for SMTPS (implicit TLS)
+	Implicit       bool // true for SMTPS (implicit TLS)
 	Addr           string
 	RateLimiter    *ratelimit.Limiter
 	ServerType     string   // smtp, submission, smtps - for metrics
 	AllowedDomains []string // Domains allowed for sending (anti-relay protection)
 	AllowedIPs     []string // IPs/CIDRs allowed to connect
-}
-
-// NewServer creates a new SMTP server
-func NewServer(cfg *config.SMTPConfig, q queue.Queue, logger *slog.Logger) *Server {
-	return NewServerWithOptions(ServerOptions{
-		Config: cfg,
-		Queue:  q,
-		Logger: logger,
-		Addr:   cfg.ListenAddr,
-	})
 }
 
 // NewServerWithOptions creates a new SMTP server with custom options
@@ -120,9 +110,4 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	s.logger.Info("shutting down SMTP server")
 	s.backend.Stop()
 	return s.server.Shutdown(ctx)
-}
-
-// Close immediately closes the server
-func (s *Server) Close() error {
-	return s.server.Close()
 }

@@ -95,11 +95,6 @@ func (a *ACMEManager) EnsureCertificates(ctx context.Context) ([]CertificateInfo
 	return results, nil
 }
 
-// Domains returns the list of configured domains
-func (a *ACMEManager) Domains() []string {
-	return a.domains
-}
-
 // TLSConfig returns TLS configuration for use with servers
 func (a *ACMEManager) TLSConfig() *tls.Config {
 	return &tls.Config{

@@ -22,7 +22,10 @@
     }
 
 {% endif %}
-    reverse_proxy {{ sendry_web_listen }}
+    reverse_proxy {{ sendry_web_listen }} {
+        # Overwrite a client-supplied X-Real-IP: Caddy passes it through as is
+        header_up X-Real-IP {remote_host}
+    }
 
     encode gzip
 

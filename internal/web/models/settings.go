@@ -33,13 +33,12 @@ type AuditLogEntry struct {
 
 // User represents a user account
 type User struct {
-	ID           string    `json:"id"`
-	Email        string    `json:"email"`
-	PasswordHash string    `json:"-"`
-	Name         string    `json:"name"`
-	Role         UserRole  `json:"role"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID        string    `json:"id"`
+	Email     string    `json:"email"`
+	Name      string    `json:"name"`
+	Role      UserRole  `json:"role"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // IsAdmin returns true if the user has admin role

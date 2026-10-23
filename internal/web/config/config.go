@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"time"
 
@@ -23,6 +24,17 @@ type ServerConfig struct {
 	UploadPath      string    `yaml:"upload_path"`
 	TLS             TLSConfig `yaml:"tls"`
 	AllowedIPs      []string  `yaml:"allowed_ips"` // Empty = allow all
+	// TrustedProxies are reverse proxy IPs/CIDRs whose X-Real-IP and
+	// X-Forwarded-For headers are believed. Unset = DefaultTrustedProxies; [] = none.
+	TrustedProxies []string `yaml:"trusted_proxies"`
+}
+
+// DefaultTrustedProxies is server.trusted_proxies when it is not set: a
+// reverse proxy on the same host or in a private network (e.g. a docker
+// bridge in front of the container).
+var DefaultTrustedProxies = []string{
+	"127.0.0.0/8", "::1/128",
+	"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7",
 }
 
 type TLSConfig struct {
@@ -66,6 +78,19 @@ type SendryServer struct {
 	APIKey  string `yaml:"api_key"`
 	Env     string `yaml:"env"`
 }
+
+// Multi-send strategies (sendry.multi_send.strategy)
+const (
+	StrategyRoundRobin   = "round_robin"
+	StrategyWeighted     = "weighted"
+	StrategyFirstHealthy = "first_healthy"
+	// StrategyWeightedRoundRobin is a deprecated alias of StrategyWeighted
+	// (the name older docs used).
+	StrategyWeightedRoundRobin = "weighted_round_robin"
+	// StrategyDomainAffinity is accepted but not implemented yet: it falls
+	// back to round_robin.
+	StrategyDomainAffinity = "domain_affinity"
+)
 
 type MultiSendConfig struct {
 	Strategy       string            `yaml:"strategy"`
@@ -127,7 +152,10 @@ func setDefaults(cfg *Config) {
 		cfg.Auth.OIDC.Scopes = []string{"openid", "profile", "email"}
 	}
 	if cfg.Sendry.MultiSend.Strategy == "" {
-		cfg.Sendry.MultiSend.Strategy = "round_robin"
+		cfg.Sendry.MultiSend.Strategy = StrategyRoundRobin
+	}
+	if cfg.Server.TrustedProxies == nil {
+		cfg.Server.TrustedProxies = DefaultTrustedProxies
 	}
 }
 
@@ -137,6 +165,18 @@ func validate(cfg *Config) error {
 	}
 	if len(cfg.Auth.SessionSecret) < 32 {
 		return fmt.Errorf("auth.session_secret must be at least 32 characters")
+	}
+	for _, p := range cfg.Server.TrustedProxies {
+		if net.ParseIP(p) == nil {
+			if _, _, err := net.ParseCIDR(p); err != nil {
+				return fmt.Errorf("server.trusted_proxies: invalid IP or CIDR %q", p)
+			}
+		}
+	}
+	switch cfg.Sendry.MultiSend.Strategy {
+	case StrategyRoundRobin, StrategyWeighted, StrategyFirstHealthy, StrategyWeightedRoundRobin, StrategyDomainAffinity:
+	default:
+		return fmt.Errorf("sendry.multi_send.strategy: unknown strategy %q (allowed: round_robin, weighted, first_healthy)", cfg.Sendry.MultiSend.Strategy)
 	}
 	if !cfg.Auth.LocalEnabled && !cfg.Auth.OIDC.Enabled {
 		return fmt.Errorf("at least one auth method must be enabled (local or OIDC)")

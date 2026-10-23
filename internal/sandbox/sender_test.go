@@ -145,7 +145,7 @@ func TestSenderSandboxMode(t *testing.T) {
 		t.Fatalf("failed to get stored message: %v", err)
 	}
 	if stored == nil {
-		t.Error("expected message to be stored in sandbox")
+		t.Fatal("expected message to be stored in sandbox")
 	}
 	if stored.Mode != "sandbox" {
 		t.Errorf("expected mode sandbox, got %s", stored.Mode)
@@ -208,7 +208,7 @@ func TestSenderRedirectMode(t *testing.T) {
 		t.Fatalf("failed to get stored message: %v", err)
 	}
 	if stored == nil {
-		t.Error("expected message to be stored")
+		t.Fatal("expected message to be stored")
 	}
 	if stored.Mode != "redirect" {
 		t.Errorf("expected mode redirect, got %s", stored.Mode)

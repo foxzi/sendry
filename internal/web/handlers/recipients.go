@@ -2,11 +2,13 @@ package handlers
 
 import (
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 
 	"github.com/foxzi/sendry/internal/web/models"
+	"github.com/foxzi/sendry/internal/web/repository"
 )
 
 func (h *Handlers) RecipientListList(w http.ResponseWriter, r *http.Request) {
@@ -197,7 +199,11 @@ func (h *Handlers) RecipientListUpdate(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) RecipientListDelete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	if err := h.recipients.DeleteList(id); err != nil {
+	if err := h.recipients.DeleteList(id); errors.Is(err, repository.ErrInUse) {
+		h.error(w, http.StatusConflict, "Cannot delete the list: campaigns were sent to it. "+
+			"Delete those campaigns first (their statistics are deleted too).")
+		return
+	} else if err != nil {
 		h.logger.Error("failed to delete recipient list", "error", err)
 		h.error(w, http.StatusInternalServerError, "Failed to delete recipient list")
 		return
@@ -269,52 +275,6 @@ func (h *Handlers) RecipientImport(w http.ResponseWriter, r *http.Request) {
 	h.render(w, "recipient_import_result", data)
 }
 
-func (h *Handlers) RecipientsList(w http.ResponseWriter, r *http.Request) {
-	// This endpoint returns just the recipients table for HTMX updates
-	id := r.PathValue("id")
-
-	search := r.URL.Query().Get("search")
-	status := r.URL.Query().Get("status")
-	tag := r.URL.Query().Get("tag")
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	if page < 1 {
-		page = 1
-	}
-	limit := 50
-	offset := (page - 1) * limit
-
-	filter := models.RecipientFilter{
-		ListID: id,
-		Search: search,
-		Status: status,
-		Tag:    tag,
-		Limit:  limit,
-		Offset: offset,
-	}
-
-	recipients, total, err := h.recipients.ListRecipients(filter)
-	if err != nil {
-		h.logger.Error("failed to list recipients", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load recipients")
-		return
-	}
-
-	totalPages := (total + limit - 1) / limit
-
-	data := map[string]any{
-		"ListID":     id,
-		"Recipients": recipients,
-		"Total":      total,
-		"Page":       page,
-		"TotalPages": totalPages,
-		"Search":     search,
-		"Status":     status,
-		"Tag":        tag,
-	}
-
-	h.views.RenderPartial(w, "recipient_table", data)
-}
-
 // RecipientAdd handles adding a single recipient
 func (h *Handlers) RecipientAdd(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
@@ -326,7 +286,7 @@ func (h *Handlers) RecipientAdd(w http.ResponseWriter, r *http.Request) {
 
 	recipient := &models.Recipient{
 		ListID:    id,
-		Email:     r.FormValue("email"),
+		Email:     repository.NormalizeEmail(r.FormValue("email")),
 		Name:      r.FormValue("name"),
 		Variables: r.FormValue("variables"),
 		Tags:      r.FormValue("tags"),
@@ -352,7 +312,11 @@ func (h *Handlers) RecipientDelete(w http.ResponseWriter, r *http.Request) {
 	listID := r.PathValue("id")
 	recipientID := r.PathValue("recipientId")
 
-	if err := h.recipients.DeleteRecipient(recipientID, listID); err != nil {
+	if err := h.recipients.DeleteRecipient(recipientID, listID); errors.Is(err, repository.ErrInUse) {
+		h.error(w, http.StatusConflict, "Cannot delete the recipient: campaigns were sent to this address. "+
+			"Set the status to unsubscribed to stop sending to it.")
+		return
+	} else if err != nil {
 		h.logger.Error("failed to delete recipient", "error", err)
 		h.error(w, http.StatusInternalServerError, "Failed to delete recipient")
 		return

@@ -530,14 +530,12 @@
     function scheduleInlineSave(item, previewEl, immediate) {
         clearTimeout(inlineEditTimers[item.uid]);
         var delay = immediate ? 0 : 700;
-        console.log('[inline-edit] scheduled', {uid: item.uid, blockId: item.blockId, immediate: !!immediate, delay: delay});
         inlineEditTimers[item.uid] = setTimeout(function() { saveInlineEdit(item, previewEl); }, delay);
     }
 
     function saveInlineEdit(item, previewEl) {
         var newSourceHTML = item.html;
         var changes = 0;
-        var diagnostics = [];
 
         var edits = [];
         previewEl.querySelectorAll('[contenteditable="true"]').forEach(function(node) {
@@ -546,20 +544,14 @@
             if (original === undefined || original === current) return;
             var origPh = (original.match(/\{\{/g) || []).length;
             var curPh = (current.match(/\{\{/g) || []).length;
-            if (origPh !== curPh) {
-                diagnostics.push('placeholder count mismatch in ' + JSON.stringify(original.slice(0, 30)));
-                return;
-            }
+            if (origPh !== curPh) return;
             var idx = -1;
             if (node.dataset.sourceIndex !== undefined) {
                 var si = parseInt(node.dataset.sourceIndex, 10);
                 if (si >= 0 && item.html.substr(si, original.length) === original) idx = si;
             }
             if (idx === -1) idx = item.html.indexOf(original);
-            if (idx === -1) {
-                diagnostics.push('original text not found in source: ' + JSON.stringify(original.slice(0, 30)));
-                return;
-            }
+            if (idx === -1) return;
             edits.push({ idx: idx, original: original, current: current, node: node });
         });
 
@@ -585,105 +577,21 @@
                 recur = at + t.length;
             });
         }
-        console.log('[inline-edit] save called', {
-            blockId: item.blockId,
-            sourceLen: item.html.length,
-            newSourceLen: newSourceHTML.length,
-            changes: changes,
-            diagnostics: diagnostics
-        });
-        if (changes === 0 || newSourceHTML === item.html) {
-            console.log('[inline-edit] no changes detected');
-            return;
-        }
-        console.log('[inline-edit] POST /blocks/' + item.blockId + '/inline-edit');
+        if (changes === 0 || newSourceHTML === item.html) return;
         fetch('/blocks/' + item.blockId + '/inline-edit', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             credentials: 'same-origin',
             body: JSON.stringify({html: newSourceHTML})
         }).then(function(r) {
-            console.log('[inline-edit] response status:', r.status);
             if (!r.ok) return r.text().then(function(t) { throw new Error(t); });
             item.html = newSourceHTML;
             if (blockMap[item.blockId]) blockMap[item.blockId].html = newSourceHTML;
-            console.log('[inline-edit] saved OK');
         }).catch(function(err) {
             console.error('[inline-edit] failed:', err.message);
             alert('Не удалось сохранить: ' + err.message);
             renderCanvas();
         });
-    }
-
-    function renderedBackToSource(sourceHTML, renderedHTML) {
-        var wrap = function(html) { return '<table><tbody>' + html + '</tbody></table>'; };
-        var srcDoc = new DOMParser().parseFromString(wrap(sourceHTML), 'text/html');
-        var rndDoc = new DOMParser().parseFromString(wrap(renderedHTML), 'text/html');
-        var srcRoot = srcDoc.querySelector('tbody');
-        var rndRoot = rndDoc.querySelector('tbody');
-        if (!srcRoot || !rndRoot) return null;
-        if (!walkAndPatch(srcRoot, rndRoot)) return null;
-        return srcRoot.innerHTML;
-    }
-
-    function walkAndPatch(src, rnd) {
-        if (src.nodeType === 3 && rnd.nodeType === 3) {
-            var srcText = src.nodeValue;
-            var rndText = rnd.nodeValue;
-            if (srcText === rndText) return true;
-            var phMatches = srcText.match(/\{\{[^}]+\}\}/g);
-            if (!phMatches) {
-                src.nodeValue = rndText;
-                return true;
-            }
-            if (phMatches.length > 1) return true;
-            var ph = phMatches[0];
-            var idx = srcText.indexOf(ph);
-            var srcBefore = srcText.slice(0, idx);
-            var srcAfter = srcText.slice(idx + ph.length);
-            var newBefore = srcBefore;
-            var newAfter = srcAfter;
-            if (srcAfter.length > 0 && rndText.endsWith(srcAfter)) {
-                var rndBeforeWithVal = rndText.slice(0, rndText.length - srcAfter.length);
-                var phValueLen = rndBeforeWithVal.length - srcBefore.length;
-                if (phValueLen >= 0 && phValueLen <= rndBeforeWithVal.length) {
-                    newBefore = rndBeforeWithVal.slice(0, rndBeforeWithVal.length - phValueLen);
-                } else {
-                    newBefore = rndBeforeWithVal;
-                }
-            } else if (srcBefore.length > 0 && rndText.startsWith(srcBefore)) {
-                var rndValueWithAfter = rndText.slice(srcBefore.length);
-                if (rndValueWithAfter.length >= srcAfter.length) {
-                    newAfter = rndValueWithAfter.slice(rndValueWithAfter.length - srcAfter.length);
-                } else {
-                    newAfter = '';
-                }
-            } else {
-                if (srcBefore.length === 0) {
-                    newBefore = '';
-                    newAfter = rndText;
-                } else if (srcAfter.length === 0) {
-                    newBefore = rndText;
-                    newAfter = '';
-                } else {
-                    newBefore = rndText;
-                    newAfter = '';
-                }
-            }
-            src.nodeValue = newBefore + ph + newAfter;
-            return true;
-        }
-        var srcChildren = src.childNodes;
-        var rndChildren = rnd.childNodes;
-        var sLen = srcChildren.length;
-        var rLen = rndChildren.length;
-        if (sLen !== rLen) {
-            return false;
-        }
-        for (var i = 0; i < sLen; i++) {
-            if (!walkAndPatch(srcChildren[i], rndChildren[i])) return false;
-        }
-        return true;
     }
 
     function spacerRow(height, color) {

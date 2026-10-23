@@ -40,8 +40,3 @@ type ListFilter struct {
 	Offset int
 	Search string
 }
-
-// Stats contains template statistics
-type Stats struct {
-	Total int64 `json:"total"`
-}

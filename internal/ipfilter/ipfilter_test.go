@@ -216,7 +216,25 @@ func TestGetClientIP(t *testing.T) {
 			name:       "X-Forwarded-For chain",
 			xff:        "203.0.113.50, 70.41.3.18, 150.172.238.178",
 			remoteAddr: "127.0.0.1:12345",
+			wantIP:     "150.172.238.178", // appended by the proxy; the rest is client-supplied
+		},
+		{
+			name:       "X-Forwarded-For skips loopback proxies",
+			xff:        "203.0.113.50, 127.0.0.1",
+			remoteAddr: "[::1]:12345",
 			wantIP:     "203.0.113.50",
+		},
+		{
+			name:       "forged X-Forwarded-For from a remote peer is ignored",
+			xff:        "10.0.0.5",
+			remoteAddr: "198.51.100.7:12345",
+			wantIP:     "198.51.100.7",
+		},
+		{
+			name:       "forged X-Real-IP from a remote peer is ignored",
+			xri:        "10.0.0.5",
+			remoteAddr: "198.51.100.7:12345",
+			wantIP:     "198.51.100.7",
 		},
 		{
 			name:       "X-Real-IP",

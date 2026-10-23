@@ -2,7 +2,6 @@ package dkim
 
 import (
 	"bytes"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -190,14 +189,4 @@ This is a test message for benchmarking DKIM signing performance.
 	for i := 0; i < b.N; i++ {
 		signer.Sign(message)
 	}
-}
-
-// helper to create temp key file for testing
-func createTempKeyFile(t *testing.T) (string, func()) {
-	t.Helper()
-	tmpDir := t.TempDir()
-	kp, _ := GenerateKey("example.com", "sendry")
-	keyPath := filepath.Join(tmpDir, "test.key")
-	kp.SavePrivateKey(keyPath)
-	return keyPath, func() { os.RemoveAll(tmpDir) }
 }

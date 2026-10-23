@@ -2,20 +2,19 @@ package repository
 
 import (
 	"database/sql"
-	"fmt"
-	"net"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/foxzi/sendry/internal/web/models"
+	"github.com/foxzi/sendry/internal/web/tracking"
 )
 
 type SettingsRepository struct {
-	db *sql.DB
+	db      *sql.DB
+	proxies tracking.TrustedProxies // reverse proxies allowed to set the client IP for the audit log
 }
 
 func NewSettingsRepository(db *sql.DB) *SettingsRepository {
@@ -60,23 +59,6 @@ func (r *SettingsRepository) GetGlobalVariablesMap() (map[string]string, error) 
 		vars[key] = value
 	}
 	return vars, nil
-}
-
-// GetVariable returns a single variable
-func (r *SettingsRepository) GetVariable(key string) (*models.GlobalVariable, error) {
-	v := &models.GlobalVariable{}
-	err := r.db.QueryRow(`
-		SELECT key, value, COALESCE(description, '') as description, updated_at
-		FROM global_variables WHERE key = ?`, key,
-	).Scan(&v.Key, &v.Value, &v.Description, &v.UpdatedAt)
-
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return v, nil
 }
 
 // SetVariable sets a global variable
@@ -188,11 +170,18 @@ func (r *SettingsRepository) CountAdmins() (int, error) {
 	return count, err
 }
 
+// SetTrustedProxies sets the reverse proxies whose X-Real-IP / X-Forwarded-For
+// headers are believed when LogAction records the client IP. Without them the
+// direct peer address is logged.
+func (r *SettingsRepository) SetTrustedProxies(proxies tracking.TrustedProxies) {
+	r.proxies = proxies
+}
+
 // LogAction writes an audit log entry. userID and userEmail may be empty for
 // unauthenticated actions (e.g. failed login). details is optional free-form text.
 // The request is used only to extract the client IP address.
 func (r *SettingsRepository) LogAction(req *http.Request, userID, userEmail, action, entityType, entityID, details string) {
-	ip := extractIP(req)
+	ip := r.proxies.ClientIP(req)
 	_ = r.AddAuditLog(&models.AuditLogEntry{
 		UserID:     userID,
 		UserEmail:  userEmail,
@@ -202,38 +191,6 @@ func (r *SettingsRepository) LogAction(req *http.Request, userID, userEmail, act
 		Details:    details,
 		IPAddress:  ip,
 	})
-}
-
-// extractIP returns the best-effort client IP from a request.
-func extractIP(r *http.Request) string {
-	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-		// X-Forwarded-For may be a comma-separated list; take the first.
-		parts := strings.SplitN(fwd, ",", 2)
-		if ip := strings.TrimSpace(parts[0]); ip != "" {
-			return ip
-		}
-	}
-	if real := r.Header.Get("X-Real-IP"); real != "" {
-		return strings.TrimSpace(real)
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
-}
-
-// detailsJSON returns a JSON-encoded details string for structured audit entries.
-// Example: detailsJSON("name", "foo", "role", "admin")
-func detailsJSON(pairs ...string) string {
-	if len(pairs)%2 != 0 {
-		return ""
-	}
-	parts := make([]string, 0, len(pairs)/2)
-	for i := 0; i < len(pairs); i += 2 {
-		parts = append(parts, fmt.Sprintf("%q:%q", pairs[i], pairs[i+1]))
-	}
-	return "{" + strings.Join(parts, ",") + "}"
 }
 
 // AddAuditLog adds an audit log entry

@@ -159,17 +159,17 @@ Distributes requests evenly across all servers:
 sendry_web_multi_send_strategy: round_robin
 ```
 
-#### Weighted Round Robin
+#### Weighted
 Sends more traffic to specific servers:
 ```yaml
-sendry_web_multi_send_strategy: weighted_round_robin
+sendry_web_multi_send_strategy: weighted
 sendry_web_multi_send_weights:
   mta-1: 3  # 75% of traffic
   mta-2: 1  # 25% of traffic
 ```
 
 #### Domain Affinity
-Routes specific sender domains to specific servers:
+Routes specific sender domains to specific servers (not implemented yet: works as round_robin):
 ```yaml
 sendry_web_multi_send_strategy: domain_affinity
 sendry_web_multi_send_domain_affinity:
@@ -374,8 +374,9 @@ ansible-playbook -i inventory/hosts.yml playbooks/sendry.yml -l sendry_panel
 ### Стратегии балансировки
 
 - **round_robin** - равномерное распределение
-- **weighted_round_robin** - взвешенное распределение
-- **domain_affinity** - привязка доменов к серверам
+- **weighted** - взвешенное распределение (по `sendry_web_multi_send_weights`)
+- **first_healthy** - всегда первый сервер из списка
+- **domain_affinity** - привязка доменов к серверам (пока не реализовано, работает как round_robin)
 
 ### Failover
 

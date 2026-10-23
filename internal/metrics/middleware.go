@@ -2,8 +2,6 @@ package metrics
 
 import (
 	"net/http"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -50,95 +48,23 @@ func HTTPMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(wrapped, r)
 
-		duration := time.Since(start).Seconds()
-		status := strconv.Itoa(wrapped.status)
-
 		// Normalize path to avoid high cardinality
-		path := normalizePath(r)
-
-		m.APIRequestsTotal.WithLabelValues(r.Method, path, status).Inc()
-		m.APIRequestDurationSeconds.WithLabelValues(r.Method, path).Observe(duration)
-
-		// Track errors
-		if wrapped.status >= 400 {
-			errorType := categorizeStatus(wrapped.status)
-			m.APIErrorsTotal.WithLabelValues(errorType).Inc()
-		}
+		m.observeAPIRequest(r.Method, normalizePath(r), wrapped.status, time.Since(start).Seconds())
 	})
 }
 
-// HTTPMiddlewareWithCollector creates a middleware that uses the collector for persistence
-func HTTPMiddlewareWithCollector(c *Collector) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if c == nil {
-				next.ServeHTTP(w, r)
-				return
-			}
+// unmatchedPath is the path label of requests that matched no route
+// (scanners probing /wp-login.php, /.env, ...): the raw path would add a
+// series per probe, and the counters are persisted across restarts.
+const unmatchedPath = "unmatched"
 
-			start := time.Now()
-			wrapped := wrapResponseWriter(w)
-
-			next.ServeHTTP(wrapped, r)
-
-			duration := time.Since(start).Seconds()
-			status := strconv.Itoa(wrapped.status)
-
-			// Normalize path to avoid high cardinality
-			path := normalizePath(r)
-
-			c.TrackAPIRequest(r.Method, path, status)
-			c.metrics.APIRequestDurationSeconds.WithLabelValues(r.Method, path).Observe(duration)
-
-			// Track errors
-			if wrapped.status >= 400 {
-				errorType := categorizeStatus(wrapped.status)
-				c.TrackAPIError(errorType)
-			}
-		})
-	}
-}
-
-// normalizePath extracts route pattern from chi router to avoid high cardinality
+// normalizePath returns the chi route pattern of the request, so the path
+// label has one value per route, or unmatchedPath.
 func normalizePath(r *http.Request) string {
-	// Try to get the route pattern from chi
-	rctx := chi.RouteContext(r.Context())
-	if rctx != nil && rctx.RoutePattern() != "" {
+	if rctx := chi.RouteContext(r.Context()); rctx != nil && rctx.RoutePattern() != "" {
 		return rctx.RoutePattern()
 	}
-
-	// Fallback: normalize the path manually
-	path := r.URL.Path
-
-	// Replace UUIDs with placeholder
-	parts := strings.Split(path, "/")
-	for i, part := range parts {
-		if isUUID(part) {
-			parts[i] = "{id}"
-		}
-	}
-
-	return strings.Join(parts, "/")
-}
-
-// isUUID checks if a string looks like a UUID
-func isUUID(s string) bool {
-	if len(s) != 36 {
-		return false
-	}
-	// Simple check for UUID format: 8-4-4-4-12
-	if s[8] != '-' || s[13] != '-' || s[18] != '-' || s[23] != '-' {
-		return false
-	}
-	for i, c := range s {
-		if i == 8 || i == 13 || i == 18 || i == 23 {
-			continue
-		}
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
-			return false
-		}
-	}
-	return true
+	return unmatchedPath
 }
 
 // categorizeStatus categorizes HTTP status codes into error types

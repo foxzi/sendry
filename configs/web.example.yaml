@@ -8,6 +8,25 @@ server:
   # dedicated CDN/static host, e.g. https://cdn.example.com
   public_upload_url: ""
   upload_path: "/var/lib/sendry-web/uploads"
+  # Restrict panel access to these IPs/CIDRs. Empty = allow all.
+  # Public tracking/unsubscribe paths (/t/, /u/) are never filtered.
+  # allowed_ips:
+  #   - "203.0.113.0/24"
+  # Reverse proxies whose X-Real-IP / X-Forwarded-For headers are trusted
+  # (IPs or CIDRs). The client IP used by allowed_ips, the audit log, API
+  # sends and open/click/unsubscribe events is taken from these headers only
+  # when the request comes from one of these addresses; otherwise the TCP
+  # peer address is used. Default when omitted: loopback and private
+  # networks (nginx/caddy on the same host or a Docker bridge). An empty
+  # list trusts nobody. If the panel is reachable directly from untrusted
+  # hosts of a private network, list only your real proxies here.
+  # trusted_proxies:
+  #   - "127.0.0.0/8"
+  #   - "::1/128"
+  #   - "10.0.0.0/8"
+  #   - "172.16.0.0/12"
+  #   - "192.168.0.0/16"
+  #   - "fc00::/7"
   tls:
     enabled: false
     cert_file: ""
@@ -49,10 +68,13 @@ sendry:
     #   env: "stage"
 
   multi_send:
-    strategy: round_robin  # round_robin, weighted_round_robin, domain_affinity
+    # round_robin (default), weighted (uses weights), first_healthy.
+    # domain_affinity is not implemented yet: accepted, but falls back to round_robin.
+    strategy: round_robin
     weights:
       mta-1: 3
       mta-2: 1
+    # Not implemented yet (used only by the domain_affinity strategy)
     domain_affinity:
       "example.com": "mta-1"
       "example.org": "mta-2"

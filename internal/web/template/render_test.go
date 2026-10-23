@@ -125,3 +125,26 @@ func TestRenderHTML_LegacyHTMLContent(t *testing.T) {
 		t.Errorf("got %q", out)
 	}
 }
+
+// Outlook conditional comments survive rendering (html/template drops
+// comments); the markup inside them is still rendered and escaped.
+func TestRenderHTML_KeepsConditionalComments(t *testing.T) {
+	src := `<!--[if mso]><v:roundrect href="{{url}}"><center>{{name}}</center></v:roundrect><![endif]-->` +
+		`<!--[if !mso]><!--><a href="{{url}}">Go</a><!--<![endif]-->` +
+		`<!-- plain comment -->`
+	out, err := RenderHTML("t", src, map[string]any{"url": "https://x.com/?a=1&b=2", "name": "<b>"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`<!--[if mso]><v:roundrect href="https://x.com/?a=1&amp;b=2"><center>&lt;b&gt;</center></v:roundrect><![endif]-->`,
+		`<!--[if !mso]><!--><a href="https://x.com/?a=1&amp;b=2">Go</a><!--<![endif]-->`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %s in %s", want, out)
+		}
+	}
+	if strings.Contains(out, "plain comment") || strings.ContainsAny(out, "") {
+		t.Errorf("plain comment kept or placeholder left: %s", out)
+	}
+}

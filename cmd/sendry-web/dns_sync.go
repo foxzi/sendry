@@ -17,14 +17,14 @@ import (
 )
 
 var (
-	dnsSyncDomain      string
-	dnsSyncAll         bool
-	dnsSyncApply       bool
-	dnsSyncProvider    string
-	dnsSyncToken       string
-	dnsSyncEmail       string
-	dnsSyncAuthMode    string
-	dnsSyncNamedotURL  string
+	dnsSyncDomain     string
+	dnsSyncAll        bool
+	dnsSyncApply      bool
+	dnsSyncProvider   string
+	dnsSyncToken      string
+	dnsSyncEmail      string
+	dnsSyncAuthMode   string
+	dnsSyncNamedotURL string
 )
 
 var dnsSyncCmd = &cobra.Command{

@@ -66,8 +66,8 @@ func TestGetDomainMode(t *testing.T) {
 		{"sandbox.com", "sandbox"},
 		{"redirect.com", "redirect"},
 		{"bcc.com", "bcc"},
-		{"nomode.com", "production"},      // default
-		{"unknown.com", "production"},     // not configured, default
+		{"nomode.com", "production"},  // default
+		{"unknown.com", "production"}, // not configured, default
 	}
 
 	for _, tc := range tests {

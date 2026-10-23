@@ -38,6 +38,24 @@
             <input type="text" id="tags" name="tags" class="input" placeholder='["newsletter", "marketing"]'>
             <small class="form-help">Tags are passed to Sendry for categorization</small>
         </div>
+
+        <h3 style="margin: 1.5rem 0 1rem">Трекинг</h3>
+
+        <div class="form-group">
+            <label class="checkbox-label">
+                <input type="checkbox" name="track_opens" value="on"{{if .TrackOpens}} checked{{end}}>
+                Отслеживать открытия
+            </label>
+            <label class="checkbox-label">
+                <input type="checkbox" name="track_clicks" value="on"{{if .TrackClicks}} checked{{end}}>
+                Отслеживать клики
+            </label>
+            <label class="checkbox-label">
+                <input type="checkbox" name="add_utm" value="on">
+                Добавлять метки UTM в ссылки
+            </label>
+            <small class="form-help">Открытия считаются по пикселю, клики по ссылкам через панель. Метки: utm_source, utm_medium, utm_campaign, sc, sr, sl (нужны для связи заказов с рассылкой). Ссылка отписки в письмах рассылки добавляется всегда.</small>
+        </div>
     </div>
 
     <div class="card-footer">

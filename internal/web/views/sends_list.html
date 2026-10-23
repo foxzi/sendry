@@ -103,6 +103,8 @@
                     <th>Subject</th>
                     <th>Server</th>
                     <th>Status</th>
+                    <th data-i18n="trk.col_opened">Opened</th>
+                    <th data-i18n="trk.col_clicks">Clicks</th>
                     <th>Created</th>
                 </tr>
             </thead>
@@ -124,6 +126,8 @@
                         {{end}}
                         {{if .ErrorMessage}}<span class="badge" title="{{.ErrorMessage}}">{{(errorType .ErrorMessage).Label}}</span>{{end}}
                     </td>
+                    <td>{{if .OpenedAt}}{{.OpenedAt.Format "2006-01-02 15:04"}}{{if gt .OpenCount 0}} <span class="text-muted">&times;{{.OpenCount}}</span>{{end}}{{else}}<span class="text-muted">-</span>{{end}}</td>
+                    <td>{{if .ClickCount}}{{.ClickCount}}{{else}}<span class="text-muted">-</span>{{end}}</td>
                     <td>{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
                 </tr>
                 {{end}}

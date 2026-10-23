@@ -136,7 +136,7 @@ func TestAPIKeyRepository_List(t *testing.T) {
 	}
 
 	// List with search
-	keys, total, err = repo.List(models.APIKeyFilter{Search: "Key A"})
+	_, total, err = repo.List(models.APIKeyFilter{Search: "Key A"})
 	if err != nil {
 		t.Fatalf("failed to list API keys with search: %v", err)
 	}

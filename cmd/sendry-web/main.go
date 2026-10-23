@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	_ "time/tzdata" // IANA time zones for scheduled sends on images without zoneinfo (Alpine)
 
 	"github.com/spf13/cobra"
 )

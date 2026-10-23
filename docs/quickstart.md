@@ -414,4 +414,4 @@ sendry ip check <your-server-ip>
 - [Templates Guide](templates.md)
 - [Header Rules Guide](header-rules.md)
 - [API Reference](api.md)
-- [Configuration Reference](configuration.md)
+- [Configuration Reference](../README.md#configuration-reference)

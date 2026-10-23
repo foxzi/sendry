@@ -313,6 +313,7 @@ See documentation:
 - [Rate limiting](docs/ratelimit.md)
 - [Prometheus metrics](docs/metrics.md)
 - [Sendry Web panel](docs/sendry-web.md)
+- [Email tracking: opens, clicks, unsubscribes](docs/tracking.md)
 - [DNS sync (Cloudflare)](docs/dns-sync.md)
 - [Ansible deployment](docs/ansible.md)
 - [Release and deploy from GitHub Actions](docs/deploy.md)

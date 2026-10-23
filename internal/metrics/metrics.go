@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"strconv"
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -20,10 +21,10 @@ type Metrics struct {
 	MessagesDeferredTotal *prometheus.CounterVec
 
 	// Queue gauges
-	QueueSize           prometheus.Gauge
-	QueueOldestSeconds  prometheus.Gauge
-	QueueActive         prometheus.Gauge
-	QueueDeferred       prometheus.Gauge
+	QueueSize          prometheus.Gauge
+	QueueOldestSeconds prometheus.Gauge
+	QueueActive        prometheus.Gauge
+	QueueDeferred      prometheus.Gauge
 
 	// SMTP counters/gauges
 	SMTPConnectionsTotal  *prometheus.CounterVec
@@ -33,19 +34,23 @@ type Metrics struct {
 	SMTPTLSTotal          prometheus.Counter
 
 	// API metrics
-	APIRequestsTotal         *prometheus.CounterVec
+	APIRequestsTotal          *prometheus.CounterVec
 	APIRequestDurationSeconds *prometheus.HistogramVec
-	APIErrorsTotal           *prometheus.CounterVec
+	APIErrorsTotal            *prometheus.CounterVec
 
 	// Rate limiting
 	RateLimitExceededTotal *prometheus.CounterVec
 
 	// System metrics
-	UptimeSeconds     prometheus.Gauge
-	Goroutines        prometheus.Gauge
-	StorageUsedBytes  prometheus.Gauge
+	UptimeSeconds    prometheus.Gauge
+	Goroutines       prometheus.Gauge
+	StorageUsedBytes prometheus.Gauge
 
 	registry *prometheus.Registry
+
+	// shadow mirrors counter values for persistence (see Collector)
+	shadow   ShadowCounters
+	shadowMu sync.Mutex
 }
 
 // New creates a new Metrics instance with all metrics registered
@@ -196,6 +201,7 @@ func New() *Metrics {
 		),
 
 		registry: reg,
+		shadow:   newShadowCounters(),
 	}
 
 	// Register all metrics
@@ -246,89 +252,109 @@ func Global() *Metrics {
 
 // IncMessagesSent increments the sent message counter
 func IncMessagesSent(domain string) {
-	m := Global()
-	if m != nil {
+	if m := Global(); m != nil {
 		m.MessagesSentTotal.WithLabelValues(domain).Inc()
+		m.updateShadow(func(sc *ShadowCounters) { sc.MessagesSent[domain]++ })
 	}
 }
 
 // IncMessagesFailed increments the failed message counter
 func IncMessagesFailed(domain, errorType string) {
-	m := Global()
-	if m != nil {
+	if m := Global(); m != nil {
 		m.MessagesFailedTotal.WithLabelValues(domain, errorType).Inc()
+		m.updateShadow(func(sc *ShadowCounters) { sc.MessagesFailed[makeLabelKey(domain, errorType)]++ })
 	}
 }
 
 // IncMessagesBounced increments the bounced message counter
 func IncMessagesBounced(domain string) {
-	m := Global()
-	if m != nil {
+	if m := Global(); m != nil {
 		m.MessagesBouncedTotal.WithLabelValues(domain).Inc()
+		m.updateShadow(func(sc *ShadowCounters) { sc.MessagesBounced[domain]++ })
 	}
 }
 
 // IncMessagesDeferred increments the deferred message counter
 func IncMessagesDeferred(domain string) {
-	m := Global()
-	if m != nil {
+	if m := Global(); m != nil {
 		m.MessagesDeferredTotal.WithLabelValues(domain).Inc()
+		m.updateShadow(func(sc *ShadowCounters) { sc.MessagesDeferred[domain]++ })
 	}
 }
 
 // IncSMTPConnections increments the SMTP connection counter
 func IncSMTPConnections(serverType string) {
-	m := Global()
-	if m != nil {
+	if m := Global(); m != nil {
 		m.SMTPConnectionsTotal.WithLabelValues(serverType).Inc()
 		m.SMTPConnectionsActive.Inc()
+		m.updateShadow(func(sc *ShadowCounters) { sc.SMTPConnections[serverType]++ })
 	}
 }
 
 // DecSMTPConnectionsActive decrements active SMTP connections
 func DecSMTPConnectionsActive() {
-	m := Global()
-	if m != nil {
+	if m := Global(); m != nil {
 		m.SMTPConnectionsActive.Dec()
 	}
 }
 
 // IncSMTPAuthSuccess increments successful auth counter
 func IncSMTPAuthSuccess() {
-	m := Global()
-	if m != nil {
+	if m := Global(); m != nil {
 		m.SMTPAuthSuccessTotal.Inc()
+		m.updateShadow(func(sc *ShadowCounters) { sc.SMTPAuthSuccess++ })
 	}
 }
 
 // IncSMTPAuthFailed increments failed auth counter
 func IncSMTPAuthFailed() {
-	m := Global()
-	if m != nil {
+	if m := Global(); m != nil {
 		m.SMTPAuthFailedTotal.Inc()
+		m.updateShadow(func(sc *ShadowCounters) { sc.SMTPAuthFailed++ })
 	}
 }
 
 // IncSMTPTLS increments TLS connection counter
 func IncSMTPTLS() {
-	m := Global()
-	if m != nil {
+	if m := Global(); m != nil {
 		m.SMTPTLSTotal.Inc()
+		m.updateShadow(func(sc *ShadowCounters) { sc.SMTPTLS++ })
 	}
 }
 
 // IncRateLimitExceeded increments rate limit exceeded counter
 func IncRateLimitExceeded(level string) {
-	m := Global()
-	if m != nil {
+	if m := Global(); m != nil {
 		m.RateLimitExceededTotal.WithLabelValues(level).Inc()
+		m.updateShadow(func(sc *ShadowCounters) { sc.RateLimitExceeded[level]++ })
 	}
 }
 
-// IncAPIErrors increments API error counter
-func IncAPIErrors(errorType string) {
-	m := Global()
-	if m != nil {
+// observeAPIRequest records an API request (and an API error for 4xx/5xx statuses)
+func (m *Metrics) observeAPIRequest(method, path string, status int, durationSeconds float64) {
+	statusStr := strconv.Itoa(status)
+	m.APIRequestsTotal.WithLabelValues(method, path, statusStr).Inc()
+	m.APIRequestDurationSeconds.WithLabelValues(method, path).Observe(durationSeconds)
+
+	var errorType string
+	if status >= 400 {
+		errorType = categorizeStatus(status)
 		m.APIErrorsTotal.WithLabelValues(errorType).Inc()
 	}
+
+	m.updateShadow(func(sc *ShadowCounters) {
+		sc.APIRequests[makeTripleLabelKey(method, path, statusStr)]++
+		if errorType != "" {
+			sc.APIErrors[errorType]++
+		}
+	})
+}
+
+// updateShadow applies fn to the shadow counters under lock.
+// Shadow counters mirror Prometheus counters so that the Collector
+// can persist them to BoltDB and restore them after restart.
+func (m *Metrics) updateShadow(fn func(sc *ShadowCounters)) {
+	m.shadowMu.Lock()
+	fn(&m.shadow)
+	m.shadowMu.Unlock()
 }

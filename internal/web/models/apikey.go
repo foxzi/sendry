@@ -6,17 +6,19 @@ import "time"
 type APIKey struct {
 	ID              string     `json:"id"`
 	Name            string     `json:"name"`
-	KeyHash         string     `json:"-"`                       // SHA256 hash, never expose
-	KeyPrefix       string     `json:"key_prefix"`              // First 8 chars for display
-	Permissions     string     `json:"permissions"`             // JSON array of permissions
-	AllowedDomains  []string   `json:"allowed_domains"`         // Domains allowed to send from (empty = all)
-	RateLimitMinute int        `json:"rate_limit_minute"`       // Max requests per minute (0 = unlimited)
-	RateLimitHour   int        `json:"rate_limit_hour"`         // Max requests per hour (0 = unlimited)
+	KeyHash         string     `json:"-"`                 // SHA256 hash, never expose
+	KeyPrefix       string     `json:"key_prefix"`        // First 8 chars for display
+	Permissions     string     `json:"permissions"`       // JSON array of permissions
+	AllowedDomains  []string   `json:"allowed_domains"`   // Domains allowed to send from (empty = all)
+	RateLimitMinute int        `json:"rate_limit_minute"` // Max requests per minute (0 = unlimited)
+	RateLimitHour   int        `json:"rate_limit_hour"`   // Max requests per hour (0 = unlimited)
 	CreatedBy       string     `json:"created_by,omitempty"`
 	CreatedAt       time.Time  `json:"created_at"`
 	LastUsedAt      *time.Time `json:"last_used_at,omitempty"`
 	ExpiresAt       *time.Time `json:"expires_at,omitempty"`
 	Active          bool       `json:"active"`
+	TrackOpens      bool       `json:"track_opens"`  // default for sends made with this key
+	TrackClicks     bool       `json:"track_clicks"` // default for sends made with this key
 }
 
 // CanSendFromDomain checks if the API key is allowed to send from the given domain

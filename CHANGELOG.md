@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- sendry-web: open, click and unsubscribe tracking (the MTA is unchanged). Public endpoints `GET /t/o/{token}.gif`, `GET /t/c/{token}`, `GET /u/{token}`, `POST /u/{token}` (button and RFC 8058 one-click) with HMAC-signed tokens, no auth, bypassing `server.allowed_ips`
+- sendry-web: Settings → Tracking (proxying domain, opens/clicks defaults), stored in the DB
+- sendry-web: campaign options track opens, track clicks, add UTM tags; API key flags `track_opens`/`track_clicks` and the same request fields on `POST /api/v1/send` and `/api/v1/send/template`
+- sendry-web: `List-Unsubscribe` / `List-Unsubscribe-Post` headers and `{{unsubscribe_url}}` variable for campaign mail, per-address-book unsubscribe (recipient status `unsubscribed` in the job's book only; `unsubscribes` is a per-(list, email) journal), unsubscribed addresses are visible in the address book with the status filter "Unsubscribed", unsubscribed recipients of the book skipped at job start and counted on the job
+- sendry-web: job and campaign statistics (Open Rate, CTR, CTOR, unsubscribes), per-recipient open/click columns, click map with per-variant snapshots, machine event filtering (`is_machine`)
+- Docs `docs/tracking.md` / `docs/tracking.ru.md` including an nginx example for a separate tracking domain
 - GitHub Actions workflow `Release (button)`: computes the next semver from the latest tag and tags HEAD of main (patch/minor/major)
 - GitHub Actions workflow `Deploy`: rolls out a released version to production servers over SSH with Ansible (all/mta/panel)
 - Ansible playbook `playbooks/upgrade.yml`: upgrades the deb package only, backs up the panel SQLite database, restarts active services and checks `/health`
@@ -15,6 +21,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `release.yml` can be started on an existing tag via `workflow_dispatch` (used by `Release (button)`, since tags pushed with `GITHUB_TOKEN` do not trigger it)
+- sendry-web: `server.trusted_proxies` defaults to loopback and private networks (`127.0.0.0/8`, `::1/128`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7`) so a proxy in front of a Docker container keeps working; set the list explicitly if untrusted hosts of a private network can reach the panel directly
+- sendry-web: `sendry.multi_send.strategy` is validated at startup: `round_robin`, `weighted`, `first_healthy`; `weighted_round_robin` (the name the docs used) is accepted as a deprecated alias of `weighted` and now really uses `weights` (before it silently fell back to `round_robin`); `domain_affinity` is accepted but not implemented yet and falls back to `round_robin` with a warning; any other value is a config error
+- `make build-web-linux` / `build-web-linux-arm64` build a static binary on `golang:1.24-alpine` (musl), the same way as the release workflow
+- go.mod: `go-oidc`, `oauth2`, `go-sqlite3`, `x/term`, `client_model` listed as direct dependencies (`go mod tidy`)
+- **Upgrade note**, sendry-web: campaign mail needs a public address for the unsubscribe link (`server.public_url` or Settings → Tracking → proxying domain). Without it new campaigns cannot be started, and jobs already running or scheduled hold their emails until it is set (the job page says so). Check `server.public_url` before upgrading
+- **Upgrade note**, sendry-web: the database migration lower-cases recipient emails (ASCII letters) and merges addresses that differ only in case within one list into one recipient (an unsubscribed duplicate wins; name and variables of the removed duplicate are lost). Back up the database before upgrading
+- sendry-web: foreign keys are enforced on every database connection. A recipient list, recipient, campaign variant or template that a campaign job used cannot be deleted any more (409 with an explanation); delete the campaign first, or set a recipient to unsubscribed
+- sendry-web: retrying failed job items re-reads the template of a variant that has not sent anything yet, so a fixed template is used; variants that sent mail keep the template frozen at job start
+- sendry-web: the open rate of a job uses the campaign's open tracking at job start, not the current setting
+- sendry-web: resubscribing removes the address from the unsubscribe statistics of past jobs
+- sendry-web: only success messages hide after 5 seconds; warnings and errors (`alert-danger` too) stay, and so does the one-time display of a new API key
+- MTA: the `path` label of `sendry_api_requests_total` / `sendry_api_request_duration_seconds` is `unmatched` for requests that match no route (scanners added a series per probed URL, kept forever since counters are persisted)
+
+### Fixed
+- Security: sendry-web `server.allowed_ips` could be bypassed by sending a forged `X-Forwarded-For` / `X-Real-IP` header; the panel IP filter and the audit log IP now honour these headers only from `server.trusted_proxies`. The right-most untrusted `X-Forwarded-For` address wins and `X-Real-IP` is used only without `X-Forwarded-For`, since Caddy passes a client-supplied `X-Real-IP` through; the ansible Caddyfile and `docs/caddy-sendry-web.md` also overwrite `X-Real-IP`
+- Security: MTA `api.allowed_ips` and `metrics.allowed_ips` could be bypassed with a forged `X-Forwarded-For` / `X-Real-IP` header from any address; these headers now count only from loopback (a reverse proxy on the same host)
+- sendry-web: tracking events were lost under concurrent requests (`database is locked`): transactions now take the SQLite write lock at start (`_txlock=immediate`)
+- sendry-web: RFC 8058 one-click unsubscribe with a `multipart/form-data` body answered success without unsubscribing
+- sendry-web: unsubscribe links in mail already sent stopped working after the campaign was deleted or old job items were cleaned up; the token now names the recipient
+- sendry-web: an invalid schedule time started the campaign immediately; it is now an error
+- sendry-web: Outlook conditional comments (`<!--[if mso]>`) were removed from rendered templates, losing bulletproof buttons; they are kept now and their links tracked
+- sendry-web: tracking left links that do not parse as a URL (`50%off`) untouched instead of turning them into a 404 redirect; an unquoted `href` ending in `/` lost the slash; `<a` inside attribute values, `<textarea>`, `<title>` and after `<!-->` was mistaken for a link
+- sendry-web: a machine click no longer hides a human click from the same IP within 30 seconds; resume and retry keep the job's first start time
+- sendry-web: missing translations on Settings → Tracking
+- Metrics persistence: counters incremented by the MTA (messages, SMTP connections/auth, rate limits, API requests/errors) were never written to BoltDB, so they reset on restart despite `docs/metrics.md`; they are now persisted and restored
+- `sendry_smtp_tls_connections_total` is now incremented when an SMTP session runs over TLS (STARTTLS or implicit TLS)
+- sendry-web: expired sessions are purged from the database every hour; session expiry is compared in the same time zone as it is stored
+- sendry-web: `weighted` strategy no longer panics when all weights are zero
+- sendry-web: broken links on the API keys page (`/settings/domains` → `/domains`) and the domain form (`/settings/dkim/new` → `/dkim/new`)
+- Docs: `POST /api/v1/dkim/upload` documented; `analytics.md` points to the tracking docs; `domains.<d>.tls`, `default_from`, `recipients_per_message` and `domain_affinity` marked as not implemented yet
+
+### Removed
+- sendry-web: unused htmx script (loaded from unpkg on every page), the timezone selector in Settings (it only affected elements that no page renders), unused route `POST /domains/import`, the unrouted `ServerDomains` handler with its `server_domains.html` template, dead builder JS and CSS
+- Unused Go code: unreachable functions and types reported by `deadcode`/`staticcheck` (sendry-web MTA client methods for templates, sandbox, DKIM generate/verify and DNSBL list; `queue.DeliveryAttempt`; `api.NewServer`, `smtp.NewServer`, `metrics.NewServer`, etc.)
 
 ## [0.4.20] - 2026-09-09
 

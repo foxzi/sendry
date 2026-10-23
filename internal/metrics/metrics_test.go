@@ -3,7 +3,6 @@ package metrics
 import (
 	"testing"
 
-	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 )
 
@@ -139,7 +138,7 @@ func TestIncSMTPConnections(t *testing.T) {
 
 	// Check active connections gauge
 	var activeMetric dto.Metric
-	if err := m.SMTPConnectionsActive.(prometheus.Gauge).Write(&activeMetric); err != nil {
+	if err := m.SMTPConnectionsActive.Write(&activeMetric); err != nil {
 		t.Fatalf("Failed to write active metric: %v", err)
 	}
 
@@ -161,7 +160,7 @@ func TestDecSMTPConnectionsActive(t *testing.T) {
 	DecSMTPConnectionsActive()
 
 	var metric dto.Metric
-	if err := m.SMTPConnectionsActive.(prometheus.Gauge).Write(&metric); err != nil {
+	if err := m.SMTPConnectionsActive.Write(&metric); err != nil {
 		t.Fatalf("Failed to write metric: %v", err)
 	}
 
@@ -180,7 +179,7 @@ func TestIncSMTPAuth(t *testing.T) {
 	IncSMTPAuthFailed()
 
 	var successMetric dto.Metric
-	if err := m.SMTPAuthSuccessTotal.(prometheus.Counter).Write(&successMetric); err != nil {
+	if err := m.SMTPAuthSuccessTotal.Write(&successMetric); err != nil {
 		t.Fatalf("Failed to write metric: %v", err)
 	}
 
@@ -189,7 +188,7 @@ func TestIncSMTPAuth(t *testing.T) {
 	}
 
 	var failedMetric dto.Metric
-	if err := m.SMTPAuthFailedTotal.(prometheus.Counter).Write(&failedMetric); err != nil {
+	if err := m.SMTPAuthFailedTotal.Write(&failedMetric); err != nil {
 		t.Fatalf("Failed to write metric: %v", err)
 	}
 
@@ -236,5 +235,4 @@ func TestGlobalNilSafe(t *testing.T) {
 	IncSMTPAuthFailed()
 	IncSMTPTLS()
 	IncRateLimitExceeded("global")
-	IncAPIErrors("server_error")
 }

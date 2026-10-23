@@ -14,6 +14,7 @@ import (
 	"github.com/foxzi/sendry/internal/web/middleware"
 	"github.com/foxzi/sendry/internal/web/repository"
 	"github.com/foxzi/sendry/internal/web/static"
+	"github.com/foxzi/sendry/internal/web/tracking"
 	"github.com/foxzi/sendry/internal/web/views"
 	"github.com/foxzi/sendry/internal/web/worker"
 )
@@ -71,11 +72,14 @@ func New(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 
 	// Setup HTTP server
 	s.http = &http.Server{
-		Addr:         cfg.Server.ListenAddr,
-		Handler:      s.setupRoutes(),
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		Addr:              cfg.Server.ListenAddr,
+		Handler:           s.setupRoutes(),
+		ReadTimeout:       30 * time.Second,
+		ReadHeaderTimeout: 10 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		// Tracking endpoints are public: keep headers (User-Agent, cookies) small
+		MaxHeaderBytes: 16 << 10,
 	}
 
 	// Initialize worker
@@ -99,6 +103,12 @@ func (s *Server) setupRoutes() http.Handler {
 	mux.Handle("GET /uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(s.cfg.Server.UploadPath))))
 
 	// Auth routes (public)
+	// Public tracking endpoints (signed tokens, no auth, not IP-filtered)
+	mux.HandleFunc("GET /t/o/{token}", h.TrackOpen)
+	mux.HandleFunc("GET /t/c/{token}", h.TrackClick)
+	mux.HandleFunc("GET /u/{token}", h.UnsubscribePage)
+	mux.HandleFunc("POST /u/{token}", h.UnsubscribeConfirm)
+
 	mux.HandleFunc("GET /auth/login", h.LoginPage)
 	mux.HandleFunc("POST /auth/login", h.Login)
 	mux.HandleFunc("GET /auth/logout", h.Logout)
@@ -179,7 +189,6 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("GET /recipients/{id}/import", h.RecipientImportPage)
 	protected.HandleFunc("POST /recipients/{id}/import", h.RecipientImport)
 	protected.HandleFunc("GET /recipients/{id}/export", h.RecipientListExport)
-	protected.HandleFunc("GET /recipients/{id}/recipients", h.RecipientsList)
 	protected.HandleFunc("POST /recipients/{id}/add", h.RecipientAdd)
 	protected.HandleFunc("DELETE /recipients/{id}/recipients/{recipientId}", h.RecipientDelete)
 
@@ -222,7 +231,6 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("GET /domains", h.CentralDomainsList)
 	protected.HandleFunc("GET /domains/new", h.CentralDomainsNew)
 	protected.HandleFunc("POST /domains", h.CentralDomainsCreate)
-	protected.HandleFunc("POST /domains/import", h.CentralDomainsImport)
 	protected.HandleFunc("GET /domains/{id}", h.CentralDomainsView)
 	protected.HandleFunc("GET /domains/{id}/edit", h.CentralDomainsEdit)
 	protected.HandleFunc("PUT /domains/{id}", h.CentralDomainsUpdate)
@@ -303,6 +311,13 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("GET /servers/{server}/dns-check", h.DNSCheck)
 	protected.HandleFunc("GET /servers/{server}/ip-check", h.IPCheck)
 
+	// Tracking settings, stop list, click map
+	protected.HandleFunc("GET /settings/tracking", adminOnly(http.HandlerFunc(h.TrackingSettings)).ServeHTTP)
+	protected.HandleFunc("POST /settings/tracking", adminOnly(http.HandlerFunc(h.TrackingSettingsSave)).ServeHTTP)
+	protected.HandleFunc("POST /settings/tracking/rotate-secret", adminOnly(http.HandlerFunc(h.TrackingSecretRotate)).ServeHTTP)
+	protected.HandleFunc("GET /jobs/{id}/clickmap", h.JobClickMap)
+	protected.HandleFunc("GET /jobs/{id}/clickmap/snapshot", h.JobClickMapSnapshot)
+
 	// Wrap protected routes with auth middleware
 	authMiddleware := middleware.Auth(s.cfg, s.db, s.logger)
 	mux.Handle("/", authMiddleware(protected))
@@ -312,9 +327,22 @@ func (s *Server) setupRoutes() http.Handler {
 	handler = middleware.Logger(s.logger)(handler)
 	handler = middleware.Recovery(s.logger)(handler)
 
-	// Apply IP filter if configured
+	// Apply IP filter if configured. Public tracking paths (/t/, /u/) are
+	// reached by email readers from anywhere, so they bypass the filter.
 	if len(s.cfg.Server.AllowedIPs) > 0 {
-		handler = middleware.IPFilter(s.cfg.Server.AllowedIPs, s.logger)(handler)
+		proxies, err := tracking.ParseTrustedProxies(s.cfg.Server.TrustedProxies)
+		if err != nil {
+			s.logger.Error("invalid server.trusted_proxies, client IP headers are ignored", "error", err)
+		}
+		filtered := middleware.IPFilter(s.cfg.Server.AllowedIPs, proxies, s.logger)(handler)
+		open := handler
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if middleware.IsPublicTrackingPath(r.URL.Path) {
+				open.ServeHTTP(w, r)
+				return
+			}
+			filtered.ServeHTTP(w, r)
+		})
 	}
 
 	return handler
@@ -323,6 +351,11 @@ func (s *Server) setupRoutes() http.Handler {
 func (s *Server) Run(ctx context.Context) error {
 	// Start background worker
 	s.worker.Start()
+
+	// Purge expired sessions in the background
+	cleanupCtx, cancelCleanup := context.WithCancel(ctx)
+	defer cancelCleanup()
+	go s.sessionCleanupLoop(cleanupCtx)
 
 	errCh := make(chan error, 1)
 

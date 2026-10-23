@@ -131,7 +131,7 @@ func TestMergeVariables(t *testing.T) {
 			campaign:      nil,
 			recipientJSON: `{"Items": [{"Name": "A"}, {"Name": "B"}]}`,
 			wantKey:       "Items",
-			want: nil,
+			want:          nil,
 		},
 		{
 			name:          "invalid json ignored",

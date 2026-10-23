@@ -13,6 +13,7 @@ import (
 	"github.com/foxzi/sendry/internal/web/repository"
 	"github.com/foxzi/sendry/internal/web/sendry"
 	emailtpl "github.com/foxzi/sendry/internal/web/template"
+	"github.com/foxzi/sendry/internal/web/tracking"
 )
 
 var (
@@ -38,6 +39,10 @@ type APISendRequest struct {
 	TemplateName string            `json:"template_name,omitempty"`
 	Data         map[string]any    `json:"data,omitempty"`
 	PreferServer string            `json:"prefer_server,omitempty"`
+
+	// TrackOpens and TrackClicks override the API key defaults when set
+	TrackOpens  *bool `json:"track_opens,omitempty"`
+	TrackClicks *bool `json:"track_clicks,omitempty"`
 }
 
 // APISendResponse represents the API response
@@ -87,6 +92,14 @@ type RouterConfig struct {
 
 // NewEmailRouter creates a new email router
 func NewEmailRouter(cfg RouterConfig) *EmailRouter {
+	if cfg.MultiSend != nil && cfg.Logger != nil {
+		switch cfg.MultiSend.Strategy {
+		case config.StrategyDomainAffinity:
+			cfg.Logger.Warn("multi_send strategy domain_affinity is not implemented yet, falling back to round_robin")
+		case config.StrategyWeightedRoundRobin:
+			cfg.Logger.Warn("multi_send strategy weighted_round_robin is deprecated, use weighted")
+		}
+	}
 	return &EmailRouter{
 		domains:         cfg.Domains,
 		templates:       cfg.Templates,
@@ -101,8 +114,65 @@ func NewEmailRouter(cfg RouterConfig) *EmailRouter {
 	}
 }
 
-// Send sends an email through the appropriate MTA server
-func (r *EmailRouter) Send(ctx context.Context, req *APISendRequest, apiKeyID, clientIP string) (*APISendResponse, error) {
+// effectiveTracking resolves open/click tracking for a request: the request
+// field if set, else the API key default, else off.
+func effectiveTracking(req *APISendRequest, apiKey *models.APIKey) (opens, clicks bool) {
+	if apiKey != nil {
+		opens, clicks = apiKey.TrackOpens, apiKey.TrackClicks
+	}
+	if req.TrackOpens != nil {
+		opens = *req.TrackOpens
+	}
+	if req.TrackClicks != nil {
+		clicks = *req.TrackClicks
+	}
+	return opens, clicks
+}
+
+// trackHTML applies open/click tracking to the HTML of an API message.
+// Raw HTML is numbered by tracking.Apply itself. API mail gets no unsubscribe link.
+func trackHTML(html, baseURL string, signer *tracking.Signer, sendID string, opens, clicks bool) string {
+	if html == "" || (!opens && !clicks) || baseURL == "" || signer == nil || sendID == "" {
+		return html
+	}
+	return tracking.Apply(html, tracking.Options{
+		BaseURL:     baseURL,
+		Signer:      signer,
+		SourceType:  models.SourceSend,
+		SourceID:    sendID,
+		TrackOpens:  opens,
+		TrackClicks: clicks,
+	})
+}
+
+// applyTracking loads tracking settings and applies tracking to sendReq.HTML.
+// Tracking problems are logged and never fail a send.
+func (r *EmailRouter) applyTracking(sendReq *sendry.SendRequest, sendID string, opens, clicks bool) {
+	if (!opens && !clicks) || sendReq.HTML == "" || sendID == "" || r.settings == nil {
+		return
+	}
+	ts, err := r.settings.GetTrackingSettings()
+	if err != nil || ts == nil || ts.Secret == "" {
+		r.logger.Error("tracking settings unavailable, sending without tracking", "send_id", sendID, "error", err)
+		return
+	}
+	base := tracking.ResolveBaseURL(ts.BaseURL, r.publicURL)
+	if base == "" {
+		r.logger.Warn("tracking base URL is not configured, sending without tracking", "send_id", sendID)
+		return
+	}
+	sendReq.HTML = trackHTML(sendReq.HTML, base, tracking.NewSigner([]byte(ts.Secret)), sendID, opens, clicks)
+}
+
+// Send sends an email through the appropriate MTA server.
+// apiKey may be nil; it supplies the default tracking flags.
+func (r *EmailRouter) Send(ctx context.Context, req *APISendRequest, apiKey *models.APIKey, clientIP string) (*APISendResponse, error) {
+	apiKeyID := ""
+	if apiKey != nil {
+		apiKeyID = apiKey.ID
+	}
+	trackOpens, trackClicks := effectiveTracking(req, apiKey)
+
 	// Validate request
 	if req.From == "" {
 		return nil, fmt.Errorf("%w: from is required", ErrInvalidRequest)
@@ -175,6 +245,9 @@ func (r *EmailRouter) Send(ctx context.Context, req *APISendRequest, apiKeyID, c
 		r.logger.Error("failed to create send record", "error", err)
 		// Continue anyway - don't fail the send because of logging
 	}
+
+	// The send ID is known now: add the pixel and tracked links
+	r.applyTracking(sendReq, send.ID, trackOpens, trackClicks)
 
 	// Send with failover
 	resp, actualServer, err := r.sendWithFailover(ctx, sendReq, servers, selectedServer)
@@ -329,17 +402,18 @@ func (r *EmailRouter) selectServer(domain string, servers []ServerInfo) *ServerI
 		return &servers[0]
 	}
 
-	strategy := "round_robin"
+	strategy := config.StrategyRoundRobin
 	if r.cfg != nil && r.cfg.Strategy != "" {
 		strategy = r.cfg.Strategy
 	}
 
 	switch strategy {
-	case "weighted":
-		return r.weightedSelect(servers)
-	case "first_healthy":
+	case config.StrategyWeighted, config.StrategyWeightedRoundRobin:
+		return r.weightedSelect(domain, servers)
+	case config.StrategyFirstHealthy:
 		return r.firstHealthySelect(servers)
 	default:
+		// round_robin; domain_affinity is not implemented yet and falls back here
 		return r.roundRobinSelect(domain, servers)
 	}
 }
@@ -356,10 +430,16 @@ func (r *EmailRouter) roundRobinSelect(domain string, servers []ServerInfo) *Ser
 }
 
 // weightedSelect selects server based on weights
-func (r *EmailRouter) weightedSelect(servers []ServerInfo) *ServerInfo {
+func (r *EmailRouter) weightedSelect(domain string, servers []ServerInfo) *ServerInfo {
 	totalWeight := 0
 	for _, s := range servers {
-		totalWeight += s.Weight
+		if s.Weight > 0 {
+			totalWeight += s.Weight
+		}
+	}
+	if totalWeight == 0 {
+		// All weights are zero: nothing to weigh, spread evenly
+		return r.roundRobinSelect(domain, servers)
 	}
 
 	// Simple weighted selection (deterministic for now)
@@ -371,6 +451,9 @@ func (r *EmailRouter) weightedSelect(servers []ServerInfo) *ServerInfo {
 
 	cumulative := 0
 	for i := range servers {
+		if servers[i].Weight <= 0 {
+			continue
+		}
 		cumulative += servers[i].Weight
 		if counter < cumulative {
 			return &servers[i]

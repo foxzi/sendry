@@ -12,6 +12,9 @@ type Campaign struct {
 	ReplyTo     string    `json:"reply_to"`
 	Variables   string    `json:"variables"` // JSON
 	Tags        string    `json:"tags"`      // JSON array
+	TrackOpens  bool      `json:"track_opens"`
+	TrackClicks bool      `json:"track_clicks"`
+	AddUTM      bool      `json:"add_utm"` // append utm_* and sc/sr/sl to tracked links
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"text/tabwriter"
@@ -205,11 +204,4 @@ func runDomainStats(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
-}
-
-// Helper for JSON output
-func outputJSON(v interface{}) error {
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	return enc.Encode(v)
 }

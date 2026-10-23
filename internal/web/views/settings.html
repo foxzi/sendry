@@ -5,33 +5,6 @@
 
 <div class="card" style="margin-bottom: 1.5rem;">
     <div class="card-header">
-        <h2 data-i18n="display_preferences">Display Preferences</h2>
-    </div>
-    <div class="card-body">
-        <div class="form-group">
-            <label for="timezone-select" data-i18n="timezone">Timezone</label>
-            <select id="timezone-select" class="form-control">
-                <option value="UTC">UTC</option>
-                <option value="Europe/Moscow">Europe/Moscow (MSK)</option>
-                <option value="Europe/London">Europe/London (GMT/BST)</option>
-                <option value="Europe/Paris">Europe/Paris (CET/CEST)</option>
-                <option value="Europe/Berlin">Europe/Berlin (CET/CEST)</option>
-                <option value="America/New_York">America/New_York (EST/EDT)</option>
-                <option value="America/Chicago">America/Chicago (CST/CDT)</option>
-                <option value="America/Denver">America/Denver (MST/MDT)</option>
-                <option value="America/Los_Angeles">America/Los_Angeles (PST/PDT)</option>
-                <option value="Asia/Tokyo">Asia/Tokyo (JST)</option>
-                <option value="Asia/Shanghai">Asia/Shanghai (CST)</option>
-                <option value="Asia/Singapore">Asia/Singapore (SGT)</option>
-                <option value="Australia/Sydney">Australia/Sydney (AEST/AEDT)</option>
-            </select>
-            <small class="form-help" data-i18n="timezone_help">All dates will be displayed in selected timezone</small>
-        </div>
-    </div>
-</div>
-
-<div class="card" style="margin-bottom: 1.5rem;">
-    <div class="card-header">
         <h2 data-i18n="infrastructure">Infrastructure</h2>
     </div>
     <div class="card-body">
@@ -80,6 +53,11 @@
                 <p data-i18n="api_keys_desc">Manage API keys for external integrations</p>
             </a>
 
+            <a href="/settings/tracking" class="settings-card">
+                <h3 data-i18n="trk.settings_title">Tracking</h3>
+                <p data-i18n="trk.settings_desc">Opens, clicks and unsubscribe links: proxying domain and defaults</p>
+            </a>
+
             <a href="/settings/test-email" class="settings-card">
                 <h3 data-i18n="send_test_email">Send Test Email</h3>
                 <p data-i18n="send_test_email_desc">Send a test email through any MTA server</p>
@@ -87,28 +65,4 @@
         </div>
     </div>
 </div>
-
-<script>
-(function() {
-    var select = document.getElementById('timezone-select');
-    if (!select) return;
-
-    // Set current value
-    var currentTz = localStorage.getItem('timezone') || Intl.DateTimeFormat().resolvedOptions().timeZone;
-    select.value = currentTz;
-
-    // If current timezone not in list, add it
-    if (select.value !== currentTz) {
-        var opt = document.createElement('option');
-        opt.value = currentTz;
-        opt.textContent = currentTz;
-        select.insertBefore(opt, select.firstChild);
-        select.value = currentTz;
-    }
-
-    select.addEventListener('change', function() {
-        Timezone.set(this.value);
-    });
-})();
-</script>
 {{end}}

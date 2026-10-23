@@ -38,10 +38,10 @@ func NewSignerFromFile(keyFile, domain, selector string) (*Signer, error) {
 // Sign signs the message and returns the signed message
 func (s *Signer) Sign(message []byte) ([]byte, error) {
 	options := &dkim.SignOptions{
-		Domain:   s.domain,
-		Selector: s.selector,
-		Signer:   s.privateKey,
-		Hash:     crypto.SHA256,
+		Domain:                 s.domain,
+		Selector:               s.selector,
+		Signer:                 s.privateKey,
+		Hash:                   crypto.SHA256,
 		HeaderCanonicalization: dkim.CanonicalizationRelaxed,
 		BodyCanonicalization:   dkim.CanonicalizationRelaxed,
 	}

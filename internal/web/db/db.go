@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -22,14 +23,15 @@ func New(path string) (*DB, error) {
 		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}
 
-	db, err := sql.Open("sqlite3", path+"?_journal_mode=WAL&_busy_timeout=5000")
+	// Foreign keys are enabled in the DSN: PRAGMA foreign_keys is per
+	// connection, and the DSN applies it to every connection of the pool.
+	// _txlock=immediate: a transaction takes the write lock at BEGIN and waits
+	// for it (busy_timeout). A deferred transaction that reads and then writes
+	// fails at once with "database is locked" when another connection
+	// committed in between, and busy_timeout does not help there.
+	db, err := sql.Open("sqlite3", path+"?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on&_txlock=immediate")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
-	}
-
-	// Enable foreign keys
-	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
-		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
 	}
 
 	return &DB{db}, nil
@@ -61,6 +63,9 @@ func (db *DB) Migrate() error {
 		migrationMediaFiles,
 		migrationTemplateBlockRefs,
 		migrationUserSMTPServers,
+		migrationEmailEvents,
+		migrationUnsubscribes,
+		migrationJobVariantSnapshots,
 	}
 
 	for _, m := range migrations {
@@ -95,9 +100,51 @@ func (db *DB) Migrate() error {
 		"ALTER TABLE templates ADD COLUMN container_radius_top INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE templates ADD COLUMN container_radius_bottom INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE template_block_refs ADD COLUMN condition TEXT NOT NULL DEFAULT ''",
+		// Open/click tracking and unsubscribes
+		// Existing campaigns keep sending untracked; new ones take the defaults from settings
+		"ALTER TABLE campaigns ADD COLUMN track_opens INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE campaigns ADD COLUMN track_clicks INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE campaigns ADD COLUMN add_utm INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE api_keys ADD COLUMN track_opens INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE api_keys ADD COLUMN track_clicks INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE send_jobs ADD COLUMN skipped_unsubscribed INTEGER NOT NULL DEFAULT 0",
+		// Whether the campaign tracked opens when the job was created; NULL
+		// for older jobs (statistics then use the campaign setting)
+		"ALTER TABLE send_jobs ADD COLUMN track_opens INTEGER",
+		"ALTER TABLE send_job_items ADD COLUMN opened_at TIMESTAMP",
+		"ALTER TABLE send_job_items ADD COLUMN open_count INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE send_job_items ADD COLUMN clicked_at TIMESTAMP",
+		"ALTER TABLE send_job_items ADD COLUMN click_count INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE send_job_items ADD COLUMN unsubscribed_at TIMESTAMP",
+		"ALTER TABLE sends ADD COLUMN opened_at TIMESTAMP",
+		"ALTER TABLE sends ADD COLUMN open_count INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE sends ADD COLUMN clicked_at TIMESTAMP",
+		"ALTER TABLE sends ADD COLUMN click_count INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE job_variant_snapshots ADD COLUMN template_subject TEXT",
+		"ALTER TABLE job_variant_snapshots ADD COLUMN template_html TEXT",
+		"ALTER TABLE job_variant_snapshots ADD COLUMN template_text TEXT",
 	}
 	for _, m := range alterMigrations {
 		db.Exec(m) // Ignore errors (column may already exist)
+	}
+
+	// Indexes added after the tables were created, and ones no query uses
+	indexMigrations := []string{
+		"DROP INDEX IF EXISTS idx_email_events_email",
+		"DROP INDEX IF EXISTS idx_email_events_created",
+		"DROP INDEX IF EXISTS idx_unsubscribes_campaign",
+		"DROP INDEX IF EXISTS idx_unsubscribes_created",
+		"CREATE INDEX IF NOT EXISTS idx_email_events_job_stats ON email_events(job_id, type, is_machine)",
+		"CREATE INDEX IF NOT EXISTS idx_email_events_dedup ON email_events(source_type, source_id, type, created_at)",
+	}
+	for _, m := range indexMigrations {
+		if _, err := db.Exec(m); err != nil {
+			return fmt.Errorf("index migration failed: %w", err)
+		}
+	}
+
+	if err := db.normalizeRecipientEmails(); err != nil {
+		return fmt.Errorf("normalize recipient emails: %w", err)
 	}
 
 	if err := db.dropColumnIfExists("templates", "container_background"); err != nil {
@@ -113,6 +160,59 @@ func (db *DB) Migrate() error {
 	return nil
 }
 
+// normalizeRecipientEmails lower-cases recipient emails once and adds the
+// unique index on (list_id, lower(email)), so the same address in different
+// case is one recipient. Addresses that collide after lower-casing are merged
+// into one row: a non-active one wins (an unsubscribe must not be lost), then
+// the oldest. Job items and unsubscribe journal rows are moved to that row.
+func (db *DB) normalizeRecipientEmails() error {
+	var n int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_recipients_list_email'`,
+	).Scan(&n); err != nil {
+		return err
+	}
+	if n > 0 {
+		return nil
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	steps := []string{
+		`CREATE TEMP TABLE recipient_dups (id TEXT PRIMARY KEY, keep_id TEXT NOT NULL)`,
+		`INSERT INTO recipient_dups (id, keep_id)
+		SELECT id, keep_id FROM (
+			SELECT id, FIRST_VALUE(id) OVER (
+				PARTITION BY list_id, lower(trim(email))
+				ORDER BY CASE WHEN COALESCE(status, 'active') = 'active' THEN 1 ELSE 0 END, created_at, id
+			) AS keep_id
+			FROM recipients
+		) WHERE id != keep_id`,
+		`UPDATE send_job_items SET recipient_id = (SELECT keep_id FROM recipient_dups d WHERE d.id = send_job_items.recipient_id)
+		WHERE recipient_id IN (SELECT id FROM recipient_dups)`,
+		`UPDATE unsubscribes SET recipient_id = (SELECT keep_id FROM recipient_dups d WHERE d.id = unsubscribes.recipient_id)
+		WHERE recipient_id IN (SELECT id FROM recipient_dups)`,
+		`DELETE FROM recipients WHERE id IN (SELECT id FROM recipient_dups)`,
+		`UPDATE recipients SET email = lower(trim(email)) WHERE email != lower(trim(email))`,
+		`UPDATE recipient_lists SET
+			total_count = (SELECT COUNT(*) FROM recipients WHERE list_id = recipient_lists.id),
+			active_count = (SELECT COUNT(*) FROM recipients WHERE list_id = recipient_lists.id AND status = 'active')
+		WHERE id IN (SELECT DISTINCT r.list_id FROM recipients r JOIN recipient_dups d ON d.keep_id = r.id)`,
+		`DROP TABLE recipient_dups`,
+		`CREATE UNIQUE INDEX idx_recipients_list_email ON recipients(list_id, lower(email))`,
+	}
+	for _, s := range steps {
+		if _, err := tx.Exec(s); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 func (db *DB) dropColumnIfExists(table, column string) error {
 	if !db.columnExists(table, column) {
 		return nil
@@ -120,12 +220,21 @@ func (db *DB) dropColumnIfExists(table, column string) error {
 	if _, err := db.Exec(fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s", table, column)); err == nil {
 		return nil
 	}
-	if _, err := db.Exec("PRAGMA foreign_keys = OFF"); err != nil {
+
+	// The pragma is per connection (and ignored inside a transaction), so the
+	// whole rebuild runs on one connection with foreign keys off
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, "PRAGMA foreign_keys = OFF"); err != nil {
 		return fmt.Errorf("disable fk: %w", err)
 	}
-	defer db.Exec("PRAGMA foreign_keys = ON")
+	defer conn.ExecContext(ctx, "PRAGMA foreign_keys = ON")
 
-	tx, err := db.Begin()
+	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -596,4 +705,69 @@ CREATE TABLE IF NOT EXISTS user_smtp_servers (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_user_smtp_servers_user ON user_smtp_servers(user_id);
+`
+
+// email_events is an append-only log of engagement events (opens, clicks,
+// unsubscribes). Rows are never deleted for now; retention is decided later.
+const migrationEmailEvents = `
+CREATE TABLE IF NOT EXISTS email_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT NOT NULL,
+    source_type TEXT NOT NULL,
+    source_id TEXT NOT NULL,
+    campaign_id TEXT,
+    job_id TEXT,
+    variant_id TEXT,
+    email TEXT NOT NULL,
+    link_id INTEGER,
+    url TEXT,
+    ip TEXT,
+    user_agent TEXT,
+    is_machine INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_email_events_source ON email_events(source_type, source_id);
+CREATE INDEX IF NOT EXISTS idx_email_events_job ON email_events(job_id, type);
+CREATE INDEX IF NOT EXISTS idx_email_events_campaign ON email_events(campaign_id, type);
+`
+
+// unsubscribes is the journal of unsubscribes per address book (recipient
+// list). The source of truth for sending is recipients.status = 'unsubscribed'
+// in that list; the same address in another list keeps receiving mail. The
+// journal records when and from which campaign the address unsubscribed.
+const migrationUnsubscribes = `
+CREATE TABLE IF NOT EXISTS unsubscribes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    list_id TEXT NOT NULL REFERENCES recipient_lists(id) ON DELETE CASCADE,
+    recipient_id TEXT,
+    email TEXT NOT NULL,
+    campaign_id TEXT,
+    job_id TEXT,
+    source_type TEXT NOT NULL,
+    source_id TEXT,
+    created_at TIMESTAMP NOT NULL,
+    UNIQUE(list_id, email)
+);
+`
+
+// job_variant_snapshots keeps the HTML of each variant as it was when the job
+// started, with data-sl link numbers, so the click map stays correct after
+// the template is edited. html is rendered with placeholder variables for the
+// click map; template_* is the frozen template source (html with data-sl) the
+// worker renders for every recipient of the job.
+const migrationJobVariantSnapshots = `
+CREATE TABLE IF NOT EXISTS job_variant_snapshots (
+    job_id TEXT NOT NULL REFERENCES send_jobs(id) ON DELETE CASCADE,
+    variant_id TEXT NOT NULL,
+    variant_name TEXT,
+    template_id TEXT,
+    template_version INTEGER,
+    html TEXT NOT NULL,
+    links JSON NOT NULL DEFAULT '[]',
+    template_subject TEXT,
+    template_html TEXT,
+    template_text TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (job_id, variant_id)
+);
 `

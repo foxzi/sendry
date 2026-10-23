@@ -31,6 +31,9 @@ sudo systemctl start sendry-web
 ```yaml
 server:
   listen_addr: ":8088"
+  allowed_ips: []        # IP/CIDR, с которых можно открыть панель; пусто = всем
+  # trusted_proxies:     # прокси, чьим X-Real-IP / X-Forwarded-For верим
+  #   - "127.0.0.0/8"    # по умолчанию: loopback + частные сети
   tls:
     enabled: false
     cert_file: "/etc/sendry/certs/web.crt"
@@ -43,6 +46,8 @@ logging:
   level: info    # debug, info, warn, error
   format: json   # json, text
 ```
+
+IP клиента для `allowed_ips`, журнала аудита, отправок через API и событий трекинга берётся из `X-Real-IP` / `X-Forwarded-For`, только если запрос пришёл с адреса из `trusted_proxies`; иначе используется адрес TCP-соединения, поэтому подделкой этих заголовков `allowed_ips` не обойти. По умолчанию (опция не задана): `127.0.0.0/8`, `::1/128`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7`. Пустой список `[]` не доверяет никому. Подробнее в [tracking.ru.md](tracking.ru.md#ip-читателя-и-доверенные-прокси).
 
 ### Авторизация
 
@@ -103,16 +108,18 @@ sendry:
       env: "stage"
 
   multi_send:
-    strategy: weighted_round_robin  # round_robin, weighted_round_robin, domain_affinity
+    strategy: weighted  # round_robin (по умолчанию), weighted, first_healthy, domain_affinity
     weights:
       mta-prod-1: 3
       mta-stage: 1
-    domain_affinity:
+    domain_affinity:    # пока не реализовано: стратегия domain_affinity работает как round_robin
       "example.com": "mta-prod-1"
     failover:
       enabled: true
       max_retries: 2
 ```
+
+Стратегии: `round_robin` — по очереди, `weighted` — по весам из `weights`, `first_healthy` — всегда первый сервер из списка. `domain_affinity` пока не реализована: значение принимается, но работает как `round_robin` (в логе при старте будет предупреждение). Старое имя `weighted_round_robin` считается устаревшим синонимом `weighted`. Неизвестное значение — ошибка конфигурации.
 
 ## CLI команды
 
@@ -231,6 +238,36 @@ sendry-web cleanup --days 90 --dry-run    # предпросмотр удале�
 - Управление очередью и DLQ
 - Просмотр конфигурации доменов
 - Просмотр sandbox сообщений
+
+### Трекинг и отписки
+
+Панель умеет отслеживать открытия и клики и принимает отписки. Публичные адреса `/t/o/`, `/t/c/`, `/u/` работают без авторизации и не проверяются по `server.allowed_ips`.
+
+- Настройки: **Настройки → Трекинг** (проксирующий домен, значения по умолчанию).
+- В форме кампании: «Отслеживать открытия», «Отслеживать клики», «Добавлять UTM-метки».
+- Отписавшиеся адреса видны в адресной книге с фильтром по статусу «Отписан». Отписка действует только в книге рассылки.
+- На странице задания: статистика (Open Rate, CTR, CTOR, отписки) и вкладка «Карта кликов».
+
+Подробности: [Трекинг](tracking.ru.md).
+
+### API панели
+
+Порт панели (по умолчанию 8088), авторизация API-ключом (`Authorization: Bearer <key>` или `X-API-Key`).
+
+```
+POST /api/v1/send
+POST /api/v1/send/template
+GET  /api/v1/send/{id}/status
+```
+
+Помимо обычных полей письма (`from`, `to`, `subject`, `html`, `template_id`, `data` и других), запросы на отправку принимают необязательные поля трекинга:
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `track_opens` | boolean | Вставить пиксель открытия. Перекрывает флаг API-ключа |
+| `track_clicks` | boolean | Заменять ссылки на трекинговые. Перекрывает флаг API-ключа |
+
+Если поле не передано, действует флаг ключа `track_opens` / `track_clicks` (по умолчанию выключены). Отписки для писем через API нет. Подробности и пример: [Трекинг](tracking.ru.md).
 
 ## Подстановка переменных
 

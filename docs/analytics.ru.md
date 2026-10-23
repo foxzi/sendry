@@ -8,19 +8,20 @@
 - **Prometheus метрики** (`internal/metrics/`): счётчики `sent`/`failed`/`bounced`/`deferred` по доменам, SMTP-соединения, API-запросы, очередь. Память + snapshot в Bolt.
 - **Per-message статусы** в `internal/queue/storage.go`: `pending`/`sending`/`delivered`/`failed`/`deferred` в Bolt.
 - **`sendry-web`**: таблицы `send_jobs`, `send_job_items`, `sends` в SQLite — агрегаты по кампаниям.
+- **Трекинг открытий/кликов и отписки в `sendry-web`** (пиксель, переписывание ссылок, `List-Unsubscribe`, отписка по адресной книге, Open Rate / CTR / CTOR по рассылке и кампании, карта кликов). См. [tracking.ru.md](tracking.ru.md). События хранятся в SQLite панели, MTA не менялся.
 
 ## Чего фундаментально нет
 
 1. **Event log** — поток событий (`accepted`, `attempted`, `deferred`, `delivered`, `bounced`, `opened`, `clicked`, `unsubscribed`) с timestamp и контекстом. Сохраняется только финальный статус.
-2. **Per-message attempt timeline** — попытки, MX, SMTP-ответ. `queue.DeliveryAttempt` есть как struct, но не персистится.
+2. **Per-message attempt timeline** — попытки, MX, SMTP-ответ не сохраняются.
 3. **Входящие bounce/NDR** — парсер RFC 3464 не запущен, async-bounce невидим.
-4. **Open/click tracking** — нет пикселей и link rewriter'а.
-5. **Unsubscribe / suppression list** — только на уровне `recipient.status` в web.
+4. **Open/click tracking** — есть только в `sendry-web` (см. [tracking.ru.md](tracking.ru.md)); письма, отправленные напрямую в API/SMTP MTA, не отслеживаются.
+5. **Suppression list** — отписки ведутся по адресным книгам в `sendry-web` ([tracking.ru.md](tracking.ru.md)); глобального suppression list в MTA нет.
 6. **Recipient engagement history** — нет таблицы событий по адресу.
 7. **Reputation metrics** — нет агрегатов bounce rate / complaint rate по from-домену / IP.
 8. **Cohort / campaign analytics** — `send_job_items` в SQLite умрёт на росте per-event записей.
 9. **Долгосрочное хранение** — Prometheus = короткий retention, Bolt cleaner удаляет `delivered`.
-10. **Воронка** `sent → delivered → opened → clicked → converted` — технически невозможна без event log.
+10. **Воронка** `sent → delivered → opened → clicked → converted` — `sendry-web` показывает sent/opened/clicked по рассылке, но `converted` и сквозная воронка по кампаниям требуют event log.
 
 Вывод: текущий стек решает «что сейчас происходит» (monitoring), но не «что случилось с письмом X две недели назад» и «какой CTR у кампании Y» (analytics).
 

@@ -15,6 +15,7 @@ import (
 	"github.com/foxzi/sendry/internal/web/db"
 	"github.com/foxzi/sendry/internal/web/models"
 	"github.com/foxzi/sendry/internal/web/repository"
+	"github.com/foxzi/sendry/internal/web/tracking"
 )
 
 // RateLimiter provides in-memory rate limiting
@@ -176,13 +177,11 @@ func Recovery(logger *slog.Logger) func(http.Handler) http.Handler {
 	}
 }
 
-// Auth middleware checks authentication
+// Auth middleware requires a valid, unexpired session (the "session" cookie
+// checked against the sessions table) and redirects to /auth/login otherwise.
 func Auth(cfg *config.Config, database *db.DB, logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// TODO: implement proper session checking
-			// For now, allow all requests (development mode)
-
 			// Get session cookie
 			cookie, err := r.Cookie("session")
 			if err != nil {
@@ -194,8 +193,8 @@ func Auth(cfg *config.Config, database *db.DB, logger *slog.Logger) func(http.Ha
 			// Validate session and get user info
 			var userID, email, role string
 			err = database.QueryRow(
-				"SELECT s.user_id, u.email, COALESCE(u.role, 'user') FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.id = ? AND s.expires_at > datetime('now')",
-				cookie.Value,
+				"SELECT s.user_id, u.email, COALESCE(u.role, 'user') FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.id = ? AND s.expires_at > ?",
+				cookie.Value, time.Now(),
 			).Scan(&userID, &email, &role)
 
 			if err != nil {
@@ -224,10 +223,18 @@ func AdminOnly(next http.Handler) http.Handler {
 	})
 }
 
-// MethodOverride middleware allows overriding HTTP method via _method form field
+// IsPublicTrackingPath reports whether path is a public open/click/unsubscribe
+// endpoint (/t/..., /u/...), reachable by anyone who has a mail.
+func IsPublicTrackingPath(path string) bool {
+	return strings.HasPrefix(path, "/t/") || strings.HasPrefix(path, "/u/")
+}
+
+// MethodOverride middleware allows overriding HTTP method via _method form field.
+// Public tracking paths are skipped: parsing the form here would read an
+// unbounded body before the handler can limit it.
 func MethodOverride(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
+		if r.Method == http.MethodPost && !IsPublicTrackingPath(r.URL.Path) {
 			method := r.FormValue("_method")
 			if method != "" {
 				r.Method = method
@@ -259,9 +266,7 @@ func APIAuth(apiKeys *repository.APIKeyRepository, logger *slog.Logger) func(htt
 			}
 
 			// Strip Bearer prefix if present
-			if strings.HasPrefix(auth, "Bearer ") {
-				auth = strings.TrimPrefix(auth, "Bearer ")
-			}
+			auth = strings.TrimPrefix(auth, "Bearer ")
 
 			if auth == "" {
 				sendAPIError(w, http.StatusUnauthorized, "API key required")
@@ -330,8 +335,11 @@ func sendAPIError(w http.ResponseWriter, status int, message string) {
 	json.NewEncoder(w).Encode(map[string]string{"error": message})
 }
 
-// IPFilter middleware restricts access to allowed IPs
-func IPFilter(allowedIPs []string, logger *slog.Logger) func(http.Handler) http.Handler {
+// IPFilter middleware restricts access to allowed IPs. The client IP is taken
+// from X-Real-IP / X-Forwarded-For only when the direct peer is one of the
+// trusted proxies (server.trusted_proxies); otherwise the peer address is used,
+// so the filter cannot be bypassed by forging these headers.
+func IPFilter(allowedIPs []string, proxies tracking.TrustedProxies, logger *slog.Logger) func(http.Handler) http.Handler {
 	// Parse allowed IPs/CIDRs
 	var allowedNets []*net.IPNet
 	var allowedAddrs []net.IP
@@ -362,7 +370,7 @@ func IPFilter(allowedIPs []string, logger *slog.Logger) func(http.Handler) http.
 				return
 			}
 
-			clientIP := getClientIP(r)
+			clientIP := proxies.ClientIP(r)
 			ip := net.ParseIP(clientIP)
 			if ip == nil {
 				logger.Warn("could not parse client IP", "ip", clientIP)
@@ -390,27 +398,4 @@ func IPFilter(allowedIPs []string, logger *slog.Logger) func(http.Handler) http.
 			http.Error(w, "Forbidden", http.StatusForbidden)
 		})
 	}
-}
-
-// getClientIP extracts client IP from request, handling proxies
-func getClientIP(r *http.Request) string {
-	// Check X-Forwarded-For header (first IP in chain)
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		ips := strings.Split(xff, ",")
-		if len(ips) > 0 {
-			return strings.TrimSpace(ips[0])
-		}
-	}
-
-	// Check X-Real-IP header
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return strings.TrimSpace(xri)
-	}
-
-	// Fall back to RemoteAddr
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }

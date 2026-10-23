@@ -19,8 +19,8 @@ type Message struct {
 	OriginalTo   []string  `json:"original_to,omitempty"` // Original recipients before redirect
 	Subject      string    `json:"subject"`
 	Data         []byte    `json:"data"`
-	Domain       string    `json:"domain"`        // Sending domain
-	Mode         string    `json:"mode"`          // sandbox, redirect, bcc
+	Domain       string    `json:"domain"` // Sending domain
+	Mode         string    `json:"mode"`   // sandbox, redirect, bcc
 	CapturedAt   time.Time `json:"captured_at"`
 	ClientIP     string    `json:"client_ip,omitempty"`
 	SimulatedErr string    `json:"simulated_error,omitempty"` // For error simulation

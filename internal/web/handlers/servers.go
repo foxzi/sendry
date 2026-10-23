@@ -390,50 +390,6 @@ func (h *Handlers) DLQPurge(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/servers/"+name+"/dlq", http.StatusSeeOther)
 }
 
-// ServerDomains shows domains configured on a server
-func (h *Handlers) ServerDomains(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-
-	client, err := h.sendry.GetClient(name)
-	if err != nil {
-		http.Error(w, "Server not found", http.StatusNotFound)
-		return
-	}
-
-	var domains []map[string]any
-
-	resp, err := client.ListDomains(r.Context())
-	if err == nil {
-		for _, d := range resp.Domains {
-			dkim := false
-			if d.DKIM != nil {
-				dkim = d.DKIM.Enabled
-			}
-			rateLimit := 0
-			if d.RateLimit != nil {
-				rateLimit = d.RateLimit.MessagesPerHour
-			}
-			domains = append(domains, map[string]any{
-				"Name":      d.Domain,
-				"Mode":      d.Mode,
-				"DKIM":      dkim,
-				"RateLimit": rateLimit,
-			})
-		}
-	}
-
-	data := map[string]any{
-		"Title":      name + " - Domains",
-		"Active":     "servers",
-		"User":       h.getUserFromContext(r),
-		"ServerName": name,
-		"Domains":    domains,
-		"Error":      errMsg(err),
-	}
-
-	h.render(w, "server_domains", data)
-}
-
 // ServerSandbox provides sandbox testing interface
 func (h *Handlers) ServerSandbox(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")

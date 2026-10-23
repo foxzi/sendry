@@ -62,22 +62,27 @@ build-linux-arm64:
 	@mkdir -p $(BUILD_DIR)
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64 $(CMD_DIR)
 
-# Build web for Linux (requires CGO for SQLite, uses Docker for cross-compilation)
+# Build web for Linux (requires CGO for SQLite, uses Docker for cross-compilation).
+# Same as the release workflow: static binary built on Alpine (musl), so it
+# runs on both glibc and musl systems (deb/rpm and Alpine apk packages).
+WEB_LINUX_IMAGE=golang:1.24-alpine
+WEB_STATIC_LDFLAGS=-s -w -linkmode external -extldflags '-static' -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildTime=$(BUILD_TIME)
+
 .PHONY: build-web-linux
 build-web-linux:
 	@echo "Building $(BINARY_WEB) for Linux amd64..."
 	@mkdir -p $(BUILD_DIR)
-	docker run --rm -v $(PWD):/app -w /app golang:1.23-bookworm \
-		bash -c "apt-get update && apt-get install -y gcc && \
-		CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_WEB)-linux-amd64 $(CMD_WEB_DIR)"
+	docker run --rm --platform linux/amd64 -v $(PWD):/app -w /app $(WEB_LINUX_IMAGE) \
+		sh -c "apk add --no-cache gcc musl-dev && \
+		CGO_ENABLED=1 go build -buildvcs=false -ldflags \"$(WEB_STATIC_LDFLAGS)\" -o $(BUILD_DIR)/$(BINARY_WEB)-linux-amd64 $(CMD_WEB_DIR)"
 
 .PHONY: build-web-linux-arm64
 build-web-linux-arm64:
 	@echo "Building $(BINARY_WEB) for Linux arm64..."
 	@mkdir -p $(BUILD_DIR)
-	docker run --rm -v $(PWD):/app -w /app --platform linux/arm64 golang:1.23-bookworm \
-		bash -c "apt-get update && apt-get install -y gcc && \
-		CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_WEB)-linux-arm64 $(CMD_WEB_DIR)"
+	docker run --rm --platform linux/arm64 -v $(PWD):/app -w /app $(WEB_LINUX_IMAGE) \
+		sh -c "apk add --no-cache gcc musl-dev && \
+		CGO_ENABLED=1 go build -buildvcs=false -ldflags \"$(WEB_STATIC_LDFLAGS)\" -o $(BUILD_DIR)/$(BINARY_WEB)-linux-arm64 $(CMD_WEB_DIR)"
 
 .PHONY: build-darwin
 build-darwin:

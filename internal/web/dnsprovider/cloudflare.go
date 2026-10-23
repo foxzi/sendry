@@ -192,13 +192,7 @@ func (p *CloudflareProvider) ListRecords(ctx context.Context, zoneID, name, reco
 
 	records := make([]Record, 0, len(result.Result))
 	for _, r := range result.Result {
-		records = append(records, Record{
-			ID:      r.ID,
-			Type:    r.Type,
-			Name:    r.Name,
-			Content: r.Content,
-			TTL:     r.TTL,
-		})
+		records = append(records, Record(r))
 	}
 	return records, nil
 }

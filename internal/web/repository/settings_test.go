@@ -1,9 +1,12 @@
 package repository
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/foxzi/sendry/internal/web/models"
+	"github.com/foxzi/sendry/internal/web/tracking"
 )
 
 func TestSettingsRepository_GlobalVariables(t *testing.T) {
@@ -41,18 +44,6 @@ func TestSettingsRepository_GlobalVariables(t *testing.T) {
 
 	if gotMap["company_name"] != "Test Company" {
 		t.Errorf("GetGlobalVariablesMap()[company_name] = %v, want %v", gotMap["company_name"], "Test Company")
-	}
-
-	// Get single variable
-	v, err := repo.GetVariable("company_name")
-	if err != nil {
-		t.Fatalf("GetVariable() error = %v", err)
-	}
-	if v == nil {
-		t.Fatal("GetVariable() returned nil")
-	}
-	if v.Value != "Test Company" {
-		t.Errorf("GetVariable().Value = %v, want %v", v.Value, "Test Company")
 	}
 
 	// Update variable
@@ -184,5 +175,39 @@ func TestSettingsRepository_AuditLog(t *testing.T) {
 
 	if len(entries) != 1 {
 		t.Errorf("ListAuditLog() with action filter returned %d entries, want 1", len(entries))
+	}
+}
+
+func TestSettingsRepository_LogActionClientIP(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewSettingsRepository(db)
+	proxies, err := tracking.ParseTrustedProxies([]string{"127.0.0.1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo.SetTrustedProxies(proxies)
+
+	tests := []struct {
+		action     string
+		remoteAddr string
+		xff        string
+		want       string
+	}{
+		{"untrusted_peer", "198.51.100.7:1234", "203.0.113.5", "198.51.100.7"},
+		{"trusted_proxy", "127.0.0.1:1234", "203.0.113.5", "203.0.113.5"},
+	}
+	for _, tt := range tests {
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		req.RemoteAddr = tt.remoteAddr
+		req.Header.Set("X-Forwarded-For", tt.xff)
+		repo.LogAction(req, "user-1", "u@example.com", tt.action, "test", "", "")
+
+		entries, _, err := repo.ListAuditLog(models.AuditLogFilter{Action: tt.action, Limit: 10})
+		if err != nil {
+			t.Fatalf("ListAuditLog() error = %v", err)
+		}
+		if len(entries) != 1 || entries[0].IPAddress != tt.want {
+			t.Errorf("%s: logged IP = %+v, want %s", tt.action, entries, tt.want)
+		}
 	}
 }

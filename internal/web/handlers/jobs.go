@@ -35,14 +35,10 @@ func (h *Handlers) JobList(w http.ResponseWriter, r *http.Request) {
 	jobsWithStats := make([]map[string]any, len(jobs))
 	for i, job := range jobs {
 		stats, _ := h.jobs.GetStats(job.ID)
-		progress := 0
-		if stats.Total > 0 {
-			progress = (stats.Sent + stats.Failed) * 100 / stats.Total
-		}
 		jobsWithStats[i] = map[string]any{
 			"Job":      job,
 			"Stats":    stats,
-			"Progress": progress,
+			"Progress": stats.Progress(),
 		}
 	}
 
@@ -77,10 +73,6 @@ func (h *Handlers) JobView(w http.ResponseWriter, r *http.Request) {
 	}
 
 	stats, _ := h.jobs.GetStats(id)
-	progress := 0
-	if stats.Total > 0 {
-		progress = (stats.Sent + stats.Failed) * 100 / stats.Total
-	}
 
 	errorCounts, err := h.jobs.ErrorCounts(id)
 	if err != nil {
@@ -93,6 +85,15 @@ func (h *Handlers) JobView(w http.ResponseWriter, r *http.Request) {
 		Limit: 50,
 	})
 
+	trackingStats, statsErr := h.tracking.JobStats(id)
+	if statsErr != nil {
+		h.logger.Error("failed to load tracking stats", "error", statsErr)
+	}
+	campaign, err := h.campaigns.GetByID(job.CampaignID)
+	if err != nil {
+		h.logger.Error("failed to load job campaign", "error", err)
+	}
+
 	// Parse servers from JSON
 	var servers []string
 	json.Unmarshal([]byte(job.Servers), &servers)
@@ -103,13 +104,38 @@ func (h *Handlers) JobView(w http.ResponseWriter, r *http.Request) {
 		"User":     h.getUserFromContext(r),
 		"Job":      job,
 		"Stats":    stats,
-		"Progress": progress,
+		"Progress": stats.Progress(),
 		"Items":    items,
 		"Servers":  servers,
 		"Errors":   summarizeErrors(errorCounts),
+		"Tracking": trackingCards(campaign, trackingStats, statsErr),
+	}
+	if n, _ := strconv.Atoi(r.URL.Query().Get("retried")); n > 0 {
+		data["Success"] = strconv.Itoa(n) + " failed items queued for retry"
+	}
+	// The worker sends nothing without the public origin (unsubscribe links):
+	// the items stay pending until it is configured, so say why
+	if stats.Pending > 0 && (job.Status == "running" || job.Status == "scheduled" || job.Status == "paused") {
+		if origin, err := h.publicOrigin(); err == nil && origin == "" {
+			data["NoPublicURL"] = true
+		}
 	}
 
 	h.render(w, "job_view", data)
+}
+
+// trackingCards returns the stats for the engagement cards of a job or
+// campaign page, or nil to hide them: on a load error (statsErr), or when the
+// campaign tracks neither opens nor clicks and nobody unsubscribed or was
+// skipped as unsubscribed (unsubscribe links are always on).
+func trackingCards(c *models.Campaign, st models.TrackingStats, statsErr error) *models.TrackingStats {
+	if statsErr != nil {
+		return nil
+	}
+	if c != nil && !c.TrackOpens && !c.TrackClicks && st.Unsubscribed == 0 && st.SkippedUnsub == 0 {
+		return nil
+	}
+	return &st
 }
 
 func (h *Handlers) JobItems(w http.ResponseWriter, r *http.Request) {
@@ -129,10 +155,15 @@ func (h *Handlers) JobItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	opened := yesNo(r.URL.Query().Get("opened"))
+	clicked := yesNo(r.URL.Query().Get("clicked"))
+
 	filter := models.JobItemFilter{
 		JobID:     id,
 		Status:    status,
 		ErrorType: errorType,
+		Opened:    opened,
+		Clicked:   clicked,
 		Limit:     limit,
 		Offset:    offset,
 	}
@@ -158,6 +189,8 @@ func (h *Handlers) JobItems(w http.ResponseWriter, r *http.Request) {
 		"Status":     status,
 		"ErrorType":  errorType,
 		"ErrorTypes": stats.ErrorTypes,
+		"Opened":     opened,
+		"Clicked":    clicked,
 	}
 
 	h.render(w, "job_items", data)
@@ -241,8 +274,21 @@ func (h *Handlers) JobRetry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Implement retry logic - reset failed items to pending
-	// For now, just update status back to running
+	if job.Status != "completed" && job.Status != "failed" {
+		h.error(w, http.StatusBadRequest, "Can only retry completed or failed jobs")
+		return
+	}
+
+	n, err := h.jobs.RetryFailedItems(id)
+	if err != nil {
+		h.logger.Error("failed to reset failed items", "job_id", id, "error", err)
+		h.error(w, http.StatusInternalServerError, "Failed to retry job")
+		return
+	}
+	if n == 0 {
+		http.Redirect(w, r, "/jobs/"+id, http.StatusSeeOther)
+		return
+	}
 
 	if err := h.jobs.UpdateStatus(id, "running"); err != nil {
 		h.logger.Error("failed to retry job", "error", err)
@@ -250,5 +296,13 @@ func (h *Handlers) JobRetry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/jobs/"+id, http.StatusSeeOther)
+	http.Redirect(w, r, "/jobs/"+id+"?retried="+strconv.FormatInt(n, 10), http.StatusSeeOther)
+}
+
+// yesNo normalises an engagement filter value to "yes", "no" or "".
+func yesNo(v string) string {
+	if v == "yes" || v == "no" {
+		return v
+	}
+	return ""
 }

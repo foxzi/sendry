@@ -91,7 +91,11 @@ func setupTestServer(apiKey string) (*Server, *mockQueue) {
 		APIKey:     apiKey,
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	server := NewServer(q, cfg, logger)
+	server := NewServerWithOptions(ServerOptions{
+		Queue:  q,
+		Config: cfg,
+		Logger: logger,
+	})
 	return server, q
 }
 

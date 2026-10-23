@@ -186,7 +186,6 @@ func (b *Backend) CheckRateLimit(ctx context.Context, req *ratelimit.Request) er
 	return nil
 }
 
-
 // CheckAuthBlocked checks if IP is blocked due to too many auth failures
 func (b *Backend) CheckAuthBlocked(ip string) bool {
 	b.authMu.RLock()

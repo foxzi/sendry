@@ -90,15 +90,6 @@ func (c *Client) Send(ctx context.Context, req *SendRequest) (*SendResponse, err
 	return &resp, nil
 }
 
-// SendWithTemplate sends an email using a template
-func (c *Client) SendWithTemplate(ctx context.Context, req *SendTemplateRequest) (*SendResponse, error) {
-	var resp SendResponse
-	if err := c.request(ctx, http.MethodPost, "/api/v1/send/template", req, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
-
 // GetStatus gets message status
 func (c *Client) GetStatus(ctx context.Context, id string) (*StatusResponse, error) {
 	var resp StatusResponse
@@ -212,39 +203,6 @@ func (c *Client) DeleteDomain(ctx context.Context, domain string) error {
 	return c.request(ctx, http.MethodDelete, "/api/v1/domains/"+domain, nil, nil)
 }
 
-// ListTemplates lists templates
-func (c *Client) ListTemplates(ctx context.Context, search string, limit, offset int) (*TemplateListResponse, error) {
-	path := "/api/v1/templates"
-	params := url.Values{}
-	if search != "" {
-		params.Set("search", search)
-	}
-	if limit > 0 {
-		params.Set("limit", fmt.Sprintf("%d", limit))
-	}
-	if offset > 0 {
-		params.Set("offset", fmt.Sprintf("%d", offset))
-	}
-	if len(params) > 0 {
-		path += "?" + params.Encode()
-	}
-
-	var resp TemplateListResponse
-	if err := c.request(ctx, http.MethodGet, path, nil, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
-
-// GetTemplate gets a template by ID
-func (c *Client) GetTemplate(ctx context.Context, id string) (*TemplateResponse, error) {
-	var resp TemplateResponse
-	if err := c.request(ctx, http.MethodGet, "/api/v1/templates/"+id, nil, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
-
 // CreateTemplate creates a new template
 func (c *Client) CreateTemplate(ctx context.Context, req *TemplateCreateRequest) (*TemplateResponse, error) {
 	var resp TemplateResponse
@@ -263,99 +221,11 @@ func (c *Client) UpdateTemplate(ctx context.Context, id string, req *TemplateUpd
 	return &resp, nil
 }
 
-// DeleteTemplate deletes a template
-func (c *Client) DeleteTemplate(ctx context.Context, id string) error {
-	return c.request(ctx, http.MethodDelete, "/api/v1/templates/"+id, nil, nil)
-}
-
-// PreviewTemplate previews a template with data
-func (c *Client) PreviewTemplate(ctx context.Context, id string, data map[string]any) (*TemplatePreviewResponse, error) {
-	var resp TemplatePreviewResponse
-	req := TemplatePreviewRequest{Data: data}
-	if err := c.request(ctx, http.MethodPost, "/api/v1/templates/"+id+"/preview", req, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
-
-// ListSandboxMessages lists sandbox messages
-func (c *Client) ListSandboxMessages(ctx context.Context, domain, mode string, limit, offset int) (*SandboxListResponse, error) {
-	path := "/api/v1/sandbox/messages"
-	params := url.Values{}
-	if domain != "" {
-		params.Set("domain", domain)
-	}
-	if mode != "" {
-		params.Set("mode", mode)
-	}
-	if limit > 0 {
-		params.Set("limit", fmt.Sprintf("%d", limit))
-	}
-	if offset > 0 {
-		params.Set("offset", fmt.Sprintf("%d", offset))
-	}
-	if len(params) > 0 {
-		path += "?" + params.Encode()
-	}
-
-	var resp SandboxListResponse
-	if err := c.request(ctx, http.MethodGet, path, nil, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
-
-// GetSandboxMessage gets a sandbox message
-func (c *Client) GetSandboxMessage(ctx context.Context, id string) (*SandboxMessageDetailResponse, error) {
-	var resp SandboxMessageDetailResponse
-	if err := c.request(ctx, http.MethodGet, "/api/v1/sandbox/messages/"+id, nil, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
-
-// GetSandboxStats gets sandbox statistics
-func (c *Client) GetSandboxStats(ctx context.Context) (*SandboxStatsResponse, error) {
-	var resp SandboxStatsResponse
-	if err := c.request(ctx, http.MethodGet, "/api/v1/sandbox/stats", nil, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
-
-// GenerateDKIM generates a new DKIM key on the server
-func (c *Client) GenerateDKIM(ctx context.Context, domain, selector string) (*DKIMResponse, error) {
-	req := &DKIMGenerateRequest{Domain: domain, Selector: selector}
-	var resp DKIMResponse
-	if err := c.request(ctx, http.MethodPost, "/api/v1/dkim/generate", req, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
-
 // UploadDKIM uploads an existing DKIM key to the server
 func (c *Client) UploadDKIM(ctx context.Context, domain, selector, privateKey string) (*DKIMResponse, error) {
 	req := &DKIMUploadRequest{Domain: domain, Selector: selector, PrivateKey: privateKey}
 	var resp DKIMResponse
 	if err := c.request(ctx, http.MethodPost, "/api/v1/dkim/upload", req, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
-
-// GetDKIM gets DKIM information for a domain
-func (c *Client) GetDKIM(ctx context.Context, domain string) (*DKIMInfoResponse, error) {
-	var resp DKIMInfoResponse
-	if err := c.request(ctx, http.MethodGet, "/api/v1/dkim/"+domain, nil, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
-
-// VerifyDKIM verifies DKIM setup for a domain
-func (c *Client) VerifyDKIM(ctx context.Context, domain string) (*DKIMVerifyResponse, error) {
-	var resp DKIMVerifyResponse
-	if err := c.request(ctx, http.MethodGet, "/api/v1/dkim/"+domain+"/verify", nil, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -383,15 +253,6 @@ func (c *Client) CheckDNS(ctx context.Context, domain, selector string) (*DNSChe
 func (c *Client) CheckIP(ctx context.Context, ip string) (*IPCheckResult, error) {
 	var resp IPCheckResult
 	if err := c.request(ctx, http.MethodGet, "/api/v1/ip/check/"+url.PathEscape(ip), nil, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
-
-// ListDNSBLs lists available DNSBL services
-func (c *Client) ListDNSBLs(ctx context.Context) (*DNSBLListResponse, error) {
-	var resp DNSBLListResponse
-	if err := c.request(ctx, http.MethodGet, "/api/v1/ip/dnsbls", nil, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
