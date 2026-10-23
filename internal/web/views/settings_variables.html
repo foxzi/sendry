@@ -1,46 +1,47 @@
 {{define "content"}}
 <div class="page-header">
-    <h1>Global Variables</h1>
-    <div class="header-actions">
-        <a href="/settings" class="btn btn-secondary">Back to Settings</a>
+    <div>
+        <h1 data-i18n="template_variables">Variables</h1>
+        <p class="text-muted"><span data-i18n="tpl.vars_sub">Available in every template as</span> {{`{{`}}Key{{`}}`}}</p>
     </div>
 </div>
 
 <div class="card">
     <div class="card-header">
-        <h3>Add Variable</h3>
+        <h3 data-i18n="tpl.add_variable">Add Variable</h3>
     </div>
     <div class="card-body">
         <form method="post" action="/settings/variables" class="form-inline">
             <input type="hidden" name="_method" value="PUT">
             <div class="form-group">
-                <input type="text" name="key" class="input" placeholder="Variable key" required>
+                <input type="text" name="key" class="input" placeholder="Variable key" data-i18n-placeholder="tpl.var_key_ph" required>
             </div>
             <div class="form-group">
-                <input type="text" name="value" class="input" placeholder="Value" required>
+                <input type="text" name="value" class="input" placeholder="Value" data-i18n-placeholder="tpl.value_ph" required>
             </div>
             <div class="form-group">
-                <input type="text" name="description" class="input" placeholder="Description (optional)">
+                <input type="text" name="description" class="input" placeholder="Description (optional)" data-i18n-placeholder="tpl.description_opt_ph">
             </div>
-            <button type="submit" class="btn btn-primary">Add</button>
+            <button type="submit" class="btn btn-primary" data-i18n="tpl.add">Add</button>
         </form>
     </div>
 </div>
 
 <div class="card">
     <div class="card-header">
-        <h3>Variables</h3>
+        <h3 data-i18n="template_variables">Variables</h3>
     </div>
     <div class="card-body">
         {{if .Variables}}
+        <div class="table-scroll">
         <table class="table">
             <thead>
                 <tr>
-                    <th>Key</th>
-                    <th>Value</th>
-                    <th>Description</th>
-                    <th>Updated</th>
-                    <th>Actions</th>
+                    <th data-i18n="common.key">Key</th>
+                    <th data-i18n="common.value">Value</th>
+                    <th data-i18n="common.description">Description</th>
+                    <th data-i18n="common.updated">Updated</th>
+                    <th data-i18n="actions">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -55,17 +56,18 @@
                             <input type="hidden" name="_method" value="PUT">
                             <input type="hidden" name="action" value="delete">
                             <input type="hidden" name="key" value="{{.Key}}">
-                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this variable?')">Delete</button>
+                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm(I18n.t('tpl.confirm_delete_variable'))" data-i18n="delete">Delete</button>
                         </form>
                     </td>
                 </tr>
                 {{end}}
             </tbody>
         </table>
+        </div>
         {{else}}
         <div class="empty-state">
-            <p>No global variables defined</p>
-            <p class="text-muted">Add variables above to use them in templates</p>
+            <p data-i18n="tpl.no_variables">No global variables defined</p>
+            <p class="text-muted" data-i18n="tpl.no_variables_hint">Add variables above to use them in templates</p>
         </div>
         {{end}}
     </div>

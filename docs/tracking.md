@@ -76,13 +76,9 @@ UTM tags are added to the URL on redirect:
 
 Parameters already present in the link are not overridden.
 
-### API key
-
-The API key form has `track_opens` and `track_clicks` flags. Both are off by default: transactional mail looks cleaner to spam filters without a pixel.
-
 ### API request fields
 
-`POST /api/v1/send` and `POST /api/v1/send/template` of the panel API accept optional boolean fields `track_opens` and `track_clicks`. They override the key flags.
+`POST /api/v1/send` and `POST /api/v1/send/template` of the panel API accept optional boolean fields `track_opens` (open pixel) and `track_clicks` (tracking links). Both are off by default: transactional mail looks cleaner to spam filters without a pixel.
 
 ```json
 {
@@ -95,7 +91,7 @@ The API key form has `track_opens` and `track_clicks` flags. Both are off by def
 }
 ```
 
-If a field is omitted, the key flag applies.
+If a field is omitted, that tracking is off.
 
 There is no unsubscribe for API mail at this stage: no unsubscribe link, no `List-Unsubscribe` headers, and unsubscribed addresses are not checked.
 

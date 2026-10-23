@@ -17,7 +17,7 @@ func (h *Handlers) UserList(w http.ResponseWriter, r *http.Request) {
 
 	data := map[string]any{
 		"Title":  "Users",
-		"Active": "settings",
+		"Active": "users",
 		"User":   h.getUserFromContext(r),
 		"Users":  users,
 	}
@@ -29,7 +29,7 @@ func (h *Handlers) UserList(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) UserNew(w http.ResponseWriter, r *http.Request) {
 	data := map[string]any{
 		"Title":  "New User",
-		"Active": "settings",
+		"Active": "users",
 		"User":   h.getUserFromContext(r),
 	}
 	h.render(w, "settings_user_form", data)
@@ -50,7 +50,7 @@ func (h *Handlers) UserCreate(w http.ResponseWriter, r *http.Request) {
 	if email == "" || password == "" {
 		data := map[string]any{
 			"Title":  "New User",
-			"Active": "settings",
+			"Active": "users",
 			"User":   h.getUserFromContext(r),
 			"Error":  "Email and password are required",
 		}
@@ -65,7 +65,7 @@ func (h *Handlers) UserCreate(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		data := map[string]any{
 			"Title":  "New User",
-			"Active": "settings",
+			"Active": "users",
 			"User":   h.getUserFromContext(r),
 			"Error":  "Failed to create user: " + err.Error(),
 		}
@@ -92,7 +92,7 @@ func (h *Handlers) UserEdit(w http.ResponseWriter, r *http.Request) {
 
 	data := map[string]any{
 		"Title":    "Edit User",
-		"Active":   "settings",
+		"Active":   "users",
 		"User":     h.getUserFromContext(r),
 		"EditUser": target,
 	}
@@ -122,7 +122,7 @@ func (h *Handlers) UserUpdate(w http.ResponseWriter, r *http.Request) {
 			target, _ := h.settings.GetUserByID(id)
 			data := map[string]any{
 				"Title":    "Edit User",
-				"Active":   "settings",
+				"Active":   "users",
 				"User":     h.getUserFromContext(r),
 				"EditUser": target,
 				"Error":    "Cannot remove the last admin",
@@ -160,7 +160,7 @@ func (h *Handlers) UserChangePassword(w http.ResponseWriter, r *http.Request) {
 		target, _ := h.settings.GetUserByID(id)
 		data := map[string]any{
 			"Title":    "Edit User",
-			"Active":   "settings",
+			"Active":   "users",
 			"User":     h.getUserFromContext(r),
 			"EditUser": target,
 			"Error":    "Passwords do not match or are empty",

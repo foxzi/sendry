@@ -4,34 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/foxzi/sendry/internal/web/models"
 	"github.com/foxzi/sendry/internal/web/tracking"
 )
-
-func boolPtr(b bool) *bool { return &b }
-
-func TestEffectiveTracking(t *testing.T) {
-	key := &models.APIKey{TrackOpens: true, TrackClicks: false}
-	tests := []struct {
-		name         string
-		req          APISendRequest
-		key          *models.APIKey
-		opens, click bool
-	}{
-		{"no key no fields", APISendRequest{}, nil, false, false},
-		{"key defaults", APISendRequest{}, key, true, false},
-		{"request overrides key", APISendRequest{TrackOpens: boolPtr(false), TrackClicks: boolPtr(true)}, key, false, true},
-		{"request without key", APISendRequest{TrackOpens: boolPtr(true)}, nil, true, false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			o, c := effectiveTracking(&tt.req, tt.key)
-			if o != tt.opens || c != tt.click {
-				t.Errorf("got %v/%v, want %v/%v", o, c, tt.opens, tt.click)
-			}
-		})
-	}
-}
 
 func TestTrackHTML_RawHTML(t *testing.T) {
 	signer := tracking.NewSigner([]byte("secret"))

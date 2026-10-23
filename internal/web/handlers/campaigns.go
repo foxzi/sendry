@@ -54,20 +54,13 @@ func (h *Handlers) CampaignList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) CampaignNew(w http.ResponseWriter, r *http.Request) {
-	// Tracking checkboxes default to the panel-wide tracking settings
-	trackOpens, trackClicks := false, false
-	if ts, err := h.settings.GetTrackingSettings(); err != nil {
-		h.logger.Error("failed to load tracking settings", "error", err)
-	} else if ts != nil {
-		trackOpens, trackClicks = ts.OpensDefault, ts.ClicksDefault
-	}
-
+	// Tracking checkboxes are on by default for new campaigns
 	data := map[string]any{
 		"Title":       "New Campaign",
 		"Active":      "campaigns",
 		"User":        h.getUserFromContext(r),
-		"TrackOpens":  trackOpens,
-		"TrackClicks": trackClicks,
+		"TrackOpens":  true,
+		"TrackClicks": true,
 	}
 
 	h.render(w, "campaign_new", data)
@@ -130,6 +123,7 @@ func (h *Handlers) CampaignView(w http.ResponseWriter, r *http.Request) {
 	// Get recipient lists for send page
 	recipientLists, _, _ := h.recipients.ListLists(models.RecipientListFilter{Limit: 100})
 
+	recentJobs, _, _ := h.jobs.List(models.JobListFilter{CampaignID: id, Limit: 10})
 	trackingStats, err := h.tracking.CampaignStats(id)
 	if err != nil {
 		h.logger.Error("failed to load campaign tracking stats", "error", err)
@@ -144,6 +138,7 @@ func (h *Handlers) CampaignView(w http.ResponseWriter, r *http.Request) {
 		"Variants":       variants,
 		"RecipientLists": recipientLists,
 		"Servers":        h.cfg.Sendry.Servers,
+		"Jobs":           h.jobsWithStats(recentJobs),
 	}
 
 	h.render(w, "campaign_view", data)
@@ -584,23 +579,12 @@ func (h *Handlers) CampaignJobs(w http.ResponseWriter, r *http.Request) {
 		Limit:      50,
 	})
 
-	// Get stats for each job
-	jobsWithStats := make([]map[string]any, len(jobs))
-	for i, job := range jobs {
-		stats, _ := h.jobs.GetStats(job.ID)
-		jobsWithStats[i] = map[string]any{
-			"Job":      job,
-			"Stats":    stats,
-			"Progress": stats.Progress(),
-		}
-	}
-
 	data := map[string]any{
-		"Title":    c.Name + " - Jobs",
+		"Title":    c.Name + " - Runs",
 		"Active":   "campaigns",
 		"User":     h.getUserFromContext(r),
 		"Campaign": c,
-		"Jobs":     jobsWithStats,
+		"Jobs":     h.jobsWithStats(jobs),
 	}
 
 	h.render(w, "campaign_jobs", data)

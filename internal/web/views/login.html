@@ -8,9 +8,13 @@
 </head>
 <body class="login-page">
     <div class="login-container">
+        <div class="lang-selector" style="position: absolute; top: 1rem; right: 1rem;">
+            <button type="button" class="btn btn-sm lang-btn" data-lang="en">EN</button>
+            <button type="button" class="btn btn-sm lang-btn" data-lang="ru">RU</button>
+        </div>
         <div class="login-header">
             <h1>Sendry Web</h1>
-            <p>Sign in to your account</p>
+            <p data-i18n="admin.sign_in_to_your_account">Sign in to your account</p>
         </div>
 
         {{if .Error}}
@@ -22,28 +26,31 @@
         {{if .LocalEnabled}}
         <form method="POST" action="/auth/login" class="login-form">
             <div class="form-group">
-                <label for="email">Email</label>
+                <label for="email" data-i18n="email">Email</label>
                 <input type="email" id="email" name="email" required autofocus>
             </div>
             <div class="form-group">
-                <label for="password">Password</label>
+                <label for="password" data-i18n="admin.password_2">Password</label>
                 <input type="password" id="password" name="password" required>
             </div>
-            <button type="submit" class="btn btn-primary btn-block">Sign In</button>
+            <button type="submit" class="btn btn-primary btn-block" data-i18n="admin.sign_in">Sign In</button>
         </form>
         {{end}}
 
         {{if and .LocalEnabled .OIDCEnabled}}
         <div class="divider">
-            <span>or</span>
+            <span data-i18n="admin.or">or</span>
         </div>
         {{end}}
 
         {{if .OIDCEnabled}}
         <a href="/auth/oidc/login" class="btn btn-secondary btn-block">
-            Sign in with {{.OIDCProvider}}
+            <span data-i18n="admin.sign_in_with">Sign in with</span> {{.OIDCProvider}}
         </a>
         {{end}}
     </div>
+    <script src="/static/js/i18n.js"></script>
+    <script src="/static/js/i18n/common.js"></script>
+    <script src="/static/js/i18n/infra.js"></script>
 </body>
 </html>

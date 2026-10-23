@@ -1,39 +1,43 @@
 {{define "content"}}
 <div class="page-header">
-    <h1>Jobs</h1>
+    <div>
+        <h1 data-i18n="cmp.runs">Runs</h1>
+        <p class="text-muted" data-i18n="cmp.runs_subtitle">Every time a campaign is sent, it appears here</p>
+    </div>
 </div>
 
-<div class="card">
+<div class="card scroll-target" id="results" data-partial>
     <div class="card-header">
         <form class="filter-form" method="get" action="/jobs">
             <select name="status" class="input">
-                <option value="">All Status</option>
-                <option value="draft" {{if eq .Status "draft"}}selected{{end}}>Draft</option>
-                <option value="scheduled" {{if eq .Status "scheduled"}}selected{{end}}>Scheduled</option>
-                <option value="running" {{if eq .Status "running"}}selected{{end}}>Running</option>
-                <option value="paused" {{if eq .Status "paused"}}selected{{end}}>Paused</option>
-                <option value="completed" {{if eq .Status "completed"}}selected{{end}}>Completed</option>
-                <option value="failed" {{if eq .Status "failed"}}selected{{end}}>Failed</option>
-                <option value="cancelled" {{if eq .Status "cancelled"}}selected{{end}}>Cancelled</option>
+                <option value="" data-i18n="cmp.all_statuses">All statuses</option>
+                <option value="draft" {{if eq .Status "draft"}}selected{{end}} data-i18n="cmp.opt_draft">Draft</option>
+                <option value="scheduled" {{if eq .Status "scheduled"}}selected{{end}} data-i18n="cmp.opt_scheduled">Scheduled</option>
+                <option value="running" {{if eq .Status "running"}}selected{{end}} data-i18n="cmp.opt_running">Running</option>
+                <option value="paused" {{if eq .Status "paused"}}selected{{end}} data-i18n="cmp.opt_paused">Paused</option>
+                <option value="completed" {{if eq .Status "completed"}}selected{{end}} data-i18n="cmp.opt_completed">Completed</option>
+                <option value="failed" {{if eq .Status "failed"}}selected{{end}} data-i18n="cmp.failed">Failed</option>
+                <option value="cancelled" {{if eq .Status "cancelled"}}selected{{end}} data-i18n="cmp.opt_cancelled">Cancelled</option>
             </select>
-            <button type="submit" class="btn">Filter</button>
+            <button type="submit" class="btn" data-i18n="filter">Filter</button>
             {{if .Status}}
-            <a href="/jobs" class="btn btn-secondary">Clear</a>
+            <a href="/jobs" class="btn btn-secondary" data-i18n="common.clear">Clear</a>
             {{end}}
         </form>
     </div>
     <div class="card-body">
         {{if .Jobs}}
+        <div class="table-scroll">
         <table class="table">
             <thead>
                 <tr>
-                    <th>ID</th>
-                    <th>Campaign</th>
-                    <th>Status</th>
-                    <th>Progress</th>
-                    <th>Sent/Total</th>
-                    <th>Created</th>
-                    <th>Actions</th>
+                    <th data-i18n="common.id">ID</th>
+                    <th data-i18n="cmp.campaign">Campaign</th>
+                    <th data-i18n="status">Status</th>
+                    <th data-i18n="common.progress">Progress</th>
+                    <th data-i18n="cmp.sent_total">Sent/Total</th>
+                    <th data-i18n="common.created">Created</th>
+                    <th data-i18n="actions">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -41,7 +45,7 @@
                 <tr>
                     <td><a href="/jobs/{{.Job.ID}}">{{slice .Job.ID 0 8}}...</a></td>
                     <td><a href="/campaigns/{{.Job.CampaignID}}">{{.Job.CampaignName}}</a></td>
-                    <td><span class="badge badge-{{.Job.Status}}">{{.Job.Status}}</span></td>
+                    <td><span class="badge badge-{{.Job.Status}}" data-i18n="status.{{.Job.Status}}">{{.Job.Status}}</span></td>
                     <td>
                         <div class="progress" style="width: 100px">
                             <div class="progress-bar" style="width: {{.Progress}}%"></div>
@@ -50,28 +54,29 @@
                     <td>{{.Stats.Sent}} / {{.Stats.Total}}</td>
                     <td>{{.Job.CreatedAt.Format "2006-01-02 15:04"}}</td>
                     <td class="actions">
-                        <a href="/jobs/{{.Job.ID}}" class="btn btn-sm">View</a>
+                        <a href="/jobs/{{.Job.ID}}" class="btn btn-sm" data-i18n="view">View</a>
                     </td>
                 </tr>
                 {{end}}
             </tbody>
         </table>
+        </div>
 
         {{if gt .TotalPages 1}}
         <div class="pagination">
             {{if gt .Page 1}}
-            <a href="/jobs?page={{sub .Page 1}}{{if .Status}}&status={{.Status}}{{end}}" class="btn btn-sm">&laquo; Prev</a>
+            <a data-i18n="cmp.prev" href="/jobs?page={{sub .Page 1}}{{if .Status}}&status={{.Status}}{{end}}" class="btn btn-sm">&laquo; Prev</a>
             {{end}}
-            <span class="pagination-info">Page {{.Page}} of {{.TotalPages}} ({{.Total}} total)</span>
+            <span class="pagination-info"><span data-i18n="common.page">Page</span> {{.Page}} <span data-i18n="common.of">of</span> {{.TotalPages}} ({{.Total}} <span data-i18n="cmp.total_lc">total</span>)</span>
             {{if lt .Page .TotalPages}}
-            <a href="/jobs?page={{add .Page 1}}{{if .Status}}&status={{.Status}}{{end}}" class="btn btn-sm">Next &raquo;</a>
+            <a data-i18n="cmp.next" href="/jobs?page={{add .Page 1}}{{if .Status}}&status={{.Status}}{{end}}" class="btn btn-sm">Next &raquo;</a>
             {{end}}
         </div>
         {{end}}
         {{else}}
         <div class="empty-state">
-            <p>No jobs found</p>
-            <p class="text-muted">Jobs are created when you send a campaign</p>
+            <p data-i18n="cmp.no_runs">No runs yet</p>
+            <p class="text-muted" data-i18n="cmp.runs_empty_hint">A run is created every time you send a campaign</p>
         </div>
         {{end}}
     </div>

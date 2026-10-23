@@ -38,7 +38,7 @@ func validateTrackingBaseURL(raw string) (string, string) {
 func (h *Handlers) renderTrackingSettings(w http.ResponseWriter, r *http.Request, s *models.TrackingSettings, errMsg, okMsg string) {
 	data := map[string]any{
 		"Title":    "Tracking Settings",
-		"Active":   "settings",
+		"Active":   "tracking",
 		"User":     h.getUserFromContext(r),
 		"Settings": s,
 		"Fallback": strings.TrimRight(h.cfg.Server.PublicURL, "/"),
@@ -74,10 +74,7 @@ func (h *Handlers) TrackingSettingsSave(w http.ResponseWriter, r *http.Request) 
 		h.error(w, http.StatusBadRequest, "Invalid form data")
 		return
 	}
-	s := &models.TrackingSettings{
-		OpensDefault:  r.FormValue("opens_default") != "",
-		ClicksDefault: r.FormValue("clicks_default") != "",
-	}
+	s := &models.TrackingSettings{}
 	rawBase := r.FormValue("base_url")
 	base, berr := validateTrackingBaseURL(rawBase)
 	if berr != "" {
@@ -96,9 +93,7 @@ func (h *Handlers) TrackingSettingsSave(w http.ResponseWriter, r *http.Request) 
 	}
 	h.settings.LogAction(r, middleware.GetUserID(r), middleware.GetUserEmail(r), "update", "tracking_settings", "tracking",
 		auditJSON(map[string]any{
-			"base_url":       s.BaseURL,
-			"opens_default":  s.OpensDefault,
-			"clicks_default": s.ClicksDefault,
+			"base_url": s.BaseURL,
 		}))
 	http.Redirect(w, r, "/settings/tracking?saved=1", http.StatusSeeOther)
 }

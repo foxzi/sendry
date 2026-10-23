@@ -1,28 +1,28 @@
 {{define "content"}}
 <div class="page-header">
-    <h1>{{.ServerName}} - DNS Check</h1>
+    <h1>{{.ServerName}} - <span data-i18n="infra.dns_check_2">DNS Check</span></h1>
     <div class="header-actions">
-        <a href="/servers/{{.ServerName}}" class="btn btn-secondary">Back to Server</a>
+        <a href="/servers/{{.ServerName}}" class="btn btn-secondary" data-i18n="infra.back_to_server">Back to server</a>
     </div>
 </div>
 
 <div class="card">
     <div class="card-header">
-        <h3>Check Domain DNS Records</h3>
+        <h3 data-i18n="infra.check_domain_dns_records">Check Domain DNS Records</h3>
     </div>
     <div class="card-body">
         <form method="GET" action="/servers/{{.ServerName}}/dns-check" class="form-inline">
             <div class="form-group" style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
                 <div>
-                    <label for="domain">Domain</label>
+                    <label for="domain" data-i18n="common.domain">Domain</label>
                     <input type="text" id="domain" name="domain" value="{{.Domain}}" placeholder="example.com" required class="form-control" style="min-width: 250px;">
                 </div>
                 <div>
-                    <label for="selector">DKIM Selector</label>
+                    <label for="selector" data-i18n="infra.dkim_selector">DKIM Selector</label>
                     <input type="text" id="selector" name="selector" value="{{.Selector}}" placeholder="sendry" class="form-control" style="width: 150px;">
                 </div>
                 <div>
-                    <button type="submit" class="btn btn-primary">Check DNS</button>
+                    <button type="submit" class="btn btn-primary" data-i18n="infra.check_dns">Check DNS</button>
                 </div>
             </div>
         </form>
@@ -33,7 +33,7 @@
 <div class="card" style="margin-top: 1rem;">
     <div class="card-body">
         <div class="alert alert-danger">
-            Error: {{.Error}}
+            <span data-i18n="common.error">Error</span>: {{.Error}}
         </div>
     </div>
 </div>
@@ -42,7 +42,7 @@
 {{if .Result}}
 <div class="card" style="margin-top: 1rem;">
     <div class="card-header">
-        <h3>Results for {{.Result.Domain}}</h3>
+        <h3><span data-i18n="infra.results_for">Results for</span> {{.Result.Domain}}</h3>
     </div>
     <div class="card-body">
         <!-- Summary -->
@@ -51,23 +51,24 @@
             <span class="badge badge-running">{{.Result.Summary.OK}} OK</span>
             {{end}}
             {{if gt .Result.Summary.Warnings 0}}
-            <span class="badge badge-warning">{{.Result.Summary.Warnings}} Warnings</span>
+            <span class="badge badge-warning">{{.Result.Summary.Warnings}} <span data-i18n="infra.warnings">Warnings</span></span>
             {{end}}
             {{if gt .Result.Summary.Errors 0}}
-            <span class="badge badge-failed">{{.Result.Summary.Errors}} Errors</span>
+            <span class="badge badge-failed">{{.Result.Summary.Errors}} <span data-i18n="infra.errors">Errors</span></span>
             {{end}}
             {{if gt .Result.Summary.NotFound 0}}
-            <span class="badge badge-draft">{{.Result.Summary.NotFound}} Not Found</span>
+            <span class="badge badge-draft">{{.Result.Summary.NotFound}} <span data-i18n="infra.not_found">Not Found</span></span>
             {{end}}
         </div>
 
         <!-- Results table -->
+        <div class="table-scroll">
         <table class="table">
             <thead>
                 <tr>
-                    <th style="width: 50px;">Status</th>
-                    <th style="width: 200px;">Type</th>
-                    <th>Value / Message</th>
+                    <th style="width: 50px;" data-i18n="status">Status</th>
+                    <th style="width: 200px;" data-i18n="common.type">Type</th>
+                    <th data-i18n="infra.value_message">Value / Message</th>
                 </tr>
             </thead>
             <tbody>
@@ -77,11 +78,11 @@
                         {{if eq .Status "ok"}}
                         <span class="badge badge-running">OK</span>
                         {{else if eq .Status "warning"}}
-                        <span class="badge badge-warning">WARN</span>
+                        <span class="badge badge-warning" data-i18n="infra.warn">WARN</span>
                         {{else if eq .Status "error"}}
-                        <span class="badge badge-failed">ERR</span>
+                        <span class="badge badge-failed" data-i18n="infra.err">ERR</span>
                         {{else if eq .Status "not_found"}}
-                        <span class="badge badge-draft">N/A</span>
+                        <span class="badge badge-draft" data-i18n="infra.n_a">N/A</span>
                         {{end}}
                     </td>
                     <td><strong>{{.Type}}</strong></td>
@@ -98,6 +99,7 @@
                 {{end}}
             </tbody>
         </table>
+        </div>
     </div>
 </div>
 {{end}}
@@ -106,7 +108,7 @@
 <div class="card" style="margin-top: 1rem;">
     <div class="card-body">
         <div class="empty-state">
-            <p>Enter a domain name to check MX, SPF, DKIM, DMARC, and MTA-STS records.</p>
+            <p data-i18n="infra.enter_a_domain_name_to_check_mx_spf_dkim_dmarc">Enter a domain name to check MX, SPF, DKIM, DMARC, and MTA-STS records.</p>
         </div>
     </div>
 </div>

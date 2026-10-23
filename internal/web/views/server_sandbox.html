@@ -1,8 +1,8 @@
 {{define "content"}}
 <div class="page-header">
-    <h1>Send Test Email</h1>
+    <h1 data-i18n="infra.send_test_email">Send test email</h1>
     <div class="header-actions">
-        <a href="/servers" class="btn btn-secondary">Back to Servers</a>
+        <a href="/servers" class="btn btn-secondary" data-i18n="infra.back_to_servers">Back to servers</a>
     </div>
 </div>
 
@@ -20,12 +20,12 @@
 
 <div class="card">
     <div class="card-header">
-        <h3>Send Test Email</h3>
+        <h3 data-i18n="infra.send_test_email">Send test email</h3>
     </div>
     <div class="card-body">
         <form method="post" action="/servers/{{.ServerName}}/sandbox">
             <div class="form-group">
-                <label for="server">MTA Server</label>
+                <label for="server" data-i18n="mta_server">MTA Server</label>
                 <select id="server" name="server" class="input">
                     {{range .Servers}}
                     <option value="{{.Name}}" {{if eq .Name $.ServerName}}selected{{end}}>{{.Name}} ({{.Env}})</option>
@@ -34,34 +34,31 @@
             </div>
 
             <div class="form-group">
-                <label for="from">From</label>
+                <label for="from" data-i18n="from">From</label>
                 <input type="email" id="from" name="from" class="input" required placeholder="sender@example.com">
             </div>
 
             <div class="form-group">
-                <label for="to">To</label>
+                <label for="to" data-i18n="to">To</label>
                 <input type="email" id="to" name="to" class="input" required placeholder="recipient@example.com">
             </div>
 
             <div class="form-group">
-                <label for="subject">Subject</label>
-                <input type="text" id="subject" name="subject" class="input" required placeholder="Test email">
+                <label for="subject" data-i18n="subject">Subject</label>
+                <input type="text" id="subject" name="subject" class="input" required data-i18n-placeholder="sub.test_email" placeholder="Test email">
             </div>
 
             <div class="form-group">
-                <label for="body">Body</label>
-                <textarea id="body" name="body" class="input" rows="6" required placeholder="This is a test email from Sendry Web."></textarea>
+                <label for="body" data-i18n="body">Body</label>
+                <textarea id="body" name="body" class="input" rows="6" required data-i18n-placeholder="infra.this_is_a_test_email_from_sendry_web" placeholder="This is a test email from Sendry Web."></textarea>
             </div>
 
             <div class="form-group">
-                <label>
-                    <input type="checkbox" name="html" value="1">
-                    Send as HTML
-                </label>
+                <label> <input type="checkbox" name="html" value="1"> <span data-i18n="send_as_html">Send as HTML</span> </label>
             </div>
 
             <div class="form-actions">
-                <button type="submit" class="btn btn-primary">Send Test Email</button>
+                <button type="submit" class="btn btn-primary" data-i18n="infra.send_test_email">Send test email</button>
             </div>
         </form>
     </div>

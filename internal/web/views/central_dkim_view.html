@@ -1,11 +1,11 @@
 {{define "content"}}
 <div class="page-header">
-    <h1>DKIM Key: {{.Key.Domain}}</h1>
+    <h1><span data-i18n="infra.dkim_key">DKIM Key</span>: {{.Key.Domain}}</h1>
     <div class="header-actions">
-        <a href="/dkim" class="btn btn-secondary">Back to DKIM Keys</a>
+        <a href="/dkim" class="btn btn-secondary" data-i18n="infra.back_to_dkim_keys">Back to DKIM keys</a>
         <form method="POST" action="/dkim/{{.Key.ID}}" style="display:inline;">
             <input type="hidden" name="_method" value="DELETE">
-            <button type="submit" class="btn btn-danger" onclick="return confirm('Delete this DKIM key? This will remove it from the database and attempt to remove from all deployed servers.')">Delete</button>
+            <button type="submit" class="btn btn-danger" onclick="return confirm(I18n.t('infra.delete_this_dkim_key_this_will_remove_it_from'))" data-i18n="delete">Delete</button>
         </form>
     </div>
 </div>
@@ -13,42 +13,44 @@
 <div class="grid grid-2">
     <div class="card">
         <div class="card-header">
-            <h3>Key Details</h3>
+            <h3 data-i18n="infra.key_details">Key Details</h3>
         </div>
         <div class="card-body">
+            <div class="table-scroll">
             <table class="table table-details">
                 <tr>
-                    <th>Domain</th>
+                    <th data-i18n="common.domain">Domain</th>
                     <td>{{.Key.Domain}}</td>
                 </tr>
                 <tr>
-                    <th>Selector</th>
+                    <th data-i18n="infra.selector">Selector</th>
                     <td>{{.Key.Selector}}</td>
                 </tr>
                 <tr>
-                    <th>DNS Name</th>
+                    <th data-i18n="infra.dns_name">DNS Name</th>
                     <td><code>{{.DNSName}}</code></td>
                 </tr>
                 <tr>
-                    <th>Created</th>
+                    <th data-i18n="common.created">Created</th>
                     <td>{{.Key.CreatedAt.Format "2006-01-02 15:04:05"}}</td>
                 </tr>
             </table>
+            </div>
         </div>
     </div>
 
     <div class="card">
         <div class="card-header">
-            <h3>DNS Record</h3>
+            <h3 data-i18n="infra.dns_record">DNS Record</h3>
         </div>
         <div class="card-body">
-            <p>Add this TXT record to your DNS:</p>
+            <p data-i18n="infra.add_this_txt_record_to_your_dns">Add this TXT record to your DNS:</p>
             <div class="form-group">
-                <label>Record Name</label>
+                <label data-i18n="infra.record_name">Record Name</label>
                 <input type="text" class="form-control" value="{{.DNSName}}" readonly onclick="this.select()">
             </div>
             <div class="form-group">
-                <label>Record Value</label>
+                <label data-i18n="infra.record_value">Record Value</label>
                 <textarea class="form-control" rows="4" readonly onclick="this.select()">{{.Key.DNSRecord}}</textarea>
             </div>
         </div>
@@ -57,17 +59,18 @@
 
 <div class="card">
     <div class="card-header">
-        <h3>Server Deployments</h3>
+        <h3 data-i18n="infra.server_deployments">Server Deployments</h3>
     </div>
     <div class="card-body">
+        <div class="table-scroll">
         <table class="table">
             <thead>
                 <tr>
-                    <th>Server</th>
-                    <th>Environment</th>
-                    <th>Status</th>
-                    <th>Deployed At</th>
-                    <th>Actions</th>
+                    <th data-i18n="common.server">Server</th>
+                    <th data-i18n="monitoring.servers.env">Environment</th>
+                    <th data-i18n="status">Status</th>
+                    <th data-i18n="infra.deployed_at">Deployed At</th>
+                    <th data-i18n="actions">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -79,12 +82,12 @@
                     <td>
                         {{if $deployment.ServerName}}
                             {{if eq $deployment.Status "deployed"}}
-                            <span class="badge badge-running">Deployed</span>
+                            <span class="badge badge-running" data-i18n="infra.deployed">Deployed</span>
                             {{else if eq $deployment.Status "failed"}}
-                            <span class="badge badge-failed">Failed</span>
+                            <span class="badge badge-failed" data-i18n="infra.failed">Failed</span>
                             {{end}}
                         {{else}}
-                        <span class="badge badge-draft">Not deployed</span>
+                        <span class="badge badge-draft" data-i18n="infra.not_deployed">Not deployed</span>
                         {{end}}
                     </td>
                     <td>
@@ -98,35 +101,36 @@
                         {{if $deployment.ServerName}}
                         <form method="POST" action="/dkim/{{$.Key.ID}}/deployments/{{.Name}}" style="display:inline;">
                             <input type="hidden" name="_method" value="DELETE">
-                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Remove deployment from {{.Name}}?')">Remove</button>
+                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm(I18n.t('infra.remove_deployment_from_name', {name: '{{.Name}}'}))" data-i18n="infra.remove">Remove</button>
                         </form>
                         {{else}}
                         <form method="POST" action="/dkim/{{$.Key.ID}}/deploy" style="display:inline;">
                             <input type="hidden" name="servers" value="{{.Name}}">
-                            <button type="submit" class="btn btn-sm btn-primary">Deploy</button>
+                            <button type="submit" class="btn btn-sm btn-primary" data-i18n="infra.deploy">Deploy</button>
                         </form>
                         {{end}}
                     </td>
                 </tr>
                 {{if and $deployment.ServerName $deployment.Error}}
                 <tr>
-                    <td colspan="5" class="text-danger">Error: {{$deployment.Error}}</td>
+                    <td colspan="5" class="text-danger"><span data-i18n="common.error">Error</span>: {{$deployment.Error}}</td>
                 </tr>
                 {{end}}
                 {{end}}
             </tbody>
         </table>
+        </div>
     </div>
 </div>
 
 <div class="card">
     <div class="card-header">
-        <h3>Deploy to Multiple Servers</h3>
+        <h3 data-i18n="infra.deploy_to_multiple_servers">Deploy to Multiple Servers</h3>
     </div>
     <div class="card-body">
         <form method="POST" action="/dkim/{{.Key.ID}}/deploy">
             <div class="form-group">
-                <label>Select servers to deploy this DKIM key:</label>
+                <label data-i18n="infra.select_servers_to_deploy_this_dkim_key">Select servers to deploy this DKIM key:</label>
                 {{range .Servers}}
                 {{$deployment := index $.DeployedMap .Name}}
                 {{if not $deployment.ServerName}}
@@ -140,7 +144,7 @@
                 {{end}}
             </div>
             <div class="form-actions">
-                <button type="submit" class="btn btn-primary">Deploy to Selected</button>
+                <button type="submit" class="btn btn-primary" data-i18n="infra.deploy_to_selected">Deploy to Selected</button>
             </div>
         </form>
     </div>

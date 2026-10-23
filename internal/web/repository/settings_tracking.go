@@ -11,36 +11,24 @@ import (
 
 // Keys in the settings table
 const (
-	SettingTrackingBaseURL       = "tracking.base_url"
-	SettingTrackingOpensDefault  = "tracking.opens_default"
-	SettingTrackingClicksDefault = "tracking.clicks_default"
-	SettingTrackingSecret        = "tracking.secret" // hex
+	SettingTrackingBaseURL = "tracking.base_url"
+	SettingTrackingSecret  = "tracking.secret" // hex
 	// SettingTrackingPrevSecret is the secret before the last rotation: tokens
 	// signed with it are still accepted so already sent mail keeps working.
 	SettingTrackingPrevSecret = "tracking.secret_prev" // hex
 )
 
 // GetTrackingSettings reads tracking settings from the settings table.
-// Defaults when absent: BaseURL "", OpensDefault true, ClicksDefault true.
+// Defaults when absent: BaseURL "".
 // If no secret exists yet, a random 32-byte secret is
 // generated, stored and returned (must be safe under concurrent first calls:
 // use INSERT OR IGNORE then read back).
 func (r *SettingsRepository) GetTrackingSettings() (*models.TrackingSettings, error) {
-	s := &models.TrackingSettings{OpensDefault: true, ClicksDefault: true}
+	s := &models.TrackingSettings{}
 
 	var err error
 	if s.BaseURL, err = r.GetSetting(SettingTrackingBaseURL); err != nil {
 		return nil, err
-	}
-	if v, err := r.GetSetting(SettingTrackingOpensDefault); err != nil {
-		return nil, err
-	} else if v != "" {
-		s.OpensDefault = v == "1"
-	}
-	if v, err := r.GetSetting(SettingTrackingClicksDefault); err != nil {
-		return nil, err
-	} else if v != "" {
-		s.ClicksDefault = v == "1"
 	}
 
 	secret, err := r.GetSetting(SettingTrackingSecret)
@@ -105,20 +93,5 @@ func (r *SettingsRepository) RotateTrackingSecret() error {
 
 // SaveTrackingSettings stores everything except the secrets.
 func (r *SettingsRepository) SaveTrackingSettings(s *models.TrackingSettings) error {
-	flag := func(b bool) string {
-		if b {
-			return "1"
-		}
-		return "0"
-	}
-	for _, kv := range [][2]string{
-		{SettingTrackingBaseURL, s.BaseURL},
-		{SettingTrackingOpensDefault, flag(s.OpensDefault)},
-		{SettingTrackingClicksDefault, flag(s.ClicksDefault)},
-	} {
-		if err := r.SetSetting(kv[0], kv[1]); err != nil {
-			return err
-		}
-	}
-	return nil
+	return r.SetSetting(SettingTrackingBaseURL, s.BaseURL)
 }

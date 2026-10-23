@@ -1,6 +1,6 @@
 {{define "content"}}
 <div class="page-header">
-    <h1>Import Results</h1>
+    <h1 data-i18n="cmp.import_results">Import Results</h1>
 </div>
 
 <div class="card">
@@ -11,21 +11,21 @@
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-value">{{.Result.Total}}</div>
-                <div class="stat-label">Total Rows</div>
+                <div class="stat-label" data-i18n="cmp.total_rows">Total Rows</div>
             </div>
             <div class="stat-card">
                 <div class="stat-value" style="color: var(--success)">{{.Result.Imported}}</div>
-                <div class="stat-label">Imported</div>
+                <div class="stat-label" data-i18n="cmp.imported">Imported</div>
             </div>
             <div class="stat-card">
                 <div class="stat-value" style="color: var(--warning)">{{.Result.Skipped}}</div>
-                <div class="stat-label">Skipped</div>
+                <div class="stat-label" data-i18n="cmp.skipped">Skipped</div>
             </div>
         </div>
 
         {{if .Result.Errors}}
         <div class="alert alert-warning" style="margin-top: 1.5rem">
-            <strong>Import completed with errors:</strong>
+            <strong data-i18n="cmp.import_errors">Import completed with errors:</strong>
             <ul style="margin-top: 0.5rem; margin-bottom: 0">
                 {{range .Result.Errors}}
                 <li>{{.}}</li>
@@ -35,8 +35,8 @@
         {{end}}
 
         <div class="actions-bar" style="margin-top: 1.5rem">
-            <a href="/recipients/{{.List.ID}}" class="btn btn-primary">View List</a>
-            <a href="/recipients/{{.List.ID}}/import" class="btn">Import More</a>
+            <a href="/recipients/{{.List.ID}}" class="btn btn-primary" data-i18n="cmp.view_list">View List</a>
+            <a href="/recipients/{{.List.ID}}/import" class="btn" data-i18n="cmp.import_more">Import More</a>
         </div>
     </div>
 </div>

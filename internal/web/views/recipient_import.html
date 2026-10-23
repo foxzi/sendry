@@ -1,48 +1,48 @@
 {{define "content"}}
 <div class="page-header">
-    <h1>Import Recipients</h1>
-    <a href="/recipients/{{.List.ID}}" class="btn btn-secondary">Back to List</a>
+    <h1 data-i18n="cmp.import_recipients">Import Recipients</h1>
+    <a href="/recipients/{{.List.ID}}" class="btn btn-secondary" data-i18n="cmp.back_to_list">Back to list</a>
 </div>
 
 <div class="card">
     <div class="card-header">
-        <h2>Import to: {{.List.Name}}</h2>
+        <h2><span data-i18n="cmp.import_to">Import to:</span> {{.List.Name}}</h2>
     </div>
     <div class="card-body">
         <form method="post" action="/recipients/{{.List.ID}}/import" enctype="multipart/form-data">
             <div class="form-group">
-                <label for="file">CSV File *</label>
+                <label for="file" data-i18n="cmp.csv_file_req">CSV File *</label>
                 <input type="file" id="file" name="file" accept=".csv" required class="input">
-                <small class="form-help">Maximum file size: 10 MB</small>
+                <small class="form-help" data-i18n="cmp.max_file">Maximum file size: 10 MB</small>
             </div>
 
-            <button type="submit" class="btn btn-primary">Import</button>
+            <button type="submit" class="btn btn-primary" data-i18n="cmp.import">Import</button>
         </form>
     </div>
 </div>
 
 <div class="card" style="margin-top: 1.5rem">
     <div class="card-header">
-        <h2>CSV Format</h2>
+        <h2 data-i18n="cmp.csv_format">CSV Format</h2>
     </div>
     <div class="card-body">
-        <p>Your CSV file should have headers in the first row. The following columns are recognized:</p>
+        <p data-i18n="cmp.csv_intro">Your CSV file should have headers in the first row. The following columns are recognized:</p>
         <ul>
-            <li><strong>email</strong> (required) - also accepts: e-mail, email_address</li>
-            <li><strong>name</strong> (optional) - also accepts: full_name, fullname</li>
+            <li><strong>email</strong> <span data-i18n="cmp.csv_email_desc">(required) - also accepts: e-mail, email_address</span></li>
+            <li><strong>name</strong> <span data-i18n="cmp.csv_name_desc">(optional) - also accepts: full_name, fullname</span></li>
         </ul>
 
-        <h3 style="margin-top: 1.5rem">Example CSV</h3>
+        <h3 style="margin-top: 1.5rem" data-i18n="cmp.example_csv">Example CSV</h3>
         <pre class="code-preview"><code>email,name
 john@example.com,John Doe
 jane@example.com,Jane Smith
 bob@example.com,</code></pre>
 
-        <h3 style="margin-top: 1.5rem">Notes</h3>
+        <h3 style="margin-top: 1.5rem" data-i18n="cmp.notes">Notes</h3>
         <ul>
-            <li>Existing recipients (by email) will be updated with new data</li>
-            <li>Empty email rows will be skipped</li>
-            <li>Invalid rows will be reported but won't stop the import</li>
+            <li data-i18n="cmp.note1">Existing recipients (by email) will be updated with new data</li>
+            <li data-i18n="cmp.note2">Empty email rows will be skipped</li>
+            <li data-i18n="cmp.note3">Invalid rows will be reported but won't stop the import</li>
         </ul>
     </div>
 </div>

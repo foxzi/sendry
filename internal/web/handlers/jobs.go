@@ -31,24 +31,13 @@ func (h *Handlers) JobList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get stats for each job
-	jobsWithStats := make([]map[string]any, len(jobs))
-	for i, job := range jobs {
-		stats, _ := h.jobs.GetStats(job.ID)
-		jobsWithStats[i] = map[string]any{
-			"Job":      job,
-			"Stats":    stats,
-			"Progress": stats.Progress(),
-		}
-	}
-
 	totalPages := (total + limit - 1) / limit
 
 	data := map[string]any{
-		"Title":      "Jobs",
+		"Title":      "Runs",
 		"Active":     "jobs",
 		"User":       h.getUserFromContext(r),
-		"Jobs":       jobsWithStats,
+		"Jobs":       h.jobsWithStats(jobs),
 		"Total":      total,
 		"Page":       page,
 		"TotalPages": totalPages,
@@ -56,6 +45,20 @@ func (h *Handlers) JobList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.render(w, "jobs", data)
+}
+
+// jobsWithStats builds template rows (Job, Stats, Progress) for a list of jobs.
+func (h *Handlers) jobsWithStats(jobs []models.SendJob) []map[string]any {
+	rows := make([]map[string]any, len(jobs))
+	for i, job := range jobs {
+		stats, _ := h.jobs.GetStats(job.ID)
+		rows[i] = map[string]any{
+			"Job":      job,
+			"Stats":    stats,
+			"Progress": stats.Progress(),
+		}
+	}
+	return rows
 }
 
 func (h *Handlers) JobView(w http.ResponseWriter, r *http.Request) {

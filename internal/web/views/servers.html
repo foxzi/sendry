@@ -1,6 +1,9 @@
 {{define "content"}}
 <div class="page-header">
-    <h1>Servers</h1>
+    <div>
+        <h1 data-i18n="servers">Servers</h1>
+        <p class="text-muted" data-i18n="infra.mta_instances_connected_to_this_panel">MTA instances connected to this panel</p>
+    </div>
 </div>
 
 <div class="card">
@@ -11,7 +14,7 @@
             <div class="server-card">
                 <div class="server-header">
                     <h3>{{.Name}}</h3>
-                    <span class="badge badge-{{if .Online}}running{{else}}failed{{end}}">
+                    <span class="badge badge-{{if .Online}}running{{else}}failed{{end}}" data-i18n="{{if .Online}}online{{else}}offline{{end}}">
                         {{if .Online}}Online{{else}}Offline{{end}}
                     </span>
                 </div>
@@ -19,19 +22,21 @@
                     <p class="text-muted">{{.BaseURL}}</p>
                     <span class="badge badge-{{.Env}}">{{.Env}}</span>
                     {{if .Version}}<span class="text-muted">v{{.Version}}</span>{{end}}
+                    <p class="text-muted"><span data-i18n="queue.title">Queue</span>: {{.QueueSize}}</p>
                 </div>
                 <div class="server-actions">
-                    <a href="/servers/{{.Name}}" class="btn btn-sm">View</a>
-                    <a href="/servers/{{.Name}}/queue" class="btn btn-sm btn-secondary">Queue</a>
-                    <a href="/servers/{{.Name}}/sandbox" class="btn btn-sm btn-secondary">Sandbox</a>
+                    <a href="/servers/{{.Name}}" class="btn btn-sm" data-i18n="view">View</a>
+                    <a href="/servers/{{.Name}}/queue" class="btn btn-sm btn-secondary" data-i18n="queue.title">Queue</a>
+                    <a href="/servers/{{.Name}}/dlq" class="btn btn-sm btn-secondary" data-i18n="queue.tab_dlq">DLQ</a>
+                    <a href="/servers/{{.Name}}/sandbox" class="btn btn-sm btn-secondary" data-i18n="server_sandbox">Sandbox</a>
                 </div>
             </div>
             {{end}}
         </div>
         {{else}}
         <div class="empty-state">
-            <p>No servers configured</p>
-            <p class="text-muted">Add servers in your configuration file</p>
+            <p data-i18n="monitoring.servers.empty">No servers configured</p>
+            <p class="text-muted" data-i18n="infra.add_servers_in_your_configuration_file">Add servers in your configuration file</p>
         </div>
         {{end}}
     </div>

@@ -1,43 +1,43 @@
 {{define "content"}}
 <div class="page-header">
     <div>
-        <h1>Import Template</h1>
-        <p class="text-muted">Import template from JSON file</p>
+        <h1 data-i18n="tpl.import_template">Import Template</h1>
+        <p class="text-muted" data-i18n="tpl.import_sub">Import template from JSON file</p>
     </div>
-    <a href="/templates" class="btn btn-secondary">Back to Templates</a>
+    <a href="/templates" class="btn btn-secondary" data-i18n="tpl.back_to_templates">Back to templates</a>
 </div>
 
 <div class="card">
     <div class="card-body">
         <form method="POST" action="/templates/import" enctype="multipart/form-data">
             <div class="form-group">
-                <label for="file">JSON File</label>
+                <label for="file" data-i18n="tpl.json_file">JSON File</label>
                 <input type="file" name="file" id="file" class="form-control" accept=".json">
-                <span class="form-help">Select a JSON file exported from Sendry Web</span>
+                <span class="form-help" data-i18n="tpl.json_file_help">Select a JSON file exported from Sendry Web</span>
             </div>
 
             <div class="form-divider">
-                <span>OR</span>
+                <span data-i18n="tpl.or">OR</span>
             </div>
 
             <div class="form-group">
-                <label for="json">JSON Content</label>
+                <label for="json" data-i18n="tpl.json_content">JSON Content</label>
                 <textarea name="json" id="json" class="form-control code" rows="10"
                     placeholder='{"name": "My Template", "subject": "...", "html": "..."}'></textarea>
-                <span class="form-help">Paste JSON content directly</span>
+                <span class="form-help" data-i18n="tpl.json_content_help">Paste JSON content directly</span>
             </div>
 
             <hr>
 
             <div class="form-row">
                 <div class="form-group">
-                    <label for="name">Template Name (optional override)</label>
-                    <input type="text" name="name" id="name" class="form-control" placeholder="Leave empty to use name from JSON">
+                    <label for="name" data-i18n="tpl.name_override">Template Name (optional override)</label>
+                    <input type="text" name="name" id="name" class="form-control" placeholder="Leave empty to use name from JSON" data-i18n-placeholder="tpl.name_override_ph">
                 </div>
 
                 <div class="form-group">
-                    <label for="folder">Folder (optional override)</label>
-                    <input type="text" name="folder" id="folder" class="form-control" list="folders" placeholder="Leave empty to use folder from JSON">
+                    <label for="folder" data-i18n="tpl.folder_override">Folder (optional override)</label>
+                    <input type="text" name="folder" id="folder" class="form-control" list="folders" placeholder="Leave empty to use folder from JSON" data-i18n-placeholder="tpl.folder_override_ph">
                     <datalist id="folders">
                         {{range .Folders}}
                         <option value="{{.}}">
@@ -47,8 +47,8 @@
             </div>
 
             <div class="card-footer">
-                <a href="/templates" class="btn btn-secondary">Cancel</a>
-                <button type="submit" class="btn btn-primary">Import Template</button>
+                <a href="/templates" class="btn btn-secondary" data-i18n="cancel">Cancel</a>
+                <button type="submit" class="btn btn-primary" data-i18n="tpl.import_template">Import Template</button>
             </div>
         </form>
     </div>

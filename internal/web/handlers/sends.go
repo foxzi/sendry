@@ -56,7 +56,7 @@ func (h *Handlers) SendsList(w http.ResponseWriter, r *http.Request) {
 	totalPages := (total + limit - 1) / limit
 
 	data := map[string]any{
-		"Title":      "Send History",
+		"Title":      "API sends",
 		"Active":     "sends",
 		"User":       h.getUserFromContext(r),
 		"Sends":      sends,
@@ -127,7 +127,7 @@ func (h *Handlers) SendView(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]any{
-		"Title":        "Send Details",
+		"Title":        "Send details",
 		"Events":       events,
 		"Active":       "sends",
 		"User":         h.getUserFromContext(r),

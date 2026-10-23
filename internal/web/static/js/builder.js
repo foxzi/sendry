@@ -148,17 +148,37 @@
         renderCanvas();
     }
 
+    // Translation helper: builder.js may run before i18n.js is loaded, so fall back to English.
+    function tr(key, fallback, params) {
+        if (window.I18n) return I18n.t(key, params);
+        var text = fallback;
+        if (params) { for (var p in params) text = text.replace('{' + p + '}', params[p]); }
+        return text;
+    }
+    function blockCountText(n) {
+        var lang = (window.I18n && I18n.getLang) ? I18n.getLang() : 'en';
+        var form;
+        if (lang === 'ru') {
+            var m10 = n % 10, m100 = n % 100;
+            form = (m10 === 1 && m100 !== 11) ? 'one' : ((m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) ? 'few' : 'many');
+        } else {
+            form = n === 1 ? 'one' : 'many';
+        }
+        var fb = n + ' block' + (n !== 1 ? 's' : '');
+        return tr('tpl.b_blocks_' + form, fb, {n: n});
+    }
+
     function renderCanvas() {
         canvasContainer.innerHTML = '';
 
         if (canvasBlocks.length === 0) {
             canvasEmpty.style.display = '';
-            blockCount.textContent = '0 blocks';
+            blockCount.textContent = blockCountText(0);
             return;
         }
 
         canvasEmpty.style.display = 'none';
-        blockCount.textContent = canvasBlocks.length + ' block' + (canvasBlocks.length !== 1 ? 's' : '');
+        blockCount.textContent = blockCountText(canvasBlocks.length);
 
         canvasBlocks.forEach(function(item) {
             var el = document.createElement('div');
@@ -177,25 +197,25 @@
             var btnUp = document.createElement('button');
             btnUp.type = 'button';
             btnUp.textContent = '\u2191';
-            btnUp.title = 'Move up';
+            btnUp.title = tr('tpl.b_move_up', 'Move up');
             btnUp.addEventListener('click', function(e) { e.stopPropagation(); moveBlock(item.uid, -1); });
 
             var btnDown = document.createElement('button');
             btnDown.type = 'button';
             btnDown.textContent = '\u2193';
-            btnDown.title = 'Move down';
+            btnDown.title = tr('tpl.b_move_down', 'Move down');
             btnDown.addEventListener('click', function(e) { e.stopPropagation(); moveBlock(item.uid, 1); });
 
             var btnDup = document.createElement('button');
             btnDup.type = 'button';
             btnDup.textContent = '\u2750';
-            btnDup.title = 'Duplicate';
+            btnDup.title = tr('tpl.b_duplicate', 'Duplicate');
             btnDup.addEventListener('click', function(e) { e.stopPropagation(); duplicateBlock(item.uid); });
 
             var btnDel = document.createElement('button');
             btnDel.type = 'button';
             btnDel.textContent = '\u2715';
-            btnDel.title = 'Remove';
+            btnDel.title = tr('tpl.b_remove', 'Remove');
             btnDel.style.color = 'var(--error)';
             btnDel.addEventListener('click', function(e) { e.stopPropagation(); removeBlock(item.uid); });
 
@@ -220,11 +240,11 @@
                 gap.className = 'builder-block-gap';
                 gap.style.cssText = 'display:flex; align-items:center; gap:0.5rem; padding:0.5rem 0.75rem; border-top:1px dashed var(--border); font-size:0.8rem; color:var(--text-muted);';
                 gap.innerHTML =
-                    '<span>Gap below:</span>' +
+                    '<span>' + tr('tpl.b_gap_below', 'Gap below:') + '</span>' +
                     '<input type="number" min="0" max="200" step="2" value="' + (item.gapHeight || 0) + '" style="width:70px; padding:0.2rem 0.4rem;"> px' +
-                    '<span style="margin-left:0.5rem;">Color:</span>' +
+                    '<span style="margin-left:0.5rem;">' + tr('tpl.b_color', 'Color:') + '</span>' +
                     '<input type="color" value="' + (item.gapColor || '#ffffff') + '" style="width:30px; height:24px; padding:0;">' +
-                    '<label style="display:flex; align-items:center; gap:0.25rem;"><input type="checkbox"' + (item.gapColor ? ' checked' : '') + '> filled</label>';
+                    '<label style="display:flex; align-items:center; gap:0.25rem;"><input type="checkbox"' + (item.gapColor ? ' checked' : '') + '> ' + tr('tpl.b_filled', 'filled') + '</label>';
 
                 var heightInput = gap.querySelector('input[type="number"]');
                 var colorInput = gap.querySelector('input[type="color"]');
@@ -272,10 +292,10 @@
             condBar.style.cssText = 'display:flex; align-items:center; gap:0.5rem; padding:0.4rem 0.75rem; border-top:1px dashed var(--border); font-size:0.8rem; color:var(--text-muted); background:rgba(255,255,255,0.5);';
             var condInputId = 'block-cond-' + item.uid;
             condBar.innerHTML =
-                '<label for="' + condInputId + '">Show if:</label>' +
+                '<label for="' + condInputId + '">' + tr('tpl.b_show_if', 'Show if:') + '</label>' +
                 '<input id="' + condInputId + '" type="text" value="' + (item.condition || '').replace(/"/g, '&quot;') + '"' +
-                ' placeholder="VariableName (empty = always)" style="flex:1; padding:0.2rem 0.4rem; font-family:monospace;">' +
-                '<span class="text-muted" style="font-size:0.75rem;">renders if {{.X}} is truthy</span>';
+                ' placeholder="' + tr('tpl.b_show_if_ph', 'VariableName (empty = always)') + '" style="flex:1; padding:0.2rem 0.4rem; font-family:monospace;">' +
+                '<span class="text-muted" style="font-size:0.75rem;">' + tr('tpl.b_show_if_hint', 'renders if {{.X}} is truthy') + '</span>';
             var condInput = condBar.querySelector('input');
             condInput.addEventListener('input', function() {
                 item.condition = this.value.trim();
@@ -589,7 +609,7 @@
             if (blockMap[item.blockId]) blockMap[item.blockId].html = newSourceHTML;
         }).catch(function(err) {
             console.error('[inline-edit] failed:', err.message);
-            alert('Не удалось сохранить: ' + err.message);
+            alert(tr('tpl.b_save_failed', 'Failed to save: ') + err.message);
             renderCanvas();
         });
     }
@@ -807,11 +827,11 @@
     function updatePreview() {
         var html = assembleHTML();
         if (!html) {
-            previewFrame.innerHTML = '<div style="padding:40px; text-align:center; color:#999;">Add blocks to see preview</div>';
+            previewFrame.innerHTML = '<div style="padding:40px; text-align:center; color:#999;">' + tr('tpl.b_add_blocks_preview', 'Add blocks to see preview') + '</div>';
             return;
         }
 
-        previewFrame.innerHTML = '<div style="padding:40px; text-align:center; color:#999;">Rendering…</div>';
+        previewFrame.innerHTML = '<div style="padding:40px; text-align:center; color:#999;">' + tr('tpl.rendering', 'Rendering…') + '</div>';
 
         var data = Object.assign({}, builderSampleData());
         var testValues = JSON.parse(localStorage.getItem('sendry_test_values') || '{}');
@@ -824,10 +844,10 @@
                 Object.assign(data, JSON.parse(dataTa.value));
             } catch (e) {
                 if (statusEl) {
-                    statusEl.textContent = 'JSON parse error: ' + e.message;
+                    statusEl.textContent = tr('tpl.b_json_error', 'JSON parse error') + ': ' + e.message;
                     statusEl.style.color = 'crimson';
                 }
-                previewFrame.innerHTML = '<pre style="padding:1rem; color:crimson;">JSON parse error: ' + e.message + '</pre>';
+                previewFrame.innerHTML = '<pre style="padding:1rem; color:crimson;">' + tr('tpl.b_json_error', 'JSON parse error') + ': ' + e.message + '</pre>';
                 return;
             }
         }
@@ -861,13 +881,13 @@
                 catch(e) {}
             }, 100);
             if (statusEl) {
-                statusEl.textContent = 'Rendered';
+                statusEl.textContent = tr('tpl.b_rendered', 'Rendered');
                 statusEl.style.color = 'var(--text-muted)';
             }
         }).catch(function(err) {
             previewFrame.innerHTML = '<pre style="padding:1rem; color:crimson; white-space:pre-wrap;">' + err.message + '</pre>';
             if (statusEl) {
-                statusEl.textContent = 'Error';
+                statusEl.textContent = tr('common.error', 'Error');
                 statusEl.style.color = 'crimson';
             }
         });
@@ -898,7 +918,7 @@
 
     document.getElementById('btn-clear').addEventListener('click', function() {
         if (canvasBlocks.length === 0) return;
-        if (!confirm('Remove all blocks?')) return;
+        if (!confirm(tr('tpl.b_confirm_clear', 'Remove all blocks?'))) return;
         canvasBlocks = [];
         renderCanvas();
     });
@@ -907,7 +927,7 @@
         var html = assembleHTML();
         if (!html) {
             e.preventDefault();
-            alert('Please add at least one block to the email.');
+            alert(tr('tpl.b_need_block', 'Please add at least one block to the email.'));
             return;
         }
         htmlHidden.value = html;
@@ -922,5 +942,11 @@
                 };
             }));
         }
+    });
+
+    // Re-render dynamic labels once translations are ready and when the language is switched.
+    document.addEventListener('DOMContentLoaded', function() { renderCanvas(); });
+    document.querySelectorAll('.lang-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() { setTimeout(renderCanvas, 0); });
     });
 })();

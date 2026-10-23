@@ -1,16 +1,16 @@
 {{define "content"}}
 <div class="page-header">
-    <h1>{{.Campaign.Name}} - Variables</h1>
-    <a href="/campaigns/{{.Campaign.ID}}" class="btn btn-secondary">Back to Campaign</a>
+    <h1>{{.Campaign.Name}} - <span data-i18n="cmp.variables">Variables</span></h1>
+    <a href="/campaigns/{{.Campaign.ID}}" class="btn btn-secondary" data-i18n="cmp.back_to_campaign">Back to campaign</a>
 </div>
 
 <form method="post" action="/campaigns/{{.Campaign.ID}}/variables" class="card">
     <input type="hidden" name="_method" value="PUT">
     <div class="card-body">
         <div class="form-group">
-            <label for="variables">Campaign Variables (JSON)</label>
+            <label for="variables" data-i18n="cmp.campaign_variables_json">Campaign Variables (JSON)</label>
             <textarea id="variables" name="variables" class="input code" rows="15">{{.Campaign.Variables}}</textarea>
-            <small class="form-help">
+            <small class="form-help" data-i18n="cmp.vars_help">
                 These variables are merged with recipient variables when sending.
                 Priority: recipient &gt; campaign &gt; global
             </small>
@@ -18,30 +18,30 @@
     </div>
 
     <div class="card-footer">
-        <a href="/campaigns/{{.Campaign.ID}}" class="btn btn-secondary">Cancel</a>
-        <button type="submit" class="btn btn-primary">Save Variables</button>
+        <a href="/campaigns/{{.Campaign.ID}}" class="btn btn-secondary" data-i18n="cancel">Cancel</a>
+        <button type="submit" class="btn btn-primary" data-i18n="cmp.save_variables">Save Variables</button>
     </div>
 </form>
 
 <div class="card" style="margin-top: 1.5rem">
     <div class="card-header">
-        <h2>Variable Usage</h2>
+        <h2 data-i18n="cmp.variable_usage">Variable Usage</h2>
     </div>
     <div class="card-body">
-        <p>Variables defined here will be available in your templates using the <code>{{"{{"}}variable_name{{"}}"}}</code> syntax.</p>
+        <p><span data-i18n="cmp.var_usage_a">Variables defined here will be available in your templates using the</span> <code>{{"{{"}}variable_name{{"}}"}}</code> <span data-i18n="cmp.var_usage_b">syntax.</span></p>
 
-        <h3 style="margin-top: 1rem">Example</h3>
+        <h3 style="margin-top: 1rem" data-i18n="cmp.example">Example</h3>
         <pre class="code-preview"><code>{
     "company_name": "Acme Corp",
     "support_email": "support@acme.com",
     "unsubscribe_url": "https://acme.com/unsubscribe"
 }</code></pre>
 
-        <h3 style="margin-top: 1rem">Variable Priority</h3>
+        <h3 style="margin-top: 1rem" data-i18n="cmp.variable_priority">Variable Priority</h3>
         <ol>
-            <li><strong>Recipient variables</strong> - highest priority, from recipient list</li>
-            <li><strong>Campaign variables</strong> - defined on this page</li>
-            <li><strong>Global variables</strong> - defined in Settings</li>
+            <li><strong data-i18n="cmp.recipient_vars">Recipient variables</strong> <span data-i18n="cmp.prio_recipient">- highest priority, from recipient list</span></li>
+            <li><strong data-i18n="cmp.campaign_vars">Campaign variables</strong> <span data-i18n="cmp.prio_campaign">- defined on this page</span></li>
+            <li><strong data-i18n="cmp.global_vars">Global variables</strong> <span data-i18n="cmp.prio_global">- defined in Settings</span></li>
         </ol>
     </div>
 </div>

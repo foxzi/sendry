@@ -110,8 +110,8 @@
                     '<td><a href="/servers/' + server.name + '">' + server.name + '</a></td>' +
                     '<td><span class="badge badge-' + server.env + '">' + server.env + '</span></td>' +
                     '<td>' + (server.online
-                        ? '<span class="badge badge-running">Online</span>'
-                        : '<span class="badge badge-failed">Offline</span>') + '</td>' +
+                        ? '<span class="badge badge-running">' + I18n.t('online') + '</span>'
+                        : '<span class="badge badge-failed">' + I18n.t('offline') + '</span>') + '</td>' +
                     '<td>' + (server.queue_size || 0) + '</td>' +
                     '<td>' + (server.dlq_size || 0) + '</td>';
                 tbody.appendChild(tr);
@@ -148,7 +148,7 @@
                     labels: labels,
                     datasets: [
                         {
-                            label: 'Sent',
+                            label: I18n.t('monitoring.stats.sent'),
                             data: sentData,
                             borderColor: '#10b981',
                             backgroundColor: 'rgba(16, 185, 129, 0.1)',
@@ -156,7 +156,7 @@
                             tension: 0.3
                         },
                         {
-                            label: 'Failed',
+                            label: I18n.t('monitoring.stats.failed'),
                             data: failedData,
                             borderColor: '#ef4444',
                             backgroundColor: 'rgba(239, 68, 68, 0.1)',
@@ -164,7 +164,7 @@
                             tension: 0.3
                         },
                         {
-                            label: 'Pending',
+                            label: I18n.t('infra.pending'),
                             data: pendingData,
                             borderColor: '#f59e0b',
                             backgroundColor: 'rgba(245, 158, 11, 0.1)',
@@ -223,12 +223,12 @@
                     labels: labels,
                     datasets: [
                         {
-                            label: 'Sent',
+                            label: I18n.t('monitoring.stats.sent'),
                             data: sentData,
                             backgroundColor: '#10b981'
                         },
                         {
-                            label: 'Failed',
+                            label: I18n.t('monitoring.stats.failed'),
                             data: failedData,
                             backgroundColor: '#ef4444'
                         }

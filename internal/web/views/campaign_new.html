@@ -1,66 +1,66 @@
 {{define "content"}}
 <div class="page-header">
-    <h1>New Campaign</h1>
+    <h1 data-i18n="cmp.new_campaign_title">New Campaign</h1>
 </div>
 
 <form method="post" action="/campaigns" class="card">
     <div class="card-body">
         <div class="form-group">
-            <label for="name">Campaign Name *</label>
-            <input type="text" id="name" name="name" required class="input" placeholder="Welcome Series">
+            <label for="name" data-i18n="cmp.campaign_name_req">Campaign Name *</label>
+            <input type="text" id="name" name="name" required class="input" placeholder="Welcome Series" data-i18n-placeholder="cmp.ph_campaign_name">
         </div>
 
         <div class="form-group">
-            <label for="description">Description</label>
-            <textarea id="description" name="description" class="input" rows="2" placeholder="Brief description of this campaign"></textarea>
+            <label for="description" data-i18n="common.description">Description</label>
+            <textarea id="description" name="description" class="input" rows="2" placeholder="Brief description of this campaign" data-i18n-placeholder="cmp.ph_campaign_desc"></textarea>
         </div>
 
-        <h3 style="margin: 1.5rem 0 1rem">Sender Information</h3>
+        <h3 style="margin: 1.5rem 0 1rem" data-i18n="cmp.sender_info">Sender Information</h3>
 
         <div class="form-row">
             <div class="form-group">
-                <label for="from_email">From Email *</label>
+                <label for="from_email" data-i18n="cmp.from_email_req">From Email *</label>
                 <input type="email" id="from_email" name="from_email" required class="input" placeholder="hello@example.com">
             </div>
             <div class="form-group">
-                <label for="from_name">From Name</label>
-                <input type="text" id="from_name" name="from_name" class="input" placeholder="Company Name">
+                <label for="from_name" data-i18n="cmp.from_name">From Name</label>
+                <input type="text" id="from_name" name="from_name" class="input" placeholder="Company Name" data-i18n-placeholder="cmp.ph_company">
             </div>
         </div>
 
         <div class="form-group">
-            <label for="reply_to">Reply-To (optional)</label>
+            <label for="reply_to" data-i18n="cmp.reply_to_opt">Reply-To (optional)</label>
             <input type="email" id="reply_to" name="reply_to" class="input" placeholder="support@example.com">
         </div>
 
         <div class="form-group">
-            <label for="tags">Tags (JSON array)</label>
+            <label for="tags" data-i18n="cmp.tags_json">Tags (JSON array)</label>
             <input type="text" id="tags" name="tags" class="input" placeholder='["newsletter", "marketing"]'>
-            <small class="form-help">Tags are passed to Sendry for categorization</small>
+            <small class="form-help" data-i18n="cmp.tags_help">Tags are passed to Sendry for categorization</small>
         </div>
 
-        <h3 style="margin: 1.5rem 0 1rem">Трекинг</h3>
+        <h3 style="margin: 1.5rem 0 1rem" data-i18n="trk.settings_title">Tracking</h3>
 
         <div class="form-group">
             <label class="checkbox-label">
                 <input type="checkbox" name="track_opens" value="on"{{if .TrackOpens}} checked{{end}}>
-                Отслеживать открытия
+                <span data-i18n="trk.track_opens">Track opens</span>
             </label>
             <label class="checkbox-label">
                 <input type="checkbox" name="track_clicks" value="on"{{if .TrackClicks}} checked{{end}}>
-                Отслеживать клики
+                <span data-i18n="trk.track_clicks">Track clicks</span>
             </label>
             <label class="checkbox-label">
                 <input type="checkbox" name="add_utm" value="on">
-                Добавлять метки UTM в ссылки
+                <span data-i18n="trk.add_utm">Add UTM tags to links</span>
             </label>
-            <small class="form-help">Открытия считаются по пикселю, клики по ссылкам через панель. Метки: utm_source, utm_medium, utm_campaign, sc, sr, sl (нужны для связи заказов с рассылкой). Ссылка отписки в письмах рассылки добавляется всегда.</small>
+            <small class="form-help" data-i18n="trk.campaign_help">Opens are counted by a pixel, clicks by links through the panel. Tags: utm_source, utm_medium, utm_campaign, sc, sr, sl (needed to tie orders to the campaign). Campaign emails always get an unsubscribe link.</small>
         </div>
     </div>
 
     <div class="card-footer">
-        <a href="/campaigns" class="btn btn-secondary">Cancel</a>
-        <button type="submit" class="btn btn-primary">Create Campaign</button>
+        <a href="/campaigns" class="btn btn-secondary" data-i18n="cancel">Cancel</a>
+        <button type="submit" class="btn btn-primary" data-i18n="cmp.create_campaign">Create Campaign</button>
     </div>
 </form>
 {{end}}

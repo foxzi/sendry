@@ -15,13 +15,12 @@ func TestTrackingSettings_DefaultsAndRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.BaseURL != "" || !s.OpensDefault || !s.ClicksDefault || len(s.Secret) != 64 {
+	if s.BaseURL != "" || len(s.Secret) != 64 {
 		t.Fatalf("defaults = %+v", s)
 	}
 	secret := s.Secret
 
-	in := &models.TrackingSettings{BaseURL: "https://lnk.example.com", OpensDefault: false, ClicksDefault: true,
-		Secret: "ignored"}
+	in := &models.TrackingSettings{BaseURL: "https://lnk.example.com", Secret: "ignored"}
 	if err := repo.SaveTrackingSettings(in); err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +28,7 @@ func TestTrackingSettings_DefaultsAndRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.BaseURL != in.BaseURL || got.OpensDefault || !got.ClicksDefault {
+	if got.BaseURL != in.BaseURL {
 		t.Errorf("got = %+v", got)
 	}
 	if got.Secret != secret {
@@ -40,7 +39,7 @@ func TestTrackingSettings_DefaultsAndRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ = repo.GetTrackingSettings()
-	if got.OpensDefault || got.ClicksDefault || got.BaseURL != "" {
+	if got.BaseURL != "" {
 		t.Errorf("cleared = %+v", got)
 	}
 }

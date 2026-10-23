@@ -1,10 +1,10 @@
 {{define "content"}}
 <div class="page-header">
     <div>
-        <h1>{{if .IsEdit}}Edit SMTP Server{{else}}Add SMTP Server{{end}}</h1>
-        <p class="text-muted">Outbound SMTP credentials for "Send test". Password is stored encrypted.</p>
+        <h1 data-i18n="admin.{{if .IsEdit}}edit_smtp_server{{else}}add_smtp_server{{end}}">{{if .IsEdit}}Edit SMTP Server{{else}}Add SMTP Server{{end}}</h1>
+        <p class="text-muted" data-i18n="admin.outbound_smtp_credentials_for_send_test">Outbound SMTP credentials for "Send test". Password is stored encrypted.</p>
     </div>
-    <a href="/settings/smtp" class="btn btn-secondary">Back</a>
+    <a href="/settings/smtp" class="btn btn-secondary" data-i18n="common.back">Back</a>
 </div>
 
 <div class="card">
@@ -12,30 +12,30 @@
         <form method="post" action="{{if .IsEdit}}/settings/smtp/{{.Server.ID}}{{else}}/settings/smtp{{end}}">
             <div class="form-row">
                 <div class="form-group">
-                    <label for="name">Name *</label>
+                    <label for="name" data-i18n="admin.name">Name *</label>
                     <input type="text" id="name" name="name" class="input" required
                         value="{{if .Server}}{{.Server.Name}}{{end}}"
                         placeholder="My mail.ru">
                 </div>
                 <div class="form-group">
-                    <label for="encryption">Encryption *</label>
+                    <label for="encryption" data-i18n="admin.encryption_2">Encryption *</label>
                     <select id="encryption" name="encryption" class="input">
                         <option value="ssl"      {{if and .Server (eq .Server.Encryption "ssl")}}selected{{end}}>SSL/TLS (port 465)</option>
                         <option value="starttls" {{if and .Server (eq .Server.Encryption "starttls")}}selected{{end}}>STARTTLS (port 587)</option>
-                        <option value="none"     {{if and .Server (eq .Server.Encryption "none")}}selected{{end}}>None (debug only)</option>
+                        <option value="none"     {{if and .Server (eq .Server.Encryption "none")}}selected{{end}} data-i18n="admin.none_debug_only">None (debug only)</option>
                     </select>
                 </div>
             </div>
 
             <div class="form-row">
                 <div class="form-group" style="flex:2;">
-                    <label for="host">Host *</label>
+                    <label for="host" data-i18n="admin.host">Host *</label>
                     <input type="text" id="host" name="host" class="input" required
                         value="{{if .Server}}{{.Server.Host}}{{end}}"
                         placeholder="smtp.mail.ru">
                 </div>
                 <div class="form-group">
-                    <label for="port">Port *</label>
+                    <label for="port" data-i18n="admin.port">Port *</label>
                     <input type="number" id="port" name="port" class="input" required min="1" max="65535"
                         value="{{if .Server}}{{.Server.Port}}{{else}}465{{end}}">
                 </div>
@@ -43,39 +43,39 @@
 
             <div class="form-row">
                 <div class="form-group">
-                    <label for="username">Username *</label>
+                    <label for="username" data-i18n="admin.username_2">Username *</label>
                     <input type="text" id="username" name="username" class="input" required
                         autocomplete="off"
                         value="{{if .Server}}{{.Server.Username}}{{end}}"
                         placeholder="user@mail.ru">
                 </div>
                 <div class="form-group">
-                    <label for="password">Password{{if not .IsEdit}} *{{end}}</label>
+                    <label for="password"><span data-i18n="admin.password_2">Password</span>{{if not .IsEdit}} *{{end}}</label>
                     <input type="password" id="password" name="password" class="input"
                         autocomplete="new-password"
                         {{if not .IsEdit}}required{{end}}
-                        placeholder="{{if .IsEdit}}Leave blank to keep current{{else}}App password / SMTP token{{end}}">
+                        data-i18n-placeholder="admin.{{if .IsEdit}}leave_blank_to_keep_current{{else}}app_password_smtp_token{{end}}" placeholder="{{if .IsEdit}}Leave blank to keep current{{else}}App password / SMTP token{{end}}">
                 </div>
             </div>
 
             <div class="form-row">
                 <div class="form-group">
-                    <label for="from_address">From address *</label>
+                    <label for="from_address" data-i18n="admin.from_address_2">From address *</label>
                     <input type="email" id="from_address" name="from_address" class="input" required
                         value="{{if .Server}}{{.Server.FromAddress}}{{end}}"
                         placeholder="noreply@example.com">
                 </div>
                 <div class="form-group">
-                    <label for="from_name">From name</label>
+                    <label for="from_name" data-i18n="admin.from_name">From name</label>
                     <input type="text" id="from_name" name="from_name" class="input"
                         value="{{if .Server}}{{.Server.FromName}}{{end}}"
-                        placeholder="My Service">
+                        data-i18n-placeholder="admin.my_service" placeholder="My Service">
                 </div>
             </div>
 
             <div style="display:flex; gap:0.5rem; margin-top:1rem;">
-                <button type="submit" class="btn btn-primary">{{if .IsEdit}}Save Changes{{else}}Create{{end}}</button>
-                <a class="btn btn-secondary" href="/settings/smtp">Cancel</a>
+                <button type="submit" class="btn btn-primary" data-i18n="{{if .IsEdit}}admin.save_changes{{else}}create{{end}}">{{if .IsEdit}}Save Changes{{else}}Create{{end}}</button>
+                <a class="btn btn-secondary" href="/settings/smtp" data-i18n="cancel">Cancel</a>
             </div>
         </form>
     </div>

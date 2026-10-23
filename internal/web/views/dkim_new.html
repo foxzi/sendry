@@ -1,8 +1,8 @@
 {{define "content"}}
 <div class="page-header">
-    <h1>New DKIM Key</h1>
+    <h1 data-i18n="infra.new_dkim_key_2">New DKIM Key</h1>
     <div class="header-actions">
-        <a href="/servers/{{.ServerName}}/dkim" class="btn btn-secondary">Cancel</a>
+        <a href="/servers/{{.ServerName}}/dkim" class="btn btn-secondary" data-i18n="cancel">Cancel</a>
     </div>
 </div>
 
@@ -10,28 +10,27 @@
     <div class="card-body">
         <form method="POST" action="/servers/{{.ServerName}}/dkim">
             <div class="form-group">
-                <label for="domain">Domain</label>
+                <label for="domain" data-i18n="common.domain">Domain</label>
                 <input type="text" id="domain" name="domain" class="form-control"
                        placeholder="example.com" required>
-                <small class="text-muted">The domain this DKIM key will sign emails for</small>
+                <small class="text-muted" data-i18n="infra.the_domain_this_dkim_key_will_sign_emails_for">The domain this DKIM key will sign emails for</small>
             </div>
 
             <div class="form-group">
-                <label for="selector">Selector</label>
+                <label for="selector" data-i18n="infra.selector">Selector</label>
                 <input type="text" id="selector" name="selector" class="form-control"
                        placeholder="sendry" value="sendry" required>
-                <small class="text-muted">The DKIM selector (DNS record will be selector._domainkey.domain)</small>
+                <small class="text-muted" data-i18n="infra.the_dkim_selector_dns_record_will_be_selector">The DKIM selector (DNS record will be selector._domainkey.domain)</small>
             </div>
 
             <div class="form-group">
                 <label class="checkbox-label">
-                    <input type="checkbox" name="auto_deploy" checked>
-                    Deploy to {{.ServerName}} after creation
+                    <input type="checkbox" name="auto_deploy" checked> <span data-i18n="infra.deploy_to">Deploy to</span> {{.ServerName}} <span data-i18n="infra.after_creation">after creation</span>
                 </label>
             </div>
 
             <div class="form-actions">
-                <button type="submit" class="btn btn-primary">Generate Key</button>
+                <button type="submit" class="btn btn-primary" data-i18n="infra.generate_key_2">Generate Key</button>
             </div>
         </form>
     </div>
@@ -39,14 +38,14 @@
 
 <div class="card">
     <div class="card-header">
-        <h3>About DKIM</h3>
+        <h3 data-i18n="infra.about_dkim">About DKIM</h3>
     </div>
     <div class="card-body">
-        <p>DKIM (DomainKeys Identified Mail) allows you to cryptographically sign emails to prove they came from your domain.</p>
-        <p>After generating a key, you will need to:</p>
+        <p data-i18n="infra.dkim_domainkeys_identified_mail_allows_you_to">DKIM (DomainKeys Identified Mail) allows you to cryptographically sign emails to prove they came from your domain.</p>
+        <p data-i18n="infra.after_generating_a_key_you_will_need_to">After generating a key, you will need to:</p>
         <ol>
-            <li>Add a TXT DNS record with the public key</li>
-            <li>The key will be automatically deployed to {{.ServerName}} if the checkbox above is enabled</li>
+            <li data-i18n="infra.add_a_txt_dns_record_with_the_public_key">Add a TXT DNS record with the public key</li>
+            <li><span data-i18n="infra.the_key_will_be_automatically_deployed_to">The key will be automatically deployed to</span> {{.ServerName}} <span data-i18n="infra.if_the_checkbox_above_is_enabled">if the checkbox above is enabled</span></li>
         </ol>
     </div>
 </div>

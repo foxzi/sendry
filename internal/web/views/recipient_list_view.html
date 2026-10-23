@@ -7,83 +7,84 @@
         {{end}}
     </div>
     <div class="header-actions">
-        <a href="/recipients/{{.List.ID}}/export" class="btn btn-secondary">Export CSV</a>
-        <a href="/recipients/{{.List.ID}}/import" class="btn">Import CSV</a>
-        <a href="/recipients/{{.List.ID}}/edit" class="btn btn-primary">Edit List</a>
+        <a href="/recipients/{{.List.ID}}/export" class="btn btn-secondary" data-i18n="cmp.export_csv">Export CSV</a>
+        <a href="/recipients/{{.List.ID}}/import" class="btn" data-i18n="import_csv">Import CSV</a>
+        <a href="/recipients/{{.List.ID}}/edit" class="btn btn-primary" data-i18n="cmp.edit_list">Edit List</a>
     </div>
 </div>
 
 <div class="stats-grid" style="margin-bottom: 1.5rem">
     <div class="stat-card">
         <div class="stat-value">{{.List.TotalCount}}</div>
-        <div class="stat-label">Total Recipients</div>
+        <div class="stat-label" data-i18n="cmp.total_recipients">Total Recipients</div>
     </div>
     <div class="stat-card">
         <div class="stat-value">{{.List.ActiveCount}}</div>
-        <div class="stat-label">Active</div>
+        <div class="stat-label" data-i18n="cmp.active">Active</div>
     </div>
     <div class="stat-card">
         <div class="stat-value">{{.List.SourceType}}</div>
-        <div class="stat-label">Source Type</div>
+        <div class="stat-label" data-i18n="cmp.source_type">Source Type</div>
     </div>
 </div>
 
 <div class="card">
     <div class="card-header">
-        <h2>Add Recipient</h2>
+        <h2 data-i18n="cmp.add_recipient">Add Recipient</h2>
     </div>
     <div class="card-body">
         <form method="post" action="/recipients/{{.List.ID}}/add" class="add-recipient-form">
             <div class="form-row">
                 <div class="form-group">
-                    <input type="email" name="email" required class="input" placeholder="Email *">
+                    <input type="email" name="email" required class="input" placeholder="Email *" data-i18n-placeholder="cmp.ph_email_req">
                 </div>
                 <div class="form-group">
-                    <input type="text" name="name" class="input" placeholder="Name">
+                    <input type="text" name="name" class="input" placeholder="Name" data-i18n-placeholder="name">
                 </div>
                 <div class="form-group">
-                    <button type="submit" class="btn btn-primary">Add</button>
+                    <button type="submit" class="btn btn-primary" data-i18n="cmp.add">Add</button>
                 </div>
             </div>
         </form>
     </div>
 </div>
 
-<div class="card" style="margin-top: 1.5rem">
+<div class="card scroll-target" style="margin-top: 1.5rem" id="results" data-partial>
     <div class="card-header">
-        <h2>Recipients ({{.Total}})</h2>
+        <h2><span data-i18n="recipients">Recipients</span> ({{.Total}})</h2>
         <form class="filter-form" method="get" action="/recipients/{{.List.ID}}">
-            <input type="text" name="search" placeholder="Search..." value="{{.Search}}" class="input">
+            <input type="text" name="search" placeholder="Search..." data-i18n-placeholder="cmp.search_ph" value="{{.Search}}" class="input">
             <select name="status" class="input">
-                <option value="">All Status</option>
-                <option value="active" {{if eq .Status "active"}}selected{{end}}>Active</option>
-                <option value="unsubscribed" {{if eq .Status "unsubscribed"}}selected{{end}}>Unsubscribed</option>
-                <option value="bounced" {{if eq .Status "bounced"}}selected{{end}}>Bounced</option>
+                <option value="" data-i18n="cmp.all_status">All Status</option>
+                <option value="active" {{if eq .Status "active"}}selected{{end}} data-i18n="cmp.active">Active</option>
+                <option value="unsubscribed" {{if eq .Status "unsubscribed"}}selected{{end}} data-i18n="cmp.opt_unsubscribed">Unsubscribed</option>
+                <option value="bounced" {{if eq .Status "bounced"}}selected{{end}} data-i18n="cmp.opt_bounced">Bounced</option>
             </select>
             {{if .Tags}}
             <select name="tag" class="input">
-                <option value="">All Tags</option>
+                <option value="" data-i18n="cmp.all_tags">All Tags</option>
                 {{range .Tags}}
                 <option value="{{.}}" {{if eq . $.Tag}}selected{{end}}>{{.}}</option>
                 {{end}}
             </select>
             {{end}}
-            <button type="submit" class="btn">Filter</button>
+            <button type="submit" class="btn" data-i18n="filter">Filter</button>
             {{if or .Search .Status .Tag}}
-            <a href="/recipients/{{.List.ID}}" class="btn btn-secondary">Clear</a>
+            <a href="/recipients/{{.List.ID}}" class="btn btn-secondary" data-i18n="common.clear">Clear</a>
             {{end}}
         </form>
     </div>
     <div class="card-body">
         {{if .Recipients}}
+        <div class="table-scroll">
         <table class="table">
             <thead>
                 <tr>
-                    <th>Email</th>
-                    <th>Name</th>
-                    <th>Status</th>
-                    <th>Created</th>
-                    <th>Actions</th>
+                    <th data-i18n="email">Email</th>
+                    <th data-i18n="name">Name</th>
+                    <th data-i18n="status">Status</th>
+                    <th data-i18n="common.created">Created</th>
+                    <th data-i18n="actions">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -93,42 +94,43 @@
                     <td>{{if .Name}}{{.Name}}{{else}}<span class="text-muted">-</span>{{end}}</td>
                     <td>
                         {{if eq .Status "active"}}
-                        <span class="badge badge-success">active</span>
+                        <span class="badge badge-success" data-i18n="status.active">active</span>
                         {{else if eq .Status "unsubscribed"}}
-                        <span class="badge badge-secondary">unsubscribed</span>
+                        <span class="badge badge-secondary" data-i18n="status.unsubscribed">unsubscribed</span>
                         {{else if eq .Status "bounced"}}
-                        <span class="badge badge-danger">bounced</span>
+                        <span class="badge badge-danger" data-i18n="status.bounced">bounced</span>
                         {{else}}
-                        <span class="badge">{{.Status}}</span>
+                        <span class="badge" data-i18n="status.{{.Status}}">{{.Status}}</span>
                         {{end}}
                     </td>
                     <td>{{.CreatedAt.Format "2006-01-02"}}</td>
                     <td>
-                        <form method="post" action="/recipients/{{$.List.ID}}/recipients/{{.ID}}" style="display:inline" onsubmit="return confirm('Delete this recipient?')">
+                        <form method="post" action="/recipients/{{$.List.ID}}/recipients/{{.ID}}" style="display:inline" onsubmit="return confirm(I18n.t('cmp.confirm_delete_recipient'))">
                             <input type="hidden" name="_method" value="DELETE">
-                            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                            <button type="submit" class="btn btn-sm btn-danger" data-i18n="delete">Delete</button>
                         </form>
                     </td>
                 </tr>
                 {{end}}
             </tbody>
         </table>
+        </div>
 
         {{if gt .TotalPages 1}}
         <div class="pagination">
             {{if gt .Page 1}}
-            <a href="/recipients/{{.List.ID}}?page={{sub .Page 1}}{{if .Search}}&search={{.Search}}{{end}}{{if .Status}}&status={{.Status}}{{end}}{{if .Tag}}&tag={{.Tag}}{{end}}" class="btn btn-sm">&laquo; Prev</a>
+            <a data-i18n="cmp.prev" href="/recipients/{{.List.ID}}?page={{sub .Page 1}}{{if .Search}}&search={{.Search}}{{end}}{{if .Status}}&status={{.Status}}{{end}}{{if .Tag}}&tag={{.Tag}}{{end}}" class="btn btn-sm">&laquo; Prev</a>
             {{end}}
-            <span class="pagination-info">Page {{.Page}} of {{.TotalPages}}</span>
+            <span class="pagination-info"><span data-i18n="common.page">Page</span> {{.Page}} <span data-i18n="common.of">of</span> {{.TotalPages}}</span>
             {{if lt .Page .TotalPages}}
-            <a href="/recipients/{{.List.ID}}?page={{add .Page 1}}{{if .Search}}&search={{.Search}}{{end}}{{if .Status}}&status={{.Status}}{{end}}{{if .Tag}}&tag={{.Tag}}{{end}}" class="btn btn-sm">Next &raquo;</a>
+            <a data-i18n="cmp.next" href="/recipients/{{.List.ID}}?page={{add .Page 1}}{{if .Search}}&search={{.Search}}{{end}}{{if .Status}}&status={{.Status}}{{end}}{{if .Tag}}&tag={{.Tag}}{{end}}" class="btn btn-sm">Next &raquo;</a>
             {{end}}
         </div>
         {{end}}
         {{else}}
         <div class="empty-state">
-            <p>No recipients in this list</p>
-            <p class="text-muted">Add recipients manually above or import from CSV</p>
+            <p data-i18n="cmp.no_recipients">No recipients in this list</p>
+            <p class="text-muted" data-i18n="cmp.no_recipients_hint">Add recipients manually above or import from CSV</p>
         </div>
         {{end}}
     </div>
@@ -136,13 +138,13 @@
 
 <div class="card" style="margin-top: 1.5rem">
     <div class="card-header">
-        <h2>Danger Zone</h2>
+        <h2 data-i18n="cmp.danger_zone">Danger Zone</h2>
     </div>
     <div class="card-body">
-        <form method="post" action="/recipients/{{.List.ID}}" onsubmit="return confirm('Are you sure? This will delete all recipients in this list.')">
+        <form method="post" action="/recipients/{{.List.ID}}" onsubmit="return confirm(I18n.t('cmp.confirm_delete_list'))">
             <input type="hidden" name="_method" value="DELETE">
-            <button type="submit" class="btn btn-danger">Delete List</button>
-            <span class="text-muted" style="margin-left: 1rem">This will permanently delete the list and all its recipients</span>
+            <button type="submit" class="btn btn-danger" data-i18n="cmp.delete_list">Delete List</button>
+            <span class="text-muted" style="margin-left: 1rem" data-i18n="cmp.delete_list_hint">This will permanently delete the list and all its recipients</span>
         </form>
     </div>
 </div>
