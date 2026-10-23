@@ -104,8 +104,6 @@ func (h *Handlers) APIKeyCreate(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt:       expiresAt,
 		RateLimitMinute: rateLimitMinute,
 		RateLimitHour:   rateLimitHour,
-		TrackOpens:      r.FormValue("track_opens") != "",
-		TrackClicks:     r.FormValue("track_clicks") != "",
 	}
 
 	result, err := h.apiKeys.Create(opts)
@@ -202,12 +200,6 @@ func (h *Handlers) APIKeyEdit(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.apiKeys.Update(id, name, allowedDomains, rateLimitMinute, rateLimitHour); err != nil {
 		h.logger.Error("failed to update API key", "id", id, "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to update API key")
-		return
-	}
-
-	if err := h.apiKeys.UpdateTracking(id, r.FormValue("track_opens") != "", r.FormValue("track_clicks") != ""); err != nil {
-		h.logger.Error("failed to update API key tracking", "id", id, "error", err)
 		h.error(w, http.StatusInternalServerError, "Failed to update API key")
 		return
 	}

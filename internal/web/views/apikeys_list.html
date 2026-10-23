@@ -82,7 +82,7 @@
                     </td>
                     <td class="actions">
                         <div class="icon-actions">
-                        <button type="button" class="btn-icon-sm" onclick="editKey('{{.ID}}', '{{.Name}}', [{{range $i, $d := .AllowedDomains}}{{if $i}},{{end}}'{{$d}}'{{end}}], {{.RateLimitMinute}}, {{.RateLimitHour}}, {{.TrackOpens}}, {{.TrackClicks}})" title="Edit" data-i18n-title="edit" aria-label="Edit">
+                        <button type="button" class="btn-icon-sm" onclick="editKey('{{.ID}}', '{{.Name}}', [{{range $i, $d := .AllowedDomains}}{{if $i}},{{end}}'{{$d}}'{{end}}], {{.RateLimitMinute}}, {{.RateLimitHour}})" title="Edit" data-i18n-title="edit" aria-label="Edit">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
                         </button>
                         <form method="post" action="/settings/api-keys/{{.ID}}/toggle">
@@ -170,17 +170,6 @@
                         {{end}}
                     </div>
                 </div>
-                <div class="form-group">
-                    <label class="checkbox-label">
-                        <input type="checkbox" name="track_opens" value="on">
-                        <span data-i18n="trk.key_track_opens">Track opens (default for this key)</span>
-                    </label>
-                    <label class="checkbox-label">
-                        <input type="checkbox" name="track_clicks" value="on">
-                        <span data-i18n="trk.key_track_clicks">Track clicks (default for this key)</span>
-                    </label>
-                    <small class="form-help" data-i18n="trk.key_help">The track_opens / track_clicks fields of a request override these values.</small>
-                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" onclick="document.getElementById('create-modal').style.display='none'" class="btn btn-secondary" data-i18n="cancel">Cancel</button>
@@ -226,17 +215,6 @@
                         {{end}}
                     </div>
                 </div>
-                <div class="form-group">
-                    <label class="checkbox-label">
-                        <input type="checkbox" name="track_opens" id="edit_track_opens" value="on">
-                        <span data-i18n="trk.key_track_opens">Track opens (default for this key)</span>
-                    </label>
-                    <label class="checkbox-label">
-                        <input type="checkbox" name="track_clicks" id="edit_track_clicks" value="on">
-                        <span data-i18n="trk.key_track_clicks">Track clicks (default for this key)</span>
-                    </label>
-                    <small class="form-help" data-i18n="trk.key_help">The track_opens / track_clicks fields of a request override these values.</small>
-                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" onclick="document.getElementById('edit-modal').style.display='none'" class="btn btn-secondary" data-i18n="cancel">Cancel</button>
@@ -247,9 +225,7 @@
 </div>
 
 <script>
-function editKey(id, name, allowedDomains, rateLimitMinute, rateLimitHour, trackOpens, trackClicks) {
-    document.getElementById('edit_track_opens').checked = !!trackOpens;
-    document.getElementById('edit_track_clicks').checked = !!trackClicks;
+function editKey(id, name, allowedDomains, rateLimitMinute, rateLimitHour) {
     document.getElementById('edit-form').action = '/settings/api-keys/' + id + '/edit';
     document.getElementById('edit_name').value = name;
     document.getElementById('edit_rate_limit_minute').value = rateLimitMinute || '';

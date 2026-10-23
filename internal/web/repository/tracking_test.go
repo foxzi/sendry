@@ -301,7 +301,7 @@ func TestTracking_EventCreatedAtDefault(t *testing.T) {
 	}
 }
 
-func TestCampaignAndAPIKeyTrackingFlags(t *testing.T) {
+func TestCampaignTrackingFlags(t *testing.T) {
 	db := setupTestDB(t)
 	camps := NewCampaignRepository(db)
 	c := &models.Campaign{Name: "n", FromEmail: "a@example.com", TrackOpens: true, AddUTM: true}
@@ -321,25 +321,6 @@ func TestCampaignAndAPIKeyTrackingFlags(t *testing.T) {
 		t.Fatalf("List = %+v, %v", list, err)
 	}
 
-	keys := NewAPIKeyRepository(db)
-	res, err := keys.Create(APIKeyCreateOptions{Name: "k", TrackOpens: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	byID, _ := keys.GetByID(res.ID)
-	byHash, _ := keys.GetByHash(HashKey(res.Key))
-	for _, k := range []*models.APIKey{byID, byHash} {
-		if k == nil || !k.TrackOpens || k.TrackClicks {
-			t.Fatalf("key = %+v", k)
-		}
-	}
-	if err := keys.UpdateTracking(res.ID, false, true); err != nil {
-		t.Fatal(err)
-	}
-	klist, _, err := keys.List(models.APIKeyFilter{})
-	if err != nil || len(klist) != 1 || klist[0].TrackOpens || !klist[0].TrackClicks {
-		t.Fatalf("keys list = %+v, %v", klist, err)
-	}
 }
 
 func TestTracking_StatsBase(t *testing.T) {

@@ -54,20 +54,13 @@ func (h *Handlers) CampaignList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) CampaignNew(w http.ResponseWriter, r *http.Request) {
-	// Tracking checkboxes default to the panel-wide tracking settings
-	trackOpens, trackClicks := false, false
-	if ts, err := h.settings.GetTrackingSettings(); err != nil {
-		h.logger.Error("failed to load tracking settings", "error", err)
-	} else if ts != nil {
-		trackOpens, trackClicks = ts.OpensDefault, ts.ClicksDefault
-	}
-
+	// Tracking checkboxes are on by default for new campaigns
 	data := map[string]any{
 		"Title":       "New Campaign",
 		"Active":      "campaigns",
 		"User":        h.getUserFromContext(r),
-		"TrackOpens":  trackOpens,
-		"TrackClicks": trackClicks,
+		"TrackOpens":  true,
+		"TrackClicks": true,
 	}
 
 	h.render(w, "campaign_new", data)

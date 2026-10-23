@@ -78,10 +78,8 @@ type Unsubscribe struct {
 type TrackingSettings struct {
 	// BaseURL is the proxying domain used in tracking links, stored as an
 	// origin, e.g. https://lnk.example.com. Empty means server.public_url.
-	BaseURL       string `json:"base_url"`
-	OpensDefault  bool   `json:"opens_default"`
-	ClicksDefault bool   `json:"clicks_default"`
-	Secret        string `json:"-"` // HMAC key for tokens, generated on first use
+	BaseURL string `json:"base_url"`
+	Secret  string `json:"-"` // HMAC key for tokens, generated on first use
 	// PreviousSecret is the key before the last rotation, still accepted
 	// when verifying tokens. Empty if the secret was never rotated.
 	PreviousSecret string `json:"-"`

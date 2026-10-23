@@ -23,17 +23,6 @@
             <input type="text" id="base_url" name="base_url" class="input" value="{{.Settings.BaseURL}}" placeholder="lnk.example.com">
             <small class="form-help" data-i18n="trk.base_url_help">Pixel, clicks and unsubscribe go through this domain. If it gets blocked, enter a new one: only new emails change, old links keep working through any domain that proxies to the panel. Empty: the panel address.</small>
         </div>
-
-        <div class="form-group">
-            <label class="checkbox-label">
-                <input type="checkbox" id="opens_default" name="opens_default" value="1"{{if .Settings.OpensDefault}} checked{{end}}>
-                <span data-i18n="trk.opens_default">Track opens by default for new campaigns</span>
-            </label>
-            <label class="checkbox-label">
-                <input type="checkbox" id="clicks_default" name="clicks_default" value="1"{{if .Settings.ClicksDefault}} checked{{end}}>
-                <span data-i18n="trk.clicks_default">Track clicks by default for new campaigns</span>
-            </label>
-        </div>
     </div>
     <div class="card-footer">
         <button type="submit" class="btn btn-primary" data-i18n="save">Save</button>

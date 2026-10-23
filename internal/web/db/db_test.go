@@ -121,3 +121,47 @@ func TestMigrate_Indexes(t *testing.T) {
 		t.Errorf("track_opens default = %q, want 0", dflt)
 	}
 }
+
+func TestMigrate_DropsTrackingDefaults(t *testing.T) {
+	d, err := New(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if err := d.Migrate(); err != nil {
+		t.Fatal(err)
+	}
+	// a database from v0.6.0 has per-key and global tracking defaults
+	for _, q := range []string{
+		`ALTER TABLE api_keys ADD COLUMN track_opens INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE api_keys ADD COLUMN track_clicks INTEGER NOT NULL DEFAULT 0`,
+		`INSERT INTO settings (key, value) VALUES ('tracking.opens_default', '1'), ('tracking.clicks_default', '0'), ('tracking.base_url', 'https://lnk.example.com')`,
+	} {
+		if _, err := d.Exec(q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	if err := d.Migrate(); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, col := range []string{"track_opens", "track_clicks"} {
+		if d.columnExists("api_keys", col) {
+			t.Errorf("api_keys.%s not dropped", col)
+		}
+	}
+	var keys []string
+	rows, err := d.Query(`SELECT key FROM settings WHERE key LIKE 'tracking.%' ORDER BY key`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var k string
+		rows.Scan(&k)
+		keys = append(keys, k)
+	}
+	rows.Close()
+	if len(keys) != 1 || keys[0] != "tracking.base_url" {
+		t.Errorf("tracking settings = %v, want only tracking.base_url", keys)
+	}
+}
