@@ -2,6 +2,11 @@
 I18n.register({
     en: {
         'trk.delivered': 'Delivered',
+        'trk.engagement': 'Engagement',
+        'trk.share_of_delivered': 'Percent of delivered',
+        'trk.of_total': 'of',
+        'trk.opens_total_lc': 'opens in total',
+        'trk.clicks_total_lc': 'clicks in total',
         'trk.unique_opens': 'Opened (unique)',
         'trk.total_opens': 'Opens total',
         'trk.unique_clicks': 'Clicked (unique)',
@@ -70,6 +75,11 @@ I18n.register({
     },
     ru: {
         'trk.delivered': 'Доставлено',
+        'trk.engagement': 'Вовлечённость',
+        'trk.share_of_delivered': 'Проценты от доставленных',
+        'trk.of_total': 'из',
+        'trk.opens_total_lc': 'открытий всего',
+        'trk.clicks_total_lc': 'кликов всего',
         'trk.unique_opens': 'Открыли (уникальные)',
         'trk.total_opens': 'Открытий всего',
         'trk.unique_clicks': 'Кликнули (уникальные)',

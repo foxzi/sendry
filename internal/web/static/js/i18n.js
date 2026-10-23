@@ -108,6 +108,7 @@ var I18n = (function() {
             'job_completed': 'Completed',
             'pause': 'Pause',
             'resume': 'Resume',
+            'theme_toggle': 'Toggle theme',
             'cancel_job': 'Cancel',
             'retry_failed': 'Retry Failed',
             'status_draft': 'Draft',
@@ -308,6 +309,7 @@ var I18n = (function() {
             'job_completed': 'Завершена',
             'pause': 'Пауза',
             'resume': 'Продолжить',
+            'theme_toggle': 'Сменить тему',
             'cancel_job': 'Отменить',
             'retry_failed': 'Повторить неудачные',
             'status_draft': 'Черновик',
@@ -445,11 +447,17 @@ var I18n = (function() {
     }
 
     function applyTranslations() {
-        // Unknown keys leave the server-rendered text in place
+        // Unknown keys leave the server-rendered text in place;
+        // data-i18n-arg-<name> attributes fill {name} placeholders
         document.querySelectorAll('[data-i18n]').forEach(function(el) {
             var key = el.getAttribute('data-i18n');
             var v = lookup(key);
-            if (v !== undefined) el.textContent = v;
+            if (v === undefined) return;
+            for (var i = 0; i < el.attributes.length; i++) {
+                var a = el.attributes[i];
+                if (a.name.indexOf('data-i18n-arg-') === 0) v = v.replace('{' + a.name.slice(14) + '}', a.value);
+            }
+            el.textContent = v;
         });
         document.querySelectorAll('[data-i18n-placeholder]').forEach(function(el) {
             var key = el.getAttribute('data-i18n-placeholder');

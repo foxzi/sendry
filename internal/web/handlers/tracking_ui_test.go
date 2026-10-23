@@ -224,7 +224,7 @@ func TestJobViewRendersTrackingStats(t *testing.T) {
 	if rec.Code != 200 {
 		t.Fatalf("code %d: %s", rec.Code, body)
 	}
-	for _, want := range []string{"Opened (unique)", "Open rate", "CTR", "CTOR", "/jobs/" + j.ID + "/clickmap"} {
+	for _, want := range []string{"Opened (unique)", "eng-funnel", "CTR", "CTOR", "/jobs/" + j.ID + "/clickmap", "dl-bar"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("job view lacks %q", want)
 		}

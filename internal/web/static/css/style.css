@@ -20,6 +20,11 @@
     --sidebar-hover-bg: rgba(255,255,255,.06);
     --sidebar-w: 232px;
     --topbar-h: 52px;
+    --primary-soft: #eff6ff;
+    --success-soft: #d1fae5;
+    --warning-soft: #fef3c7;
+    --error-soft: #fee2e2;
+    --cf-band: #f3f4f6;
 }
 
 [data-theme="dark"] {
@@ -29,6 +34,11 @@
     --text-muted: #9ca3af;
     --border: #374151;
     --sidebar-bg: #0b1220;
+    --primary-soft: rgba(59,130,246,.16);
+    --success-soft: rgba(16,185,129,.18);
+    --warning-soft: rgba(245,158,11,.18);
+    --error-soft: rgba(239,68,68,.18);
+    --cf-band: rgba(255,255,255,.04);
 }
 
 /* Reset */
@@ -992,6 +1002,22 @@ body {
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
+/* Own chevron instead of the native arrow, which sits flush with the edge */
+select:not([multiple]):not([size]) {
+    -webkit-appearance: none;
+    appearance: none;
+    padding-right: 2.25rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 12px 12px;
+    cursor: pointer;
+}
+
+[data-theme="dark"] select:not([multiple]):not([size]) {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%239ca3af' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
 .input.code {
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     font-size: 0.875rem;
@@ -1804,4 +1830,1214 @@ td.actions form {
 .cm-modes {
     display: inline-flex;
     margin-bottom: 0;
+}
+
+/* Run progress: one stacked bar of item states */
+.dl-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 0.75rem;
+    margin-bottom: 0.875rem;
+}
+
+.dl-progress {
+    font-size: 2rem;
+    font-weight: 600;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.dl-caption {
+    font-size: 14px;
+    color: var(--text-muted);
+}
+
+.dl-caption strong {
+    color: var(--text);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+/* The 2px gap between segments shows the card surface */
+.dl-bar {
+    display: flex;
+    gap: 2px;
+    height: 14px;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.dl-seg {
+    display: block;
+    flex-basis: 0;
+    min-width: 3px;
+    transition: opacity 0.12s ease;
+}
+
+.dl-seg:hover {
+    opacity: 0.8;
+}
+
+.dl-sent { background: var(--viz-3); }
+.dl-skipped { background: var(--viz-neutral); }
+.dl-failed { background: var(--viz-8); }
+.dl-queued { background: var(--viz-1); }
+.dl-pending { background: var(--border); }
+
+.dl-legend {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.75rem;
+    margin-top: 1rem;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+}
+
+.dl-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.dl-item a {
+    color: var(--text);
+}
+
+.dl-item a:hover {
+    color: var(--primary);
+}
+
+.dl-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex: none;
+}
+
+.dl-swatch.dl-pending {
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-muted) 45%, transparent);
+}
+
+.dl-count {
+    font-weight: 600;
+}
+
+.dl-share {
+    color: var(--text-muted);
+}
+
+.dl-item.is-zero a,
+.dl-item.is-zero .dl-count {
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+/* Engagement funnel: delivered, opened, clicked, unsubscribed */
+.eng-card {
+    margin-bottom: 1.5rem;
+}
+
+.eng-note {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.eng-funnel {
+    list-style: none;
+}
+
+.eng-row {
+    display: grid;
+    grid-template-columns: minmax(9rem, 14rem) 1fr 4.5rem 8.5rem;
+    grid-template-areas: "label track count pct";
+    align-items: center;
+    column-gap: 1rem;
+    padding: 0.5rem 0;
+}
+
+.eng-label { grid-area: label; min-width: 0; }
+.eng-track { grid-area: track; }
+.eng-count { grid-area: count; }
+.eng-pct { grid-area: pct; }
+
+.eng-label > span {
+    font-size: 14px;
+}
+
+.eng-label small {
+    display: block;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.eng-label strong {
+    color: var(--text);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Square at the baseline, rounded at the data end */
+.eng-track {
+    height: 12px;
+    border-radius: 0 4px 4px 0;
+    background: color-mix(in srgb, var(--viz-1) 12%, transparent);
+}
+
+.eng-bar {
+    height: 100%;
+    min-width: 3px;
+    border-radius: 0 4px 4px 0;
+    background: var(--viz-1);
+}
+
+.eng-count {
+    text-align: right;
+    font-size: 15px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.eng-pct {
+    text-align: right;
+    font-size: 13px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.eng-metric {
+    margin-right: 0.25rem;
+    font-size: 12px;
+}
+
+.eng-row-unsub {
+    margin-top: 0.375rem;
+    padding-top: 0.875rem;
+    border-top: 1px solid var(--border);
+}
+
+.eng-row-unsub .eng-track {
+    background: color-mix(in srgb, var(--viz-neutral) 16%, transparent);
+}
+
+.eng-row-unsub .eng-bar {
+    background: var(--viz-neutral);
+}
+
+.eng-foot {
+    margin-top: 0.75rem;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.eng-foot strong {
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 600px) {
+    .eng-row {
+        grid-template-columns: 1fr auto auto;
+        grid-template-areas: "label count pct" "track track track";
+        row-gap: 0.375rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dl-seg {
+        transition: none;
+    }
+}
+/* ==========================================================================
+   Campaign flow: create / edit / send (views/_campaign_flow.html, js/campaign-flow.js)
+   ========================================================================== */
+.cf {
+    display: grid;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.cf .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+.cf input[type="radio"],
+.cf input[type="checkbox"] {
+    width: auto;
+}
+
+.cf [hidden] {
+    display: none;
+}
+
+.cf form {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.cf-title {
+    margin-top: 1rem;
+    font-size: 1.125rem;
+    font-weight: 600;
+}
+
+.cf-title:first-child {
+    margin-top: 0;
+}
+
+.cf-note {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+}
+
+/* Rows: separate cards with a gap */
+.cf-rows {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.cf-row {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-card);
+}
+
+/* Optional rows share one card */
+.cf-group {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-card);
+}
+
+.cf-group-h {
+    padding: 0.625rem 1rem 0;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.cf-group > .cf-row {
+    border: 0;
+    border-top: 1px solid var(--border);
+    border-radius: 0;
+    background: none;
+}
+
+.cf-group > .cf-row:first-child {
+    border-top: 0;
+}
+
+.cf-group > .cf-group-h + .cf-row {
+    margin-top: 0.5rem;
+}
+
+/* Locked: dashed, no background, dimmed */
+.cf-row.is-locked,
+.cf-group:has(> .is-locked) {
+    background: none;
+    border-style: dashed;
+}
+
+.cf-group > .cf-row.is-locked {
+    border-style: none;
+    border-top: 1px dashed var(--border);
+}
+
+.cf-row.is-locked .cf-sum {
+    opacity: 0.55;
+}
+
+.cf-row.is-locked .cf-edit-btn {
+    visibility: hidden;
+}
+
+/* Open: lifted with a primary ring */
+.cf-rows > .cf-row.is-open {
+    background: var(--bg-card);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 1px var(--primary), var(--shadow);
+    margin-block: 0.375rem;
+}
+
+.cf-group:has(> .is-open) {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 1px var(--primary), var(--shadow);
+}
+
+.cf-group > .cf-row.is-open {
+    border-color: var(--border);
+    box-shadow: none;
+    margin-block: 0;
+}
+
+/* Row summary: dot | name | value or hint | edit */
+.cf-sum {
+    display: grid;
+    grid-template-columns: 22px 11rem minmax(0, 1fr) auto;
+    gap: 0.75rem;
+    align-items: start;
+    padding: 0.75rem 1rem;
+}
+
+.cf-row.is-open .cf-sum {
+    border-bottom: 1px solid var(--border);
+}
+
+.cf-row.is-open .cf-val,
+.cf-row.is-open .cf-edit-btn {
+    display: none;
+}
+
+.cf-dot {
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    margin-top: 2px;
+    border: 1.5px solid transparent;
+    border-radius: 50%;
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.cf-dot.ok {
+    background: var(--success-soft);
+    color: var(--success);
+}
+
+.cf-dot.cur {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+}
+
+.cf-dot.todo {
+    border-color: var(--border);
+    color: var(--text-muted);
+}
+
+.cf-dot.opt {
+    border-color: var(--border);
+}
+
+.cf-dot.warn {
+    background: var(--warning-soft);
+    color: var(--warning);
+}
+
+.cf-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.cf-hint {
+    display: none;
+    min-width: 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.cf-row.is-open .cf-hint {
+    display: block;
+}
+
+.cf-val {
+    min-width: 0;
+    font-size: 0.9rem;
+    overflow-wrap: anywhere;
+}
+
+.cf-sub {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+}
+
+.cf-edit-btn,
+.cf-link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--primary);
+    font: inherit;
+    font-size: 0.875rem;
+    cursor: pointer;
+}
+
+.cf-edit-btn:hover,
+.cf-link:hover {
+    text-decoration: underline;
+}
+
+.cf-edit-btn[hidden],
+.cf-link[hidden] {
+    display: none;
+}
+
+/* Summary contents */
+.cf-vers {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 0.75rem;
+}
+
+.cf-ver {
+    display: grid;
+    grid-template-columns: 54px minmax(0, 1fr);
+    gap: 0.625rem;
+    align-items: start;
+    font-size: 0.85rem;
+}
+
+.cf-ver b {
+    display: block;
+}
+
+.cf-ver .cf-sub {
+    display: block;
+}
+
+/* The email is drawn at 600px and scaled to the 54px box */
+.cf-mini {
+    position: relative;
+    display: block;
+    width: 54px;
+    aspect-ratio: 3 / 4;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: #fff;
+}
+
+.cf-mini iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 600px;
+    height: 800px;
+    border: 0;
+    transform: scale(0.09);
+    transform-origin: 0 0;
+    pointer-events: none;
+    background: #fff;
+}
+
+.cf-pct {
+    display: block;
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+}
+
+.cf-kvs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+}
+
+.cf-kvs code {
+    padding: 1px 6px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg);
+    font-size: 0.78rem;
+}
+
+/* Open row body */
+.cf-body {
+    padding: 1rem 1rem 0;
+}
+
+.cf-fields {
+    display: grid;
+    gap: 0.875rem;
+    padding-bottom: 1rem;
+}
+
+.cf-fields .field,
+.cf-fields .form-group {
+    display: grid;
+    gap: 0.25rem;
+    min-width: 0;
+    margin: 0;
+}
+
+.cf-fields .field > label,
+.cf-fields .form-group > label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+
+.cf-fields .field[hidden],
+.cf-fields .form-group[hidden] {
+    display: none;
+}
+
+.cf-fields textarea.input {
+    min-height: 5rem;
+    resize: vertical;
+}
+
+.cf-fields .help,
+.cf-fields .form-help {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.cf-err {
+    font-size: 0.8125rem;
+    color: var(--error);
+}
+
+.cf-error {
+    margin-bottom: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--error);
+    border-radius: 6px;
+    background: var(--error-soft);
+    font-size: 0.875rem;
+    color: var(--error);
+}
+
+.cf-saved {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--success);
+}
+
+.cf-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin: 0 -1rem;
+    padding: 0.625rem 1rem;
+    border-top: 1px solid var(--border);
+    border-radius: 0 0 var(--radius) var(--radius);
+    background: var(--cf-band);
+}
+
+.cf-foot [data-act="cancel"] {
+    order: -1;
+}
+
+/* Version tabs and segmented buttons */
+.cf-vtabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+}
+
+/* Version tab: a pill with the version button and a cross to delete it */
+.cf-vtab {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg-card);
+    color: var(--text);
+}
+
+.cf-vtab:hover {
+    border-color: var(--primary);
+}
+
+.cf-vtab:has(> button.on) {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+    color: var(--primary);
+}
+
+.cf-vtab button {
+    padding: 0.125rem 0.25rem 0.125rem 0.75rem;
+    border: 0;
+    border-radius: 999px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: 0.8125rem;
+    cursor: pointer;
+}
+
+.cf-vtab .cf-vtab-x {
+    padding: 0.125rem 0.625rem 0.125rem 0.25rem;
+    font-size: 1rem;
+    line-height: 1;
+    opacity: 0.6;
+}
+
+.cf-vtab .cf-vtab-x:hover {
+    opacity: 1;
+    color: var(--error);
+}
+
+/* The ring goes around the whole pill, not the half inside it */
+.cf .cf-vtab button:focus-visible {
+    outline: none;
+}
+
+.cf-vtab:has(button:focus-visible) {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.cf-seg {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.cf-seg button {
+    padding: 0.25rem 0.75rem;
+    border: 0;
+    background: var(--bg-card);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.8125rem;
+    cursor: pointer;
+}
+
+.cf-seg button:hover:not(.on) {
+    background: var(--bg);
+}
+
+.cf-seg button.on {
+    background: var(--primary);
+    color: #fff;
+}
+
+.cf-vtabs[hidden],
+.cf-seg[hidden] {
+    display: none;
+}
+
+.cf-ab-help {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+}
+
+.cf-split {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.cf-split input[type="range"] {
+    flex: 1 1 160px;
+    width: auto;
+    min-width: 0;
+    padding: 0;
+    accent-color: var(--primary);
+}
+
+.cf-split-label {
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.cf-split[hidden] {
+    display: none;
+}
+
+/* Template gallery */
+.cf-gal-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.cf .cf-search {
+    width: 220px;
+    max-width: 100%;
+}
+
+.cf-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+}
+
+.cf-chip {
+    padding: 0.125rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg-card);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.8125rem;
+    cursor: pointer;
+}
+
+.cf-chip:hover {
+    border-color: var(--primary);
+}
+
+.cf-chip.on {
+    border-color: var(--primary);
+    background: var(--primary);
+    color: #fff;
+}
+
+.cf-gal {
+    --cf-scale: 0.22;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.75rem;
+    max-height: 420px;
+    overflow-y: auto;
+    padding: 3px;
+}
+
+.cf-tpl {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    padding: 6px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-card);
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.cf-tpl:hover {
+    border-color: var(--primary);
+}
+
+.cf-tpl.sel {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px var(--primary);
+}
+
+.cf-tpl[hidden] {
+    display: none;
+}
+
+.cf-thumb {
+    position: relative;
+    display: block;
+    aspect-ratio: 4 / 5;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: #fff;
+}
+
+/* The email is drawn at 600px and scaled down, so the thumbnail shows the real layout */
+.cf-thumb iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 600px;
+    height: 750px;
+    border: 0;
+    transform: scale(var(--cf-scale));
+    transform-origin: 0 0;
+    pointer-events: none;
+    background: #fff;
+}
+
+.cf-tpl-name {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+}
+
+.cf-tpl-folder {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.cf-empty {
+    padding: 1rem;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+}
+
+.cf-empty[hidden] {
+    display: none;
+}
+
+/* Variables */
+.cf-kv {
+    display: grid;
+    gap: 0.375rem;
+}
+
+.cf-kv-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) 28px;
+    gap: 0.375rem;
+    align-items: center;
+}
+
+.cf-kv-del {
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: var(--text-muted);
+    font-size: 1.125rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.cf-kv-del:hover {
+    background: var(--bg);
+    color: var(--error);
+}
+
+/* Recipient lists */
+.cf-lists {
+    display: grid;
+    gap: 0.5rem;
+}
+
+label.cf-list {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.625rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-card);
+    cursor: pointer;
+}
+
+label.cf-list:hover {
+    border-color: var(--primary);
+}
+
+label.cf-list:has(input:checked) {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 1px var(--primary);
+}
+
+label.cf-list:has(input:focus-visible) {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.cf-list-name {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.cf-list-num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.cf-list-num b {
+    font-size: 1.0625rem;
+}
+
+.cf-list-num small {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+/* Check: preview + side column */
+.cf-check {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 1rem;
+    align-items: start;
+}
+
+/* The 600px preview takes the whole row; test email and readiness sit under it */
+.cf-check > :first-child {
+    grid-column: 1 / -1;
+}
+
+/* Panel children are spaced by the grid gap, so nothing sticks together */
+.cf-panel {
+    display: grid;
+    gap: 0.75rem;
+    align-content: start;
+    padding: 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-card);
+}
+
+.cf-panel-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.cf-panel > .btn,
+.cf-panel > .cf-seg {
+    justify-self: start;
+}
+
+.cf-panel-head h4,
+.cf-panel-head h3 {
+    font-size: 0.9375rem;
+    font-weight: 600;
+}
+
+.cf-pv-subject {
+    font-size: 0.875rem;
+    overflow-wrap: anywhere;
+}
+
+.cf-stage {
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    overflow-x: auto;
+}
+
+.cf-preview {
+    display: block;
+    flex: none;
+    width: 600px;
+    height: 520px;
+    margin-inline: auto;
+    border: 0;
+    border-radius: 4px;
+    background: #fff;
+}
+
+.cf-stage.is-phone .cf-preview {
+    width: 375px;
+}
+
+.cf-preview[hidden] {
+    display: none;
+}
+
+.cf-stage-msg {
+    padding: 2rem 1rem;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.cf-stage-msg.err {
+    color: var(--error);
+    white-space: pre-wrap;
+}
+
+.cf-stage-msg[hidden] {
+    display: none;
+}
+
+.cf-test-result {
+    font-size: 0.875rem;
+    overflow-wrap: anywhere;
+}
+
+.cf-test-result.ok {
+    color: var(--success);
+}
+
+.cf-test-result.err {
+    color: var(--error);
+}
+
+.cf-test-result[hidden] {
+    display: none;
+}
+
+/* Readiness checklist */
+.cf-ready-row {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr);
+    gap: 0.625rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.875rem;
+}
+
+.cf-ready-row:last-child {
+    border-bottom: 0;
+}
+
+.cf-ico {
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    margin-top: 1px;
+    border-radius: 50%;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.cf-ico.ok {
+    background: var(--success-soft);
+    color: var(--success);
+}
+
+.cf-ico.warn {
+    background: var(--warning-soft);
+    color: var(--warning);
+}
+
+.cf-ready-t {
+    font-weight: 600;
+}
+
+.cf-ready-d {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+}
+
+/* When to send */
+.cf-radio-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+}
+
+.cf-radio-row label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    cursor: pointer;
+}
+
+.cf-pilot {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    padding-left: 1.5rem;
+}
+
+.cf-pilot .input {
+    width: 90px;
+}
+
+.cf-more {
+    font-size: 0.875rem;
+}
+
+.cf-more summary {
+    width: fit-content;
+    color: var(--primary);
+    cursor: pointer;
+}
+
+.cf-more[open] summary {
+    margin-bottom: 0.5rem;
+}
+
+.cf-more label {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+/* Final actions */
+.cf-final {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    padding-top: 0.5rem;
+}
+
+.cf-final-help {
+    flex-basis: 100%;
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+}
+
+.cf-final .btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+/* Focus */
+.cf button:focus-visible,
+.cf summary:focus-visible,
+.cf .cf-search:focus-visible,
+.cf-tpl:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+@media (max-width: 900px) {
+    .cf-check {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .cf-check > :nth-child(n + 2),
+    .cf-check > :first-child {
+        grid-column: auto;
+        grid-row: auto;
+    }
+}
+
+@media (max-width: 640px) {
+    .cf-sum {
+        grid-template-columns: 22px minmax(0, 1fr) auto;
+        row-gap: 0.25rem;
+    }
+
+    .cf-sum .cf-val,
+    .cf-sum .cf-hint {
+        grid-column: 1 / -1;
+    }
+
+    .cf-gal {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .cf .cf-search {
+        width: 100%;
+    }
+
+    .cf-preview {
+        height: 420px;
+    }
+
+    .cf-stage {
+        padding: 0.5rem;
+    }
+
+    .cf-kv-row {
+        grid-template-columns: minmax(0, 1fr) 28px;
+    }
+
+    .cf-kv-row .cf-kv-key,
+    .cf-kv-row .cf-kv-val {
+        grid-column: 1;
+    }
+
+    .cf-kv-row .cf-kv-del {
+        grid-column: 2;
+        grid-row: 1 / span 2;
+    }
+
+    .cf-final .btn {
+        flex: 1 1 100%;
+    }
 }

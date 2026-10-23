@@ -1,0 +1,413 @@
+{{/* Shared rows of the campaign flow (create / edit / send). Both blocks take the
+page data map (Mode, Campaign, Content, Variables, Templates, ...). The DOM
+contract is described in docs/campaign-flow.ru.md. */}}
+
+{{define "cf_letter"}}
+<h2 class="cf-title" data-i18n="cmp.cf_letter">Email</h2>
+{{if ne .Mode "create"}}<p class="cf-note" data-i18n="cmp.cf_note_next">Changes affect the next sends. Emails already sent do not change.</p>{{end}}
+<div class="cf-rows">
+
+    <!-- from -->
+    <section class="cf-row" data-row="from" data-kind="step">
+        <div class="cf-sum">
+            <span class="cf-dot" aria-hidden="true"></span>
+            <h3 class="cf-name" id="cf-from-h" data-i18n="cmp.cf_from">From</h3>
+            <p class="cf-hint" data-i18n="cmp.cf_h_from">The address the email is sent from and the name the recipient sees.</p>
+            <div class="cf-val" data-out></div>
+            <button type="button" class="cf-edit-btn" data-act="open" aria-expanded="false" aria-controls="cf-from-body" data-i18n="cmp.cf_change">Change</button>
+        </div>
+        <div class="cf-body" id="cf-from-body" hidden>
+            <div class="cf-fields">
+                <div class="field">
+                    <label for="from_email" data-i18n="cmp.cf_from_email">Sender email</label>
+                    <input type="email" id="from_email" name="from_email" class="input" autocomplete="off" placeholder="hello@example.com" value="{{.Campaign.FromEmail}}">
+                    <small class="cf-err" data-err="from_email" role="alert" hidden></small>
+                </div>
+                <div class="field">
+                    <label for="from_name" data-i18n="cmp.cf_from_name">Sender name</label>
+                    <input type="text" id="from_name" name="from_name" class="input" autocomplete="off" placeholder="Company Name" data-i18n-placeholder="cmp.ph_company" value="{{.Campaign.FromName}}">
+                    <small class="cf-err" data-err="from_name" role="alert" hidden></small>
+                </div>
+                <div class="field">
+                    <label for="reply_to" data-i18n="cmp.cf_reply_to">Reply-To</label>
+                    <input type="email" id="reply_to" name="reply_to" class="input" autocomplete="off" placeholder="support@example.com" value="{{.Campaign.ReplyTo}}">
+                    <small class="form-help" data-i18n="cmp.cf_reply_to_help">Where replies from recipients will go.</small>
+                    <small class="cf-err" data-err="reply_to" role="alert" hidden></small>
+                </div>
+            </div>
+            <p class="cf-error" role="alert" hidden></p>
+            <div class="cf-foot">
+                {{if ne .Mode "create"}}<button type="button" class="btn" data-act="cancel" data-i18n="cmp.cf_cancel">Cancel</button>{{end}}
+                <button type="button" class="btn btn-primary" data-act="primary" data-i18n="cmp.cf_next">Next</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- content -->
+    <section class="cf-row" data-row="content" data-kind="step">
+        <div class="cf-sum">
+            <span class="cf-dot" aria-hidden="true"></span>
+            <h3 class="cf-name" id="cf-content-h" data-i18n="cmp.cf_content">Content</h3>
+            <p class="cf-hint" data-i18n="cmp.cf_h_content">Template and subject. You can add a second version for an A/B test.</p>
+            <div class="cf-val" data-out></div>
+            <button type="button" class="cf-edit-btn" data-act="open" aria-expanded="false" aria-controls="cf-content-body" data-i18n="cmp.cf_change">Change</button>
+        </div>
+        <div class="cf-body" id="cf-content-body" hidden>
+            <div class="cf-fields">
+                <input type="hidden" id="template_id" name="template_id" value="{{.Content.ATemplateID}}">
+                <input type="hidden" id="template_id_b" name="template_id_b" value="{{.Content.BTemplateID}}">
+                <input type="hidden" id="ab_enabled" name="ab_enabled" value="on"{{if not .Content.HasB}} disabled{{end}}>
+
+                <div class="cf-vtabs" role="group" aria-label="Version" data-i18n-label="cmp.cf_versions"{{if not .Content.HasB}} hidden{{end}}>
+                    <span class="cf-vtab"><button type="button" class="on" data-ver="a" data-i18n="cmp.cf_ver_a">Version A</button><button type="button" class="cf-vtab-x" data-act="ver-del" data-del="a" aria-label="Delete version A" data-i18n-label="cmp.cf_del_ver_a">&times;</button></span>
+                    <span class="cf-vtab"><button type="button" data-ver="b" data-i18n="cmp.cf_ver_b">Version B</button><button type="button" class="cf-vtab-x" data-act="ver-del" data-del="b" aria-label="Delete version B" data-i18n-label="cmp.cf_del_ver_b">&times;</button></span>
+                </div>
+                <p class="cf-ab-help" data-i18n="cmp.cf_ab_help"{{if not .Content.HasB}} hidden{{end}}>Each recipient gets one of the versions at random. The campaign statistics will show which one worked better.</p>
+
+                <div class="field">
+                    <span class="cf-label" id="cf-tpl-label" data-i18n="cmp.cf_template">Template</span>
+                    {{if .Templates}}
+                    <div class="cf-gal-tools">
+                        <input type="search" id="cf-tpl-search" class="input cf-search" autocomplete="off" placeholder="Search templates" data-i18n-placeholder="cmp.wz_tpl_search" aria-label="Search templates" data-i18n-label="cmp.wz_tpl_search">
+                        {{if .Folders}}
+                        <div class="cf-chips" role="group" aria-label="Folders" data-i18n-label="cmp.cf_folders">
+                            <button type="button" class="cf-chip on" data-folder="" data-i18n="cmp.wz_all">All</button>
+                            {{range .Folders}}<button type="button" class="cf-chip" data-folder="{{.}}">{{.}}</button>{{end}}
+                        </div>
+                        {{end}}
+                    </div>
+                    <div class="cf-gal" id="cf-gal" role="group" aria-labelledby="cf-tpl-label">
+                        {{range .Templates}}
+                        <button type="button" class="cf-tpl{{if eq .ID $.Content.ATemplateID}} sel{{end}}" aria-pressed="{{if eq .ID $.Content.ATemplateID}}true{{else}}false{{end}}" data-id="{{.ID}}" data-name="{{.Name}}" data-folder="{{.Folder}}" data-subject="{{.Subject}}" data-unsub="{{if .HasUnsubscribe}}1{{else}}0{{end}}">
+                            <span class="cf-thumb"><iframe src="/templates/{{.ID}}/frame" loading="lazy" sandbox="" tabindex="-1" aria-hidden="true" title=""></iframe></span>
+                            <span class="cf-tpl-name">{{.Name}}</span>
+                            {{if .Folder}}<span class="cf-tpl-folder">{{.Folder}}</span>{{end}}
+                        </button>
+                        {{end}}
+                    </div>
+                    <p class="cf-empty" id="cf-gal-empty" hidden data-i18n="cmp.wz_tpl_none_found">No templates match</p>
+                    {{else}}
+                    <div class="alert alert-warning">
+                        <span data-i18n="cmp.wz_no_templates">There are no templates yet.</span>
+                        <a href="/templates" data-i18n="cmp.wz_create_template">Create a template</a>
+                    </div>
+                    {{end}}
+                    <small class="cf-err" data-err="template_id" role="alert" hidden></small>
+                    <small class="cf-err" data-err="template_id_b" role="alert" hidden></small>
+                </div>
+
+                <div class="field" data-ver-field="a">
+                    <label for="subject" id="cf-subject-label" data-i18n="cmp.wz_subject">Subject</label>
+                    <input type="text" id="subject" name="subject" class="input" autocomplete="off" value="{{.Content.ASubject}}">
+                    <small class="form-help" data-i18n="cmp.wz_subject_help">Taken from the template when you choose it. You can change it.</small>
+                    <small class="cf-err" data-err="subject" role="alert" hidden></small>
+                </div>
+                <div class="field" data-ver-field="b" hidden>
+                    <label for="subject_b" id="cf-subject-b-label" data-i18n="cmp.wz_ab_subject">Subject for version B</label>
+                    <input type="text" id="subject_b" name="subject_b" class="input" autocomplete="off" value="{{.Content.BSubject}}">
+                    <small class="cf-err" data-err="subject_b" role="alert" hidden></small>
+                </div>
+
+                <div class="cf-split" hidden>
+                    <label for="split_a" data-i18n="cmp.wz_ab_split">Who gets which version</label>
+                    <input type="range" id="split_a" name="split_a" min="1" max="99" step="1" value="{{.Content.SplitA}}">
+                    <span class="cf-split-label" id="cf-split-label" aria-live="polite">A {{.Content.SplitA}}%</span>
+                </div>
+
+                <div class="field">
+                    <button type="button" class="cf-link" data-act="ab" data-i18n="cmp.wz_ab_add">+ Add a second version of the email (A/B test)</button>
+                </div>
+                {{if gt .Content.Extra 0}}<p class="cf-note" data-i18n="cmp.cf_extra" data-i18n-arg-n="{{.Content.Extra}}">The campaign has {{.Content.Extra}} more versions. They will be turned off on save.</p>{{end}}
+            </div>
+            <p class="cf-error" role="alert" hidden></p>
+            <div class="cf-foot">
+                {{if ne .Mode "create"}}<button type="button" class="btn" data-act="cancel" data-i18n="cmp.cf_cancel">Cancel</button>{{end}}
+                <button type="button" class="btn btn-primary" data-act="primary" data-i18n="cmp.cf_next">Next</button>
+            </div>
+        </div>
+    </section>
+
+    <div class="cf-group">
+        {{if eq .Mode "create"}}<p class="cf-group-h" data-i18n="cmp.cf_group">Optional</p>{{end}}
+
+        <!-- vars -->
+        <section class="cf-row" data-row="vars" data-kind="opt">
+            <div class="cf-sum">
+                <span class="cf-dot" aria-hidden="true"></span>
+                <h3 class="cf-name" id="cf-vars-h" data-i18n="cmp.cf_vars">Variables</h3>
+                <p class="cf-hint" data-i18n="cmp.cf_h_vars">Values that replace {{"{{name}}"}} in the email.</p>
+                <div class="cf-val" data-out></div>
+                <button type="button" class="cf-edit-btn" data-act="open" aria-expanded="false" aria-controls="cf-vars-body" data-i18n="cmp.cf_change">Change</button>
+            </div>
+            <div class="cf-body" id="cf-vars-body" hidden>
+                <div class="cf-fields">
+                    <input type="hidden" id="variables" name="variables" value="{{.Campaign.Variables}}">
+                    <div class="cf-kv" id="cf-kv">
+                        {{range .Variables}}
+                        <div class="cf-kv-row">
+                            <input type="text" class="input cf-kv-key" autocomplete="off" placeholder="discount" aria-label="Name" data-i18n-label="cmp.cf_kv_key" value="{{.Key}}">
+                            <input type="text" class="input cf-kv-val" autocomplete="off" placeholder="20%" aria-label="Value" data-i18n-label="cmp.cf_kv_val" value="{{.Value}}">
+                            <button type="button" class="cf-kv-del" data-act="kv-del" aria-label="Remove" data-i18n-label="cmp.cf_kv_del">&times;</button>
+                        </div>
+                        {{else}}
+                        <div class="cf-kv-row">
+                            <input type="text" class="input cf-kv-key" autocomplete="off" placeholder="discount" aria-label="Name" data-i18n-label="cmp.cf_kv_key">
+                            <input type="text" class="input cf-kv-val" autocomplete="off" placeholder="20%" aria-label="Value" data-i18n-label="cmp.cf_kv_val">
+                            <button type="button" class="cf-kv-del" data-act="kv-del" aria-label="Remove" data-i18n-label="cmp.cf_kv_del">&times;</button>
+                        </div>
+                        {{end}}
+                    </div>
+                    <div class="cf-kv-tools">
+                        <button type="button" class="cf-link" data-act="kv-add" data-i18n="cmp.cf_kv_add">+ Add a variable</button>
+                        <button type="button" class="cf-link" data-act="kv-json" data-i18n="cmp.cf_kv_json">Edit as JSON</button>
+                    </div>
+                    <textarea id="cf-vars-json" class="input code" rows="4" spellcheck="false" aria-label="JSON" hidden></textarea>
+                    <small class="cf-err" data-err="variables" role="alert" hidden></small>
+                </div>
+                <p class="cf-error" role="alert" hidden></p>
+                <div class="cf-foot">
+                    {{if ne .Mode "create"}}<button type="button" class="btn" data-act="cancel" data-i18n="cmp.cf_cancel">Cancel</button>{{end}}
+                    <button type="button" class="btn btn-primary" data-act="primary" data-i18n="cmp.cf_next">Next</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- track -->
+        <section class="cf-row" data-row="track" data-kind="opt">
+            <div class="cf-sum">
+                <span class="cf-dot" aria-hidden="true"></span>
+                <h3 class="cf-name" id="cf-track-h" data-i18n="cmp.cf_track">Tracking</h3>
+                <p class="cf-hint" data-i18n="cmp.cf_h_track">What to count in the campaign statistics.</p>
+                <div class="cf-val" data-out></div>
+                <button type="button" class="cf-edit-btn" data-act="open" aria-expanded="false" aria-controls="cf-track-body" data-i18n="cmp.cf_change">Change</button>
+            </div>
+            <div class="cf-body" id="cf-track-body" hidden>
+                <div class="cf-fields">
+                    <div class="field">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="track_opens" value="on"{{if and .Campaign.TrackOpens (not .NoPublicURL)}} checked{{end}}{{if .NoPublicURL}} disabled{{end}}>
+                            <span data-i18n="trk.track_opens">Track opens</span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="track_clicks" value="on"{{if and .Campaign.TrackClicks (not .NoPublicURL)}} checked{{end}}{{if .NoPublicURL}} disabled{{end}}>
+                            <span data-i18n="trk.track_clicks">Track clicks</span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="add_utm" value="on"{{if .Campaign.AddUTM}} checked{{end}}>
+                            <span data-i18n="trk.add_utm">Add UTM tags to links</span>
+                        </label>
+                        <small class="form-help" data-i18n="trk.campaign_help">Opens are counted by a pixel, clicks by links through the panel. Tags: utm_source, utm_medium, utm_campaign, sc, sr, sl (needed to tie orders to the campaign). Campaign emails get an unsubscribe link when the proxying domain is set.</small>
+                        {{if .NoPublicURL}}<small class="form-help"><span data-i18n="trk.no_domain_fields">Opens and clicks tracking needs the proxying domain.</span> {{if .User.IsAdmin}}<a href="/settings/tracking" data-i18n="trk.settings_link">Settings &gt; Tracking</a>{{else}}<span data-i18n="trk.ask_admin">Ask an administrator to set it in the tracking settings.</span>{{end}}</small>{{end}}
+                    </div>
+                </div>
+                <p class="cf-error" role="alert" hidden></p>
+                <div class="cf-foot">
+                    {{if ne .Mode "create"}}<button type="button" class="btn" data-act="cancel" data-i18n="cmp.cf_cancel">Cancel</button>{{end}}
+                    <button type="button" class="btn btn-primary" data-act="primary" data-i18n="cmp.cf_next">Next</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- about -->
+        <section class="cf-row" data-row="about" data-kind="opt">
+            <div class="cf-sum">
+                <span class="cf-dot" aria-hidden="true"></span>
+                <h3 class="cf-name" id="cf-about-h" data-i18n="cmp.cf_about">Name and description</h3>
+                <p class="cf-hint" data-i18n="cmp.cf_h_about">Visible only in the panel.</p>
+                <div class="cf-val" data-out></div>
+                <button type="button" class="cf-edit-btn" data-act="open" aria-expanded="false" aria-controls="cf-about-body" data-i18n="cmp.cf_change">Change</button>
+            </div>
+            <div class="cf-body" id="cf-about-body" hidden>
+                <div class="cf-fields">
+                    <div class="field">
+                        <label for="name" data-i18n="cmp.cf_name">Name</label>
+                        <input type="text" id="name" name="name" class="input" autocomplete="off" value="{{.Campaign.Name}}"{{if eq .Mode "create"}} placeholder="Autumn sale" data-i18n-placeholder="cmp.cf_ph_name"{{else}} placeholder="Autumn sale" data-i18n-placeholder="cmp.wz_ph_name"{{end}}>
+                        {{if eq .Mode "create"}}<small class="form-help" data-i18n="cmp.cf_name_help">If empty, the subject of version A and the date are used.</small>{{end}}
+                        <small class="cf-err" data-err="name" role="alert" hidden></small>
+                    </div>
+                    <div class="field">
+                        <label for="description" data-i18n="common.description">Description</label>
+                        <textarea id="description" name="description" class="input" rows="2" placeholder="Brief description of this campaign" data-i18n-placeholder="cmp.ph_campaign_desc">{{.Campaign.Description}}</textarea>
+                        <small class="cf-err" data-err="description" role="alert" hidden></small>
+                    </div>
+                </div>
+                <p class="cf-error" role="alert" hidden></p>
+                <div class="cf-foot">
+                    {{if ne .Mode "create"}}<button type="button" class="btn" data-act="cancel" data-i18n="cmp.cf_cancel">Cancel</button>{{end}}
+                    <button type="button" class="btn btn-primary" data-act="primary" data-i18n="cmp.cf_next">Next</button>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+{{end}}
+
+{{define "cf_send"}}
+<h2 class="cf-title" data-i18n="cmp.cf_send">Sending</h2>
+<div class="cf-rows">
+
+    <!-- to -->
+    <section class="cf-row" data-row="to" data-kind="step">
+        <div class="cf-sum">
+            <span class="cf-dot" aria-hidden="true"></span>
+            <h3 class="cf-name" id="cf-to-h" data-i18n="cmp.cf_to">To</h3>
+            <p class="cf-hint" data-i18n="cmp.cf_h_to">Unsubscribed and non-working addresses will not get the email.</p>
+            <div class="cf-val" data-out></div>
+            <button type="button" class="cf-edit-btn" data-act="open" aria-expanded="false" aria-controls="cf-to-body" data-i18n="cmp.cf_change">Change</button>
+        </div>
+        <div class="cf-body" id="cf-to-body" hidden>
+            <div class="cf-fields">
+                {{if .RecipientLists}}
+                <div class="cf-lists" id="cf-lists" role="radiogroup" aria-labelledby="cf-to-h">
+                    {{range .RecipientLists}}
+                    <label class="cf-list" data-active="{{.ActiveCount}}" data-total="{{.TotalCount}}" data-name="{{.Name}}">
+                        <input type="radio" name="recipient_list_id" value="{{.ID}}">
+                        <span class="cf-list-name">{{.Name}}</span>
+                        <span class="cf-list-num"><b>{{.ActiveCount}}</b><small data-role="inactive"></small></span>
+                    </label>
+                    {{end}}
+                </div>
+                {{else}}
+                <div class="alert alert-warning">
+                    <span data-i18n="cmp.wz_no_lists">There are no recipient lists yet.</span>
+                    <a href="/recipients" data-i18n="cmp.wz_create_list">Create a list</a>
+                </div>
+                {{end}}
+                <small class="cf-err" data-err="recipient_list_id" role="alert" hidden></small>
+            </div>
+            <p class="cf-error" role="alert" hidden></p>
+            <div class="cf-foot">
+                <button type="button" class="btn btn-primary" data-act="primary" data-i18n="cmp.cf_next">Next</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- check -->
+    <section class="cf-row" data-row="check" data-kind="step">
+        <div class="cf-sum">
+            <span class="cf-dot" aria-hidden="true"></span>
+            <h3 class="cf-name" id="cf-check-h" data-i18n="cmp.cf_check">Check</h3>
+            <p class="cf-hint" data-i18n="cmp.cf_h_check">Look at the email and send a test to yourself.</p>
+            <div class="cf-val" data-out></div>
+            <button type="button" class="cf-edit-btn" data-act="open" aria-expanded="false" aria-controls="cf-check-body" data-i18n="cmp.cf_change">Change</button>
+        </div>
+        <div class="cf-body" id="cf-check-body" hidden>
+            <div class="cf-fields">
+                <div class="cf-check">
+                    <div class="cf-panel">
+                        <div class="cf-panel-head">
+                            <h4 data-i18n="cmp.wz_preview">What the recipient will see</h4>
+                            <div class="cf-seg" id="cf-dev" role="group" aria-label="Device" data-i18n-label="cmp.cf_device">
+                                <button type="button" class="on" data-dev="pc" data-i18n="cmp.wz_desktop">Computer</button>
+                                <button type="button" data-dev="phone" data-i18n="cmp.wz_phone">Phone</button>
+                            </div>
+                        </div>
+                        <div class="cf-seg" id="cf-pv-ver" role="group" aria-label="Version" data-i18n-label="cmp.cf_versions" hidden>
+                            <button type="button" class="on" data-ver="a">A</button>
+                            <button type="button" data-ver="b">B</button>
+                        </div>
+                        <p class="cf-pv-subject"><span class="text-muted" data-i18n="cmp.wz_subject_colon">Subject:</span> <span id="cf-pv-subject"></span></p>
+                        <div class="cf-stage" id="cf-stage">
+                            <iframe id="cf-preview" class="cf-preview" sandbox="" title="Preview" data-i18n-title="cmp.wz_preview_title"></iframe>
+                            <p class="cf-stage-msg" id="cf-preview-msg" hidden></p>
+                        </div>
+                    </div>
+                    <div class="cf-panel">
+                        <div class="cf-panel-head"><h4 data-i18n="cmp.wz_test">Test email</h4></div>
+                        <div class="field">
+                            <label for="cf-test-to" data-i18n="cmp.wz_test_to">Send the test to</label>
+                            <input type="email" id="cf-test-to" class="input" autocomplete="off" value="{{.UserEmail}}">
+                        </div>
+                        <button type="button" class="btn" id="cf-test-btn" data-i18n="cmp.wz_test_send">Send to me</button>
+                        <p class="cf-test-result" id="cf-test-result" role="status" hidden></p>
+                    </div>
+                    <div class="cf-panel">
+                        <div class="cf-panel-head"><h4 data-i18n="cmp.wz_ready">Readiness</h4></div>
+                        <div class="cf-ready" id="cf-ready"></div>
+                    </div>
+                </div>
+            </div>
+            <p class="cf-error" role="alert" hidden></p>
+            <div class="cf-foot">
+                <button type="button" class="btn btn-primary" data-act="primary" data-i18n="cmp.cf_next">Next</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- when -->
+    <section class="cf-row" data-row="when" data-kind="step">
+        <div class="cf-sum">
+            <span class="cf-dot" aria-hidden="true"></span>
+            <h3 class="cf-name" id="cf-when-h" data-i18n="cmp.cf_when">When</h3>
+            <p class="cf-hint" data-i18n="cmp.cf_h_when">Now or on a schedule.</p>
+            <div class="cf-val" data-out></div>
+            <button type="button" class="cf-edit-btn" data-act="open" aria-expanded="false" aria-controls="cf-when-body" data-i18n="cmp.cf_change">Change</button>
+        </div>
+        <div class="cf-body" id="cf-when-body" hidden>
+            <div class="cf-fields">
+                <div class="cf-radio-row" role="radiogroup" aria-labelledby="cf-when-h">
+                    <label class="checkbox-label"><input type="radio" name="cf_when" value="now" checked> <span data-i18n="cmp.wz_now">Now</span></label>
+                    <label class="checkbox-label"><input type="radio" name="cf_when" value="later"> <span data-i18n="cmp.wz_later">Schedule</span></label>
+                </div>
+                <div class="field" id="cf-when-later" hidden>
+                    <label for="scheduled_at" data-i18n="cmp.wz_when_at">Date and time</label>
+                    <input type="datetime-local" id="scheduled_at" name="scheduled_at" class="input cf-narrow" disabled>
+                    <input type="hidden" id="tz" name="tz">
+                    <input type="hidden" id="tz_offset" name="tz_offset">
+                    <small class="form-help"><span data-i18n="cmp.time_zone">Time zone</span>: <span id="cf-tz-label">UTC</span></small>
+                    <small class="cf-err" data-err="scheduled_at" role="alert" hidden></small>
+                </div>
+
+                <div class="field">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="dry_run" id="dry_run" value="on">
+                        <span data-i18n="cmp.wz_pilot">First send only to the first recipients (pilot)</span>
+                    </label>
+                    <div class="cf-pilot" id="cf-pilot" hidden>
+                        <label for="dry_run_limit" data-i18n="cmp.wz_pilot_n">How many recipients</label>
+                        <input type="number" id="dry_run_limit" name="dry_run_limit" class="input cf-num" value="10" min="1" max="100" disabled>
+                        <small class="form-help" data-i18n="cmp.wz_pilot_help">Up to 100. Useful to check how the email arrives before the full send.</small>
+                        <small class="cf-err" data-err="dry_run_limit" role="alert" hidden></small>
+                    </div>
+                </div>
+
+                <details class="cf-more">
+                    <summary data-i18n="cmp.wz_servers_adv">More options: servers and distribution</summary>
+                    <div class="cf-more-body">
+                        <div class="field">
+                            <span class="cf-label" data-i18n="cmp.wz_servers">Servers to send from</span>
+                            {{range .Servers}}
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="servers" value="{{.Name}}" checked>
+                                {{.Name}} <span class="badge badge-{{.Env}}">{{.Env}}</span>
+                            </label>
+                            {{else}}
+                            <p class="text-muted" data-i18n="cmp.no_servers">No servers configured</p>
+                            {{end}}
+                            <small class="cf-err" data-err="servers" role="alert" hidden></small>
+                        </div>
+                        <div class="field">
+                            <label for="strategy" data-i18n="cmp.wz_strategy">How to split between servers</label>
+                            <select id="strategy" name="strategy" class="input">
+                                <option value="round-robin" data-i18n="cmp.wz_strategy_rr">Evenly, one by one</option>
+                                <option value="random" data-i18n="cmp.wz_strategy_random">Randomly</option>
+                                <option value="weighted" data-i18n="cmp.wz_strategy_weighted">By server weights</option>
+                            </select>
+                        </div>
+                    </div>
+                </details>
+            </div>
+            <p class="cf-error" role="alert" hidden></p>
+            <div class="cf-foot">
+                <button type="button" class="btn btn-primary" data-act="primary" data-i18n="cmp.cf_next">Next</button>
+            </div>
+        </div>
+    </section>
+</div>
+
+<div class="cf-final">
+    {{if eq .Mode "create"}}<button type="submit" id="cf-save" name="action" value="save" class="btn" data-i18n="cmp.wz_save">Save without sending</button>{{end}}
+    <button type="submit" id="cf-send" name="action" value="send" class="btn btn-primary">Send</button>
+    <p class="cf-final-help" id="cf-final-help"></p>
+</div>
+{{end}}

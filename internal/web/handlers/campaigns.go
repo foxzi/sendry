@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"errors"
 	"math/rand/v2"
 	"net/http"
 	"strconv"
@@ -10,7 +9,6 @@ import (
 
 	"github.com/foxzi/sendry/internal/web/middleware"
 	"github.com/foxzi/sendry/internal/web/models"
-	"github.com/foxzi/sendry/internal/web/repository"
 	"github.com/foxzi/sendry/internal/web/tracking"
 )
 
@@ -52,60 +50,6 @@ func (h *Handlers) CampaignList(w http.ResponseWriter, r *http.Request) {
 	h.render(w, "campaigns", data)
 }
 
-func (h *Handlers) CampaignNew(w http.ResponseWriter, r *http.Request) {
-	// Tracking checkboxes are on by default for new campaigns, and off and
-	// disabled without the public origin tracking links are built with
-	hasOrigin := h.hasPublicOrigin()
-	data := map[string]any{
-		"Title":       "New Campaign",
-		"Active":      "campaigns",
-		"User":        h.getUserFromContext(r),
-		"TrackOpens":  hasOrigin,
-		"TrackClicks": hasOrigin,
-		"NoPublicURL": !hasOrigin,
-	}
-
-	h.render(w, "campaign_new", data)
-}
-
-func (h *Handlers) CampaignCreate(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
-		return
-	}
-
-	c := &models.Campaign{
-		Name:        r.FormValue("name"),
-		Description: r.FormValue("description"),
-		FromEmail:   r.FormValue("from_email"),
-		FromName:    r.FormValue("from_name"),
-		ReplyTo:     r.FormValue("reply_to"),
-		Variables:   r.FormValue("variables"),
-		Tags:        r.FormValue("tags"),
-		TrackOpens:  r.FormValue("track_opens") != "",
-		TrackClicks: r.FormValue("track_clicks") != "",
-		AddUTM:      r.FormValue("add_utm") != "",
-	}
-	if !h.hasPublicOrigin() {
-		c.TrackOpens, c.TrackClicks = false, false
-	}
-
-	if c.Name == "" || c.FromEmail == "" {
-		h.error(w, http.StatusBadRequest, "Name and From Email are required")
-		return
-	}
-
-	if err := h.campaigns.Create(c); err != nil {
-		h.logger.Error("failed to create campaign", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to create campaign")
-		return
-	}
-
-	h.settings.LogAction(r, middleware.GetUserID(r), middleware.GetUserEmail(r),
-		"create", "campaign", c.ID, `{"name":"`+c.Name+`"}`)
-	http.Redirect(w, r, "/campaigns/"+c.ID, http.StatusSeeOther)
-}
-
 func (h *Handlers) CampaignView(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
@@ -120,97 +64,28 @@ func (h *Handlers) CampaignView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	variants, err := h.campaigns.GetVariants(id)
+	data, err := h.campaignFlowData(r, "edit", c)
 	if err != nil {
-		h.logger.Error("failed to get variants", "error", err)
+		h.logger.Error("failed to build campaign page", "error", err)
+		h.error(w, http.StatusInternalServerError, "Failed to load campaign")
+		return
 	}
-
-	// Get recipient lists for send page
-	recipientLists, _, _ := h.recipients.ListLists(models.RecipientListFilter{Limit: 100})
 
 	recentJobs, _, _ := h.jobs.List(models.JobListFilter{CampaignID: id, Limit: 10})
 	trackingStats, err := h.tracking.CampaignStats(id)
 	if err != nil {
 		h.logger.Error("failed to load campaign tracking stats", "error", err)
 	}
-
-	data := map[string]any{
-		"Title":          c.Name,
-		"Active":         "campaigns",
-		"User":           h.getUserFromContext(r),
-		"Tracking":       trackingCards(c, trackingStats, err),
-		"Campaign":       c,
-		"Variants":       variants,
-		"RecipientLists": recipientLists,
-		"Servers":        h.cfg.Sendry.Servers,
-		"Jobs":           h.jobsWithStats(recentJobs),
-		"NoPublicURL":    !h.hasPublicOrigin(),
-	}
+	data["Tracking"] = trackingCards(c, trackingStats, err)
+	data["Jobs"] = h.jobsWithStats(recentJobs)
 
 	h.render(w, "campaign_view", data)
 }
 
-func (h *Handlers) CampaignEdit(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-
-	c, err := h.campaigns.GetByID(id)
-	if err != nil {
-		h.logger.Error("failed to get campaign", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load campaign")
-		return
-	}
-	if c == nil {
-		h.error(w, http.StatusNotFound, "Campaign not found")
-		return
-	}
-
-	data := map[string]any{
-		"Title":       "Edit " + c.Name,
-		"Active":      "campaigns",
-		"User":        h.getUserFromContext(r),
-		"Campaign":    c,
-		"NoPublicURL": !h.hasPublicOrigin(),
-	}
-
-	h.render(w, "campaign_edit", data)
-}
-
-func (h *Handlers) CampaignUpdate(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-
-	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
-		return
-	}
-
-	c, err := h.campaigns.GetByID(id)
-	if err != nil || c == nil {
-		h.error(w, http.StatusNotFound, "Campaign not found")
-		return
-	}
-
-	c.Name = r.FormValue("name")
-	c.Description = r.FormValue("description")
-	c.FromEmail = r.FormValue("from_email")
-	c.FromName = r.FormValue("from_name")
-	c.ReplyTo = r.FormValue("reply_to")
-	c.Tags = r.FormValue("tags")
-	c.TrackOpens = r.FormValue("track_opens") != ""
-	c.TrackClicks = r.FormValue("track_clicks") != ""
-	c.AddUTM = r.FormValue("add_utm") != ""
-	if !h.hasPublicOrigin() {
-		c.TrackOpens, c.TrackClicks = false, false
-	}
-
-	if err := h.campaigns.Update(c); err != nil {
-		h.logger.Error("failed to update campaign", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to update campaign")
-		return
-	}
-
-	h.settings.LogAction(r, middleware.GetUserID(r), middleware.GetUserEmail(r),
-		"update", "campaign", id, `{"name":"`+c.Name+`"}`)
-	http.Redirect(w, r, "/campaigns/"+id, http.StatusSeeOther)
+// CampaignRedirect sends the old edit, variables and variants pages to the
+// campaign page.
+func (h *Handlers) CampaignRedirect(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, "/campaigns/"+r.PathValue("id"), http.StatusMovedPermanently)
 }
 
 func (h *Handlers) CampaignDelete(w http.ResponseWriter, r *http.Request) {
@@ -229,124 +104,6 @@ func (h *Handlers) CampaignDelete(w http.ResponseWriter, r *http.Request) {
 	h.settings.LogAction(r, middleware.GetUserID(r), middleware.GetUserEmail(r),
 		"delete", "campaign", id, "")
 	http.Redirect(w, r, "/campaigns", http.StatusSeeOther)
-}
-
-func (h *Handlers) CampaignVariables(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-
-	c, err := h.campaigns.GetByID(id)
-	if err != nil || c == nil {
-		h.error(w, http.StatusNotFound, "Campaign not found")
-		return
-	}
-
-	data := map[string]any{
-		"Title":    c.Name + " - Variables",
-		"Active":   "campaigns",
-		"User":     h.getUserFromContext(r),
-		"Campaign": c,
-	}
-
-	h.render(w, "campaign_variables", data)
-}
-
-func (h *Handlers) CampaignVariablesUpdate(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-
-	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
-		return
-	}
-
-	variables := r.FormValue("variables")
-
-	if err := h.campaigns.UpdateVariables(id, variables); err != nil {
-		h.logger.Error("failed to update variables", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to update variables")
-		return
-	}
-
-	http.Redirect(w, r, "/campaigns/"+id, http.StatusSeeOther)
-}
-
-func (h *Handlers) CampaignVariants(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-
-	c, err := h.campaigns.GetByID(id)
-	if err != nil || c == nil {
-		h.error(w, http.StatusNotFound, "Campaign not found")
-		return
-	}
-
-	variants, err := h.campaigns.GetVariants(id)
-	if err != nil {
-		h.logger.Error("failed to get variants", "error", err)
-	}
-
-	// Get templates for selection
-	templateList, _, _ := h.templates.List(models.TemplateListFilter{Limit: 100})
-
-	data := map[string]any{
-		"Title":     c.Name + " - Variants",
-		"Active":    "campaigns",
-		"User":      h.getUserFromContext(r),
-		"Campaign":  c,
-		"Variants":  variants,
-		"Templates": templateList,
-	}
-
-	h.render(w, "campaign_variants", data)
-}
-
-func (h *Handlers) CampaignVariantCreate(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-
-	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
-		return
-	}
-
-	weight, _ := strconv.Atoi(r.FormValue("weight"))
-	if weight <= 0 {
-		weight = 100
-	}
-
-	v := &models.CampaignVariant{
-		CampaignID:      id,
-		Name:            r.FormValue("name"),
-		TemplateID:      r.FormValue("template_id"),
-		SubjectOverride: r.FormValue("subject_override"),
-		Weight:          weight,
-	}
-
-	if v.Name == "" || v.TemplateID == "" {
-		h.error(w, http.StatusBadRequest, "Name and template are required")
-		return
-	}
-
-	if err := h.campaigns.AddVariant(v); err != nil {
-		h.logger.Error("failed to add variant", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to add variant")
-		return
-	}
-
-	http.Redirect(w, r, "/campaigns/"+id+"/variants", http.StatusSeeOther)
-}
-
-func (h *Handlers) CampaignVariantDelete(w http.ResponseWriter, r *http.Request) {
-	campaignID := r.PathValue("id")
-	variantID := r.PathValue("variantId")
-
-	if err := h.campaigns.DeleteVariant(variantID); errors.Is(err, repository.ErrInUse) {
-		h.error(w, http.StatusConflict, "Cannot delete the variant: jobs of this campaign used it.")
-		return
-	} else if err != nil {
-		h.logger.Error("failed to delete variant", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to delete variant")
-		return
-	}
-
-	http.Redirect(w, r, "/campaigns/"+campaignID+"/variants", http.StatusSeeOther)
 }
 
 // publicOrigin returns the public origin of unsubscribe and tracking links:
@@ -370,46 +127,6 @@ func (h *Handlers) hasPublicOrigin() bool {
 	return origin != ""
 }
 
-// campaignSendData returns the data of the campaign send page
-func (h *Handlers) campaignSendData(r *http.Request, c *models.Campaign) map[string]any {
-	variants, _ := h.campaigns.GetVariants(c.ID)
-	recipientLists, _, _ := h.recipients.ListLists(models.RecipientListFilter{Limit: 100})
-
-	// Warn when no variant template contains the unsubscribe link variable
-	hasUnsubscribeLink := false
-	checked := map[string]bool{}
-	for _, v := range variants {
-		if checked[v.TemplateID] {
-			continue
-		}
-		checked[v.TemplateID] = true
-		tmpl, err := h.templates.GetByID(v.TemplateID)
-		if err != nil || tmpl == nil {
-			continue
-		}
-		if tracking.HasUnsubscribeVar(tmpl.HTML) || tracking.HasUnsubscribeVar(tmpl.Text) {
-			hasUnsubscribeLink = true
-			break
-		}
-	}
-
-	// Without a public origin mail goes with no unsubscribe link and no
-	// tracking; the missing {{unsubscribe_url}} warning is moot then
-	noOrigin := !h.hasPublicOrigin()
-
-	return map[string]any{
-		"NoUnsubscribeLink": len(variants) > 0 && !hasUnsubscribeLink && !noOrigin,
-		"NoPublicURL":       noOrigin,
-		"Title":             "Send " + c.Name,
-		"Active":            "campaigns",
-		"User":              h.getUserFromContext(r),
-		"Campaign":          c,
-		"Variants":          variants,
-		"RecipientLists":    recipientLists,
-		"Servers":           h.cfg.Sendry.Servers,
-	}
-}
-
 func (h *Handlers) CampaignSendPage(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
@@ -419,7 +136,24 @@ func (h *Handlers) CampaignSendPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.render(w, "campaign_send", h.campaignSendData(r, c))
+	data, err := h.campaignFlowData(r, "send", c)
+	if err != nil {
+		h.logger.Error("failed to build campaign send page", "error", err)
+		h.error(w, http.StatusInternalServerError, "Failed to load campaign")
+		return
+	}
+	h.render(w, "campaign_send", data)
+}
+
+// activeVariants returns the variants that are sent (weight > 0), in order
+func activeVariants(variants []models.CampaignVariant) []models.CampaignVariant {
+	active := make([]models.CampaignVariant, 0, len(variants))
+	for _, v := range variants {
+		if v.Weight > 0 {
+			active = append(active, v)
+		}
+	}
+	return active
 }
 
 func (h *Handlers) CampaignSend(w http.ResponseWriter, r *http.Request) {
@@ -436,56 +170,74 @@ func (h *Handlers) CampaignSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	recipientListID := r.FormValue("recipient_list_id")
-	if recipientListID == "" {
-		h.error(w, http.StatusBadRequest, "Recipient list is required")
-		return
-	}
-
-	servers := r.Form["servers"]
-	if len(servers) == 0 {
-		h.error(w, http.StatusBadRequest, "At least one server is required")
-		return
-	}
-
-	strategy := r.FormValue("strategy")
-	if strategy == "" {
-		strategy = jobStrategyRoundRobin
-	}
-	if strategy != jobStrategyRoundRobin && strategy != jobStrategyRandom && strategy != jobStrategyWeighted {
-		h.error(w, http.StatusBadRequest, "Unknown distribution strategy")
+	params, perr := parseJobParams(r)
+	if perr != nil {
+		h.error(w, perr.status, perr.message)
 		return
 	}
 
 	// Get variants
 	variants, err := h.campaigns.GetVariants(id)
+	variants = activeVariants(variants)
 	if err != nil || len(variants) == 0 {
 		h.error(w, http.StatusBadRequest, "Campaign has no variants configured")
 		return
 	}
 
-	// Handle dry-run mode
-	dryRun := r.FormValue("dry_run") == "on"
-	dryRunLimit := 0
-	if dryRun {
-		dryRunLimit, _ = strconv.Atoi(r.FormValue("dry_run_limit"))
-		if dryRunLimit <= 0 {
-			dryRunLimit = 10 // default
-		}
+	job, perr := h.startJob(r, c, variants, params)
+	if perr != nil {
+		h.error(w, perr.status, perr.message)
+		return
+	}
+	http.Redirect(w, r, "/jobs/"+job.ID, http.StatusSeeOther)
+}
+
+// statusError is an error to answer a request with
+type statusError struct {
+	status  int
+	message string
+}
+
+// jobParams are the send settings of a campaign send form
+type jobParams struct {
+	RecipientListID string
+	Servers         []string
+	Strategy        string
+	DryRun          bool
+	DryRunLimit     int
+	ScheduledAt     *time.Time
+}
+
+// parseJobParams reads and validates the send settings of a parsed form:
+// recipient_list_id, servers, strategy, dry_run, dry_run_limit, scheduled_at,
+// tz and tz_offset.
+func parseJobParams(r *http.Request) (jobParams, *statusError) {
+	p := jobParams{
+		RecipientListID: r.FormValue("recipient_list_id"),
+		Servers:         r.Form["servers"],
+		Strategy:        r.FormValue("strategy"),
+	}
+	if p.RecipientListID == "" {
+		return p, &statusError{http.StatusBadRequest, "Recipient list is required"}
+	}
+	if len(p.Servers) == 0 {
+		return p, &statusError{http.StatusBadRequest, "At least one server is required"}
 	}
 
-	// Create servers JSON
-	serversJSON, _ := json.Marshal(servers)
+	if p.Strategy == "" {
+		p.Strategy = jobStrategyRoundRobin
+	}
+	if p.Strategy != jobStrategyRoundRobin && p.Strategy != jobStrategyRandom && p.Strategy != jobStrategyWeighted {
+		return p, &statusError{http.StatusBadRequest, "Unknown distribution strategy"}
+	}
 
-	// Create job
-	job := &models.SendJob{
-		CampaignID:      id,
-		RecipientListID: recipientListID,
-		Servers:         string(serversJSON),
-		Strategy:        strategy,
-		DryRun:          dryRun,
-		DryRunLimit:     dryRunLimit,
-		TrackOpens:      c.TrackOpens && h.hasPublicOrigin(), // no pixel without the public origin
+	// Handle dry-run mode
+	p.DryRun = r.FormValue("dry_run") == "on"
+	if p.DryRun {
+		p.DryRunLimit, _ = strconv.Atoi(r.FormValue("dry_run_limit"))
+		if p.DryRunLimit <= 0 {
+			p.DryRunLimit = 10 // default
+		}
 	}
 
 	// Handle scheduled_at
@@ -493,30 +245,49 @@ func (h *Handlers) CampaignSend(w http.ResponseWriter, r *http.Request) {
 		t, err := parseScheduledAt(scheduledAt, r.FormValue("tz"), r.FormValue("tz_offset"))
 		if err != nil {
 			// Never fall back to sending right away
-			h.error(w, http.StatusBadRequest, "Invalid schedule time")
-			return
+			return p, &statusError{http.StatusBadRequest, "Invalid schedule time"}
 		}
-		job.ScheduledAt = &t
+		p.ScheduledAt = &t
+	}
+	return p, nil
+}
+
+// startJob creates the send job of a campaign with an item per recipient of
+// the list, and starts it unless it is scheduled. variants must not be empty.
+func (h *Handlers) startJob(r *http.Request, c *models.Campaign, variants []models.CampaignVariant, p jobParams) (*models.SendJob, *statusError) {
+	// Create servers JSON
+	serversJSON, _ := json.Marshal(p.Servers)
+
+	// Create job
+	job := &models.SendJob{
+		CampaignID:      c.ID,
+		RecipientListID: p.RecipientListID,
+		Servers:         string(serversJSON),
+		Strategy:        p.Strategy,
+		DryRun:          p.DryRun,
+		DryRunLimit:     p.DryRunLimit,
+		TrackOpens:      c.TrackOpens && h.hasPublicOrigin(), // no pixel without the public origin
+		ScheduledAt:     p.ScheduledAt,
+	}
+	if p.ScheduledAt != nil {
 		job.Status = "scheduled"
 	}
 
 	if err := h.jobs.Create(job); err != nil {
 		h.logger.Error("failed to create job", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to create job")
-		return
+		return nil, &statusError{http.StatusInternalServerError, "Failed to create job"}
 	}
 
 	// Get recipients: active ones up to the dry-run limit (all without it)
-	recipients, unsubscribed, err := h.jobRecipients(recipientListID, dryRunLimit)
+	recipients, unsubscribed, err := h.jobRecipients(p.RecipientListID, p.DryRunLimit)
 	if err != nil {
 		h.logger.Error("failed to get recipients", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to get recipients")
-		return
+		return nil, &statusError{http.StatusInternalServerError, "Failed to get recipients"}
 	}
 
 	// Create job items
 	items := make([]models.SendJobItem, len(recipients), len(recipients)+len(unsubscribed))
-	nextServer := h.serverPicker(strategy, servers)
+	nextServer := h.serverPicker(p.Strategy, p.Servers)
 	nextVariant := weightedPicker(variants)
 
 	for i, recipient := range recipients {
@@ -524,7 +295,7 @@ func (h *Handlers) CampaignSend(w http.ResponseWriter, r *http.Request) {
 			JobID:       job.ID,
 			RecipientID: recipient.ID,
 			VariantID:   variants[nextVariant()].ID,
-			ServerName:  servers[nextServer()],
+			ServerName:  p.Servers[nextServer()],
 		}
 	}
 
@@ -535,7 +306,7 @@ func (h *Handlers) CampaignSend(w http.ResponseWriter, r *http.Request) {
 			JobID:       job.ID,
 			RecipientID: recipient.ID,
 			VariantID:   variants[0].ID,
-			ServerName:  servers[0],
+			ServerName:  p.Servers[0],
 			Status:      models.JobItemStatusSkipped,
 			Error:       models.SkipReasonUnsubscribed,
 		})
@@ -543,8 +314,7 @@ func (h *Handlers) CampaignSend(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.jobs.CreateItems(items); err != nil {
 		h.logger.Error("failed to create job items", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to create job items")
-		return
+		return nil, &statusError{http.StatusInternalServerError, "Failed to create job items"}
 	}
 
 	if len(unsubscribed) > 0 {
@@ -560,8 +330,8 @@ func (h *Handlers) CampaignSend(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.settings.LogAction(r, middleware.GetUserID(r), middleware.GetUserEmail(r),
-		"send", "campaign", id, `{"job_id":"`+job.ID+`","recipients":`+strconv.Itoa(len(recipients))+`}`)
-	http.Redirect(w, r, "/jobs/"+job.ID, http.StatusSeeOther)
+		"send", "campaign", c.ID, `{"job_id":"`+job.ID+`","recipients":`+strconv.Itoa(len(recipients))+`}`)
+	return job, nil
 }
 
 func (h *Handlers) CampaignJobs(w http.ResponseWriter, r *http.Request) {

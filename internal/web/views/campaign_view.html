@@ -1,99 +1,22 @@
 {{define "content"}}
 <div class="page-header">
     <div>
-        <h1>{{.Campaign.Name}}</h1>
-        {{if .Campaign.Description}}
-        <p class="text-muted">{{.Campaign.Description}}</p>
-        {{end}}
+        <h1 id="cf-page-title">{{.Campaign.Name}}</h1>
+        <p class="text-muted" id="cf-page-desc"{{if not .Campaign.Description}} hidden{{end}}>{{.Campaign.Description}}</p>
     </div>
     <div class="header-actions">
-        <a href="/campaigns/{{.Campaign.ID}}/send" class="btn btn-primary" data-i18n="cmp.send_campaign">Send campaign</a>
-        <a href="/campaigns/{{.Campaign.ID}}/edit" class="btn" data-i18n="edit">Edit</a>
+        <a href="/campaigns/{{.Campaign.ID}}/send" class="btn btn-primary" data-i18n="cmp.cf_send_btn">Send&hellip;</a>
     </div>
 </div>
 
 {{if .NoPublicURL}}{{template "no_public_url" .}}{{end}}
 
+<div class="cf" id="cf" data-mode="edit" data-campaign-id="{{.Campaign.ID}}">
+    {{template "cf_letter" .}}
+</div>
+
 {{if .Tracking}}
 {{template "tracking_cards" .Tracking}}
-{{end}}
-
-<div class="grid-2">
-    <div class="card">
-        <div class="card-header">
-            <h2 data-i18n="cmp.campaign_details">Campaign Details</h2>
-        </div>
-        <div class="card-body">
-            <dl class="details-list">
-                <dt data-i18n="common.from">From</dt>
-                <dd>{{if .Campaign.FromName}}{{.Campaign.FromName}} &lt;{{.Campaign.FromEmail}}&gt;{{else}}{{.Campaign.FromEmail}}{{end}}</dd>
-
-                {{if .Campaign.ReplyTo}}
-                <dt data-i18n="cmp.reply_to">Reply-To</dt>
-                <dd>{{.Campaign.ReplyTo}}</dd>
-                {{end}}
-
-                {{if .Campaign.Tags}}
-                <dt data-i18n="cmp.tags">Tags</dt>
-                <dd><code>{{.Campaign.Tags}}</code></dd>
-                {{end}}
-
-                <dt data-i18n="common.created">Created</dt>
-                <dd>{{.Campaign.CreatedAt.Format "2006-01-02 15:04:05"}}</dd>
-
-                <dt data-i18n="common.updated">Updated</dt>
-                <dd>{{.Campaign.UpdatedAt.Format "2006-01-02 15:04:05"}}</dd>
-            </dl>
-        </div>
-    </div>
-
-    <div class="card">
-        <div class="card-header">
-            <h2 data-i18n="cmp.template_variants">Template Variants</h2>
-            <a href="/campaigns/{{.Campaign.ID}}/variants" class="btn btn-sm" data-i18n="cmp.manage">Manage</a>
-        </div>
-        <div class="card-body">
-            {{if .Variants}}
-            <div class="table-scroll">
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th data-i18n="name">Name</th>
-                        <th data-i18n="cmp.template">Template</th>
-                        <th data-i18n="cmp.weight">Weight</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {{range .Variants}}
-                    <tr>
-                        <td>{{.Name}}</td>
-                        <td><a href="/templates/{{.TemplateID}}">{{.TemplateName}}</a></td>
-                        <td>{{.Weight}}%</td>
-                    </tr>
-                    {{end}}
-                </tbody>
-            </table>
-            </div>
-            {{else}}
-            <div class="empty-state">
-                <p data-i18n="cmp.no_variants">No variants configured</p>
-                <a href="/campaigns/{{.Campaign.ID}}/variants" class="btn btn-sm btn-primary" data-i18n="cmp.add_variant">Add Variant</a>
-            </div>
-            {{end}}
-        </div>
-    </div>
-</div>
-
-{{if .Campaign.Variables}}
-<div class="card" style="margin-top: 1.5rem">
-    <div class="card-header">
-        <h2 data-i18n="cmp.campaign_variables">Campaign Variables</h2>
-        <a href="/campaigns/{{.Campaign.ID}}/variables" class="btn btn-sm" data-i18n="edit">Edit</a>
-    </div>
-    <div class="card-body">
-        <pre class="code-preview"><code>{{.Campaign.Variables}}</code></pre>
-    </div>
-</div>
 {{end}}
 
 <div class="card" style="margin-top: 1.5rem">
@@ -144,17 +67,20 @@
     </div>
 </div>
 
-<div class="card" style="margin-top: 1.5rem">
-    <div class="card-header">
-        <h2 data-i18n="cmp.quick_actions">Quick Actions</h2>
-    </div>
-    <div class="card-body actions-bar">
-        <a href="/campaigns/{{.Campaign.ID}}/variables" class="btn" data-i18n="cmp.edit_variables">Edit Variables</a>
-        <a href="/campaigns/{{.Campaign.ID}}/jobs" class="btn" data-i18n="cmp.view_runs">View runs</a>
-        <form method="post" action="/campaigns/{{.Campaign.ID}}" onsubmit="return confirm(I18n.t('cmp.confirm_delete_campaign'))" style="margin-left: auto">
-            <input type="hidden" name="_method" value="DELETE">
-            <button type="submit" class="btn btn-danger" data-i18n="cmp.delete_campaign">Delete Campaign</button>
-        </form>
-    </div>
-</div>
+<form method="post" action="/campaigns/{{.Campaign.ID}}" onsubmit="return confirm(I18n.t('cmp.confirm_delete_campaign'))" style="margin-top: 1.5rem">
+    <input type="hidden" name="_method" value="DELETE">
+    <button type="submit" class="btn btn-danger" data-i18n="cmp.delete_campaign">Delete Campaign</button>
+</form>
+
+<script>
+window.CF_CONFIG = {
+    mode: "edit",
+    campaignId: {{toJSON .Campaign.ID}},
+    noPublicURL: {{if .NoPublicURL}}true{{else}}false{{end}},
+    isAdmin: {{if .User.IsAdmin}}true{{else}}false{{end}},
+    userEmail: {{toJSON .UserEmail}},
+    senderDomains: {{toJSON .SenderDomains}}
+};
+</script>
+<script src="/static/js/campaign-flow.js"></script>
 {{end}}

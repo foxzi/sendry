@@ -70,7 +70,7 @@ func (r *CampaignRepository) List(filter models.CampaignListFilter) ([]models.Ca
 	// Get campaigns with stats
 	query := `
 		SELECT c.id, c.name, c.description, c.from_email, c.from_name, c.reply_to, c.variables, c.tags, c.track_opens, c.track_clicks, c.add_utm, c.created_at, c.updated_at,
-			COALESCE((SELECT COUNT(*) FROM campaign_variants WHERE campaign_id = c.id), 0) as variant_count,
+			COALESCE((SELECT COUNT(*) FROM campaign_variants WHERE campaign_id = c.id AND weight > 0), 0) as variant_count, -- disabled versions (weight 0) are kept only for job history
 			COALESCE((SELECT COUNT(*) FROM send_jobs WHERE campaign_id = c.id), 0) as job_count
 		FROM campaigns c
 		WHERE 1=1`
@@ -177,6 +177,23 @@ func (r *CampaignRepository) GetVariants(campaignID string) ([]models.CampaignVa
 	}
 
 	return variants, nil
+}
+
+// UpdateVariant updates the name, template, subject override and weight of a variant
+func (r *CampaignRepository) UpdateVariant(v *models.CampaignVariant) error {
+	_, err := r.db.Exec(`
+		UPDATE campaign_variants SET name = ?, template_id = ?, subject_override = ?, weight = ?
+		WHERE id = ?`,
+		v.Name, v.TemplateID, v.SubjectOverride, v.Weight, v.ID,
+	)
+	return err
+}
+
+// VariantInUse reports whether a send job used the variant
+func (r *CampaignRepository) VariantInUse(id string) (bool, error) {
+	var used bool
+	err := r.db.QueryRow("SELECT EXISTS(SELECT 1 FROM send_job_items WHERE variant_id = ?)", id).Scan(&used)
+	return used, err
 }
 
 // DeleteVariant deletes a variant

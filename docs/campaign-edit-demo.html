@@ -1,0 +1,1107 @@
+<meta charset="utf-8">
+<title>Правка рассылки</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: variant switcher on top, then a mock of the sendry-web campaign page with notes beside it. Colors follow the panel's own style.css. */
+:root {
+    --bg: #eef1f5;
+    --surface: #ffffff;
+    --panel-bg: #f9fafb;
+    --text: #111827;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --primary: #3b82f6;
+    --primary-dark: #2563eb;
+    --primary-soft: #e8f0fe;
+    --success: #0f9f6e;
+    --success-soft: #e3f6ee;
+    --warning: #b7791f;
+    --warning-soft: #fdf3dc;
+    --error: #dc2626;
+    --error-soft: #fde8e8;
+    --sidebar-bg: #1c2533;
+    --sidebar-text: #aeb8c6;
+    --sidebar-active: rgba(255,255,255,.10);
+    --urlbar: #e7ebf0;
+    --note-bg: #fffdf6;
+    --note-border: #eadfbf;
+    --thumb-a: #fbe3d4;
+    --thumb-b: #dbeafe;
+    --thumb-c: #dcfce7;
+    --thumb-ink: #94a3b8;
+    --shadow: 0 1px 3px rgba(15,23,42,.08), 0 8px 24px rgba(15,23,42,.06);
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --r: 8px;
+}
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --bg: #0c111a; --surface: #1f2937; --panel-bg: #111827; --text: #f3f4f6; --muted: #9ca3af;
+        --border: #374151; --primary: #5b9bff; --primary-dark: #3b82f6; --primary-soft: #1d2b45;
+        --success: #34d399; --success-soft: #12322a; --warning: #fbbf24; --warning-soft: #3a2f12;
+        --error: #f87171; --error-soft: #3b1a1a; --sidebar-bg: #0b1220; --sidebar-text: #9aa6b8;
+        --sidebar-active: rgba(255,255,255,.09); --urlbar: #18202d; --note-bg: #1a1a14; --note-border: #3d3820;
+        --thumb-a: #3a2a22; --thumb-b: #1e2a40; --thumb-c: #173226; --thumb-ink: #64748b;
+        --shadow: 0 1px 3px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.3);
+        color-scheme: dark;
+    }
+}
+:root[data-theme="dark"] {
+    --bg: #0c111a; --surface: #1f2937; --panel-bg: #111827; --text: #f3f4f6; --muted: #9ca3af;
+    --border: #374151; --primary: #5b9bff; --primary-dark: #3b82f6; --primary-soft: #1d2b45;
+    --success: #34d399; --success-soft: #12322a; --warning: #fbbf24; --warning-soft: #3a2f12;
+    --error: #f87171; --error-soft: #3b1a1a; --sidebar-bg: #0b1220; --sidebar-text: #9aa6b8;
+    --sidebar-active: rgba(255,255,255,.09); --urlbar: #18202d; --note-bg: #1a1a14; --note-border: #3d3820;
+    --thumb-a: #3a2a22; --thumb-b: #1e2a40; --thumb-c: #173226; --thumb-ink: #64748b;
+    --shadow: 0 1px 3px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.3);
+    color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--text); font-family: var(--font); line-height: 1.5; }
+.wrap { max-width: 1240px; margin: 0 auto; padding-block: 28px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1 { font-size: 1.6rem; line-height: 1.2; margin: 0 0 6px; text-wrap: balance; }
+.lead { color: var(--muted); margin: 0 0 22px; max-width: 72ch; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* Variant switcher */
+.switch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
+.switch button { text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; cursor: pointer; display: grid; gap: 2px; }
+.switch button:hover { border-color: var(--primary); }
+.switch button[aria-selected="true"] { border: 2px solid var(--primary); padding: 11px 13px; }
+.sw-name { font-weight: 600; }
+.sw-meta { color: var(--muted); font-size: .85rem; }
+
+/* Screen = mock + notes */
+.screen { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
+.notes { background: var(--note-bg); border: 1px solid var(--note-border); border-radius: 10px; padding: 14px 16px; font-size: .9rem; display: grid; gap: 10px; position: sticky; top: 16px; }
+.notes h3 { margin: 0; font-size: 1rem; }
+.notes ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.notes .hint { color: var(--muted); font-size: .82rem; margin: 0; }
+.tag { display: inline-block; font-size: .72rem; font-weight: 600; padding: 1px 8px; border-radius: 999px; }
+.tag.bad { background: var(--error-soft); color: var(--error); }
+.tag.good { background: var(--success-soft); color: var(--success); }
+
+/* Mock panel frame */
+.pf { border-radius: 10px; overflow: hidden; box-shadow: var(--shadow); border: 1px solid var(--border); background: var(--panel-bg); min-width: 0; }
+.pf-url { background: var(--urlbar); padding: 7px 12px; font-family: var(--mono); font-size: .78rem; color: var(--muted); border-bottom: 1px solid var(--border); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.pf-body { display: grid; grid-template-columns: 150px minmax(0, 1fr); min-height: 560px; }
+.pf-side { background: var(--sidebar-bg); color: var(--sidebar-text); padding: 14px 8px; font-size: .82rem; display: grid; align-content: start; gap: 2px; }
+.pf-side b { color: #fff; padding: 0 8px 10px; font-size: .95rem; }
+.pf-side span { padding: 5px 8px; border-radius: 6px; }
+.pf-side span.on { background: var(--sidebar-active); color: #fff; }
+.pf-main { padding: 20px 22px 28px; min-width: 0; display: grid; gap: 16px; align-content: start; position: relative; }
+
+/* Panel primitives */
+.ph { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.ph h2 { margin: 0; font-size: 1.35rem; line-height: 1.25; }
+.ph p { margin: 2px 0 0; color: var(--muted); font-size: .9rem; }
+.ph .acts { display: flex; gap: 8px; }
+.btn { border: 1px solid var(--border); background: var(--surface); border-radius: 6px; padding: 6px 14px; cursor: pointer; font-size: .88rem; white-space: nowrap; }
+.btn:hover { border-color: var(--primary); }
+.btn.pri { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn.pri:hover { background: var(--primary-dark); }
+.btn.sm { padding: 3px 10px; font-size: .8rem; }
+.link { background: none; border: 0; color: var(--primary); cursor: pointer; padding: 0; font-size: .88rem; }
+.link:hover { text-decoration: underline; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); }
+.input { width: 100%; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; background: var(--surface); font-size: .9rem; }
+.field { display: grid; gap: 4px; min-width: 0; }
+.field label, .field .lbl { font-size: .82rem; font-weight: 600; }
+.help { color: var(--muted); font-size: .78rem; }
+.row2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.check { display: flex; gap: 8px; align-items: center; font-size: .9rem; }
+.muted { color: var(--muted); }
+.ghost { border: 1px dashed var(--border); border-radius: var(--r); padding: 14px; color: var(--muted); font-size: .85rem; text-align: center; }
+
+/* Schematic email thumbnails */
+.thumb { aspect-ratio: 3 / 4; max-width: 100%; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); padding: 8%; display: grid; grid-template-rows: 16% 34% repeat(4, 6%) 1fr; gap: 5%; overflow: hidden; }
+.thumb i { display: block; border-radius: 2px; background: var(--thumb-ink); opacity: .35; }
+.thumb i:nth-child(1) { width: 45%; }
+.thumb i:nth-child(2) { opacity: 1; }
+.thumb i:nth-child(4) { width: 80%; }
+.thumb i:nth-child(6) { width: 60%; }
+.thumb i:nth-child(7) { width: 50%; height: 60%; align-self: end; background: var(--primary); opacity: .7; border-radius: 4px; }
+.thumb.t-a i:nth-child(2) { background: var(--thumb-a); }
+.thumb.t-b i:nth-child(2) { background: var(--thumb-b); }
+.thumb.t-c i:nth-child(2) { background: var(--thumb-c); }
+
+/* ===== Variant A: checklist rows ===== */
+.cl { overflow: hidden; }
+.cl-head { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cl-head h3 { margin: 0; font-size: 1rem; }
+.cl-row { border-bottom: 1px solid var(--border); }
+.cl-row:last-child { border-bottom: 0; }
+.cl-sum { display: grid; grid-template-columns: 22px 130px minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 12px 16px; }
+.cl-dot { width: 18px; height: 18px; border-radius: 50%; margin-top: 2px; display: grid; place-items: center; font-size: .7rem; font-weight: 700; }
+.cl-dot.ok { background: var(--success-soft); color: var(--success); }
+.cl-dot.warn { background: var(--warning-soft); color: var(--warning); }
+.cl-dot.opt { border: 1.5px solid var(--border); }
+.cl-name { font-weight: 600; font-size: .9rem; }
+.cl-val { font-size: .9rem; min-width: 0; overflow-wrap: anywhere; }
+.cl-val .sub { color: var(--muted); font-size: .82rem; }
+.cl-dot.cur { background: var(--primary); color: #fff; }
+.cl-dot.todo { border: 1.5px solid var(--border); color: var(--muted); }
+.cl-row.locked .cl-sum { opacity: .5; }
+.cl-row.locked [data-edit] { visibility: hidden; }
+.cl-row.open { background: var(--panel-bg); }
+.cl-row.open .cl-sum .cl-val, .cl-row.open .cl-sum [data-edit] { visibility: hidden; }
+.cl + .cl { margin-top: 0; }
+.lists { display: grid; gap: 8px; }
+.lists label { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 10px; align-items: center; border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 10px 12px; cursor: pointer; font-size: .9rem; }
+.lists label:has(input:checked) { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+.lists .n { font-variant-numeric: tabular-nums; color: var(--muted); font-size: .82rem; text-align: right; }
+.chk { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 16px; align-items: start; }
+.chk .thumb { aspect-ratio: 3 / 4; }
+.ready { display: grid; gap: 6px; font-size: .86rem; margin: 0; padding: 0; list-style: none; }
+.ready li { display: flex; gap: 8px; }
+.ready .ok { color: var(--success); }
+.ready .warn { color: var(--warning); }
+.inline { display: flex; gap: 8px; flex-wrap: wrap; }
+.inline .input { flex: 1; min-width: 160px; }
+.final { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 14px 16px; border-top: 1px solid var(--border); }
+.final .btn.pri:disabled { opacity: .45; cursor: default; }
+.final .help { flex-basis: 100%; }
+@media (max-width: 640px) { .chk { grid-template-columns: minmax(0, 1fr); } .chk .thumb { max-width: 160px; } }
+.cl-row.editing { background: var(--panel-bg); }
+.cl-row.editing .cl-sum .cl-val, .cl-row.editing .cl-sum .link { visibility: hidden; }
+.cl-edit { padding: 0 16px 16px 50px; display: grid; gap: 12px; }
+.cl-btns { display: flex; gap: 8px; }
+.cl-saved { color: var(--success); font-size: .8rem; font-weight: 600; }
+.vars-mini { display: flex; flex-wrap: wrap; gap: 6px; }
+.vars-mini code { font-family: var(--mono); font-size: .78rem; background: var(--panel-bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; }
+.versions { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.ver { display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 10px; align-items: start; font-size: .85rem; }
+.ver b { display: block; }
+.ver .pct { font-variant-numeric: tabular-nums; color: var(--muted); font-size: .8rem; }
+.gal { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; }
+.gal button { border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 6px; cursor: pointer; display: grid; gap: 4px; text-align: left; font-size: .76rem; }
+.gal button[aria-pressed="true"] { border: 2px solid var(--primary); padding: 5px; }
+.split { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.split input { flex: 1; min-width: 140px; }
+.split span { font-variant-numeric: tabular-nums; font-size: .85rem; }
+.kv { display: grid; gap: 6px; }
+.kv-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) 28px; gap: 6px; align-items: center; }
+.kv-row .x { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 1rem; }
+.kv-tok { font-family: var(--mono); font-size: .76rem; color: var(--muted); }
+.notice { border-radius: 6px; padding: 8px 12px; font-size: .85rem; background: var(--warning-soft); color: var(--text); border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent); }
+.tabs-lite { display: flex; gap: 6px; flex-wrap: wrap; }
+.tabs-lite button { border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 2px 12px; font-size: .8rem; cursor: pointer; }
+.tabs-lite button[aria-pressed="true"] { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
+
+/* ===== Variant B: editor + preview ===== */
+.ed { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 16px; align-items: start; }
+.ed-form { display: grid; gap: 14px; }
+.ed-sec { padding: 14px 16px; display: grid; gap: 12px; }
+.ed-sec h3 { margin: 0; font-size: .98rem; }
+.ed-pv { position: sticky; top: 12px; display: grid; gap: 8px; }
+.pv-env { padding: 10px 12px; font-size: .82rem; display: grid; gap: 2px; border-bottom: 1px solid var(--border); }
+.pv-env b { font-size: .9rem; }
+.pv-body { padding: 12px; }
+.pv-body .thumb { aspect-ratio: auto; height: 300px; }
+.dirty { position: sticky; bottom: 0; margin: 0 -22px -28px; padding: 10px 22px; background: var(--surface); border-top: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; box-shadow: 0 -6px 16px rgba(15,23,42,.06); }
+.dirty .msg { flex: 1; font-size: .88rem; min-width: 160px; }
+.dirty .msg b { color: var(--warning); }
+.ch { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--warning); margin-left: 6px; vertical-align: middle; }
+
+
+/* ===== v2: separate cards ===== */
+.cl-hint { display: none; color: var(--muted); font-size: .85rem; min-width: 0; }
+.v2 .cl { background: none; border: 0; overflow: visible; display: grid; gap: 8px; }
+.v2 .cl-head { padding: 0 2px; border: 0; }
+.v2 .cl-row, .v2 .cl-group { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); }
+.v2 .cl-group .cl-row { background: none; border: 0; border-top: 1px solid var(--border); border-radius: 0; }
+.cl-group-h { padding: 8px 16px; font-size: .8rem; color: var(--muted); }
+.v2 .cl-row.locked { background: none; border-style: dashed; }
+.v2 .cl-group:has(.locked) { background: none; border-style: dashed; }
+.v2 .cl-group .cl-row.locked { border-top-style: dashed; }
+.v2 .cl-row:is(.open, .editing) { background: var(--surface); border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary), var(--shadow); margin-block: 6px; }
+.v2 .cl-group:has(:is(.open, .editing)) { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary), var(--shadow); }
+.v2 .cl-group .cl-row:is(.open, .editing) { box-shadow: none; margin-block: 0; border-color: var(--border); }
+.v2 .cl-row:is(.open, .editing) .cl-sum { border-bottom: 1px solid var(--border); }
+.v2 .cl-row:is(.open, .editing) .cl-sum .cl-val { display: none; }
+.v2 .cl-row:is(.open, .editing) .cl-hint { display: block; }
+.v2 .cl-edit { padding: 16px; gap: 14px; animation: none; }
+.v2 .cl-btns { margin: 2px -16px -16px; padding: 10px 16px; border-top: 1px solid var(--border); background: var(--panel-bg); border-radius: 0 0 var(--r) var(--r); justify-content: flex-end; flex-wrap: wrap; }
+.v2 .cl-btns [data-cancel] { order: -1; }
+.v2 .final { border-top: 0; padding: 8px 0 0; }
+@media (max-width: 640px) { .cl-sum .cl-hint { grid-column: 2 / -1; } }
+
+@media (max-width: 960px) {
+    .screen { grid-template-columns: minmax(0, 1fr); }
+    .notes { position: static; }
+    .ed { grid-template-columns: minmax(0, 1fr); }
+    .ed-pv { position: static; }
+}
+@media (max-width: 640px) {
+    .switch { grid-template-columns: minmax(0, 1fr); }
+    .pf-body { grid-template-columns: minmax(0, 1fr); }
+    .pf-side { display: none; }
+    .pf-main { padding: 16px 14px 24px; }
+    .cl-sum { grid-template-columns: 22px minmax(0, 1fr) auto; }
+    .cl-sum .cl-val { grid-column: 2 / -1; }
+    .cl-edit { padding-left: 16px; }
+    .dirty { margin: 0 -14px -24px; padding-inline: 14px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+    .cl-edit { animation: open .16s ease-out; }
+    @keyframes open { from { opacity: 0; transform: translateY(-4px); } }
+}
+</style>
+
+<div class="wrap">
+    <h1>Правка рассылки</h1>
+    <p class="lead">Создание и правка собраны из одних строк. При создании строки открываются по очереди кнопкой «Далее», при правке каждую можно открыть и сохранить отдельно. В макетах всё кликается.</p>
+
+    <div class="switch" role="tablist" aria-label="Варианты" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr))">
+        <button type="button" role="tab" aria-selected="true" data-v="new"><span class="sw-name">Создание</span><span class="sw-meta">Те же строки, открываются по очереди</span></button>
+        <button type="button" role="tab" aria-selected="false" data-v="new2"><span class="sw-name">Создание, версия 2</span><span class="sw-meta">Каждая строка — отдельная карточка</span></button>
+        <button type="button" role="tab" aria-selected="false" data-v="a"><span class="sw-name">Правка</span><span class="sw-meta">Страница рассылки = список настроек, у каждой «Изменить»</span></button>
+        <button type="button" role="tab" aria-selected="false" data-v="a2"><span class="sw-name">Правка, версия 2</span><span class="sw-meta">Те же отдельные карточки</span></button>
+        <button type="button" role="tab" aria-selected="false" data-v="b"><span class="sw-name">Б. Редактор с превью</span><span class="sw-meta">Одна страница «Изменить» со всеми полями и живым превью письма</span></button>
+        <button type="button" role="tab" aria-selected="false" data-v="now"><span class="sw-name">Как сейчас</span><span class="sw-meta">Четыре страницы, A/B через таблицу вариантов</span></button>
+    </div>
+
+    <!-- ===== Create ===== -->
+    <section class="screen" data-screen="new">
+        <div class="pf">
+            <div class="pf-url">sendry.example.com/campaigns/new</div>
+            <div class="pf-body">
+                <nav class="pf-side" aria-hidden="true"><b>Sendry</b><span>Обзор</span><span class="on">Рассылки</span><span>Шаблоны</span><span>Получатели</span><span>Домены</span><span>Настройки</span></nav>
+                <div class="pf-main" id="nw">
+                    <div class="ph">
+                        <div><h2 id="n-title">Новая рассылка</h2></div>
+                        <div class="acts"><button type="button" class="btn">Отмена</button></div>
+                    </div>
+
+                    <div class="card cl">
+                        <div class="cl-head"><h3>Письмо</h3></div>
+
+                        <div class="cl-row" data-row="from" data-step>
+                            <div class="cl-sum">
+                                <span class="cl-dot" aria-hidden="true">1</span>
+                                <span class="cl-name">От кого</span>
+                                <span class="cl-val" data-out></span>
+                                <button type="button" class="link" data-edit>Изменить</button>
+                            </div>
+                            <div class="cl-edit" hidden>
+                                <div class="row2">
+                                    <div class="field"><label for="n-fname">Имя отправителя</label><input id="n-fname" class="input" value="Магазин Ромашка"></div>
+                                    <div class="field"><label for="n-femail">Email отправителя *</label><input id="n-femail" class="input" value="news@romashka.ru"></div>
+                                </div>
+                                <div class="field"><label for="n-reply">Reply-To</label><input id="n-reply" class="input" placeholder="support@romashka.ru"><span class="help">Куда придут ответы получателей. Если пусто, на адрес отправителя.</span></div>
+                                <div class="cl-btns"><button type="button" class="btn pri sm" data-next>Далее</button></div>
+                            </div>
+                        </div>
+
+                        <div class="cl-row" data-row="content" data-step>
+                            <div class="cl-sum">
+                                <span class="cl-dot" aria-hidden="true">2</span>
+                                <span class="cl-name">Содержание</span>
+                                <span class="cl-val" data-out></span>
+                                <button type="button" class="link" data-edit>Изменить</button>
+                            </div>
+                            <div class="cl-edit" hidden>
+                                <div class="field" id="n-ab-head" hidden>
+                                    <div class="tabs-lite" role="group" aria-label="Версия">
+                                        <button type="button" aria-pressed="true" data-nver="A">Версия A</button>
+                                        <button type="button" aria-pressed="false" data-nver="B">Версия B</button>
+                                    </div>
+                                    <span class="help">Каждый получатель получит одну из версий, случайно. В статистике рассылки будет видно, какая сработала лучше.</span>
+                                </div>
+                                <div class="field">
+                                    <span class="lbl" id="n-gal-lbl">Шаблон *</span>
+                                    <div class="gal" id="n-gal">
+                                        <button type="button" aria-pressed="false" data-tpl="Осень −20%" data-subj="Скидки до 20% на всё" data-cls="t-a"><span class="thumb t-a"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Осень −20%</button>
+                                        <button type="button" aria-pressed="false" data-tpl="Осень, подборка" data-subj="Собрали осеннее для вас" data-cls="t-b"><span class="thumb t-b"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Осень, подборка</button>
+                                        <button type="button" aria-pressed="false" data-tpl="Новинки недели" data-subj="Что нового в магазине" data-cls="t-c"><span class="thumb t-c"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Новинки недели</button>
+                                    </div>
+                                    <span class="help" id="n-gal-err" style="color:var(--error)" hidden>Выберите шаблон</span>
+                                </div>
+                                <div class="field"><label for="n-subj" id="n-subj-lbl">Тема письма</label><input id="n-subj" class="input" placeholder="Подставится из шаблона"></div>
+                                <div class="field" id="n-split-f" hidden>
+                                    <label for="n-split">Кто какую версию получит</label>
+                                    <div class="split"><input type="range" id="n-split" min="1" max="99" value="50"><span id="n-split-l">A 50% / B 50%</span></div>
+                                </div>
+                                <div><button type="button" class="link" id="n-ab">+ Добавить версию B (A/B-тест)</button></div>
+                                <div class="cl-btns"><button type="button" class="btn pri sm" data-next>Далее</button></div>
+                            </div>
+                        </div>
+
+                        <div class="cl-row" data-row="vars" data-opt>
+                            <div class="cl-sum">
+                                <span class="cl-dot opt" aria-hidden="true"></span>
+                                <span class="cl-name">Переменные</span>
+                                <span class="cl-val" data-out><span class="muted">Нет</span></span>
+                                <button type="button" class="link" data-edit>Изменить</button>
+                            </div>
+                            <div class="cl-edit" hidden>
+                                <div class="kv" id="n-kv">
+                                    <div class="kv-row"><input class="input" placeholder="discount" aria-label="Название"><input class="input" placeholder="20%" aria-label="Значение"><button type="button" class="x" aria-label="Удалить">×</button></div>
+                                </div>
+                                <span class="help">В письме пишется как <span class="kv-tok">{{discount}}</span>.</span>
+                                <div class="cl-btns"><button type="button" class="btn pri sm" data-done>Готово</button></div>
+                            </div>
+                        </div>
+
+                        <div class="cl-row" data-row="track" data-opt>
+                            <div class="cl-sum">
+                                <span class="cl-dot opt" aria-hidden="true"></span>
+                                <span class="cl-name">Трекинг</span>
+                                <span class="cl-val" data-out>Открытия и клики считаются, без UTM-меток</span>
+                                <button type="button" class="link" data-edit>Изменить</button>
+                            </div>
+                            <div class="cl-edit" hidden>
+                                <label class="check"><input type="checkbox" id="n-to" checked> Считать открытия</label>
+                                <label class="check"><input type="checkbox" id="n-tc" checked> Считать клики</label>
+                                <label class="check"><input type="checkbox" id="n-utm"> Добавлять UTM-метки к ссылкам</label>
+                                <div class="cl-btns"><button type="button" class="btn pri sm" data-done>Готово</button></div>
+                            </div>
+                        </div>
+
+                        <div class="cl-row" data-row="about" data-opt>
+                            <div class="cl-sum">
+                                <span class="cl-dot opt" aria-hidden="true"></span>
+                                <span class="cl-name">Название и описание</span>
+                                <span class="cl-val" data-out><span class="muted">Возьмётся из темы письма и даты</span></span>
+                                <button type="button" class="link" data-edit>Изменить</button>
+                            </div>
+                            <div class="cl-edit" hidden>
+                                <div class="field"><label for="n-name">Название рассылки</label><input id="n-name" class="input"><span class="help" id="n-name-help">Видно только в панели.</span></div>
+                                <div class="field"><label for="n-desc">Описание</label><input id="n-desc" class="input" placeholder="Для подписчиков, кто покупал в сентябре"></div>
+                                <div class="cl-btns"><button type="button" class="btn pri sm" data-done>Готово</button></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card cl">
+                        <div class="cl-head"><h3>Отправка</h3></div>
+
+                        <div class="cl-row" data-row="to" data-step>
+                            <div class="cl-sum">
+                                <span class="cl-dot" aria-hidden="true">3</span>
+                                <span class="cl-name">Кому</span>
+                                <span class="cl-val" data-out></span>
+                                <button type="button" class="link" data-edit>Изменить</button>
+                            </div>
+                            <div class="cl-edit" hidden>
+                                <div class="lists" role="radiogroup" aria-label="Список получателей">
+                                    <label><input type="radio" name="n-list" value="Покупатели сентября" data-n="1 284" checked><span>Покупатели сентября<br><span class="help">36 отписались или адрес не работает</span></span><span class="n">1 284 получат</span></label>
+                                    <label><input type="radio" name="n-list" value="Все подписчики" data-n="9 410"><span>Все подписчики<br><span class="help">512 отписались или адрес не работает</span></span><span class="n">9 410 получат</span></label>
+                                </div>
+                                <div class="cl-btns"><button type="button" class="btn pri sm" data-next>Далее</button></div>
+                            </div>
+                        </div>
+
+                        <div class="cl-row" data-row="check" data-step>
+                            <div class="cl-sum">
+                                <span class="cl-dot" aria-hidden="true">4</span>
+                                <span class="cl-name">Проверка</span>
+                                <span class="cl-val" data-out></span>
+                                <button type="button" class="link" data-edit>Изменить</button>
+                            </div>
+                            <div class="cl-edit" hidden>
+                                <div class="chk">
+                                    <div style="display:grid; gap:8px; align-content:start">
+                                        <div class="tabs-lite" id="n-pv-tabs" role="group" aria-label="Версия" hidden>
+                                            <button type="button" aria-pressed="true" data-pver="A">A</button>
+                                            <button type="button" aria-pressed="false" data-pver="B">B</button>
+                                        </div>
+                                        <div class="thumb t-a" id="n-pv"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+                                        <span class="help" id="n-pv-subj"></span>
+                                    </div>
+                                    <div style="display:grid; gap:12px; min-width:0">
+                                        <ul class="ready">
+                                            <li><span class="ok">✓</span>Есть ссылка отписки</li>
+                                            <li><span class="ok">✓</span>Домен romashka.ru развёрнут, DKIM включён</li>
+                                            <li><span class="warn">!</span>Проксирующий домен не задан: письма уйдут без трекинга</li>
+                                        </ul>
+                                        <div class="field">
+                                            <label for="n-test">Пробное письмо</label>
+                                            <div class="inline"><input id="n-test" class="input" value="ilya@romashka.ru"><button type="button" class="btn sm" id="n-test-btn">Отправить мне</button></div>
+                                            <span class="help" id="n-test-res" role="status"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="cl-btns"><button type="button" class="btn pri sm" data-next>Далее</button><button type="button" class="btn sm">Открыть письмо целиком</button></div>
+                            </div>
+                        </div>
+
+                        <div class="cl-row" data-row="when" data-step>
+                            <div class="cl-sum">
+                                <span class="cl-dot" aria-hidden="true">5</span>
+                                <span class="cl-name">Когда</span>
+                                <span class="cl-val" data-out></span>
+                                <button type="button" class="link" data-edit>Изменить</button>
+                            </div>
+                            <div class="cl-edit" hidden>
+                                <label class="check"><input type="radio" name="n-when" value="now" checked> Сейчас</label>
+                                <label class="check"><input type="radio" name="n-when" value="later"> Запланировать</label>
+                                <label class="check"><input type="checkbox" id="n-pilot"> Сначала отправить только первым 50 получателям (пилот)</label>
+                                <span class="help">Серверы и распределение — в «Дополнительно», как в мастере.</span>
+                                <div class="cl-btns"><button type="button" class="btn pri sm" data-next>Готово</button></div>
+                            </div>
+                        </div>
+
+                        <div class="final">
+                            <button type="button" class="btn pri" id="n-send" disabled>Отправить</button>
+                            <button type="button" class="btn" id="n-save" disabled>Сохранить без отправки</button>
+                            <span class="help" id="n-final-help">Заполните «От кого» и «Содержание», чтобы сохранить рассылку.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <aside class="notes">
+            <h3>Создание</h3>
+            <ul>
+                <li>Открыта одна строка. «Далее» сворачивает её в ту же сводку, что на странице рассылки, и открывает следующую.</li>
+                <li>Номера только у обязательных шагов. Строки ниже текущего шага бледные, их пока не открыть.</li>
+                <li>Переменные, трекинг, название уже заполнены по умолчанию, «Далее» их пропускает. Открываются после «Содержания».</li>
+                <li>Название по умолчанию: тема версии A и дата, например «Скидки до 20% на всё, 26 окт». Переменные вроде {{name}} из темы вырезаются. Поле названия пустое, пока его не заполнить.</li>
+                <li>Пройденную строку можно открыть снова. Тогда кнопка в ней «Готово», и после неё снова открывается текущий шаг.</li>
+                <li>«Сохранить без отправки» доступна сразу после «Содержания». Карточку «Отправка» тогда можно не проходить.</li>
+            </ul>
+            <p><span class="tag good">одни строки</span> карточка «Письмо» та же, что в правке; карточка «Отправка» та же, что у кнопки «Отправить…» на странице рассылки</p>
+            <p class="hint">До финальной кнопки на сервер ничего не пишется, всё уходит одной формой, как в нынешнем мастере.</p>
+        </aside>
+    </section>
+
+    <!-- ===== Variant A ===== -->
+    <section class="screen" data-screen="a" hidden>
+        <div class="pf">
+            <div class="pf-url">sendry.example.com/campaigns/7f3a…</div>
+            <div class="pf-body">
+                <nav class="pf-side" aria-hidden="true"><b>Sendry</b><span>Обзор</span><span class="on">Рассылки</span><span>Шаблоны</span><span>Получатели</span><span>Домены</span><span>Настройки</span></nav>
+                <div class="pf-main">
+                    <div class="ph">
+                        <div><h2>Осенняя распродажа</h2><p>Для подписчиков, кто покупал в сентябре</p></div>
+                        <div class="acts"><button type="button" class="btn pri">Отправить…</button></div>
+                    </div>
+
+                    <div class="card cl" id="cl">
+                        <div class="cl-head">
+                            <h3>Письмо</h3>
+                            <span class="help">Изменения коснутся следующих отправок. Уже отправленные письма не меняются.</span>
+                        </div>
+
+                        <div class="cl-row" data-row="from">
+                            <div class="cl-sum">
+                                <span class="cl-dot ok" aria-hidden="true">✓</span>
+                                <span class="cl-name">От кого</span>
+                                <span class="cl-val" data-out="from">Магазин Ромашка &lt;news@romashka.ru&gt;<br><span class="sub">Reply-To: support@romashka.ru</span></span>
+                                <button type="button" class="link" data-edit>Изменить</button>
+                            </div>
+                            <div class="cl-edit" hidden>
+                                <div class="row2">
+                                    <div class="field"><label for="a-fname">Имя отправителя</label><input id="a-fname" class="input" value="Магазин Ромашка"></div>
+                                    <div class="field"><label for="a-femail">Email отправителя *</label><input id="a-femail" class="input" value="news@romashka.ru"></div>
+                                </div>
+                                <div class="field"><label for="a-reply">Reply-To</label><input id="a-reply" class="input" value="support@romashka.ru"><span class="help">Куда придут ответы получателей.</span></div>
+                                <div class="cl-btns"><button type="button" class="btn pri sm" data-save>Сохранить</button><button type="button" class="btn sm" data-cancel>Отмена</button></div>
+                            </div>
+                        </div>
+
+                        <div class="cl-row" data-row="content">
+                            <div class="cl-sum">
+                                <span class="cl-dot ok" aria-hidden="true">✓</span>
+                                <span class="cl-name">Содержание</span>
+                                <div class="cl-val">
+                                    <div class="versions" data-out="content">
+                                        <div class="ver"><div class="thumb t-a"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div><b>Версия A</b>Осень −20%<br><span class="sub">«Скидки до 20% на всё»</span><br><span class="pct">50% получателей</span></div></div>
+                                        <div class="ver"><div class="thumb t-b"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div><b>Версия B</b>Осень, подборка<br><span class="sub">«Собрали осеннее для вас»</span><br><span class="pct">50% получателей</span></div></div>
+                                    </div>
+                                </div>
+                                <button type="button" class="link" data-edit>Изменить</button>
+                            </div>
+                            <div class="cl-edit" hidden>
+                                <div class="tabs-lite" role="group" aria-label="Версия">
+                                    <button type="button" aria-pressed="true" data-ver="A">Версия A</button>
+                                    <button type="button" aria-pressed="false" data-ver="B">Версия B</button>
+                                </div>
+                                <div class="field">
+                                    <span class="lbl">Шаблон</span>
+                                    <div class="gal" id="a-gal">
+                                        <button type="button" aria-pressed="true" data-tpl="Осень −20%" data-subj="Скидки до 20% на всё" data-cls="t-a"><span class="thumb t-a"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Осень −20%</button>
+                                        <button type="button" aria-pressed="false" data-tpl="Осень, подборка" data-subj="Собрали осеннее для вас" data-cls="t-b"><span class="thumb t-b"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Осень, подборка</button>
+                                        <button type="button" aria-pressed="false" data-tpl="Новинки недели" data-subj="Что нового в магазине" data-cls="t-c"><span class="thumb t-c"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Новинки недели</button>
+                                    </div>
+                                    <span class="help">Та же галерея, что в мастере: поиск и папки.</span>
+                                </div>
+                                <div class="field"><label for="a-subj">Тема письма</label><input id="a-subj" class="input" value="Скидки до 20% на всё"></div>
+                                <div class="field">
+                                    <label for="a-split">Кто какую версию получит</label>
+                                    <div class="split"><input type="range" id="a-split" min="1" max="99" value="50"><span id="a-split-l">A 50% / B 50%</span></div>
+                                </div>
+                                <div><button type="button" class="link" id="a-drop-b">Убрать версию B</button></div>
+                                <div class="cl-btns"><button type="button" class="btn pri sm" data-save>Сохранить</button><button type="button" class="btn sm" data-cancel>Отмена</button><button type="button" class="btn sm" style="margin-left:auto">Посмотреть письмо</button></div>
+                            </div>
+                        </div>
+
+                        <div class="cl-row" data-row="vars">
+                            <div class="cl-sum">
+                                <span class="cl-dot opt" aria-hidden="true"></span>
+                                <span class="cl-name">Переменные</span>
+                                <span class="cl-val vars-mini" data-out="vars"><code>discount = 20%</code><code>promo = AUTUMN</code></span>
+                                <button type="button" class="link" data-edit>Изменить</button>
+                            </div>
+                            <div class="cl-edit" hidden>
+                                <div class="kv" id="a-kv">
+                                    <div class="kv-row"><input class="input" value="discount" aria-label="Название"><input class="input" value="20%" aria-label="Значение"><button type="button" class="x" aria-label="Удалить">×</button></div>
+                                    <div class="kv-row"><input class="input" value="promo" aria-label="Название"><input class="input" value="AUTUMN" aria-label="Значение"><button type="button" class="x" aria-label="Удалить">×</button></div>
+                                </div>
+                                <div><button type="button" class="link" id="a-kv-add">+ Добавить переменную</button></div>
+                                <span class="help">В письме пишется как <span class="kv-tok">{{discount}}</span>. Если у получателя есть своя переменная с тем же названием, возьмётся она. <button type="button" class="link" style="font-size:inherit">Править как JSON</button></span>
+                                <div class="cl-btns"><button type="button" class="btn pri sm" data-save>Сохранить</button><button type="button" class="btn sm" data-cancel>Отмена</button></div>
+                            </div>
+                        </div>
+
+                        <div class="cl-row" data-row="track">
+                            <div class="cl-sum">
+                                <span class="cl-dot ok" aria-hidden="true">✓</span>
+                                <span class="cl-name">Трекинг</span>
+                                <span class="cl-val" data-out="track">Открытия и клики считаются, UTM-метки добавляются</span>
+                                <button type="button" class="link" data-edit>Изменить</button>
+                            </div>
+                            <div class="cl-edit" hidden>
+                                <label class="check"><input type="checkbox" id="a-to" checked> Считать открытия</label>
+                                <label class="check"><input type="checkbox" id="a-tc" checked> Считать клики</label>
+                                <label class="check"><input type="checkbox" id="a-utm" checked> Добавлять UTM-метки к ссылкам</label>
+                                <div class="cl-btns"><button type="button" class="btn pri sm" data-save>Сохранить</button><button type="button" class="btn sm" data-cancel>Отмена</button></div>
+                            </div>
+                        </div>
+
+                        <div class="cl-row" data-row="about">
+                            <div class="cl-sum">
+                                <span class="cl-dot opt" aria-hidden="true"></span>
+                                <span class="cl-name">Название и описание</span>
+                                <span class="cl-val" data-out="about">Осенняя распродажа<br><span class="sub">Для подписчиков, кто покупал в сентябре</span></span>
+                                <button type="button" class="link" data-edit>Изменить</button>
+                            </div>
+                            <div class="cl-edit" hidden>
+                                <div class="field"><label for="a-name">Название рассылки *</label><input id="a-name" class="input" value="Осенняя распродажа"></div>
+                                <div class="field"><label for="a-desc">Описание</label><input id="a-desc" class="input" value="Для подписчиков, кто покупал в сентябре"></div>
+                                <div class="cl-btns"><button type="button" class="btn pri sm" data-save>Сохранить</button><button type="button" class="btn sm" data-cancel>Отмена</button></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="ghost">Графики открытий и кликов, запуски, «Удалить рассылку» — как сейчас</div>
+                </div>
+            </div>
+        </div>
+        <aside class="notes">
+            <h3>Правка на месте</h3>
+            <ul>
+                <li>Страница рассылки сама становится редактором: видно, что сейчас настроено, и каждую строку можно открыть и поменять.</li>
+                <li>Одна строка открыта за раз, у неё свои «Сохранить» и «Отмена». Сохранение без перезагрузки, строка закрывается и показывает новое значение.</li>
+                <li>«Содержание» показывает миниатюры версий A/B. Внутри та же галерея шаблонов и ползунок, что в мастере.</li>
+                <li>Переменные — пары «название / значение» вместо JSON. Для тех, кому удобнее, остаётся «Править как JSON».</li>
+            </ul>
+            <p><span class="tag good">уходит</span> страницы <code>/edit</code>, <code>/variables</code>, <code>/variants</code></p>
+            <p><span class="tag good">меньше кода</span> на сервере пять маленьких обработчиков сохранения вместо трёх страниц с формами</p>
+            <p class="hint">Так же устроены Mailchimp и Unisender: создают мастером, правят чек-листом. «Отправить…» пока ведёт на старую страницу отправки, её можно потом заменить шагами 2–4 мастера.</p>
+        </aside>
+    </section>
+
+    <!-- ===== Variant B ===== -->
+    <section class="screen" data-screen="b" hidden>
+        <div class="pf">
+            <div class="pf-url">sendry.example.com/campaigns/7f3a…/edit</div>
+            <div class="pf-body">
+                <nav class="pf-side" aria-hidden="true"><b>Sendry</b><span>Обзор</span><span class="on">Рассылки</span><span>Шаблоны</span><span>Получатели</span><span>Домены</span><span>Настройки</span></nav>
+                <div class="pf-main">
+                    <div class="ph">
+                        <div><h2>Изменить: Осенняя распродажа</h2><p>Изменения коснутся следующих отправок</p></div>
+                    </div>
+                    <div class="ed" id="ed">
+                        <div class="ed-form">
+                            <div class="card ed-sec">
+                                <h3>Отправитель</h3>
+                                <div class="row2">
+                                    <div class="field"><label for="b-fname">Имя отправителя</label><input id="b-fname" class="input" value="Магазин Ромашка"></div>
+                                    <div class="field"><label for="b-femail">Email отправителя *</label><input id="b-femail" class="input" value="news@romashka.ru"></div>
+                                </div>
+                                <div class="field"><label for="b-reply">Reply-To</label><input id="b-reply" class="input" value="support@romashka.ru"><span class="help">Куда придут ответы получателей.</span></div>
+                            </div>
+                            <div class="card ed-sec">
+                                <h3>Содержание</h3>
+                                <div class="tabs-lite" role="group" aria-label="Версия">
+                                    <button type="button" aria-pressed="true">Версия A · 50%</button>
+                                    <button type="button" aria-pressed="false">Версия B · 50%</button>
+                                    <button type="button" aria-pressed="false">+ версия</button>
+                                </div>
+                                <div class="gal" id="b-gal">
+                                    <button type="button" aria-pressed="true" data-cls="t-a" data-subj="Скидки до 20% на всё"><span class="thumb t-a"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Осень −20%</button>
+                                    <button type="button" aria-pressed="false" data-cls="t-b" data-subj="Собрали осеннее для вас"><span class="thumb t-b"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Осень, подборка</button>
+                                    <button type="button" aria-pressed="false" data-cls="t-c" data-subj="Что нового в магазине"><span class="thumb t-c"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Новинки недели</button>
+                                </div>
+                                <div class="field"><label for="b-subj">Тема письма</label><input id="b-subj" class="input" value="Скидки до 20% на всё"></div>
+                            </div>
+                            <div class="card ed-sec">
+                                <h3>Переменные, трекинг, название</h3>
+                                <div class="kv">
+                                    <div class="kv-row"><input class="input" value="discount" aria-label="Название"><input class="input" value="20%" aria-label="Значение"><button type="button" class="x" aria-label="Удалить">×</button></div>
+                                </div>
+                                <label class="check"><input type="checkbox" checked> Считать открытия</label>
+                                <label class="check"><input type="checkbox" checked> Считать клики</label>
+                                <div class="field"><label for="b-name">Название рассылки *</label><input id="b-name" class="input" value="Осенняя распродажа"></div>
+                            </div>
+                        </div>
+                        <div class="card ed-pv" aria-label="Превью">
+                            <div class="pv-env"><b id="b-pv-from">Магазин Ромашка</b><span id="b-pv-subj">Скидки до 20% на всё</span><span class="muted">Reply-To: <span id="b-pv-reply">support@romashka.ru</span></span></div>
+                            <div class="pv-body"><div class="thumb t-a" id="b-pv-thumb"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+                        </div>
+                    </div>
+                    <div class="dirty" id="b-dirty" hidden>
+                        <span class="msg"><b>Есть несохранённые изменения</b><span id="b-dirty-n"></span></span>
+                        <button type="button" class="btn sm" id="b-reset">Отменить</button>
+                        <button type="button" class="btn pri sm" id="b-save">Сохранить изменения</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <aside class="notes">
+            <h3>Редактор с превью</h3>
+            <ul>
+                <li>Одна страница <code>/edit</code> со всеми полями, справа письмо так, как его увидит получатель: от кого, тема, сам шаблон.</li>
+                <li>Превью обновляется сразу, пока печатаешь. Поменял шаблон — сразу видно новое письмо.</li>
+                <li>Внизу появляется полоса «Есть несохранённые изменения». Уйти со страницы с изменениями — браузер переспросит.</li>
+                <li>Попробуйте поменять тему или шаблон в макете.</li>
+            </ul>
+            <p><span class="tag good">плюс</span> письмо перед глазами всё время правки</p>
+            <p><span class="tag bad">минус</span> чтобы поменять одну тему, всё равно открываешь целую форму; страница рассылки и страница правки остаются разными</p>
+            <p><span class="tag bad">минус</span> на телефоне превью уезжает под форму</p>
+        </aside>
+    </section>
+
+    <!-- ===== Now ===== -->
+    <section class="screen" data-screen="now" hidden>
+        <div class="pf">
+            <div class="pf-url">sendry.example.com/campaigns/7f3a…/variants</div>
+            <div class="pf-body">
+                <nav class="pf-side" aria-hidden="true"><b>Sendry</b><span>Обзор</span><span class="on">Рассылки</span><span>Шаблоны</span><span>Получатели</span><span>Домены</span><span>Настройки</span></nav>
+                <div class="pf-main">
+                    <div class="ph"><div><h2>Осенняя распродажа - Variants</h2><p>Configure template variants for A/B testing</p></div><div class="acts"><button type="button" class="btn">Back to campaign</button></div></div>
+                    <div class="card ed-sec">
+                        <h3>Add Variant</h3>
+                        <div class="row2">
+                            <div class="field"><span class="lbl">Variant Name *</span><input class="input" placeholder="Variant A" aria-label="Variant Name"></div>
+                            <div class="field"><span class="lbl">Template *</span><select class="input" aria-label="Template"><option>Select template...</option></select></div>
+                            <div class="field"><span class="lbl">Weight (%)</span><input class="input" value="100" aria-label="Weight"></div>
+                        </div>
+                    </div>
+                    <div class="card ed-sec">
+                        <h3>Current Variants</h3>
+                        <div class="muted" style="font-size:.88rem">A · Осень −20% · 50% · <span style="color:var(--error)">Delete</span><br>B · Осень, подборка · 50% · <span style="color:var(--error)">Delete</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <aside class="notes">
+            <h3>Как сейчас</h3>
+            <ul>
+                <li>Чтобы сменить тему письма: открыть рассылку → «Manage» в вариантах → удалить вариант → создать заново с тем же шаблоном и весом.</li>
+                <li>Шаблон выбирается из выпадающего списка без миниатюр.</li>
+                <li>Отправитель и трекинг — на <code>/edit</code>, переменные — на <code>/variables</code> в JSON. Три страницы с кнопкой «Назад».</li>
+            </ul>
+            <p><span class="tag bad">4 перехода</span> чтобы поменять одну тему</p>
+        </aside>
+    </section>
+</div>
+
+<script>
+(() => {
+    // Variant switcher
+    const tabs = document.querySelectorAll('.switch [role=tab]');
+    tabs.forEach(t => t.addEventListener('click', () => {
+        tabs.forEach(x => x.setAttribute('aria-selected', x === t));
+        document.querySelectorAll('[data-screen]').forEach(s => { s.hidden = s.dataset.screen !== t.dataset.v; });
+    }));
+
+    // ===== Create =====
+    // p: id prefix of this copy ("n-" for v1, "m-" for v2)
+    function initCreate(rootId, p) {
+        const root = document.getElementById(rootId);
+        const $ = id => document.getElementById(id.replace(/^n-/, p));
+        const v = id => $(id).value.trim();
+        const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+        const rows = [...root.querySelectorAll('.cl-row')];
+        const steps = rows.filter(r => r.hasAttribute('data-step'));
+        const opts = rows.filter(r => r.hasAttribute('data-opt'));
+        let cur = 0;            // index of the current step
+        let open = null;        // row whose editor is open
+        // Versions: A always, B after "+ Добавить версию B"
+        const ver = { A: { name: '', cls: '', subj: '' }, B: null };
+        let curVer = 'A';
+        const thumbHTML = cls => `<div class="thumb ${cls}"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>`;
+        const split = () => +$('n-split').value;
+
+        const summary = {
+            from: () => (v('n-fname') ? `${esc(v('n-fname'))} &lt;${esc(v('n-femail'))}&gt;` : esc(v('n-femail'))) + `<br><span class="sub">Reply-To: ${esc(v('n-reply') || v('n-femail'))}</span>`,
+            content: () => {
+                const one = (k, label, pct) => `<div class="ver">${thumbHTML(ver[k].cls)}<div>${label ? `<b>${label}</b>` : ''}${esc(ver[k].name)}<br><span class="sub">«${esc(ver[k].subj)}»</span>${pct ? `<br><span class="pct">${pct}% получателей</span>` : ''}</div></div>`;
+                return ver.B
+                    ? `<div class="versions">${one('A', 'Версия A', split())}${one('B', 'Версия B', 100 - split())}</div>`
+                    : one('A');
+            },
+            vars: () => {
+                const p = [...$('n-kv').querySelectorAll('.kv-row')].map(r => r.querySelectorAll('input')).filter(i => i[0].value.trim());
+                return p.length ? `<span class="vars-mini">${p.map(i => `<code>${esc(i[0].value.trim())} = ${esc(i[1].value)}</code>`).join('')}</span>` : '<span class="muted">Нет</span>';
+            },
+            track: () => {
+                const o = $('n-to').checked, c = $('n-tc').checked;
+                return (o && c ? 'Открытия и клики считаются' : o ? 'Считаются только открытия' : c ? 'Считаются только клики' : 'Открытия и клики не считаются') + ($('n-utm').checked ? ', UTM-метки добавляются' : ', без UTM-меток');
+            },
+            about: () => esc(campaignName()) + (v('n-desc') ? `<br><span class="sub">${esc(v('n-desc'))}</span>` : ''),
+            to: () => { const r = root.querySelector(`[name=${p}list]:checked`); return `${esc(r.value)}<br><span class="sub">${r.dataset.n} получат</span>`; },
+            check: () => 'Письмо просмотрено' + ($('n-test-res').textContent ? ', пробное отправлено' : ''),
+            when: () => (root.querySelector(`[name=${p}when]:checked`).value === 'now' ? 'Сразу после нажатия «Отправить»' : 'По расписанию') + ($('n-pilot').checked ? '<br><span class="sub">Сначала пилот на 50 получателей</span>' : ''),
+        };
+        // Default name: subject of version A without {{variables}}, plus the creation date
+        const autoName = () => {
+            const s = ver.A.subj.replace(/\{\{[^}]*\}\}/g, '').replace(/^[\s,.!:;-]+|[\s,.!:;-]+$/g, '').replace(/\s{2,}/g, ' ');
+            return s ? `${s}, 26 окт` : '';
+        };
+        const campaignName = () => v('n-name') || autoName();
+
+        function render() {
+            steps.forEach((r, i) => {
+                const dot = r.querySelector('.cl-dot');
+                const done = i < cur;
+                dot.className = 'cl-dot ' + (done ? 'ok' : i === cur ? 'cur' : 'todo');
+                dot.textContent = done ? '✓' : i + 1;
+                r.classList.toggle('locked', i > cur);
+            });
+            const contentDone = cur > 1;
+            opts.forEach(r => r.classList.toggle('locked', !contentDone));
+            rows.forEach(r => {
+                r.classList.toggle('open', r === open);
+                r.querySelector('.cl-edit').hidden = r !== open;
+            });
+            $('n-title').textContent = campaignName() || 'Новая рассылка';
+            const allDone = cur >= steps.length;
+            $('n-save').disabled = !contentDone;
+            $('n-send').disabled = !allDone;
+            const list = root.querySelector(`[name=${p}list]:checked`);
+            $('n-send').textContent = allDone ? `Отправить ${list.dataset.n} получателям` : 'Отправить';
+            $('n-final-help').textContent = allDone ? '' : contentDone ? 'Можно сохранить сейчас и отправить позже со страницы рассылки.' : 'Заполните «От кого» и «Содержание», чтобы сохранить рассылку.';
+            $('n-final-help').hidden = allDone;
+        }
+        function openRow(r) {
+            open = r;
+            const isStep = steps.indexOf(r);
+            const btn = r.querySelector('[data-next]');
+            if (btn) btn.textContent = isStep < cur ? 'Готово' : isStep === steps.length - 1 ? 'Готово' : 'Далее';
+            render();
+            const f = r.querySelector('.cl-edit input, .cl-edit button');
+            if (f) f.focus({ preventScroll: true });
+        }
+        function fill(r) { r.querySelector('[data-out]').innerHTML = summary[r.dataset.row](); }
+        function valid(r) {
+            if (r.dataset.row === 'from' && !v('n-femail')) { $('n-femail').focus(); return false; }
+            if (r.dataset.row === 'content') {
+                const missing = !ver.A.name ? 'A' : ver.B && !ver.B.name ? 'B' : null;
+                if (missing) {
+                    showVer(missing);
+                    $('n-gal-err').textContent = ver.B ? `Выберите шаблон для версии ${missing}` : 'Выберите шаблон';
+                    $('n-gal-err').hidden = false;
+                    return false;
+                }
+            }
+            return true;
+        }
+        function backToCurrent() { open = cur < steps.length ? steps[cur] : null; if (open) openRow(open); else render(); }
+
+        root.addEventListener('click', e => {
+            const r = e.target.closest('.cl-row');
+            if (!r) return;
+            if (e.target.matches('[data-edit]') && !r.classList.contains('locked')) openRow(r);
+            if (e.target.matches('[data-next]')) {
+                if (!valid(r)) return;
+                fill(r);
+                const i = steps.indexOf(r);
+                if (i === cur) cur++;
+                if (r.dataset.row === 'content') opts.forEach(fill);
+                backToCurrent();
+            }
+            if (e.target.matches('[data-done]')) { fill(r); opts.forEach(fill); backToCurrent(); }
+        });
+        function showVer(k) {
+            curVer = k;
+            const ab = !!ver.B;
+            $('n-ab-head').hidden = !ab;
+            $('n-split-f').hidden = !ab;
+            $('n-ab').textContent = ab ? 'Убрать версию B' : '+ Добавить версию B (A/B-тест)';
+            root.querySelectorAll('[data-nver]').forEach(b => b.setAttribute('aria-pressed', b.dataset.nver === k));
+            $('n-gal-lbl').textContent = ab ? `Шаблон версии ${k} *` : 'Шаблон *';
+            $('n-subj-lbl').textContent = ab ? `Тема версии ${k}` : 'Тема письма';
+            $('n-gal').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x.dataset.tpl === ver[k].name));
+            $('n-subj').value = ver[k].subj;
+            $('n-split-l').textContent = `A ${split()}% / B ${100 - split()}%`;
+            $('n-gal-err').hidden = true;
+            showPreview('A');
+        }
+        function showPreview(k) {
+            $('n-pv-tabs').hidden = !ver.B;
+            root.querySelectorAll('[data-pver]').forEach(b => b.setAttribute('aria-pressed', b.dataset.pver === k));
+            $('n-pv').className = 'thumb ' + (ver[k] && ver[k].cls);
+            $('n-pv-subj').textContent = ver[k] && ver[k].subj ? `Тема: «${ver[k].subj}»` : '';
+        }
+        $('n-gal').addEventListener('click', e => {
+            const b = e.target.closest('button');
+            if (!b) return;
+            Object.assign(ver[curVer], { name: b.dataset.tpl, cls: b.dataset.cls, subj: b.dataset.subj });
+            showVer(curVer);
+            render();
+        });
+        $('n-subj').addEventListener('input', () => { ver[curVer].subj = $('n-subj').value; });
+        $('n-split').addEventListener('input', () => { $('n-split-l').textContent = `A ${split()}% / B ${100 - split()}%`; });
+        $('n-ab').addEventListener('click', () => {
+            if (ver.B) { ver.B = null; showVer('A'); }
+            else { ver.B = { name: '', cls: '', subj: '' }; showVer('B'); }
+        });
+        root.querySelectorAll('[data-nver]').forEach(b => b.addEventListener('click', () => showVer(b.dataset.nver)));
+        root.querySelectorAll('[data-pver]').forEach(b => b.addEventListener('click', () => showPreview(b.dataset.pver)));
+        $('n-test-btn').addEventListener('click', () => { $('n-test-res').textContent = `Отправлено на ${v('n-test')}`; });
+        root.addEventListener('change', e => { if (e.target.name === p + 'list') render(); });
+        root.addEventListener('input', e => { if (e.target.id === p + 'name' || e.target.id === p + 'subj') render(); });
+        $('n-send').addEventListener('click', () => { $('n-final-help').hidden = false; $('n-final-help').textContent = 'В панели здесь откроется страница запуска.'; });
+        $('n-save').addEventListener('click', () => { $('n-final-help').hidden = false; $('n-final-help').textContent = 'В панели здесь откроется страница рассылки, все строки уже в режиме правки.'; });
+
+        openRow(steps[0]);
+    }
+
+    // ===== Variant A =====
+    // p: id prefix of this copy ("a-" for v1, "c-" for v2)
+    function initEdit(clId, p) {
+    const cl = $id(clId);
+    const $id = id => document.getElementById(id.replace(/^a-/, p));
+    const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const val = id => $id(id).value.trim();
+    const thumb = cls => `<div class="thumb ${cls}"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>`;
+
+    // Content state: per-version template, subject; split
+    const content = {
+        A: { tpl: 'Осень −20%', subj: 'Скидки до 20% на всё', cls: 't-a' },
+        B: { tpl: 'Осень, подборка', subj: 'Собрали осеннее для вас', cls: 't-b' },
+        split: 50,
+    };
+    let draft = null, cur = 'A';
+
+    function close(row) {
+        row.classList.remove('editing');
+        row.querySelector('.cl-edit').hidden = true;
+        row.querySelector('[data-edit]').focus();
+    }
+    function showVer(v) {
+        cur = v;
+        cl.querySelectorAll('[data-ver]').forEach(b => b.setAttribute('aria-pressed', b.dataset.ver === v));
+        $id('a-gal').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.tpl === draft[v].tpl));
+        $id('a-subj').value = draft[v].subj;
+    }
+    function splitLabel() {
+        const a = +$id('a-split').value;
+        $id('a-split-l').textContent = `A ${a}% / B ${100 - a}%`;
+    }
+
+    cl.addEventListener('click', e => {
+        const row = e.target.closest('.cl-row');
+        if (!row) return;
+        if (e.target.matches('[data-edit]')) {
+            cl.querySelectorAll('.cl-row.editing').forEach(close);
+            row.classList.add('editing');
+            row.querySelector('.cl-edit').hidden = false;
+            if (row.dataset.row === 'content') {
+                draft = JSON.parse(JSON.stringify(content));
+                $id('a-split').value = draft.split;
+                cl.querySelector('[data-ver=B]').hidden = !draft.B;
+                $id('a-split').closest('.field').hidden = !draft.B;
+                $id('a-drop-b').textContent = draft.B ? 'Убрать версию B' : '+ Добавить версию B (A/B-тест)';
+                splitLabel();
+                showVer('A');
+            }
+            const f = row.querySelector('.cl-edit input, .cl-edit button');
+            if (f) f.focus();
+        }
+        if (e.target.matches('[data-cancel]')) close(row);
+        if (e.target.matches('[data-save]')) { save(row); close(row); flash(row); }
+    });
+
+    function flash(row) {
+        const name = row.querySelector('.cl-name');
+        const s = document.createElement('span');
+        s.className = 'cl-saved'; s.textContent = ' Сохранено'; s.setAttribute('role', 'status');
+        name.appendChild(s);
+        setTimeout(() => s.remove(), 1800);
+    }
+
+    function save(row) {
+        const out = row.querySelector('[data-out]');
+        switch (row.dataset.row) {
+        case 'from': {
+            const n = val('a-fname'), m = val('a-femail'), r = val('a-reply');
+            out.innerHTML = (n ? `${esc(n)} &lt;${esc(m)}&gt;` : esc(m)) + (r ? `<br><span class="sub">Reply-To: ${esc(r)}</span>` : '');
+            break;
+        }
+        case 'content': {
+            draft[cur].subj = val('a-subj');
+            draft.split = draft.B ? +$id('a-split').value : 100;
+            Object.assign(content, draft);
+            content.B = draft.B;
+            const ver = (k, pct) => `<div class="ver">${thumb(content[k].cls)}<div><b>Версия ${k}</b>${esc(content[k].tpl)}<br><span class="sub">«${esc(content[k].subj)}»</span><br><span class="pct">${pct}% получателей</span></div></div>`;
+            out.innerHTML = content.B ? ver('A', content.split) + ver('B', 100 - content.split) : ver('A', 100).replace('<b>Версия A</b>', '');
+            break;
+        }
+        case 'vars': {
+            const pairs = [...$id('a-kv').querySelectorAll('.kv-row')].map(r => r.querySelectorAll('input')).filter(i => i[0].value.trim());
+            out.innerHTML = pairs.length ? pairs.map(i => `<code>${esc(i[0].value.trim())} = ${esc(i[1].value)}</code>`).join('') : '<span class="muted">Нет</span>';
+            break;
+        }
+        case 'track': {
+            const o = $id('a-to').checked, c = $id('a-tc').checked, u = $id('a-utm').checked;
+            const what = o && c ? 'Открытия и клики считаются' : o ? 'Считаются только открытия' : c ? 'Считаются только клики' : 'Открытия и клики не считаются';
+            out.textContent = what + (u ? ', UTM-метки добавляются' : ', без UTM-меток');
+            break;
+        }
+        case 'about': {
+            const d = val('a-desc');
+            out.innerHTML = esc(val('a-name')) + (d ? `<br><span class="sub">${esc(d)}</span>` : '');
+            cl.closest('.pf-main').querySelector('.ph h2').textContent = val('a-name');
+            cl.closest('.pf-main').querySelector('.ph p').textContent = val('a-desc');
+            break;
+        }
+        }
+    }
+
+    cl.querySelectorAll('[data-ver]').forEach(b => b.addEventListener('click', () => {
+        draft[cur].subj = val('a-subj');
+        showVer(b.dataset.ver);
+    }));
+    $id('a-gal').addEventListener('click', e => {
+        const b = e.target.closest('button');
+        if (!b) return;
+        draft[cur].tpl = b.dataset.tpl; draft[cur].cls = b.dataset.cls; draft[cur].subj = b.dataset.subj;
+        showVer(cur);
+    });
+    $id('a-split').addEventListener('input', splitLabel);
+    $id('a-drop-b').addEventListener('click', e => {
+        if (draft.B) { draft[cur].subj = val('a-subj'); draft.B = null; showVer('A'); }
+        else { draft.B = { tpl: 'Новинки недели', subj: 'Что нового в магазине', cls: 't-c' }; showVer('B'); }
+        cl.querySelector('[data-ver=B]').hidden = !draft.B;
+        $id('a-split').closest('.field').hidden = !draft.B;
+        e.target.textContent = draft.B ? 'Убрать версию B' : '+ Добавить версию B (A/B-тест)';
+    });
+    $id('a-kv-add').addEventListener('click', () => {
+        const r = document.createElement('div');
+        r.className = 'kv-row';
+        r.innerHTML = '<input class="input" aria-label="Название" placeholder="название"><input class="input" aria-label="Значение" placeholder="значение"><button type="button" class="x" aria-label="Удалить">×</button>';
+        $id('a-kv').appendChild(r);
+        r.querySelector('input').focus();
+    });
+    }
+
+    // ===== v2: copies of the create and edit screens with separate cards =====
+    const HINTS = {
+        from: 'Адрес, с которого уйдёт письмо, и имя, которое увидит получатель.',
+        content: 'Шаблон и тема. Можно добавить вторую версию для A/B-теста.',
+        vars: 'Значения, которые подставятся в письмо вместо {{название}}.',
+        track: 'Что считать в статистике рассылки.',
+        about: 'Видно только в панели.',
+        to: 'Отписавшимся и на нерабочие адреса письмо не уйдёт.',
+        check: 'Посмотрите письмо и отправьте пробное себе.',
+        when: 'Сейчас или по расписанию.',
+    };
+    function cloneV2(src, key, from, to, rootFrom, rootTo, notes) {
+        const orig = document.querySelector(`[data-screen=${src}]`);
+        const s = orig.cloneNode(true);
+        s.dataset.screen = key;
+        s.hidden = true;
+        s.classList.add('v2');
+        const swap = v => v.startsWith(from) ? to + v.slice(from.length) : v;
+        s.querySelectorAll('[id]').forEach(e => { e.id = e.id === rootFrom ? rootTo : swap(e.id); });
+        s.querySelectorAll('label[for]').forEach(e => { e.htmlFor = swap(e.htmlFor); });
+        s.querySelectorAll('[name]').forEach(e => { e.name = swap(e.name); });
+        s.querySelectorAll('.cl-row').forEach(r => {
+            const h = document.createElement('span');
+            h.className = 'cl-hint';
+            h.textContent = HINTS[r.dataset.row] || '';
+            r.querySelector('.cl-name').after(h);
+        });
+        // Optional rows share one card
+        const opt = [...s.querySelectorAll('.cl-row')].filter(r => ['vars', 'track', 'about'].includes(r.dataset.row));
+        const g = document.createElement('div');
+        g.className = 'cl-group';
+        g.innerHTML = '<div class="cl-group-h">Можно не менять</div>';
+        opt[0].before(g);
+        opt.forEach(r => g.appendChild(r));
+        s.querySelector('.notes').innerHTML = notes;
+        orig.after(s);
+    }
+    cloneV2('new', 'new2', 'n-', 'm-', 'nw', 'nw2', `
+        <h3>Создание, версия 2</h3>
+        <ul>
+            <li>Каждая строка — своя карточка. Между ними воздух, поэтому открытая строка не сливается с соседними.</li>
+            <li>Открытая карточка выделена рамкой и тенью. Вверху название и одна строка о том, что здесь настраивается, вместо значения.</li>
+            <li>Кнопки в подвале карточки, справа, на сером фоне. Видно, где строка кончается.</li>
+            <li>Ещё не доступные шаги — пунктирные и без фона: сразу видно, что их пока нет.</li>
+            <li>Переменные, трекинг и название собраны в одну карточку «Можно не менять», чтобы не выглядеть как обязательные шаги.</li>
+        </ul>
+        <p class="hint">Логика та же, что в первой версии. Меняется только CSS и обёртка для необязательных строк.</p>`);
+    cloneV2('a', 'a2', 'a-', 'c-', 'cl', 'cl2', `
+        <h3>Правка, версия 2</h3>
+        <ul>
+            <li>Те же карточки, что при создании. «Письмо» — заголовок над карточками, а не рамка вокруг всего.</li>
+            <li>Открытая строка поднимается над остальными, у неё свой подвал с «Сохранить» и «Отмена».</li>
+            <li>В свёрнутом виде почти как раньше, только с промежутками между карточками.</li>
+        </ul>`);
+    initCreate('nw', 'n-');
+    initCreate('nw2', 'm-');
+    initEdit('cl', 'a-');
+    initEdit('cl2', 'c-');
+
+    document.addEventListener('click', e => { if (e.target.matches('.kv-row .x')) e.target.closest('.kv-row').remove(); });
+
+    // ===== Variant B =====
+    const val = id => document.getElementById(id).value.trim();
+    const ed = document.getElementById('ed');
+    const initial = new Map();
+    ed.querySelectorAll('input').forEach(i => initial.set(i, i.type === 'checkbox' ? i.checked : i.value));
+    let initialTpl = 't-a';
+    function syncB() {
+        document.getElementById('b-pv-from').textContent = val('b-fname') || val('b-femail');
+        document.getElementById('b-pv-subj').textContent = val('b-subj') || '(без темы)';
+        document.getElementById('b-pv-reply').textContent = val('b-reply') || val('b-femail');
+        let n = 0;
+        initial.forEach((v, i) => { if ((i.type === 'checkbox' ? i.checked : i.value) !== v) n++; });
+        const tpl = document.querySelector('#b-gal [aria-pressed=true]').dataset.cls;
+        if (tpl !== initialTpl) n++;
+        document.getElementById('b-dirty').hidden = n === 0;
+        document.getElementById('b-dirty-n').textContent = n ? ` (${n})` : '';
+    }
+    ed.addEventListener('input', syncB);
+    ed.addEventListener('change', syncB);
+    document.getElementById('b-gal').addEventListener('click', e => {
+        const b = e.target.closest('button');
+        if (!b) return;
+        document.querySelectorAll('#b-gal button').forEach(x => x.setAttribute('aria-pressed', x === b));
+        document.getElementById('b-pv-thumb').className = 'thumb ' + b.dataset.cls;
+        document.getElementById('b-subj').value = b.dataset.subj;
+        syncB();
+    });
+    function resetB(commit) {
+        if (commit) {
+            initial.forEach((v, i) => initial.set(i, i.type === 'checkbox' ? i.checked : i.value));
+            initialTpl = document.querySelector('#b-gal [aria-pressed=true]').dataset.cls;
+        } else {
+            initial.forEach((v, i) => { if (i.type === 'checkbox') i.checked = v; else i.value = v; });
+            document.querySelectorAll('#b-gal button').forEach(x => x.setAttribute('aria-pressed', x.dataset.cls === initialTpl));
+            document.getElementById('b-pv-thumb').className = 'thumb ' + initialTpl;
+        }
+        syncB();
+    }
+    document.getElementById('b-reset').addEventListener('click', () => resetB(false));
+    document.getElementById('b-save').addEventListener('click', () => resetB(true));
+})();
+</script>

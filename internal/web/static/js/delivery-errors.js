@@ -1,5 +1,6 @@
-// Delivery error donuts for the API sends page.
-// Reads JSON from #delivery-errors-data and renders two panels into #delivery-errors-panels.
+// Delivery error donuts for the API sends page and the campaign run page.
+// Reads JSON from #delivery-errors-data and renders two panels into #delivery-errors-panels;
+// its data-items-url (default /sends) is the filtered list the segments link to.
 (function() {
     'use strict';
 
@@ -58,8 +59,10 @@
         return e;
     }
 
+    var itemsURL = '/sends';
+
     function href(status, type) {
-        return '/sends?status=' + status + '&error_type=' + encodeURIComponent(type) + '#results';
+        return itemsURL + '?status=' + status + '&error_type=' + encodeURIComponent(type) + '#results';
     }
 
     // Whole percents summing to 100; the biggest slice absorbs rounding.
@@ -174,6 +177,7 @@
         var data;
         try { data = JSON.parse(src.textContent); } catch (e) { return; }
         if (!Array.isArray(data)) return;
+        itemsURL = host.getAttribute('data-items-url') || '/sends';
         host.textContent = '';
         PANELS.forEach(function(def) { host.appendChild(buildPanel(data, def)); });
         host.classList.add('is-ready');

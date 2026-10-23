@@ -114,7 +114,7 @@ func (h *Handlers) JobView(w http.ResponseWriter, r *http.Request) {
 		"Tracking": trackingCards(campaign, trackingStats, statsErr),
 	}
 	if n, _ := strconv.Atoi(r.URL.Query().Get("retried")); n > 0 {
-		data["Success"] = strconv.Itoa(n) + " failed items queued for retry"
+		data["Retried"] = n
 	}
 	// Without the public origin the worker sends with no unsubscribe links and
 	// no tracking, so warn while the run still has mail to send

@@ -39,7 +39,7 @@ func newCampaignTestHandlers(t *testing.T, publicURL string) (*Handlers, *sql.DB
 	cfg.Server.PublicURL = publicURL
 
 	for _, q := range []string{
-		`INSERT INTO recipient_lists (id, name, source_type) VALUES ('l1', 'list', 'manual')`,
+		`INSERT INTO recipient_lists (id, name, description, source_type) VALUES ('l1', 'list', '', 'manual')`,
 		// list order is created_at DESC
 		`INSERT INTO recipients (id, list_id, email, name, variables, tags, status, created_at) VALUES ('ra', 'l1', 'a@example.org', '', '', '', 'active', '2026-01-04')`,
 		`INSERT INTO recipients (id, list_id, email, name, variables, tags, status, created_at) VALUES ('rb', 'l1', 'b@example.org', '', '', '', 'unsubscribed', '2026-01-03')`,
@@ -72,17 +72,14 @@ func TestCampaignSend_WithoutPublicURL(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// the page warns, but still offers to send
+	// the page data tells there is no public origin
 	req := httptest.NewRequest(http.MethodGet, "/campaigns/c1/send", nil)
-	req.SetPathValue("id", "c1")
-	page := httptest.NewRecorder()
-	h.CampaignSendPage(page, req)
-	body := page.Body.String()
-	if !strings.Contains(body, "The proxying domain is not set.") {
-		t.Errorf("send page without warning: %s", body)
+	data, err := h.campaignFlowData(req, "send", &models.Campaign{ID: "c1"})
+	if err != nil {
+		t.Fatal(err)
 	}
-	if strings.Contains(body, " disabled ") {
-		t.Errorf("send button disabled without public URL")
+	if data["NoPublicURL"] != true || data["Mode"] != "send" {
+		t.Errorf("NoPublicURL=%v Mode=%v", data["NoPublicURL"], data["Mode"])
 	}
 
 	// the job is created, and opens are not counted: there is no pixel
@@ -99,36 +96,15 @@ func TestCampaignSend_WithoutPublicURL(t *testing.T) {
 	}
 }
 
-func TestCampaignSendPage_UnsubscribeLinkDetected(t *testing.T) {
-	h, _ := newCampaignTestHandlers(t, "https://panel.example.com")
-	req := httptest.NewRequest(http.MethodGet, "/campaigns/c1/send", nil)
-	req.SetPathValue("id", "c1")
-	page := httptest.NewRecorder()
-	h.CampaignSendPage(page, req)
-	body := page.Body.String()
-	if strings.Contains(body, "unsubscribe_url}}. ") {
-		t.Errorf("unsubscribe link with spaces not detected")
-	}
-	if strings.Contains(body, "The proxying domain is not set.") {
-		t.Errorf("warning shown with a public URL")
-	}
-}
-
-func TestCampaignForm_TrackingDisabledWithoutPublicURL(t *testing.T) {
+func TestCampaignCreate_TrackingDisabledWithoutPublicURL(t *testing.T) {
 	h, d := newCampaignTestHandlers(t, "")
-	req := httptest.NewRequest(http.MethodGet, "/campaigns/new", nil)
-	rec := httptest.NewRecorder()
-	h.CampaignNew(rec, req)
-	body := rec.Body.String()
-	if !strings.Contains(body, `name="track_opens" value="on" disabled>`) || !strings.Contains(body, `name="track_clicks" value="on" disabled>`) {
-		t.Errorf("tracking checkboxes not disabled: %s", body)
-	}
 
 	// a crafted form cannot turn tracking on
-	form := url.Values{"name": {"c2"}, "from_email": {"a@example.com"}, "track_opens": {"on"}, "track_clicks": {"on"}}
-	post := httptest.NewRequest(http.MethodPost, "/campaigns", strings.NewReader(form.Encode()))
-	post.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	h.CampaignCreate(httptest.NewRecorder(), post)
+	form := url.Values{"name": {"c2"}, "from_email": {"a@example.com"}, "template_id": {"t1"}, "track_opens": {"on"}, "track_clicks": {"on"}}
+	rec := postCampaignCreate(h, form)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
 	var opens, clicks bool
 	if err := d.QueryRow(`SELECT track_opens, track_clicks FROM campaigns WHERE name = 'c2'`).Scan(&opens, &clicks); err != nil {
 		t.Fatal(err)
