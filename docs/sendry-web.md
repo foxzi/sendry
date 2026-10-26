@@ -243,10 +243,10 @@ Besides the usual message fields (`from`, `to`, `subject`, `html`, `template_id`
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `track_opens` | boolean | Insert the open pixel. Overrides the API key flag |
-| `track_clicks` | boolean | Rewrite links to tracking links. Overrides the API key flag |
+| `track_opens` | boolean | Insert the open pixel. Default `false` |
+| `track_clicks` | boolean | Rewrite links to tracking links. Default `false` |
 
-If a field is omitted, the key flag `track_opens` / `track_clicks` applies (both off by default). There is no unsubscribe for API mail. Details and an example: [Tracking](tracking.md).
+There is no unsubscribe for API mail. Details and an example: [Tracking](tracking.md).
 
 ## Variable Substitution
 

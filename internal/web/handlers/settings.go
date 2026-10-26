@@ -30,8 +30,8 @@ func (h *Handlers) GlobalVariables(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]any{
-		"Title":     "Global Variables",
-		"Active":    "settings",
+		"Title":     "Variables",
+		"Active":    "variables",
 		"User":      h.getUserFromContext(r),
 		"Variables": vars,
 	}
@@ -102,8 +102,8 @@ func (h *Handlers) AuditLog(w http.ResponseWriter, r *http.Request) {
 	totalPages := (total + limit - 1) / limit
 
 	data := map[string]any{
-		"Title":      "Audit Log",
-		"Active":     "settings",
+		"Title":      "Audit log",
+		"Active":     "audit",
 		"User":       h.getUserFromContext(r),
 		"Entries":    entries,
 		"Page":       page,
@@ -120,8 +120,8 @@ func (h *Handlers) SettingsTestEmail(w http.ResponseWriter, r *http.Request) {
 	servers := h.getServersStatus()
 
 	data := map[string]any{
-		"Title":   "Send Test Email",
-		"Active":  "settings",
+		"Title":   "Test email",
+		"Active":  "test_email",
 		"User":    h.getUserFromContext(r),
 		"Servers": servers,
 	}

@@ -1,31 +1,32 @@
 {{define "content"}}
 <div class="page-header">
-    <h1>{{.Campaign.Name}} - Jobs</h1>
+    <h1>{{.Campaign.Name}} - <span data-i18n="cmp.runs">Runs</span></h1>
     <div class="header-actions">
-        <a href="/campaigns/{{.Campaign.ID}}/send" class="btn btn-primary">Send Campaign</a>
-        <a href="/campaigns/{{.Campaign.ID}}" class="btn btn-secondary">Back to Campaign</a>
+        <a href="/campaigns/{{.Campaign.ID}}/launch" class="btn btn-primary" data-i18n="cmp.send_campaign">Send campaign</a>
+        <a href="/campaigns/{{.Campaign.ID}}" class="btn btn-secondary" data-i18n="cmp.back_to_campaign">Back to campaign</a>
     </div>
 </div>
 
 <div class="card">
     <div class="card-body">
         {{if .Jobs}}
+        <div class="table-scroll">
         <table class="table">
             <thead>
                 <tr>
-                    <th>ID</th>
-                    <th>Status</th>
-                    <th>Progress</th>
-                    <th>Sent/Total</th>
-                    <th>Created</th>
-                    <th>Actions</th>
+                    <th data-i18n="common.id">ID</th>
+                    <th data-i18n="status">Status</th>
+                    <th data-i18n="common.progress">Progress</th>
+                    <th data-i18n="cmp.sent_total">Sent/Total</th>
+                    <th data-i18n="common.created">Created</th>
+                    <th data-i18n="actions">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 {{range .Jobs}}
                 <tr>
                     <td><a href="/jobs/{{.Job.ID}}">{{slice .Job.ID 0 8}}...</a></td>
-                    <td><span class="badge badge-{{.Job.Status}}">{{.Job.Status}}</span></td>
+                    <td>{{template "job_status" .}}</td>
                     <td>
                         <div class="progress" style="width: 100px">
                             <div class="progress-bar" style="width: {{.Progress}}%"></div>
@@ -34,16 +35,17 @@
                     <td>{{.Stats.Sent}} / {{.Stats.Total}}</td>
                     <td>{{.Job.CreatedAt.Format "2006-01-02 15:04"}}</td>
                     <td>
-                        <a href="/jobs/{{.Job.ID}}" class="btn btn-sm">View</a>
+                        <a href="/jobs/{{.Job.ID}}" class="btn btn-sm" data-i18n="view">View</a>
                     </td>
                 </tr>
                 {{end}}
             </tbody>
         </table>
+        </div>
         {{else}}
         <div class="empty-state">
-            <p>No send jobs for this campaign yet</p>
-            <a href="/campaigns/{{.Campaign.ID}}/send" class="btn btn-primary">Send Campaign</a>
+            <p data-i18n="cmp.no_runs_campaign">No runs for this campaign yet</p>
+            <a href="/campaigns/{{.Campaign.ID}}/launch" class="btn btn-primary" data-i18n="cmp.send_campaign">Send campaign</a>
         </div>
         {{end}}
     </div>

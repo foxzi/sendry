@@ -1,30 +1,32 @@
 {{define "content"}}
 <div class="page-header">
     <div>
-        <h1>Job Items</h1>
-        <p class="text-muted">Job: {{slice .Job.ID 0 8}}... | Campaign: {{.Job.CampaignName}}</p>
-    </div>
-    <div class="header-actions">
-        <a href="/jobs/{{.Job.ID}}/clickmap" class="btn" data-i18n="trk.tab_clickmap">Click map</a>
-        <a href="/jobs/{{.Job.ID}}" class="btn btn-secondary">Back to Job</a>
+        <h1 data-i18n="cmp.run_items">Run items</h1>
+        <p class="text-muted"><span data-i18n="cmp.run_colon">Run:</span> <a href="/jobs/{{.Job.ID}}">{{slice .Job.ID 0 8}}...</a> | <span data-i18n="cmp.campaign_colon">Campaign:</span> <a href="/campaigns/{{.Job.CampaignID}}">{{.Job.CampaignName}}</a></p>
     </div>
 </div>
 
-<div class="card">
+<div class="tabs" style="margin-bottom: 1rem">
+    <a href="/jobs/{{.Job.ID}}" class="tab" data-i18n="trk.tab_overview">Overview</a>
+    <a href="/jobs/{{.Job.ID}}/items" class="tab active" data-i18n="trk.tab_recipients">Recipients</a>
+    <a href="/jobs/{{.Job.ID}}/clickmap" class="tab" data-i18n="trk.tab_clickmap">Click map</a>
+</div>
+
+<div class="card scroll-target" id="results" data-partial>
     <div class="card-header">
         <form class="filter-form" method="get" action="/jobs/{{.Job.ID}}/items">
             <select name="status" class="input">
-                <option value="">All Status</option>
-                <option value="pending" {{if eq .Status "pending"}}selected{{end}}>Pending</option>
-                <option value="queued" {{if eq .Status "queued"}}selected{{end}}>Queued</option>
-                <option value="sent" {{if eq .Status "sent"}}selected{{end}}>Sent</option>
-                <option value="failed" {{if eq .Status "failed"}}selected{{end}}>Failed</option>
-                <option value="skipped" {{if eq .Status "skipped"}}selected{{end}}>Skipped</option>
+                <option value="" data-i18n="cmp.all_status">All Status</option>
+                <option value="pending" {{if eq .Status "pending"}}selected{{end}} data-i18n="cmp.pending">Pending</option>
+                <option value="queued" {{if eq .Status "queued"}}selected{{end}} data-i18n="cmp.queued">Queued</option>
+                <option value="sent" {{if eq .Status "sent"}}selected{{end}} data-i18n="cmp.sent">Sent</option>
+                <option value="failed" {{if eq .Status "failed"}}selected{{end}} data-i18n="cmp.failed">Failed</option>
+                <option value="skipped" {{if eq .Status "skipped"}}selected{{end}} data-i18n="cmp.skipped">Skipped</option>
             </select>
             <select name="error_type" class="input">
-                <option value="">All Errors</option>
+                <option value="" data-i18n="cmp.all_errors">All Errors</option>
                 {{range .ErrorTypes}}
-                <option value="{{.}}" {{if eq . $.ErrorType}}selected{{end}}>{{.Label}}</option>
+                <option value="{{.}}" data-i18n="error_type.{{.}}" {{if eq . $.ErrorType}}selected{{end}}>{{.Label}}</option>
                 {{end}}
             </select>
             <select name="opened" class="input">
@@ -37,58 +39,60 @@
                 <option value="yes" {{if eq .Clicked "yes"}}selected{{end}} data-i18n="trk.clicked_yes">Clicked</option>
                 <option value="no" {{if eq .Clicked "no"}}selected{{end}} data-i18n="trk.clicked_no">Not clicked</option>
             </select>
-            <button type="submit" class="btn">Filter</button>
+            <button type="submit" class="btn" data-i18n="filter">Filter</button>
             {{if or .Status .ErrorType .Opened .Clicked}}
-            <a href="/jobs/{{.Job.ID}}/items" class="btn btn-secondary">Clear</a>
+            <a href="/jobs/{{.Job.ID}}/items" class="btn btn-secondary" data-i18n="common.clear">Clear</a>
             {{end}}
         </form>
-        <span class="text-muted">{{.Total}} items</span>
+        <span class="text-muted">{{.Total}} <span data-i18n="cmp.items_lc">items</span></span>
     </div>
     <div class="card-body">
         {{if .Items}}
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Email</th>
-                    <th>Variant</th>
-                    <th>Server</th>
-                    <th>Status</th>
-                    <th>Sendry ID</th>
-                    <th data-i18n="trk.col_opened">Opened</th>
-                    <th data-i18n="trk.col_clicks">Clicks</th>
-                    <th>Error</th>
-                </tr>
-            </thead>
-            <tbody>
-                {{range .Items}}
-                <tr>
-                    <td>{{.Email}}{{if .UnsubscribedAt}} <span class="badge badge-secondary" data-i18n="trk.unsub_badge">unsubscribed</span>{{end}}</td>
-                    <td>{{if .VariantName}}{{.VariantName}}{{else}}<span class="text-muted">-</span>{{end}}</td>
-                    <td>{{.ServerName}}</td>
-                    <td><span class="badge badge-{{.Status}}">{{.Status}}</span></td>
-                    <td>{{if .SendryMsgID}}<code>{{.SendryMsgID}}</code>{{else}}<span class="text-muted">-</span>{{end}}</td>
-                    <td>{{if .OpenedAt}}{{.OpenedAt.Format "2006-01-02 15:04"}}{{if gt .OpenCount 0}} <span class="text-muted">&times;{{.OpenCount}}</span>{{end}}{{else}}<span class="text-muted">-</span>{{end}}</td>
-                    <td>{{if .ClickCount}}{{.ClickCount}}{{else}}<span class="text-muted">-</span>{{end}}</td>
-                    <td>{{if eq .Status "skipped"}}<span class="text-muted">{{.Error}}</span>{{else if .Error}}<span class="badge">{{(errorType .Error).Label}}</span> <span class="text-error">{{.Error}}</span>{{else}}<span class="text-muted">-</span>{{end}}</td>
-                </tr>
-                {{end}}
-            </tbody>
-        </table>
+        <div class="table-scroll">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th data-i18n="email">Email</th>
+                        <th data-i18n="cmp.variant">Variant</th>
+                        <th data-i18n="common.server">Server</th>
+                        <th data-i18n="status">Status</th>
+                        <th data-i18n="cmp.sendry_id">Sendry ID</th>
+                        <th data-i18n="trk.col_opened">Opened</th>
+                        <th data-i18n="trk.col_clicks">Clicks</th>
+                        <th data-i18n="common.error">Error</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Items}}
+                    <tr>
+                        <td>{{.Email}}{{if .UnsubscribedAt}} <span class="badge badge-secondary" data-i18n="trk.unsub_badge">unsubscribed</span>{{end}}</td>
+                        <td>{{if .VariantName}}{{.VariantName}}{{else}}<span class="text-muted">-</span>{{end}}</td>
+                        <td>{{.ServerName}}</td>
+                        <td><span class="badge badge-{{.Status}}" data-i18n="status.{{.Status}}"{{if eq .Status "queued"}} data-i18n-title="cmp.queued_hint"{{end}}>{{.Status}}</span></td>
+                        <td>{{if .SendryMsgID}}<code>{{.SendryMsgID}}</code>{{else}}<span class="text-muted">-</span>{{end}}</td>
+                        <td class="nowrap">{{if .OpenedAt}}{{.OpenedAt.Format "2006-01-02 15:04"}}{{if gt .OpenCount 0}} <span class="text-muted">&times;{{.OpenCount}}</span>{{end}}{{else}}<span class="text-muted">-</span>{{end}}</td>
+                        <td>{{if .ClickCount}}{{.ClickCount}}{{else}}<span class="text-muted">-</span>{{end}}</td>
+                        <td>{{if eq .Status "skipped"}}<span class="text-muted">{{.Error}}</span>{{else if .Error}}<span class="text-muted" title="{{.Error}}" data-i18n="error_type.{{errorType .Error}}">{{(errorType .Error).Label}}</span>{{else}}<span class="text-muted">-</span>{{end}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
 
         {{if gt .TotalPages 1}}
         <div class="pagination">
             {{if gt .Page 1}}
-            <a href="/jobs/{{.Job.ID}}/items?page={{sub .Page 1}}{{if .Status}}&status={{.Status}}{{end}}{{if .ErrorType}}&error_type={{.ErrorType}}{{end}}{{if .Opened}}&opened={{.Opened}}{{end}}{{if .Clicked}}&clicked={{.Clicked}}{{end}}" class="btn btn-sm">&laquo; Prev</a>
+            <a data-i18n="cmp.prev" href="/jobs/{{.Job.ID}}/items?page={{sub .Page 1}}{{if .Status}}&status={{.Status}}{{end}}{{if .ErrorType}}&error_type={{.ErrorType}}{{end}}{{if .Opened}}&opened={{.Opened}}{{end}}{{if .Clicked}}&clicked={{.Clicked}}{{end}}" class="btn btn-sm">&laquo; Prev</a>
             {{end}}
-            <span class="pagination-info">Page {{.Page}} of {{.TotalPages}}</span>
+            <span class="pagination-info"><span data-i18n="common.page">Page</span> {{.Page}} <span data-i18n="common.of">of</span> {{.TotalPages}}</span>
             {{if lt .Page .TotalPages}}
-            <a href="/jobs/{{.Job.ID}}/items?page={{add .Page 1}}{{if .Status}}&status={{.Status}}{{end}}{{if .ErrorType}}&error_type={{.ErrorType}}{{end}}{{if .Opened}}&opened={{.Opened}}{{end}}{{if .Clicked}}&clicked={{.Clicked}}{{end}}" class="btn btn-sm">Next &raquo;</a>
+            <a data-i18n="cmp.next" href="/jobs/{{.Job.ID}}/items?page={{add .Page 1}}{{if .Status}}&status={{.Status}}{{end}}{{if .ErrorType}}&error_type={{.ErrorType}}{{end}}{{if .Opened}}&opened={{.Opened}}{{end}}{{if .Clicked}}&clicked={{.Clicked}}{{end}}" class="btn btn-sm">Next &raquo;</a>
             {{end}}
         </div>
         {{end}}
         {{else}}
         <div class="empty-state">
-            <p>No items found</p>
+            <p data-i18n="cmp.no_items_found">No items found</p>
         </div>
         {{end}}
     </div>

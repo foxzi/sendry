@@ -1,36 +1,37 @@
 {{define "content"}}
 <div class="page-header">
-    <h1>{{.ServerName}} - Queue</h1>
+    <h1>{{.ServerName}} - <span data-i18n="queue.title">Queue</span></h1>
     <div class="header-actions">
         {{if .Messages}}
         <form method="post" action="/servers/{{.ServerName}}/queue/purge" style="display: inline;">
-            <button type="submit" class="btn btn-danger" onclick="return confirm('Delete ALL messages from queue? This cannot be undone.')">Clear Queue</button>
+            <button type="submit" class="btn btn-danger" onclick="return confirm(I18n.t('infra.delete_all_messages_from_queue_this_cannot_be'))" data-i18n="infra.clear_queue">Clear queue</button>
         </form>
         {{end}}
-        <a href="/servers/{{.ServerName}}" class="btn btn-secondary">Back to Server</a>
+        <a href="/servers/{{.ServerName}}" class="btn btn-secondary" data-i18n="infra.back_to_server">Back to server</a>
     </div>
 </div>
 
 <div class="card">
     <div class="card-header">
-        <span>{{.Total}} messages in queue</span>
+        <span>{{.Total}} <span data-i18n="queue.messages_in_queue">messages in queue</span></span>
         {{if .Messages}}
-        <input type="text" id="queue-search" class="form-control" placeholder="Search by ID, From, To, Subject..."
+        <input type="text" id="queue-search" class="form-control" data-i18n-placeholder="infra.search_by_id_from_to_subject" placeholder="Search by ID, From, To, Subject..."
                style="max-width: 300px; display: inline-block; margin-left: 1rem;">
         {{end}}
     </div>
     <div class="card-body">
         {{if .Messages}}
+        <div class="table-scroll">
         <table class="table" id="queue-table">
             <thead>
                 <tr>
-                    <th class="sortable" data-col="0">ID</th>
-                    <th class="sortable" data-col="1">From</th>
-                    <th class="sortable" data-col="2">To</th>
-                    <th class="sortable" data-col="3">Subject</th>
-                    <th class="sortable" data-col="4">Status</th>
-                    <th class="sortable" data-col="5">Created</th>
-                    <th>Actions</th>
+                    <th class="sortable" data-col="0" data-i18n="common.id">ID</th>
+                    <th class="sortable" data-col="1" data-i18n="from">From</th>
+                    <th class="sortable" data-col="2" data-i18n="to">To</th>
+                    <th class="sortable" data-col="3" data-i18n="subject">Subject</th>
+                    <th class="sortable" data-col="4" data-i18n="status">Status</th>
+                    <th class="sortable" data-col="5" data-i18n="common.created">Created</th>
+                    <th data-i18n="actions">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -40,22 +41,23 @@
                     <td>{{.From}}</td>
                     <td>{{.To}}</td>
                     <td>{{.Subject}}</td>
-                    <td>{{.Status}}</td>
+                    <td data-i18n="status.{{.Status}}">{{.Status}}</td>
                     <td>{{.CreatedAt}}</td>
                     <td class="actions">
-                        <a href="/servers/{{$.ServerName}}/queue/{{.ID}}" class="btn btn-sm">View</a>
+                        <a href="/servers/{{$.ServerName}}/queue/{{.ID}}" class="btn btn-sm" data-i18n="view">View</a>
                         <form method="post" action="/servers/{{$.ServerName}}/queue/{{.ID}}/delete" style="display: inline;">
-                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this message from queue?')">Delete</button>
+                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm(I18n.t('infra.delete_this_message_from_queue'))" data-i18n="delete">Delete</button>
                         </form>
                     </td>
                 </tr>
                 {{end}}
             </tbody>
         </table>
+        </div>
         {{else}}
         <div class="empty-state">
-            <p>Queue is empty</p>
-            <p class="text-muted">Messages waiting to be sent will appear here</p>
+            <p data-i18n="queue.empty">Queue is empty</p>
+            <p class="text-muted" data-i18n="queue.empty_hint">Messages waiting to be sent will appear here</p>
         </div>
         {{end}}
     </div>

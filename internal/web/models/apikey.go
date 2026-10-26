@@ -17,8 +17,6 @@ type APIKey struct {
 	LastUsedAt      *time.Time `json:"last_used_at,omitempty"`
 	ExpiresAt       *time.Time `json:"expires_at,omitempty"`
 	Active          bool       `json:"active"`
-	TrackOpens      bool       `json:"track_opens"`  // default for sends made with this key
-	TrackClicks     bool       `json:"track_clicks"` // default for sends made with this key
 }
 
 // CanSendFromDomain checks if the API key is allowed to send from the given domain

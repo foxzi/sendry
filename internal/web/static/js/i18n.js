@@ -3,15 +3,36 @@ var I18n = (function() {
     var translations = {
         en: {
             // Navigation
-            'nav.templates': 'Templates',
-            'nav.recipients': 'Recipients',
+            'nav.overview': 'Overview',
             'nav.campaigns': 'Campaigns',
-            'nav.jobs': 'Jobs',
-            'nav.sends': 'Sends',
-            'nav.servers': 'Servers',
-            'nav.monitoring': 'Monitoring',
-            'nav.settings': 'Settings',
-            'nav.queue': 'Queue',
+            'nav.templates': 'Templates',
+            'nav.audience': 'Audience',
+            'nav.sends': 'API sends',
+            'nav.infra': 'Infrastructure',
+            'nav.admin': 'Administration',
+            'nav.group_email': 'Email',
+            'nav.group_system': 'System',
+            'nav.menu': 'Menu',
+            'nav.collapse': 'Collapse menu',
+            'nav.expand': 'Expand menu',
+            'nav.queue_badge': 'Messages waiting in the queue',
+            'sub.campaigns': 'Campaigns',
+            'sub.runs': 'Runs',
+            'sub.templates': 'Templates',
+            'sub.blocks': 'Blocks',
+            'sub.media': 'Media',
+            'sub.variables': 'Variables',
+            'sub.servers': 'Servers',
+            'sub.queue': 'Queue',
+            'sub.domains': 'Domains',
+            'sub.dkim': 'DKIM',
+            'sub.monitoring': 'Monitoring',
+            'sub.test_email': 'Test email',
+            'sub.settings': 'Settings',
+            'sub.users': 'Users',
+            'sub.api_keys': 'API keys',
+            'sub.tracking': 'Tracking',
+            'sub.audit': 'Audit log',
             'logout': 'Logout',
 
             // Common
@@ -87,6 +108,7 @@ var I18n = (function() {
             'job_completed': 'Completed',
             'pause': 'Pause',
             'resume': 'Resume',
+            'theme_toggle': 'Toggle theme',
             'cancel_job': 'Cancel',
             'retry_failed': 'Retry Failed',
             'status_draft': 'Draft',
@@ -122,11 +144,11 @@ var I18n = (function() {
             'global_variables': 'Global Variables',
             'global_variables_desc': 'Manage template variables available across all campaigns',
             'users': 'Users',
-            'users_desc': 'Manage user accounts and permissions',
-            'audit_log': 'Audit Log',
-            'audit_log_desc': 'View activity history and changes',
-            'api_keys': 'API Keys',
-            'api_keys_desc': 'Manage API keys for external integrations',
+            'users_desc': 'Accounts and roles for this panel',
+            'audit_log': 'Audit log',
+            'audit_log_desc': 'Who changed what, and when',
+            'api_keys': 'API keys',
+            'api_keys_desc': 'Keys for sending through the HTTP API',
             'send_test_email': 'Send Test Email',
             'send_test_email_desc': 'Send a test email through any MTA server',
             'mta_server': 'MTA Server',
@@ -170,6 +192,7 @@ var I18n = (function() {
             // Queue overview
             'queue.title': 'Queue',
             'queue.total': 'Total',
+            'queue.queue_dlq_hint': '(queue / DLQ)',
             'queue.tab_queue': 'Queue',
             'queue.tab_dlq': 'DLQ',
             'queue.messages_in_queue': 'messages in queue',
@@ -177,73 +200,40 @@ var I18n = (function() {
             'queue.empty': 'Queue is empty',
             'queue.empty_hint': 'Messages waiting to be sent will appear here',
             'queue.dlq_empty': 'DLQ is empty',
-            'queue.dlq_empty_hint': 'Failed messages will appear here',
-
-            // tracking: ui
-            'trk.delivered': 'Delivered',
-            'trk.unique_opens': 'Opened (unique)',
-            'trk.total_opens': 'Opens total',
-            'trk.unique_clicks': 'Clicked (unique)',
-            'trk.total_clicks': 'Clicks total',
-            'trk.unsubscribed': 'Unsubscribed',
-            'trk.skipped': 'Skipped (unsubscribed in this list)',
-            'trk.tab_overview': 'Overview',
-            'trk.tab_recipients': 'Recipients',
-            'trk.tab_clickmap': 'Click map',
-            'trk.unsub_badge': 'unsubscribed',
-            'trk.opened_any': 'Opened: any',
-            'trk.opened_yes': 'Opened',
-            'trk.opened_no': 'Not opened',
-            'trk.clicked_any': 'Clicked: any',
-            'trk.clicked_yes': 'Clicked',
-            'trk.clicked_no': 'Not clicked',
-            'trk.col_opened': 'Opened',
-            'trk.col_clicks': 'Clicks',
-            'trk.events': 'Events',
-            'trk.col_time': 'Time',
-            'trk.col_type': 'Type',
-            'trk.col_link': 'Link',
-            'trk.ev_open': 'Open',
-            'trk.ev_click': 'Click',
-            'trk.ev_unsub': 'Unsubscribe',
-            'trk.machine': 'machine',
-            'trk.no_events': 'No events yet',
-            'trk.settings_title': 'Tracking',
-            'trk.settings_desc': 'Opens, clicks and unsubscribe links: proxying domain and defaults',
-            'trk.saved': 'Settings saved',
-            'trk.base_url': 'Proxying domain',
-            'trk.base_url_help': 'Pixel, clicks and unsubscribe go through this domain. If it gets blocked, enter a new one: only new emails change, old links keep working through any domain that proxies to the panel. Empty: the panel address.',
-            'trk.opens_default': 'Track opens by default for new campaigns',
-            'trk.clicks_default': 'Track clicks by default for new campaigns',
-            'trk.effective': 'Effective tracking address',
-            'trk.ex_open': 'Open pixel',
-            'trk.ex_click': 'Click redirect',
-            'trk.ex_unsub': 'Unsubscribe page',
-            'trk.no_origin': 'Neither a proxying domain nor server.public_url is set: campaigns cannot be sent (every campaign email needs an unsubscribe link), API emails go out without pixel and tracked links.',
-            'trk.no_base_url_warn': 'No proxying domain is set: tracking links and redirects go through the panel address. Use a separate domain (e.g. lnk.example.com) that proxies only /t/ and /u/ to the panel, so the panel address is not exposed in mail and a blocked link domain does not block the panel.',
-            'trk.secret': 'Link signing secret',
-            'trk.secret_help': 'Tracking and unsubscribe links are signed with a secret. Rotate it if it may have leaked. Links in mail already sent keep working until the next rotation: the previous secret is still accepted, the one before it is dropped. Click and open links expire after 180 days, unsubscribe links after 2 years.',
-            'trk.secret_prev': 'A previous secret is kept for verification.',
-            'trk.rotate': 'Rotate secret',
-            'trk.mode_unique': 'Unique',
-            'trk.mode_total': 'Total',
-            'trk.links': 'Links',
-            'trk.col_label': 'Label',
-            'trk.col_kind': 'Kind',
-            'trk.col_share': 'Share',
-            'trk.map_empty': 'The map will appear once sending starts'
+            'queue.dlq_empty_hint': 'Failed messages will appear here'
         },
         ru: {
             // Navigation
+            'nav.overview': 'Обзор',
+            'nav.campaigns': 'Рассылки',
             'nav.templates': 'Шаблоны',
-            'nav.recipients': 'Получатели',
-            'nav.campaigns': 'Кампании',
-            'nav.jobs': 'Рассылки',
-            'nav.sends': 'Отправки',
-            'nav.servers': 'Серверы',
-            'nav.monitoring': 'Мониторинг',
-            'nav.settings': 'Настройки',
-            'nav.queue': 'Очередь',
+            'nav.audience': 'Аудитория',
+            'nav.sends': 'Отправки по API',
+            'nav.infra': 'Инфраструктура',
+            'nav.admin': 'Администрирование',
+            'nav.group_email': 'Почта',
+            'nav.group_system': 'Система',
+            'nav.menu': 'Меню',
+            'nav.collapse': 'Свернуть меню',
+            'nav.expand': 'Развернуть меню',
+            'nav.queue_badge': 'Писем ждёт отправки в очереди',
+            'sub.campaigns': 'Рассылки',
+            'sub.runs': 'Запуски',
+            'sub.templates': 'Шаблоны',
+            'sub.blocks': 'Блоки',
+            'sub.media': 'Медиа',
+            'sub.variables': 'Переменные',
+            'sub.servers': 'Серверы',
+            'sub.queue': 'Очередь',
+            'sub.domains': 'Домены',
+            'sub.dkim': 'DKIM',
+            'sub.monitoring': 'Мониторинг',
+            'sub.test_email': 'Тестовое письмо',
+            'sub.settings': 'Настройки',
+            'sub.users': 'Пользователи',
+            'sub.api_keys': 'API-ключи',
+            'sub.tracking': 'Трекинг',
+            'sub.audit': 'Журнал аудита',
             'logout': 'Выход',
 
             // Common
@@ -263,7 +253,7 @@ var I18n = (function() {
             // Dashboard
             'dashboard': 'Панель управления',
             'templates_count': 'Шаблоны',
-            'campaigns_count': 'Кампании',
+            'campaigns_count': 'Рассылки',
             'recipients_count': 'Получатели',
             'active_jobs': 'Активные рассылки',
             'servers_status': 'Статус серверов',
@@ -300,7 +290,7 @@ var I18n = (function() {
             'status_bounced': 'Отклонён',
 
             // Campaigns
-            'campaigns': 'Кампании',
+            'campaigns': 'Рассылки',
             'new_campaign': 'Новая кампания',
             'campaign_name': 'Название кампании',
             'from_email': 'Email отправителя',
@@ -319,6 +309,7 @@ var I18n = (function() {
             'job_completed': 'Завершена',
             'pause': 'Пауза',
             'resume': 'Продолжить',
+            'theme_toggle': 'Сменить тему',
             'cancel_job': 'Отменить',
             'retry_failed': 'Повторить неудачные',
             'status_draft': 'Черновик',
@@ -354,11 +345,11 @@ var I18n = (function() {
             'global_variables': 'Глобальные переменные',
             'global_variables_desc': 'Управление переменными шаблонов для всех кампаний',
             'users': 'Пользователи',
-            'users_desc': 'Управление учётными записями',
-            'audit_log': 'Журнал действий',
-            'audit_log_desc': 'Просмотр истории изменений',
-            'api_keys': 'API ключи',
-            'api_keys_desc': 'Управление ключами для внешних интеграций',
+            'users_desc': 'Учётные записи и роли в этой панели',
+            'audit_log': 'Журнал аудита',
+            'audit_log_desc': 'Кто, что и когда изменил',
+            'api_keys': 'API-ключи',
+            'api_keys_desc': 'Ключи для отправки через HTTP API',
             'send_test_email': 'Отправить тестовое письмо',
             'send_test_email_desc': 'Отправить тестовое письмо через любой MTA сервер',
             'mta_server': 'MTA Сервер',
@@ -402,6 +393,7 @@ var I18n = (function() {
             // Queue overview
             'queue.title': 'Очередь',
             'queue.total': 'Всего',
+            'queue.queue_dlq_hint': '(очередь / DLQ)',
             'queue.tab_queue': 'Очередь',
             'queue.tab_dlq': 'DLQ',
             'queue.messages_in_queue': 'сообщений в очереди',
@@ -409,74 +401,42 @@ var I18n = (function() {
             'queue.empty': 'Очередь пуста',
             'queue.empty_hint': 'Сообщения, ожидающие отправки, появятся здесь',
             'queue.dlq_empty': 'DLQ пуст',
-            'queue.dlq_empty_hint': 'Неотправленные сообщения появятся здесь',
-
-            // tracking: ui
-            'trk.delivered': 'Доставлено',
-            'trk.unique_opens': 'Открыли (уникальные)',
-            'trk.total_opens': 'Открытий всего',
-            'trk.unique_clicks': 'Кликнули (уникальные)',
-            'trk.total_clicks': 'Кликов всего',
-            'trk.unsubscribed': 'Отписались',
-            'trk.skipped': 'Пропущено (отписаны в этой книге)',
-            'trk.tab_overview': 'Обзор',
-            'trk.tab_recipients': 'Получатели',
-            'trk.tab_clickmap': 'Карта кликов',
-            'trk.unsub_badge': 'отписан',
-            'trk.opened_any': 'Открытия: все',
-            'trk.opened_yes': 'Открыли',
-            'trk.opened_no': 'Не открыли',
-            'trk.clicked_any': 'Клики: все',
-            'trk.clicked_yes': 'Кликнули',
-            'trk.clicked_no': 'Не кликали',
-            'trk.col_opened': 'Открыто',
-            'trk.col_clicks': 'Клики',
-            'trk.events': 'События',
-            'trk.col_time': 'Время',
-            'trk.col_type': 'Тип',
-            'trk.col_link': 'Ссылка',
-            'trk.ev_open': 'Открытие',
-            'trk.ev_click': 'Клик',
-            'trk.ev_unsub': 'Отписка',
-            'trk.machine': 'машинное',
-            'trk.no_events': 'Событий пока нет',
-            'trk.settings_title': 'Трекинг',
-            'trk.settings_desc': 'Открытия, клики и отписки: проксирующий домен и значения по умолчанию',
-            'trk.saved': 'Настройки сохранены',
-            'trk.base_url': 'Проксирующий домен',
-            'trk.base_url_help': 'Через этот домен идут пиксель, клики и отписка. Если домен заблокируют, впишите новый: изменится только в новых письмах, старые ссылки продолжат работать через любой домен, который проксирует на панель. Пусто: адрес панели.',
-            'trk.opens_default': 'Отслеживать открытия по умолчанию в новых кампаниях',
-            'trk.clicks_default': 'Отслеживать клики по умолчанию в новых кампаниях',
-            'trk.effective': 'Действующий адрес трекинга',
-            'trk.ex_open': 'Пиксель открытий',
-            'trk.ex_click': 'Переход по ссылке',
-            'trk.ex_unsub': 'Страница отписки',
-            'trk.no_origin': 'Не задан ни проксирующий домен, ни server.public_url: рассылки запустить нельзя (в каждом письме рассылки нужна ссылка отписки), письма через API уходят без пикселя и отслеживаемых ссылок.',
-            'trk.no_base_url_warn': 'Проксирующий домен не задан: ссылки трекинга и редиректы идут через адрес панели. Заведите отдельный домен (например, lnk.example.com), который проксирует на панель только /t/ и /u/: адрес панели не попадёт в письма, а блокировка домена ссылок не заблокирует панель.',
-            'trk.secret': 'Секрет подписи ссылок',
-            'trk.secret_help': 'Ссылки трекинга и отписки подписаны секретом. Смените его, если он мог утечь. Ссылки в уже отправленных письмах работают до следующей смены: предыдущий секрет ещё принимается, более старый удаляется. Ссылки кликов и открытий действуют 180 дней, ссылки отписки 2 года.',
-            'trk.secret_prev': 'Предыдущий секрет сохранён для проверки старых ссылок.',
-            'trk.rotate': 'Сменить секрет',
-            'trk.mode_unique': 'Уникальные',
-            'trk.mode_total': 'Всего',
-            'trk.links': 'Ссылки',
-            'trk.col_label': 'Подпись',
-            'trk.col_kind': 'Тип',
-            'trk.col_share': 'Доля',
-            'trk.map_empty': 'Карта появится после начала отправки'
+            'queue.dlq_empty_hint': 'Неотправленные сообщения появятся здесь'
         }
     };
 
     var currentLang = localStorage.getItem('lang') || 'en';
 
+    // Merge section dictionaries ({en: {...}, ru: {...}}) loaded from /static/js/i18n/*.js
+    function register(dict) {
+        for (var lang in dict) {
+            if (!translations[lang]) translations[lang] = {};
+            for (var k in dict[lang]) translations[lang][k] = dict[lang][k];
+        }
+    }
+
+    function lookup(key) {
+        var v = translations[currentLang][key];
+        if (v === undefined) v = translations['en'][key];
+        return v;
+    }
+
     function t(key, params) {
-        var text = translations[currentLang][key] || translations['en'][key] || key;
+        var text = lookup(key);
+        if (text === undefined) text = key;
         if (params) {
-            for (var p in params) {
-                text = text.replace('{' + p + '}', params[p]);
-            }
+            for (var p in params) text = fillParam(text, p, params[p]);
         }
         return text;
+    }
+
+    // Replaces the first {name} in text with value as is: String.replace
+    // would read "$&" or "$'" in a campaign name or domain as a pattern
+    function fillParam(text, name, value) {
+        var marker = '{' + name + '}';
+        var i = text.indexOf(marker);
+        if (i < 0) return text;
+        return text.slice(0, i) + String(value) + text.slice(i + marker.length);
     }
 
     function setLang(lang) {
@@ -494,9 +454,17 @@ var I18n = (function() {
     }
 
     function applyTranslations() {
+        // Unknown keys leave the server-rendered text in place;
+        // data-i18n-arg-<name> attributes fill {name} placeholders
         document.querySelectorAll('[data-i18n]').forEach(function(el) {
             var key = el.getAttribute('data-i18n');
-            el.textContent = t(key);
+            var v = lookup(key);
+            if (v === undefined) return;
+            for (var i = 0; i < el.attributes.length; i++) {
+                var a = el.attributes[i];
+                if (a.name.indexOf('data-i18n-arg-') === 0) v = fillParam(v, a.name.slice(14), a.value);
+            }
+            el.textContent = v;
         });
         document.querySelectorAll('[data-i18n-placeholder]').forEach(function(el) {
             var key = el.getAttribute('data-i18n-placeholder');
@@ -505,6 +473,15 @@ var I18n = (function() {
         document.querySelectorAll('[data-i18n-title]').forEach(function(el) {
             var key = el.getAttribute('data-i18n-title');
             el.title = t(key);
+            if (el.hasAttribute('aria-label')) el.setAttribute('aria-label', t(key));
+        });
+        document.querySelectorAll('[data-i18n-aria]').forEach(function(el) {
+            el.setAttribute('aria-label', t(el.getAttribute('data-i18n-aria')));
+        });
+        // data-label feeds CSS ::before labels in stacked (mobile) tables
+        document.querySelectorAll('[data-i18n-label]').forEach(function(el) {
+            var key = el.getAttribute('data-i18n-label');
+            el.setAttribute('data-label', t(key));
         });
     }
 
@@ -528,6 +505,8 @@ var I18n = (function() {
 
     return {
         t: t,
+        apply: applyTranslations,
+        register: register,
         setLang: setLang,
         getLang: getLang,
         init: init

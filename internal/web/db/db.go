@@ -9,8 +9,22 @@ import (
 	"regexp"
 	"strings"
 
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/mattn/go-sqlite3"
 )
+
+// driverName is the sqlite3 driver with the functions the queries rely on.
+// SQLite's own lower() and LIKE fold the case of ASCII letters only, so a
+// search for "демо" does not find "Демо". ulower() lowercases any Unicode
+// text; searches compare ulower(column) LIKE ulower(?).
+const driverName = "sqlite3_sendry"
+
+func init() {
+	sql.Register(driverName, &sqlite3.SQLiteDriver{
+		ConnectHook: func(conn *sqlite3.SQLiteConn) error {
+			return conn.RegisterFunc("ulower", strings.ToLower, true)
+		},
+	})
+}
 
 type DB struct {
 	*sql.DB
@@ -29,7 +43,7 @@ func New(path string) (*DB, error) {
 	// for it (busy_timeout). A deferred transaction that reads and then writes
 	// fails at once with "database is locked" when another connection
 	// committed in between, and busy_timeout does not help there.
-	db, err := sql.Open("sqlite3", path+"?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on&_txlock=immediate")
+	db, err := sql.Open(driverName, path+"?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on&_txlock=immediate")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
@@ -101,12 +115,10 @@ func (db *DB) Migrate() error {
 		"ALTER TABLE templates ADD COLUMN container_radius_bottom INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE template_block_refs ADD COLUMN condition TEXT NOT NULL DEFAULT ''",
 		// Open/click tracking and unsubscribes
-		// Existing campaigns keep sending untracked; new ones take the defaults from settings
+		// Existing campaigns keep sending untracked; the new campaign form has both on
 		"ALTER TABLE campaigns ADD COLUMN track_opens INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE campaigns ADD COLUMN track_clicks INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE campaigns ADD COLUMN add_utm INTEGER NOT NULL DEFAULT 0",
-		"ALTER TABLE api_keys ADD COLUMN track_opens INTEGER NOT NULL DEFAULT 0",
-		"ALTER TABLE api_keys ADD COLUMN track_clicks INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE send_jobs ADD COLUMN skipped_unsubscribed INTEGER NOT NULL DEFAULT 0",
 		// Whether the campaign tracked opens when the job was created; NULL
 		// for older jobs (statistics then use the campaign setting)
@@ -155,6 +167,15 @@ func (db *DB) Migrate() error {
 	}
 	if err := db.dropColumnIfExists("templates", "block_divider_color"); err != nil {
 		return fmt.Errorf("drop block_divider_color: %w", err)
+	}
+	// Per-key and global tracking defaults were removed: API sends opt in per request
+	for _, col := range []string{"track_opens", "track_clicks"} {
+		if err := db.dropColumnIfExists("api_keys", col); err != nil {
+			return fmt.Errorf("drop api_keys.%s: %w", col, err)
+		}
+	}
+	if _, err := db.Exec("DELETE FROM settings WHERE key IN ('tracking.opens_default', 'tracking.clicks_default')"); err != nil {
+		return fmt.Errorf("delete tracking defaults: %w", err)
 	}
 
 	return nil

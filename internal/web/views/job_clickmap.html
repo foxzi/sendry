@@ -2,7 +2,7 @@
 <div class="page-header">
     <div>
         <h1 data-i18n="trk.tab_clickmap">Click map</h1>
-        <p class="text-muted">Job: <a href="/jobs/{{.Job.ID}}">{{slice .Job.ID 0 8}}...</a> | Campaign: <a href="/campaigns/{{.Job.CampaignID}}">{{.Job.CampaignName}}</a></p>
+        <p class="text-muted"><span data-i18n="cmp.run_colon">Run:</span> <a href="/jobs/{{.Job.ID}}">{{slice .Job.ID 0 8}}...</a> | <span data-i18n="cmp.campaign_colon">Campaign:</span> <a href="/campaigns/{{.Job.CampaignID}}">{{.Job.CampaignName}}</a></p>
     </div>
 </div>
 
@@ -25,7 +25,7 @@
                 </select>
             </form>
             {{end}}
-            <div class="tabs" id="cm-mode">
+            <div class="tabs cm-modes" id="cm-mode">
                 <button type="button" class="tab active" data-mode="unique_clicks" data-i18n="trk.mode_unique">Unique</button>
                 <button type="button" class="tab" data-mode="total_clicks" data-i18n="trk.mode_total">Total</button>
             </div>
@@ -42,6 +42,7 @@
 <div class="card">
     <div class="card-header"><h2 data-i18n="trk.links">Links</h2></div>
     <div class="card-body">
+        <div class="table-scroll">
         <table class="table">
             <thead>
                 <tr>
@@ -57,17 +58,18 @@
             <tbody>
                 {{range .Rows}}
                 <tr data-link="{{.LinkID}}">
-                    <td>{{.LinkID}}</td>
+                    <td class="num">{{.LinkID}}</td>
                     <td>{{.Label}}</td>
                     <td>{{.Kind}}</td>
-                    <td><span class="cm-url" title="{{.URL}}">{{.URL}}</span></td>
-                    <td>{{.UniqueClicks}}</td>
-                    <td>{{.TotalClicks}}</td>
-                    <td>{{printf "%.1f" .Share}}%</td>
+                    <td><span class="cell-truncate" title="{{.URL}}">{{.URL}}</span></td>
+                    <td class="num">{{.UniqueClicks}}</td>
+                    <td class="num">{{.TotalClicks}}</td>
+                    <td class="num">{{printf "%.1f" .Share}}%</td>
                 </tr>
                 {{end}}
             </tbody>
         </table>
+        </div>
     </div>
 </div>
 
@@ -76,16 +78,9 @@
 {{else}}
 <div class="card">
     <div class="card-body">
-        <div class="empty-state"><p data-i18n="trk.map_empty">Карта появится после начала отправки</p></div>
+        <div class="empty-state"><p data-i18n="trk.map_empty">The map will appear once sending starts</p></div>
     </div>
 </div>
 {{end}}
 
-<style>
-.cm-wrap { position: relative; max-width: 800px; margin: 0 auto; border: 1px solid var(--border); background: #fff; }
-.cm-wrap iframe { display: block; width: 100%; height: 600px; border: 0; }
-#cm-overlay { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
-.cm-badge { position: absolute; min-width: 22px; padding: 1px 6px; border-radius: 11px; font: 600 12px/18px sans-serif; color: #fff; text-align: center; pointer-events: auto; box-shadow: 0 1px 3px rgba(0,0,0,.4); cursor: default; }
-.cm-url { display: inline-block; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
-</style>
 {{end}}

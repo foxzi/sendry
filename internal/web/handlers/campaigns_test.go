@@ -39,7 +39,7 @@ func newCampaignTestHandlers(t *testing.T, publicURL string) (*Handlers, *sql.DB
 	cfg.Server.PublicURL = publicURL
 
 	for _, q := range []string{
-		`INSERT INTO recipient_lists (id, name, source_type) VALUES ('l1', 'list', 'manual')`,
+		`INSERT INTO recipient_lists (id, name, description, source_type) VALUES ('l1', 'list', '', 'manual')`,
 		// list order is created_at DESC
 		`INSERT INTO recipients (id, list_id, email, name, variables, tags, status, created_at) VALUES ('ra', 'l1', 'a@example.org', '', '', '', 'active', '2026-01-04')`,
 		`INSERT INTO recipients (id, list_id, email, name, variables, tags, status, created_at) VALUES ('rb', 'l1', 'b@example.org', '', '', '', 'unsubscribed', '2026-01-03')`,
@@ -66,29 +66,70 @@ func postCampaignSend(h *Handlers, form url.Values) *httptest.ResponseRecorder {
 	return rec
 }
 
-func TestCampaignSend_RequiresPublicURL(t *testing.T) {
+func TestCampaignSend_WithoutPublicURL(t *testing.T) {
 	h, d := newCampaignTestHandlers(t, "")
+	if _, err := d.Exec(`UPDATE campaigns SET track_opens = 1`); err != nil {
+		t.Fatal(err)
+	}
+
+	// the page data tells there is no public origin
+	req := httptest.NewRequest(http.MethodGet, "/campaigns/c1", nil)
+	data, err := h.campaignFlowData(req, "edit", &models.Campaign{ID: "c1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if data["NoPublicURL"] != true || data["Mode"] != "edit" {
+		t.Errorf("NoPublicURL=%v Mode=%v", data["NoPublicURL"], data["Mode"])
+	}
+
+	// the job is created, and opens are not counted: there is no pixel
+	rec := postCampaignSend(h, url.Values{"recipient_list_id": {"l1"}, "servers": {"mx1"}})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	var trackOpens bool
+	if err := d.QueryRow(`SELECT track_opens FROM send_jobs`).Scan(&trackOpens); err != nil {
+		t.Fatal(err)
+	}
+	if trackOpens {
+		t.Error("job tracks opens without public URL")
+	}
+}
+
+func TestCampaignSend_NoActiveRecipients(t *testing.T) {
+	h, d := newCampaignTestHandlers(t, "https://panel.example.com")
+	if _, err := d.Exec(`UPDATE recipients SET status = 'unsubscribed'`); err != nil {
+		t.Fatal(err)
+	}
 
 	rec := postCampaignSend(h, url.Values{"recipient_list_id": {"l1"}, "servers": {"mx1"}})
-	if !strings.Contains(rec.Body.String(), "public URL for unsubscribe links is not configured") {
-		t.Errorf("expected an error on the send page, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status %d, want 400: %s", rec.Code, rec.Body.String())
 	}
-	var n int
-	d.QueryRow(`SELECT COUNT(*) FROM send_jobs`).Scan(&n)
-	if n != 0 {
-		t.Errorf("job created without public URL")
+	var jobs int
+	if err := d.QueryRow(`SELECT COUNT(*) FROM send_jobs`).Scan(&jobs); err != nil {
+		t.Fatal(err)
 	}
+	if jobs != 0 {
+		t.Errorf("%d jobs created for a list with nobody to send to", jobs)
+	}
+}
 
-	// the page warns up-front and does not offer to send
-	req := httptest.NewRequest(http.MethodGet, "/campaigns/c1/send", nil)
-	req.SetPathValue("id", "c1")
-	page := httptest.NewRecorder()
-	h.CampaignSendPage(page, req)
-	if body := page.Body.String(); !strings.Contains(body, "Cannot send:") || !strings.Contains(body, " disabled ") {
-		t.Errorf("send page without warning: %s", body)
+func TestCampaignCreate_TrackingDisabledWithoutPublicURL(t *testing.T) {
+	h, d := newCampaignTestHandlers(t, "")
+
+	// a crafted form cannot turn tracking on
+	form := url.Values{"name": {"c2"}, "from_email": {"a@example.com"}, "template_id": {"t1"}, "track_opens": {"on"}, "track_clicks": {"on"}}
+	rec := postCampaignCreate(h, form)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
 	}
-	if strings.Contains(page.Body.String(), "unsubscribe_url}}. ") {
-		t.Errorf("unsubscribe link with spaces not detected")
+	var opens, clicks bool
+	if err := d.QueryRow(`SELECT track_opens, track_clicks FROM campaigns WHERE name = 'c2'`).Scan(&opens, &clicks); err != nil {
+		t.Fatal(err)
+	}
+	if opens || clicks {
+		t.Errorf("tracking saved without public URL: opens=%v clicks=%v", opens, clicks)
 	}
 }
 
@@ -98,6 +139,10 @@ func TestCampaignSend_ItemsWeightsAndSkipped(t *testing.T) {
 	rec := postCampaignSend(h, url.Values{"recipient_list_id": {"l1"}, "servers": {"mx1"}})
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	// the launch shows up on the campaign page
+	if loc := rec.Header().Get("Location"); loc != "/campaigns/c1" {
+		t.Errorf("redirect to %q", loc)
 	}
 
 	rows, err := d.Query(`SELECT i.recipient_id, i.variant_id FROM send_job_items i JOIN recipients r ON r.id = i.recipient_id
@@ -185,19 +230,6 @@ func TestWeightedPicker(t *testing.T) {
 	}
 	if counts[0] != 700 || counts[1] != 200 || counts[2] != 100 {
 		t.Errorf("counts %v, want 700/200/100", counts)
-	}
-}
-
-func TestUnsubscribeVarRE(t *testing.T) {
-	for _, s := range []string{"{{unsubscribe_url}}", "{{ unsubscribe_url }}", "{{.unsubscribe_url}}", "{{- unsubscribe_url -}}"} {
-		if !unsubscribeVarRE.MatchString(s) {
-			t.Errorf("%q not matched", s)
-		}
-	}
-	for _, s := range []string{"unsubscribe_url", "{{unsubscribe_urls}}", "https://x.com/unsubscribe_url"} {
-		if unsubscribeVarRE.MatchString(s) {
-			t.Errorf("%q matched", s)
-		}
 	}
 }
 

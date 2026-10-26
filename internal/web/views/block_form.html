@@ -96,9 +96,9 @@
 </style>
 
 <div class="page-header">
-    <h1>{{if .IsEdit}}Edit Block{{else}}New Block{{end}}</h1>
+    <h1>{{if .IsEdit}}<span data-i18n="tpl.edit_block">Edit Block</span>{{else}}<span data-i18n="tpl.new_block">New Block</span>{{end}}</h1>
     <div class="header-actions">
-        <a href="/blocks" class="btn btn-secondary">Back to Blocks</a>
+        <a href="/blocks" class="btn btn-secondary" data-i18n="tpl.back_to_blocks">Back to blocks</a>
     </div>
 </div>
 
@@ -106,17 +106,17 @@
     <div class="card-body">
         <form method="post" action="{{if .IsEdit}}/blocks/{{.Block.ID}}{{else}}/blocks{{end}}">
             <div class="form-group">
-                <label for="name">Name</label>
+                <label for="name" data-i18n="name">Name</label>
                 <input type="text" id="name" name="name" class="input" required
                     value="{{if .Block}}{{.Block.Name}}{{end}}"
-                    placeholder="e.g. Header - Order Created">
+                    placeholder="e.g. Header - Order Created" data-i18n-placeholder="tpl.block_name_ph">
             </div>
 
             <div class="form-group">
-                <label for="category">Category</label>
+                <label for="category" data-i18n="tpl.category">Category</label>
                 <input type="text" id="category" name="category" class="input" required list="category-list"
                     value="{{if .Block}}{{.Block.Category}}{{end}}"
-                    placeholder="e.g. headers, footers, content">
+                    placeholder="e.g. headers, footers, content" data-i18n-placeholder="tpl.block_cat_ph">
                 <datalist id="category-list">
                     {{range .Categories}}
                     <option value="{{.}}">
@@ -125,38 +125,36 @@
             </div>
 
             <div class="form-group">
-                <label for="preview_text">Description</label>
+                <label for="preview_text" data-i18n="common.description">Description</label>
                 <input type="text" id="preview_text" name="preview_text" class="input"
                     value="{{if .Block}}{{.Block.PreviewText}}{{end}}"
-                    placeholder="Short description of this block">
+                    placeholder="Short description of this block" data-i18n-placeholder="tpl.block_desc_ph">
             </div>
 
             <div class="form-row">
                 <div class="form-group">
-                    <label for="border_radius">Border radius (px)</label>
+                    <label for="border_radius" data-i18n="tpl.border_radius">Border radius (px)</label>
                     <input type="number" id="border_radius" name="border_radius" min="0" max="64" step="1" class="input"
                         value="{{if .Block}}{{.Block.BorderRadius}}{{else}}0{{end}}">
                 </div>
                 <div class="form-group">
-                    <label for="padding_v">Content padding — vertical (px)</label>
+                    <label for="padding_v" data-i18n="tpl.content_pad_v">Content padding — vertical (px)</label>
                     <input type="number" id="padding_v" name="padding_v" min="0" max="200" step="2" class="input"
                         value="{{if .Block}}{{.Block.PaddingV}}{{else}}0{{end}}">
                 </div>
                 <div class="form-group">
-                    <label for="padding_h">Content padding — horizontal (px)</label>
+                    <label for="padding_h" data-i18n="tpl.content_pad_h">Content padding — horizontal (px)</label>
                     <input type="number" id="padding_h" name="padding_h" min="0" max="200" step="2" class="input"
                         value="{{if .Block}}{{.Block.PaddingH}}{{else}}0{{end}}">
                 </div>
             </div>
-            <p class="text-muted" style="font-size:0.8rem; margin:0.4rem 0 1rem;">
-                Radius and padding apply through a wrapping table at render time, so the block's HTML stays clean.
-            </p>
+            <p class="text-muted" style="font-size:0.8rem; margin:0.4rem 0 1rem;" data-i18n="tpl.wrap_hint">Radius and padding apply through a wrapping table at render time, so the block's HTML stays clean.</p>
 
             <div class="form-group">
-                <label for="html">HTML</label>
+                <label for="html" data-i18n="tpl.html">HTML</label>
                 <div class="html-toolbar">
-                    <button type="button" class="btn btn-sm btn-secondary" onclick="openImagePicker('insert')">Insert Image</button>
-                    <button type="button" class="btn btn-sm btn-secondary" onclick="openVariablesPanel()">Variables</button>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="openImagePicker('insert')" data-i18n="tpl.insert_image">Insert Image</button>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="openVariablesPanel()" data-i18n="template_variables">Variables</button>
                 </div>
                 <textarea id="html" name="html" class="input" required rows="20"
                     style="font-family:monospace; font-size:13px; tab-size:2;">{{if .Block}}{{.Block.HTML}}{{end}}</textarea>
@@ -164,40 +162,39 @@
 
             {{if not .IsEdit}}
             <div id="block-preview" style="margin-bottom:1rem;">
-                <label>Quick preview</label>
+                <label data-i18n="tpl.quick_preview">Quick preview</label>
                 <div style="border:1px solid var(--border); border-radius:var(--radius); padding:1rem; background:#fff; max-width:600px;">
-                    <iframe id="preview-frame" style="width:100%; height:300px; border:none;"></iframe>
+                    <iframe id="preview-frame" sandbox="" title="Preview" style="width:100%; height:300px; border:none;"></iframe>
                 </div>
                 <p class="text-muted" style="margin-top:0.4rem; font-size:0.8rem;">
-                    Substitutes simple <code>{{"{{"}}Variable}}</code> placeholders from the test values modal.
-                    Save the block to unlock the server-side <strong>Live preview</strong> that supports
-                    <code>{{"{{"}}range}}</code> and <code>{{"{{"}}if}}</code>.
+                    <span data-i18n="tpl.qp1">Substitutes simple</span> <code>{{"{{"}}Variable}}</code> <span data-i18n="tpl.qp2">placeholders from the test values modal. Save the block to unlock the server-side</span> <strong data-i18n="tpl.live_preview_short">Live preview</strong> <span data-i18n="tpl.qp3">that supports</span>
+                    <code>{{"{{"}}range}}</code> <span data-i18n="tpl.qp4">and</span> <code>{{"{{"}}if}}</code>.
                 </p>
             </div>
             {{end}}
 
             {{if .IsEdit}}
             <div class="form-group">
-                <label>Live preview (server render — supports arrays and conditionals)</label>
+                <label data-i18n="tpl.live_preview">Live preview (server render — supports arrays and conditionals)</label>
                 <div style="display:flex; flex-direction:column; gap:1rem;">
                     <div>
                         <textarea id="livepreview-data"
                             class="input"
                             rows="10"
                             style="font-family:monospace; font-size:12px; width:100%; box-sizing:border-box;"
-                            placeholder='Paste JSON here, e.g. {"Items":[{"Name":"A","Price":"100 ₽"}]}'>{{.SampleJSON}}</textarea>
+                            placeholder='Paste JSON here, e.g. {"Items":[{"Name":"A","Price":"100 ₽"}]}' data-i18n-placeholder="tpl.json_ph">{{.SampleJSON}}</textarea>
                         <div style="display:flex; gap:0.5rem; margin-top:0.5rem; align-items:center; flex-wrap:wrap;">
-                            <button type="button" class="btn btn-primary btn-sm" id="livepreview-render">Render</button>
+                            <button type="button" class="btn btn-primary btn-sm" id="livepreview-render" data-i18n="tpl.render">Render</button>
                             <span style="border-left:1px solid var(--border); height:24px; margin:0 0.25rem;"></span>
-                            <span class="text-muted" style="font-size:0.8rem;">Width:</span>
-                            <button type="button" class="btn btn-sm btn-primary" data-livepreview-width="600">Desktop · 600px</button>
-                            <button type="button" class="btn btn-sm btn-secondary" data-livepreview-width="320">Mobile · 320px</button>
+                            <span class="text-muted" style="font-size:0.8rem;" data-i18n="tpl.width">Width:</span>
+                            <button type="button" class="btn btn-sm btn-primary" data-livepreview-width="600" data-i18n="tpl.desktop_600">Desktop · 600px</button>
+                            <button type="button" class="btn btn-sm btn-secondary" data-livepreview-width="320" data-i18n="tpl.mobile_320">Mobile · 320px</button>
                             <span class="text-muted" id="livepreview-status" style="font-size:0.8rem; margin-left:auto;"></span>
                         </div>
                     </div>
                     <div style="background:#f5f5f5; padding:1.5rem 1rem; border-radius:var(--radius); display:flex; justify-content:center;">
                         <div id="livepreview-shell" style="width:600px; max-width:100%; transition:width 0.15s; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
-                            <iframe id="livepreview-frame" style="width:100%; height:720px; border:none; display:block;"></iframe>
+                            <iframe id="livepreview-frame" sandbox="" title="Preview" style="width:100%; height:720px; border:none; display:block;"></iframe>
                         </div>
                     </div>
                 </div>
@@ -205,8 +202,8 @@
             {{end}}
 
             <div class="form-actions">
-                <button type="submit" class="btn btn-primary">{{if .IsEdit}}Update Block{{else}}Create Block{{end}}</button>
-                <a href="/blocks" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary">{{if .IsEdit}}<span data-i18n="tpl.update_block">Update Block</span>{{else}}<span data-i18n="tpl.create_block">Create Block</span>{{end}}</button>
+                <a href="/blocks" class="btn btn-secondary" data-i18n="cancel">Cancel</a>
             </div>
         </form>
     </div>
@@ -215,13 +212,13 @@
 <div class="modal-overlay" id="image-modal">
     <div class="modal">
         <div class="modal-header">
-            <h3 id="image-modal-title">Select Image</h3>
+            <h3 id="image-modal-title" data-i18n="tpl.select_image">Select Image</h3>
             <button class="modal-close" onclick="closeImagePicker()">&times;</button>
         </div>
         <div class="modal-body">
             <div class="modal-upload" id="modal-upload-area">
-                <strong>Upload new image</strong>
-                <p>Drop here or click</p>
+                <strong data-i18n="tpl.upload_new">Upload new image</strong>
+                <p data-i18n="tpl.drop_or_click">Drop here or click</p>
                 <input type="file" id="modal-file-input" accept="image/*" style="display:none;">
             </div>
             <div class="media-picker-grid" id="media-grid"></div>
@@ -232,16 +229,16 @@
 <div class="modal-overlay" id="vars-modal">
     <div class="modal">
         <div class="modal-header">
-            <h3>Template Variables</h3>
+            <h3 data-i18n="tpl.template_variables">Template Variables</h3>
             <button class="modal-close" onclick="document.getElementById('vars-modal').classList.remove('active')">&times;</button>
         </div>
         <div class="modal-body">
             <p style="font-size:0.85rem; color:var(--text-muted); margin-top:0;">
-                Variables found in HTML. Image variables (inside <code>src="..."</code>) can be replaced with uploaded images.
+                <span data-i18n="tpl.vars_found1">Variables found in HTML. Image variables (inside</span> <code>src="..."</code>) <span data-i18n="tpl.vars_found2">can be replaced with uploaded images.</span>
             </p>
             <ul class="var-list" id="vars-list"></ul>
             <div id="vars-empty" style="text-align:center; color:var(--text-muted); padding:2rem; display:none;">
-                No variables found. Use <code>{{"{{"}}VarName{{"}}"}}</code> syntax in your HTML.
+                <span data-i18n="tpl.no_vars1">No variables found. Use</span> <code>{{"{{"}}VarName{{"}}"}}</code> <span data-i18n="tpl.no_vars2">syntax in your HTML.</span>
             </div>
         </div>
     </div>
@@ -277,7 +274,7 @@ function saveTestValues() { localStorage.setItem('sendry_test_values', JSON.stri
     function updatePreview() {
         var html = textarea.value;
         if (!html.trim()) {
-            frame.srcdoc = '<p style="color:#999;font-family:sans-serif;text-align:center;padding:2rem;">Enter HTML to see preview</p>';
+            frame.srcdoc = '<p style="color:#999;font-family:sans-serif;text-align:center;padding:2rem;">' + I18n.t('tpl.enter_html') + '</p>';
             return;
         }
         var previewHtml = applyTestValues(html);
@@ -308,9 +305,9 @@ function saveTestValues() { localStorage.setItem('sendry_test_values', JSON.stri
         var parsed = {};
         if (raw) {
             try { parsed = JSON.parse(raw); }
-            catch(e) { status.textContent = 'JSON parse error: ' + e.message; status.style.color = 'crimson'; return; }
+            catch(e) { status.textContent = I18n.t('tpl.b_json_error') + ': ' + e.message; status.style.color = 'crimson'; return; }
         }
-        status.textContent = 'Rendering…'; status.style.color = '';
+        status.textContent = I18n.t('tpl.rendering'); status.style.color = '';
 
         fetch('/blocks/' + blockId + '/preview', {
             method: 'POST',
@@ -323,10 +320,10 @@ function saveTestValues() { localStorage.setItem('sendry_test_values', JSON.stri
         }).then(function(html) {
             html = SendryPreview.stripWrapperDarkModeCSS(html);
             frame.srcdoc = html;
-            status.textContent = 'OK — block rendered with the JSON above.';
+            status.textContent = I18n.t('tpl.ok_rendered');
             status.style.color = 'var(--text-muted)';
         }).catch(function(err) {
-            status.textContent = 'Error: ' + err.message;
+            status.textContent = I18n.t('common.error') + ': ' + err.message;
             status.style.color = 'crimson';
         });
     }
@@ -359,7 +356,7 @@ function openImagePicker(mode, varName) {
     _pickerMode = mode || 'insert';
     _replaceVarName = varName || '';
     var title = document.getElementById('image-modal-title');
-    title.textContent = mode === 'replace' ? 'Replace ' + varName : 'Insert Image';
+    title.textContent = mode === 'replace' ? I18n.t('tpl.replace') + ' ' + varName : I18n.t('tpl.insert_image');
     document.getElementById('image-modal').classList.add('active');
     loadMediaFiles();
 }
@@ -370,12 +367,12 @@ function closeImagePicker() {
 
 function loadMediaFiles() {
     var grid = document.getElementById('media-grid');
-    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:2rem;">Loading...</div>';
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:2rem;">' + I18n.t('loading') + '</div>';
     fetch('/media/api')
         .then(function(r) { return r.json(); })
         .then(function(files) {
             if (!files || files.length === 0) {
-                grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:2rem;">No images yet. Upload one above.</div>';
+                grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:2rem;">' + I18n.t('tpl.no_images') + '</div>';
                 return;
             }
             grid.innerHTML = '';
@@ -482,7 +479,7 @@ function openVariablesPanel() {
             if (v.isSrc) {
                 var badge = document.createElement('span');
                 badge.style.cssText = 'font-size:0.7rem; background:#e0f2fe; color:#0369a1; padding:1px 6px; border-radius:4px; margin-left:6px;';
-                badge.textContent = 'image';
+                badge.textContent = I18n.t('tpl.image_lc');
                 left.appendChild(badge);
             }
 
@@ -493,13 +490,13 @@ function openVariablesPanel() {
                 var btn = document.createElement('button');
                 btn.type = 'button';
                 btn.className = 'btn btn-sm btn-primary';
-                btn.textContent = 'Choose image';
+                btn.textContent = I18n.t('tpl.choose_image');
                 btn.onclick = (function(n) { return function() { pickImageForVar(n); }; })(v.name);
                 actions.appendChild(btn);
             } else {
                 var input = document.createElement('input');
                 input.type = 'text';
-                input.placeholder = 'Test value...';
+                input.placeholder = I18n.t('tpl.test_value_ph');
                 input.value = testValues[v.name] || '';
                 input.style.cssText = 'width:200px; padding:0.3rem 0.5rem; border:1px solid var(--border); border-radius:var(--radius); font-size:0.8rem;';
                 input.oninput = (function(n) { return function(e) {
@@ -511,7 +508,7 @@ function openVariablesPanel() {
 
                 var label = document.createElement('span');
                 label.style.cssText = 'font-size:0.7rem; color:var(--text-muted); margin-left:4px;';
-                label.textContent = 'preview only';
+                label.textContent = I18n.t('tpl.preview_only');
                 actions.appendChild(label);
             }
 
@@ -524,7 +521,7 @@ function openVariablesPanel() {
         if (images.length > 0) {
             var divider = document.createElement('li');
             divider.style.cssText = 'padding:0.75rem 0 0.25rem; font-size:0.8rem; font-weight:600; color:var(--text-muted); border-bottom:none;';
-            divider.textContent = 'Images in block';
+            divider.textContent = I18n.t('tpl.images_in_block');
             list.appendChild(divider);
 
             images.forEach(function(img, idx) {
@@ -547,7 +544,7 @@ function openVariablesPanel() {
                 var replBtn = document.createElement('button');
                 replBtn.type = 'button';
                 replBtn.className = 'btn btn-sm btn-secondary';
-                replBtn.textContent = 'Replace';
+                replBtn.textContent = I18n.t('tpl.replace');
                 replBtn.onclick = (function(u) { return function() { replaceExistingImage(u); }; })(img.url);
                 actions2.appendChild(replBtn);
 
@@ -594,12 +591,12 @@ uploadArea.addEventListener('drop', function(e) {
 function uploadFile(file) {
     var fd = new FormData();
     fd.append('file', file);
-    uploadArea.innerHTML = '<strong>Uploading...</strong>';
+    uploadArea.innerHTML = '<strong>' + I18n.t('tpl.uploading') + '</strong>';
 
     fetch('/media/upload', { method: 'POST', body: fd, headers: { 'Accept': 'application/json' } })
         .then(function(r) { return r.json(); })
         .then(function(media) {
-            uploadArea.innerHTML = '<strong>Upload new image</strong><p>Drop here or click</p>';
+            uploadArea.innerHTML = '<strong>' + I18n.t('tpl.upload_new') + '</strong><p>' + I18n.t('tpl.drop_or_click') + '</p>';
             fileInput.value = '';
             loadMediaFiles();
             // Auto-select if in replace mode
@@ -608,7 +605,7 @@ function uploadFile(file) {
             }
         })
         .catch(function() {
-            uploadArea.innerHTML = '<strong>Upload failed</strong><p>Drop here or click</p>';
+            uploadArea.innerHTML = '<strong>' + I18n.t('tpl.upload_failed') + '</strong><p>' + I18n.t('tpl.drop_or_click') + '</p>';
             fileInput.value = '';
         });
 }

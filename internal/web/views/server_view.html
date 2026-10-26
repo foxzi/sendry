@@ -2,31 +2,31 @@
 <div class="page-header">
     <h1>{{.Server.Name}}</h1>
     <div class="header-actions">
-        <a href="/servers" class="btn btn-secondary">Back to Servers</a>
+        <a href="/servers" class="btn btn-secondary" data-i18n="infra.back_to_servers">Back to servers</a>
     </div>
 </div>
 
 <div class="grid grid-2">
     <div class="card">
         <div class="card-header">
-            <h3>Server Info</h3>
+            <h3 data-i18n="infra.server_info">Server Info</h3>
         </div>
         <div class="card-body">
             <dl class="info-list">
                 <dt>URL</dt>
                 <dd>{{.Server.BaseURL}}</dd>
-                <dt>Environment</dt>
+                <dt data-i18n="monitoring.servers.env">Environment</dt>
                 <dd><span class="badge badge-{{.Server.Env}}">{{.Server.Env}}</span></dd>
-                <dt>Status</dt>
+                <dt data-i18n="status">Status</dt>
                 <dd>
-                    <span class="badge badge-{{if .Server.Online}}running{{else}}failed{{end}}">
+                    <span class="badge badge-{{if .Server.Online}}running{{else}}failed{{end}}" data-i18n="{{if .Server.Online}}online{{else}}offline{{end}}">
                         {{if .Server.Online}}Online{{else}}Offline{{end}}
                     </span>
                 </dd>
                 {{if .Server.Online}}
-                <dt>Version</dt>
+                <dt data-i18n="infra.version">Version</dt>
                 <dd>{{.Server.Version}}</dd>
-                <dt>Uptime</dt>
+                <dt data-i18n="infra.uptime">Uptime</dt>
                 <dd>{{.Server.Uptime}}</dd>
                 {{end}}
             </dl>
@@ -35,38 +35,51 @@
 
     <div class="card">
         <div class="card-header">
-            <h3>Statistics</h3>
+            <h3 data-i18n="infra.statistics">Statistics</h3>
         </div>
         <div class="card-body">
             <dl class="info-list">
-                <dt>Queue Size</dt>
+                <dt data-i18n="infra.queue_size">Queue Size</dt>
                 <dd>{{.Stats.QueueSize}}</dd>
-                <dt>DLQ Size</dt>
+                <dt data-i18n="infra.dlq_size">DLQ Size</dt>
                 <dd>{{.Stats.DLQSize}}</dd>
-                <dt>Delivered (24h)</dt>
+                <dt data-i18n="infra.delivered_24h">Delivered (24h)</dt>
                 <dd>{{.Stats.Delivered}}</dd>
-                <dt>Failed (24h)</dt>
+                <dt data-i18n="infra.failed_24h">Failed (24h)</dt>
                 <dd>{{.Stats.Failed}}</dd>
-                <dt>Rate Limited (24h)</dt>
+                <dt data-i18n="infra.rate_limited_24h">Rate Limited (24h)</dt>
                 <dd>{{.Stats.RateLimited}}</dd>
             </dl>
         </div>
     </div>
 </div>
 
-<div class="card">
-    <div class="card-header">
-        <h3>Quick Actions</h3>
+<div class="grid grid-2" style="margin-top: 1.5rem;">
+    <div class="card">
+        <div class="card-header">
+            <h3 data-i18n="infra.mail_flow">Mail flow</h3>
+        </div>
+        <div class="card-body">
+            <div class="btn-group">
+                <a href="/servers/{{.Server.Name}}/queue" class="btn" data-i18n="queue.title">Queue</a>
+                <a href="/servers/{{.Server.Name}}/dlq" class="btn" data-i18n="infra.dead_letter_queue">Dead letter queue</a>
+                <a href="/servers/{{.Server.Name}}/sandbox" class="btn" data-i18n="infra.sandbox_inbox">Sandbox inbox</a>
+            </div>
+        </div>
     </div>
-    <div class="card-body">
-        <div class="btn-group">
-            <a href="/servers/{{.Server.Name}}/queue" class="btn">View Queue</a>
-            <a href="/servers/{{.Server.Name}}/dlq" class="btn">Dead Letter Queue</a>
-            <a href="/servers/{{.Server.Name}}/domains" class="btn">Domains</a>
-            <a href="/servers/{{.Server.Name}}/dkim" class="btn">DKIM Keys</a>
-            <a href="/servers/{{.Server.Name}}/sandbox" class="btn">Send Test Email</a>
-            <a href="/servers/{{.Server.Name}}/dns-check" class="btn">DNS Check</a>
-            <a href="/servers/{{.Server.Name}}/ip-check" class="btn">IP Check</a>
+
+    <div class="card">
+        <div class="card-header">
+            <h3 data-i18n="infra.configuration_checks">Configuration &amp; checks</h3>
+        </div>
+        <div class="card-body">
+            <div class="btn-group">
+                <a href="/servers/{{.Server.Name}}/domains" class="btn" data-i18n="infra.domains_on_this_server">Domains on this server</a>
+                <a href="/servers/{{.Server.Name}}/dkim" class="btn" data-i18n="infra.dkim_keys_on_this_server">DKIM keys on this server</a>
+                <a href="/servers/{{.Server.Name}}/dns-check" class="btn" data-i18n="infra.dns_check">DNS check</a>
+                <a href="/servers/{{.Server.Name}}/ip-check" class="btn" data-i18n="infra.ip_check">IP check</a>
+            </div>
+            <p class="text-muted" style="margin-top: 0.75rem;" data-i18n="infra.server_local_settings_to_manage_domains_for_all">Server-local settings. To manage domains for all servers use Infrastructure → Domains.</p>
         </div>
     </div>
 </div>

@@ -2,7 +2,7 @@
 <style>
 .builder-layout {
     display: grid;
-    grid-template-columns: 280px 1fr;
+    grid-template-columns: 280px minmax(0, 1fr);
     gap: 1rem;
     min-height: calc(100vh - 180px);
 }
@@ -322,16 +322,16 @@
 </style>
 
 <div class="page-header">
-    <h1>Email Builder</h1>
+    <h1 data-i18n="tpl.email_builder">Email Builder</h1>
     <div class="header-actions">
-        <a href="/templates" class="btn btn-secondary">Back to Templates</a>
+        <a href="/templates" class="btn btn-secondary" data-i18n="tpl.back_to_templates">Back to templates</a>
     </div>
 </div>
 
 <form method="post" action="{{if .Template}}/templates/{{.Template.ID}}/builder{{else}}/templates/builder{{end}}" id="builder-form">
     <div class="builder-layout">
         <div class="builder-sidebar">
-            <div class="builder-sidebar-header">Block Library</div>
+            <div class="builder-sidebar-header" data-i18n="tpl.block_library">Block Library</div>
             {{range .Categories}}
             <div class="block-category open" data-category="{{.ID}}">
                 <div class="block-category-header" onclick="this.parentElement.classList.toggle('open')">
@@ -340,7 +340,7 @@
                 </div>
                 <div class="block-category-items">
                     {{range .Blocks}}
-                    <div class="block-card" data-block-id="{{.ID}}" data-block-name="{{.Name}}" title="Click to add">
+                    <div class="block-card" data-block-id="{{.ID}}" data-block-name="{{.Name}}" title="Click to add" data-i18n-title="tpl.click_to_add">
                         <div class="block-card-icon">+</div>
                         <span>{{.Name}}</span>
                     </div>
@@ -354,13 +354,13 @@
             <div class="builder-form">
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="name">Template Name *</label>
-                        <input type="text" id="name" name="name" required class="input" placeholder="Welcome Email"
+                        <label for="name" data-i18n="tpl.template_name_req">Template Name *</label>
+                        <input type="text" id="name" name="name" required class="input" placeholder="Welcome Email" data-i18n-placeholder="tpl.name_ph"
                             value="{{if .Template}}{{.Template.Name}}{{end}}">
                     </div>
                     <div class="form-group">
-                        <label for="folder">Folder</label>
-                        <input type="text" id="folder" name="folder" class="input" placeholder="marketing" list="folders"
+                        <label for="folder" data-i18n="tpl.folder">Folder</label>
+                        <input type="text" id="folder" name="folder" class="input" placeholder="marketing" data-i18n-placeholder="tpl.folder_ph" list="folders"
                             value="{{if .Template}}{{.Template.Folder}}{{end}}">
                         <datalist id="folders">
                             {{range .Folders}}
@@ -370,68 +370,68 @@
                     </div>
                 </div>
                 <div class="form-group">
-                    <label for="subject">Subject *</label>
-                    <input type="text" id="subject" name="subject" required class="input" placeholder="Welcome to your company!"
+                    <label for="subject" data-i18n="tpl.subject_req">Subject *</label>
+                    <input type="text" id="subject" name="subject" required class="input" placeholder="Welcome to your company!" data-i18n-placeholder="tpl.subject_ph"
                         value="{{if .Template}}{{.Template.Subject}}{{end}}">
                 </div>
                 <div class="form-group">
-                    <label for="description">Description</label>
-                    <input type="text" id="description" name="description" class="input" placeholder="Brief description of this template"
+                    <label for="description" data-i18n="common.description">Description</label>
+                    <input type="text" id="description" name="description" class="input" placeholder="Brief description of this template" data-i18n-placeholder="tpl.desc_ph"
                         value="{{if .Template}}{{.Template.Description}}{{end}}">
                 </div>
 
                 <details style="border:1px solid var(--border); border-radius:var(--radius); padding:0.5rem 0.75rem; margin-top:0.5rem;">
-                    <summary style="cursor:pointer; font-size:0.85rem; color:var(--text-muted);">Container layout</summary>
+                    <summary style="cursor:pointer; font-size:0.85rem; color:var(--text-muted);" data-i18n="tpl.container_layout">Container layout</summary>
 
                     <div class="form-row" style="margin-top:0.75rem;">
                         <div class="form-group">
-                            <label for="container-width">Email width (px)</label>
+                            <label for="container-width" data-i18n="tpl.email_width">Email width (px)</label>
                             <input type="number" id="container-width" name="container_width" min="320" max="1200" step="10" class="input"
                                 value="{{if and .Template .Template.ContainerWidth}}{{.Template.ContainerWidth}}{{else}}600{{end}}">
                         </div>
                         <div class="form-group">
-                            <label for="container-radius">Border radius — all (px)</label>
+                            <label for="container-radius" data-i18n="tpl.radius_all">Border radius — all (px)</label>
                             <input type="number" id="container-radius" name="container_radius" min="0" max="64" step="1" class="input"
                                 value="{{if .Template}}{{.Template.ContainerRadius}}{{else}}8{{end}}">
                         </div>
                     </div>
                     <div class="form-row" style="margin-top:0.5rem;">
                         <div class="form-group">
-                            <label for="container-radius-top">Border radius — top only (px)</label>
+                            <label for="container-radius-top" data-i18n="tpl.radius_top">Border radius — top only (px)</label>
                             <input type="number" id="container-radius-top" name="container_radius_top" min="0" max="64" step="1" class="input"
                                 value="{{if .Template}}{{.Template.ContainerRadiusTop}}{{else}}0{{end}}">
                         </div>
                         <div class="form-group">
-                            <label for="container-radius-bottom">Border radius — bottom only (px)</label>
+                            <label for="container-radius-bottom" data-i18n="tpl.radius_bottom">Border radius — bottom only (px)</label>
                             <input type="number" id="container-radius-bottom" name="container_radius_bottom" min="0" max="64" step="1" class="input"
                                 value="{{if .Template}}{{.Template.ContainerRadiusBottom}}{{else}}0{{end}}">
                         </div>
                     </div>
                     <p class="text-muted" style="font-size:0.78rem; margin:0.25rem 0 0;">
-                        Top/Bottom override the "all" radius when &gt; 0. Leave both at 0 to apply the same radius to every corner.
+                        <span data-i18n="tpl.radius_hint">Top/Bottom override the "all" radius when &gt; 0. Leave both at 0 to apply the same radius to every corner.</span>
                     </p>
                     <div class="form-row" style="margin-top:0.5rem;">
                         <div class="form-group">
-                            <label for="container-padding-v">Outer padding — vertical (px)</label>
+                            <label for="container-padding-v" data-i18n="tpl.padding_v">Outer padding — vertical (px)</label>
                             <input type="number" id="container-padding-v" name="container_padding_v" min="0" max="200" step="2" class="input"
                                 value="{{if .Template}}{{.Template.ContainerPaddingV}}{{else}}20{{end}}">
                         </div>
                         <div class="form-group">
-                            <label for="container-padding-h">Outer padding — horizontal (px)</label>
+                            <label for="container-padding-h" data-i18n="tpl.padding_h">Outer padding — horizontal (px)</label>
                             <input type="number" id="container-padding-h" name="container_padding_h" min="0" max="200" step="2" class="input"
                                 value="{{if .Template}}{{.Template.ContainerPaddingH}}{{else}}0{{end}}">
                         </div>
                     </div>
                     <div class="form-row" style="margin-top:0.5rem;">
                         <div class="form-group">
-                            <label for="page-background">Page background</label>
+                            <label for="page-background" data-i18n="tpl.page_bg">Page background</label>
                             <div style="display:flex; align-items:center; gap:0.5rem;">
                                 <input type="color" id="page-background" name="page_background" class="input" style="height:38px; padding:2px; max-width:100px;"
                                     value="{{if and .Template .Template.PageBackground (ne .Template.PageBackground "transparent")}}{{.Template.PageBackground}}{{else}}#F5F5F5{{end}}">
                                 <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; font-weight:normal;">
                                     <input type="checkbox" id="page-background-transparent" name="page_background_transparent" value="on"
                                         {{if and .Template (eq .Template.PageBackground "transparent")}}checked{{end}}>
-                                    Transparent
+                                    <span data-i18n="tpl.transparent">Transparent</span>
                                 </label>
                             </div>
                         </div>
@@ -439,47 +439,43 @@
                     <label style="display:flex; align-items:center; gap:0.4rem; margin-top:0.6rem; font-size:0.85rem;">
                         <input type="checkbox" id="container-transparent" name="container_transparent" value="on"
                             {{if and .Template .Template.ContainerTransparent}}checked{{end}}>
-                        Transparent container background
+                        <span data-i18n="tpl.transparent_container">Transparent container background</span>
                     </label>
                     <p class="text-muted" style="font-size:0.8rem; margin:0.4rem 0 0;">
-                        Per-block colours come from the block's own markup. Use "Gap below" on a block to add coloured spacing between blocks.
+                        <span data-i18n="tpl.colors_hint">Per-block colours come from the block's own markup. Use "Gap below" on a block to add coloured spacing between blocks.</span>
                     </p>
                 </details>
             </div>
 
             {{if .LegacyRecovered}}
             <div class="alert" style="background:#FFFBE6; border:1px solid #FFC905; color:#7a5b00; padding:0.6rem 0.9rem; border-radius:var(--radius); margin-bottom:0.75rem; font-size:0.9rem;">
-                ⚠ This template was missing block links — sendry auto-detected blocks by matching their HTML.
-                Verify the order is correct and click <strong>Save</strong> to persist the link.
+                <span data-i18n="tpl.legacy_recovered1">⚠ This template was missing block links — sendry auto-detected blocks by matching their HTML. Verify the order is correct and click</span> <strong data-i18n="save">Save</strong> <span data-i18n="tpl.legacy_recovered2">to persist the link.</span>
             </div>
             {{else if .LegacyEmpty}}
             <div class="alert" style="background:#FFEEE5; border:1px solid #DC662D; color:#8a3c0e; padding:0.6rem 0.9rem; border-radius:var(--radius); margin-bottom:0.75rem; font-size:0.9rem;">
-                ⚠ This template's HTML was edited outside the builder, so we can't recover its block layout.
-                Add the blocks you want and click <strong>Save</strong> to overwrite the current HTML.
+                <span data-i18n="tpl.legacy_empty1">⚠ This template's HTML was edited outside the builder, so we can't recover its block layout. Add the blocks you want and click</span> <strong data-i18n="save">Save</strong> <span data-i18n="tpl.legacy_empty2">to overwrite the current HTML.</span>
             </div>
             {{end}}
 
             <div class="builder-canvas">
                 <div class="builder-canvas-header">
                     <div class="canvas-tabs">
-                        <button type="button" class="canvas-tab active" data-tab="build">Build</button>
-                        <button type="button" class="canvas-tab" data-tab="preview">Preview</button>
-                        <button type="button" class="canvas-tab" data-tab="code">HTML Code</button>
+                        <button type="button" class="canvas-tab active" data-tab="build" data-i18n="tpl.tab_build">Build</button>
+                        <button type="button" class="canvas-tab" data-tab="preview" data-i18n="template_preview">Preview</button>
+                        <button type="button" class="canvas-tab" data-tab="code" data-i18n="tpl.tab_code">HTML Code</button>
                     </div>
                     <span class="block-count" id="block-count">0 blocks</span>
                 </div>
 
                 <div class="builder-canvas-body" id="canvas-build" style="overflow-x:auto;">
-                    <div class="builder-canvas-empty" id="canvas-empty">
-                        Click blocks on the left to add them to your email
-                    </div>
+                    <div class="builder-canvas-empty" id="canvas-empty" data-i18n="tpl.canvas_empty">Click blocks on the left to add them to your email</div>
                     <div id="canvas-blocks" style="min-width:600px;"></div>
                 </div>
 
                 <div class="builder-canvas-body" id="canvas-preview" style="display:none;">
                     <details style="margin-bottom:0.75rem;" open>
                         <summary style="cursor:pointer; font-size:0.85rem; color:var(--text-muted); margin-bottom:0.4rem;">
-                            Sample data (JSON) — describes the payload the backend should send to <code>/v1/send/template</code>
+                            <span data-i18n="tpl.sample_data_hint">Sample data (JSON) — describes the payload the backend should send to</span> <code>/v1/send/template</code>
                         </summary>
                         <textarea id="builder-preview-data"
                             class="input"
@@ -488,10 +484,10 @@
                             placeholder='{"Items":[{"Name":"A","Price":"100 ₽"}]}'></textarea>
                     </details>
                     <div style="display:flex; gap:0.5rem; margin-bottom:0.75rem; align-items:center; flex-wrap:wrap;">
-                        <button type="button" class="btn btn-sm btn-primary" id="btn-preview-render">Render</button>
+                        <button type="button" class="btn btn-sm btn-primary" id="btn-preview-render" data-i18n="tpl.render">Render</button>
                         <span style="border-left:1px solid var(--border); height:24px; margin:0 0.25rem;"></span>
-                        <button type="button" class="btn btn-sm btn-primary" data-preview-width="600" onclick="setPreviewWidth(600, this)">Desktop (600px)</button>
-                        <button type="button" class="btn btn-sm btn-secondary" data-preview-width="320" onclick="setPreviewWidth(320, this)">Mobile (320px)</button>
+                        <button type="button" class="btn btn-sm btn-primary" data-preview-width="600" onclick="setPreviewWidth(600, this)" data-i18n="tpl.desktop">Desktop (600px)</button>
+                        <button type="button" class="btn btn-sm btn-secondary" data-preview-width="320" onclick="setPreviewWidth(320, this)" data-i18n="tpl.mobile">Mobile (320px)</button>
                         <span class="text-muted" id="builder-preview-status" style="font-size:0.8rem; margin-left:auto;"></span>
                     </div>
                     <div class="builder-preview-container" style="padding:1rem; border-radius:var(--radius); overflow-x:auto;">
@@ -505,11 +501,11 @@
 
                 <div class="builder-actions">
                     <div>
-                        <button type="button" class="btn btn-sm btn-secondary" id="btn-clear">Clear All</button>
+                        <button type="button" class="btn btn-sm btn-secondary" id="btn-clear" data-i18n="tpl.clear_all">Clear All</button>
                     </div>
                     <div style="display:flex; gap:0.5rem;">
-                        <a href="/templates" class="btn btn-secondary">Cancel</a>
-                        <button type="submit" class="btn btn-primary" id="btn-create">{{if .Template}}Save Changes{{else}}Create Template{{end}}</button>
+                        <a href="/templates" class="btn btn-secondary" data-i18n="cancel">Cancel</a>
+                        <button type="submit" class="btn btn-primary" id="btn-create">{{if .Template}}<span data-i18n="tpl.save_changes">Save Changes</span>{{else}}<span data-i18n="tpl.create_template">Create Template</span>{{end}}</button>
                     </div>
                 </div>
             </div>

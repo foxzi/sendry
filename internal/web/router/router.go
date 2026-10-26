@@ -40,9 +40,9 @@ type APISendRequest struct {
 	Data         map[string]any    `json:"data,omitempty"`
 	PreferServer string            `json:"prefer_server,omitempty"`
 
-	// TrackOpens and TrackClicks override the API key defaults when set
-	TrackOpens  *bool `json:"track_opens,omitempty"`
-	TrackClicks *bool `json:"track_clicks,omitempty"`
+	// TrackOpens and TrackClicks turn on the open pixel and click tracking (off by default)
+	TrackOpens  bool `json:"track_opens,omitempty"`
+	TrackClicks bool `json:"track_clicks,omitempty"`
 }
 
 // APISendResponse represents the API response
@@ -114,21 +114,6 @@ func NewEmailRouter(cfg RouterConfig) *EmailRouter {
 	}
 }
 
-// effectiveTracking resolves open/click tracking for a request: the request
-// field if set, else the API key default, else off.
-func effectiveTracking(req *APISendRequest, apiKey *models.APIKey) (opens, clicks bool) {
-	if apiKey != nil {
-		opens, clicks = apiKey.TrackOpens, apiKey.TrackClicks
-	}
-	if req.TrackOpens != nil {
-		opens = *req.TrackOpens
-	}
-	if req.TrackClicks != nil {
-		clicks = *req.TrackClicks
-	}
-	return opens, clicks
-}
-
 // trackHTML applies open/click tracking to the HTML of an API message.
 // Raw HTML is numbered by tracking.Apply itself. API mail gets no unsubscribe link.
 func trackHTML(html, baseURL string, signer *tracking.Signer, sendID string, opens, clicks bool) string {
@@ -165,13 +150,13 @@ func (r *EmailRouter) applyTracking(sendReq *sendry.SendRequest, sendID string, 
 }
 
 // Send sends an email through the appropriate MTA server.
-// apiKey may be nil; it supplies the default tracking flags.
+// apiKey may be nil.
 func (r *EmailRouter) Send(ctx context.Context, req *APISendRequest, apiKey *models.APIKey, clientIP string) (*APISendResponse, error) {
 	apiKeyID := ""
 	if apiKey != nil {
 		apiKeyID = apiKey.ID
 	}
-	trackOpens, trackClicks := effectiveTracking(req, apiKey)
+	trackOpens, trackClicks := req.TrackOpens, req.TrackClicks
 
 	// Validate request
 	if req.From == "" {

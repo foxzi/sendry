@@ -1,30 +1,31 @@
 {{define "content"}}
 <div class="page-header">
-    <h1>Campaigns</h1>
-    <a href="/campaigns/new" class="btn btn-primary">New Campaign</a>
+    <h1 data-i18n="campaigns">Campaigns</h1>
+    <a href="/campaigns/new" class="btn btn-primary" data-i18n="cmp.new_campaign">New campaign</a>
 </div>
 
-<div class="card">
+<div class="card scroll-target" id="results" data-partial>
     <div class="card-header">
         <form class="filter-form" method="get" action="/campaigns">
-            <input type="text" name="search" placeholder="Search campaigns..." value="{{.Search}}" class="input">
-            <button type="submit" class="btn">Search</button>
+            <input type="text" name="search" placeholder="Search campaigns..." data-i18n-placeholder="cmp.search_campaigns" value="{{.Search}}" class="input">
+            <button type="submit" class="btn" data-i18n="search">Search</button>
             {{if .Search}}
-            <a href="/campaigns" class="btn btn-secondary">Clear</a>
+            <a href="/campaigns" class="btn btn-secondary" data-i18n="common.clear">Clear</a>
             {{end}}
         </form>
     </div>
     <div class="card-body">
         {{if .Campaigns}}
+        <div class="table-scroll">
         <table class="table">
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>From</th>
-                    <th>Variants</th>
-                    <th>Jobs</th>
-                    <th>Updated</th>
-                    <th>Actions</th>
+                    <th data-i18n="name">Name</th>
+                    <th data-i18n="common.from">From</th>
+                    <th data-i18n="cmp.variants">Variants</th>
+                    <th data-i18n="cmp.runs">Runs</th>
+                    <th data-i18n="common.updated">Updated</th>
+                    <th data-i18n="actions">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -36,36 +37,48 @@
                         <div class="text-muted">{{.Description}}</div>
                         {{end}}
                     </td>
-                    <td>
+                    <td class="cell-break">
                         {{if .FromName}}{{.FromName}} &lt;{{.FromEmail}}&gt;{{else}}{{.FromEmail}}{{end}}
                     </td>
                     <td>{{.VariantCount}}</td>
                     <td>{{.JobCount}}</td>
                     <td>{{.UpdatedAt.Format "2006-01-02 15:04"}}</td>
                     <td class="actions">
-                        <a href="/campaigns/{{.ID}}/variants" class="btn btn-sm">Variants</a>
-                        <a href="/campaigns/{{.ID}}/edit" class="btn btn-sm">Edit</a>
+                        <div class="icon-actions">
+                        <a href="/campaigns/{{.ID}}/launch" class="btn-icon-sm btn-icon-success" title="Send" data-i18n-title="cmp.cf_send_btn" aria-label="Send" data-i18n-aria="cmp.cf_send_btn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg>
+                        </a>
+                        <a href="/campaigns/{{.ID}}" class="btn-icon-sm" title="Edit" data-i18n-title="edit" aria-label="Edit" data-i18n-aria="edit">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                        </a>
+                        </div>
                     </td>
                 </tr>
                 {{end}}
             </tbody>
         </table>
+        </div>
 
         {{if gt .TotalPages 1}}
         <div class="pagination">
             {{if gt .Page 1}}
-            <a href="/campaigns?page={{sub .Page 1}}{{if .Search}}&search={{.Search}}{{end}}" class="btn btn-sm">&laquo; Prev</a>
+            <a data-i18n="cmp.prev" href="/campaigns?page={{sub .Page 1}}{{if .Search}}&search={{.Search}}{{end}}" class="btn btn-sm">&laquo; Prev</a>
             {{end}}
-            <span class="pagination-info">Page {{.Page}} of {{.TotalPages}} ({{.Total}} total)</span>
+            <span class="pagination-info"><span data-i18n="common.page">Page</span> {{.Page}} <span data-i18n="common.of">of</span> {{.TotalPages}} ({{.Total}} <span data-i18n="cmp.total_lc">total</span>)</span>
             {{if lt .Page .TotalPages}}
-            <a href="/campaigns?page={{add .Page 1}}{{if .Search}}&search={{.Search}}{{end}}" class="btn btn-sm">Next &raquo;</a>
+            <a data-i18n="cmp.next" href="/campaigns?page={{add .Page 1}}{{if .Search}}&search={{.Search}}{{end}}" class="btn btn-sm">Next &raquo;</a>
             {{end}}
         </div>
         {{end}}
+        {{else if .Search}}
+        <div class="empty-state">
+            <p data-i18n="common.nothing_found">Nothing found</p>
+            <p class="text-muted" data-i18n="common.nothing_found_hint">Try another query or clear the filter.</p>
+        </div>
         {{else}}
         <div class="empty-state">
-            <p>No campaigns found</p>
-            <a href="/campaigns/new" class="btn btn-primary">Create your first campaign</a>
+            <p data-i18n="cmp.no_campaigns">No campaigns yet</p>
+            <a href="/campaigns/new" class="btn btn-primary" data-i18n="cmp.new_campaign">New campaign</a>
         </div>
         {{end}}
     </div>

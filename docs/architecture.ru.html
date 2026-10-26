@@ -1,0 +1,533 @@
+<title>Sendry: карта серверов</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: sticky control bar (scenario, buttons, current step) + map that fits the viewport + reference cards below. */
+:root {
+  --bg: #f2f4f7;
+  --fg: #17212b;
+  --muted: #5b6977;
+  --line: #c6cfd9;
+  --surface: #ffffff;
+  --surface-2: #e9edf2;
+  --panel: #0f7b6c;
+  --mta: #2457c5;
+  --ext: #8a6d3b;
+  --ci: #5b5f66;
+  --mail: #e08a1c;
+  --api: #2457c5;
+  --disk: #7a3fb8;
+  --pkg: #2e8b57;
+  --font-display: "Bricolage Grotesque", "IBM Plex Sans", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f151c; --fg: #e4e9ef; --muted: #98a5b3; --line: #2b3844; --surface: #171f28; --surface-2: #1f2932;
+    --panel: #2fb8a3; --mta: #6b93f0; --ext: #c9a66b; --ci: #a0a6ad;
+    --mail: #f0a53c; --api: #6b93f0; --disk: #b07ae6; --pkg: #4fc47f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f151c; --fg: #e4e9ef; --muted: #98a5b3; --line: #2b3844; --surface: #171f28; --surface-2: #1f2932;
+  --panel: #2fb8a3; --mta: #6b93f0; --ext: #c9a66b; --ci: #a0a6ad;
+  --mail: #f0a53c; --api: #6b93f0; --disk: #b07ae6; --pkg: #4fc47f;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.45;
+  padding-block: 0 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.wrap { max-width: 1200px; margin: 0 auto; display: grid; gap: 16px; }
+
+h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(22px, 2.6vw, 30px);
+  line-height: 1.1;
+  margin: 18px 0 0;
+  text-wrap: balance;
+}
+
+/* Sticky control bar */
+.bar {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 5;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 14px;
+  display: grid;
+  gap: 8px;
+}
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tab {
+  font: 500 13px var(--font-body);
+  color: var(--fg);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+.tab[aria-selected="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.btns { display: flex; gap: 6px; margin-left: auto; }
+.btn {
+  font: 600 13px var(--font-body);
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.btn.primary { background: var(--mta); color: #fff; border-color: var(--mta); }
+.btn:disabled { opacity: .45; cursor: default; }
+.tab:focus-visible, .btn:focus-visible, .node:focus-visible { outline: 2px solid var(--mta); outline-offset: 2px; }
+
+.caption { display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: start; min-height: 44px; }
+.caption .num {
+  width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  font: 600 13px var(--font-body); background: var(--mail); color: #fff; font-variant-numeric: tabular-nums;
+}
+.caption .lbl { font-weight: 600; font-size: 15px; }
+.caption .txt { color: var(--muted); font-size: 14px; }
+@media (max-width: 700px) { .btns { margin-left: 0; width: 100%; } .btn { flex: 1; } }
+
+/* Map */
+.stage {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 6px;
+  display: grid;
+  place-items: center;
+  overflow-x: auto;
+}
+.stage svg { display: block; width: 100%; height: auto; max-height: 68vh; min-width: 720px; font-family: var(--font-body); }
+
+svg text { fill: var(--fg); font-size: 15px; }
+svg .t-title { font-family: var(--font-display); font-weight: 700; font-size: 17px; }
+svg .t-sub { fill: var(--muted); font-size: 12.5px; }
+svg .t-frame { font-family: var(--font-display); font-weight: 700; font-size: 14px; letter-spacing: .04em; text-transform: uppercase; }
+
+.frame rect { fill: var(--surface-2); stroke: var(--line); stroke-width: 1.2; rx: 14; }
+.frame.f-panel rect { stroke: var(--panel); }
+.frame.f-mta rect { stroke: var(--mta); }
+.frame.f-ext rect { stroke: var(--ext); stroke-dasharray: 5 4; }
+.frame.f-ci rect { stroke: var(--ci); stroke-dasharray: 5 4; }
+.t-frame.c-panel { fill: var(--panel); }
+.t-frame.c-mta { fill: var(--mta); }
+.t-frame.c-ext { fill: var(--ext); }
+.t-frame.c-ci { fill: var(--ci); }
+
+.node { cursor: pointer; }
+.node > rect { fill: var(--surface); stroke: var(--line); stroke-width: 1.4; rx: 9; transition: stroke .25s, stroke-width .25s; }
+.node:hover > rect { stroke: var(--fg); }
+.node.focus > rect { stroke: var(--mail); stroke-width: 3; }
+.node.selected > rect { stroke: var(--fg); stroke-width: 2.4; }
+.node .stripe { rx: 0; }
+.node.k-panel .stripe { fill: var(--panel); }
+.node.k-mta .stripe { fill: var(--mta); }
+.node.k-ext .stripe { fill: var(--ext); }
+.node.k-ci .stripe { fill: var(--ci); }
+.node.k-store .stripe { fill: var(--disk); }
+
+.edge { fill: none; stroke: var(--line); stroke-width: 1.8; marker-end: url(#arrow); transition: stroke .25s, stroke-width .25s; }
+.edge.active { stroke: var(--fg); stroke-width: 2.6; marker-end: url(#arrow-strong); }
+#arrow path { fill: var(--line); }
+#arrow-strong path { fill: var(--fg); }
+
+.packet { pointer-events: none; opacity: 0; }
+.packet.show { opacity: 1; }
+.packet .dot { stroke: var(--surface); stroke-width: 2.5; }
+.packet.k-mail .dot { fill: var(--mail); }
+.packet.k-api .dot { fill: var(--api); }
+.packet.k-disk .dot { fill: var(--disk); }
+.packet.k-pkg .dot { fill: var(--pkg); }
+.packet text { font-size: 12px; font-weight: 700; fill: #fff; text-anchor: middle; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+.legend .l-mail::before { background: var(--mail); }
+.legend .l-api::before { background: var(--api); }
+.legend .l-disk::before { background: var(--disk); }
+.legend .l-pkg::before { background: var(--pkg); }
+
+/* Reference cards */
+.reader { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 860px) { .reader { grid-template-columns: 1fr; } }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; min-width: 0; }
+.card h2 { font-family: var(--font-display); font-size: 18px; margin: 0 0 10px; font-weight: 700; }
+.eyebrow { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 0 0 4px; }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.steps li { display: grid; grid-template-columns: 24px 1fr; gap: 8px; padding: 6px 8px; border-radius: 8px; cursor: pointer; align-items: center; }
+.steps li:hover { background: var(--surface-2); }
+.steps li.current { background: var(--surface-2); font-weight: 600; }
+.steps .num { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; background: var(--surface-2); border: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.steps li.current .num { background: var(--mail); color: #fff; border-color: var(--mail); }
+.steps li.done .num { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.detail dl { margin: 0; display: grid; gap: 8px; }
+.detail dt { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.detail dd { margin: 1px 0 0; }
+.hint { color: var(--muted); font-size: 14px; margin: 0; }
+@media (prefers-reduced-motion: reduce) { .node > rect, .edge { transition: none; } }
+</style>
+
+<div class="wrap">
+  <h1>Как устроен Sendry</h1>
+
+  <div class="bar">
+    <div class="row">
+      <div class="row" role="tablist" aria-label="Сценарии" id="tabs"></div>
+      <div class="btns">
+        <button class="btn" id="btn-reset" type="button">Сначала</button>
+        <button class="btn" id="btn-prev" type="button">← Назад</button>
+        <button class="btn" id="btn-next" type="button">Шаг →</button>
+        <button class="btn primary" id="btn-play" type="button">▶ Запустить</button>
+      </div>
+    </div>
+    <div class="caption">
+      <span class="num" id="cap-num">1</span>
+      <div><div class="lbl" id="cap-lbl"></div><div class="txt" id="cap-txt"></div></div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <svg id="map" viewBox="0 0 1100 600" role="img" aria-label="Карта серверов Sendry: клиенты слева, сервер панели в центре, MTA-серверы правее, интернет справа, GitHub внизу.">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+        <marker id="arrow-strong" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+      </defs>
+
+      <!-- Frames -->
+      <g class="frame f-panel"><rect x="250" y="40" width="280" height="330"/><text class="t-frame c-panel" x="266" y="66">Сервер панели</text></g>
+      <g class="frame f-mta"><rect x="580" y="40" width="290" height="250"/><text class="t-frame c-mta" x="596" y="66">MTA mx1</text></g>
+      <g class="frame f-mta"><rect x="580" y="305" width="290" height="65"/><text class="t-frame c-mta" x="596" y="331">MTA mx2 … mxN</text></g>
+      <g class="frame f-ext"><rect x="920" y="40" width="160" height="250"/><text class="t-frame c-ext" x="936" y="66">Интернет</text></g>
+      <g class="frame f-ci"><rect x="250" y="430" width="620" height="130"/><text class="t-frame c-ci" x="266" y="456">GitHub</text></g>
+
+      <!-- Edges -->
+      <path id="p-app-web" class="edge" d="M210 115 C 240 115, 240 130, 270 130"/>
+      <path id="p-browser-web" class="edge" d="M210 255 C 240 255, 240 170, 270 170"/>
+      <path id="p-web-db" class="edge" d="M390 200 L 390 248"/>
+      <path id="p-web-mx1" class="edge" d="M510 120 C 550 120, 560 105, 600 105"/>
+      <path id="p-mx1-web" class="edge" d="M600 118 C 560 118, 550 165, 510 165"/>
+      <path id="p-web-mx2" class="edge" d="M510 145 C 570 145, 540 352, 600 352"/>
+      <path id="p-api-queue" class="edge" d="M657 130 L 657 148"/>
+      <path id="p-queue-sender" class="edge" d="M715 180 L 733 180"/>
+      <path id="p-sender-files" class="edge" d="M792 210 L 792 228"/>
+      <path id="p-api-files" class="edge" d="M850 105 C 880 105, 880 252, 852 252"/>
+      <path id="p-sender-dns" class="edge" d="M850 192 C 890 192, 890 240, 938 240"/>
+      <path id="p-sender-out" class="edge" d="M850 168 C 890 168, 890 120, 938 120"/>
+      <path id="p-tag-actions" class="edge" d="M420 520 L 448 520"/>
+      <path id="p-actions-release" class="edge" d="M650 520 L 678 520"/>
+      <path id="p-release-mx" class="edge" d="M765 490 L 765 372"/>
+      <path id="p-release-panel" class="edge" d="M680 500 C 560 500, 430 470, 395 372"/>
+
+      <!-- Clients -->
+      <g class="node k-ext" id="n-app" tabindex="0" role="button"><rect x="30" y="80" width="180" height="70"/><rect class="stripe" x="30" y="80" width="6" height="70"/><text class="t-title" x="48" y="108">Твоё приложение</text><text class="t-sub" x="48" y="130">шлёт письма через панель</text></g>
+      <g class="node k-ext" id="n-browser" tabindex="0" role="button"><rect x="30" y="220" width="180" height="70"/><rect class="stripe" x="30" y="220" width="6" height="70"/><text class="t-title" x="48" y="248">Оператор</text><text class="t-sub" x="48" y="270">работает в панели</text></g>
+
+      <!-- Panel -->
+      <g class="node k-panel" id="n-web" tabindex="0" role="button"><rect x="270" y="90" width="240" height="110"/><rect class="stripe" x="270" y="90" width="6" height="110"/><text class="t-title" x="288" y="118">sendry-web</text><text class="t-sub" x="288" y="142">веб-панель и API для приложений</text><text class="t-sub" x="288" y="160">выбирает, на какой MTA слать</text><text class="t-sub" x="288" y="178">фоновый воркер кампаний</text></g>
+      <g class="node k-store" id="n-db" tabindex="0" role="button"><rect x="270" y="248" width="240" height="100"/><rect class="stripe" x="270" y="248" width="6" height="100"/><text class="t-title" x="288" y="276">База панели</text><text class="t-sub" x="288" y="300">один файл SQLite: домены,</text><text class="t-sub" x="288" y="318">шаблоны, кампании, получатели,</text><text class="t-sub" x="288" y="336">история отправок, пользователи</text></g>
+
+      <!-- MTA mx1 -->
+      <g class="node k-mta" id="n-mx1-api" tabindex="0" role="button"><rect x="600" y="80" width="250" height="50"/><rect class="stripe" x="600" y="80" width="6" height="50"/><text class="t-title" x="618" y="105">Приём писем</text><text class="t-sub" x="618" y="122">от панели по HTTP или напрямую по SMTP</text></g>
+      <g class="node k-store" id="n-mx1-queue" tabindex="0" role="button"><rect x="600" y="148" width="115" height="62"/><rect class="stripe" x="600" y="148" width="6" height="62"/><text class="t-title" x="618" y="174">Очередь</text><text class="t-sub" x="618" y="194">файл на диске</text></g>
+      <g class="node k-mta" id="n-mx1-sender" tabindex="0" role="button"><rect x="735" y="148" width="115" height="62"/><rect class="stripe" x="735" y="148" width="6" height="62"/><text class="t-title" x="753" y="174">Отправщик</text><text class="t-sub" x="753" y="194">подпись, повторы</text></g>
+      <g class="node k-store" id="n-mx1-files" tabindex="0" role="button"><rect x="600" y="228" width="250" height="48"/><rect class="stripe" x="600" y="228" width="6" height="48"/><text class="t-title" x="618" y="252">Домены и DKIM-ключи</text><text class="t-sub" x="618" y="268">файлы, которые кладёт панель</text></g>
+
+      <!-- MTA mx2 -->
+      <g class="node k-mta" id="n-mx2" tabindex="0" role="button"><rect x="600" y="338" width="250" height="26"/><rect class="stripe" x="600" y="338" width="6" height="26"/><text class="t-sub" x="618" y="356">то же самое: своя очередь, свои файлы</text></g>
+
+      <!-- Internet -->
+      <g class="node k-ext" id="n-recipients" tabindex="0" role="button"><rect x="938" y="80" width="124" height="76"/><rect class="stripe" x="938" y="80" width="6" height="76"/><text class="t-title" x="956" y="108">Получатели</text><text class="t-sub" x="956" y="128">Gmail, Яндекс,</text><text class="t-sub" x="956" y="144">Mail.ru…</text></g>
+      <g class="node k-ext" id="n-dns" tabindex="0" role="button"><rect x="938" y="200" width="124" height="76"/><rect class="stripe" x="938" y="200" width="6" height="76"/><text class="t-title" x="956" y="228">DNS</text><text class="t-sub" x="956" y="248">где сервер получателя;</text><text class="t-sub" x="956" y="264">твои SPF, DKIM, DMARC</text></g>
+
+      <!-- GitHub -->
+      <g class="node k-ci" id="n-tag" tabindex="0" role="button"><rect x="270" y="490" width="150" height="56"/><rect class="stripe" x="270" y="490" width="6" height="56"/><text class="t-title" x="288" y="514">Тег версии</text><text class="t-sub" x="288" y="534">git tag v0.4.21</text></g>
+      <g class="node k-ci" id="n-actions" tabindex="0" role="button"><rect x="450" y="490" width="200" height="56"/><rect class="stripe" x="450" y="490" width="6" height="56"/><text class="t-title" x="468" y="514">Сборка</text><text class="t-sub" x="468" y="534">тесты, бинарники, пакеты</text></g>
+      <g class="node k-ci" id="n-release" tabindex="0" role="button"><rect x="680" y="490" width="170" height="56"/><rect class="stripe" x="680" y="490" width="6" height="56"/><text class="t-title" x="698" y="514">Релиз</text><text class="t-sub" x="698" y="534">deb-пакет для серверов</text></g>
+
+      <g class="packet" id="packet"><circle class="dot" r="11"/><text y="4.5" id="packet-label">✉</text></g>
+    </svg>
+  </div>
+
+  <div class="legend">
+    <span class="l-mail">письмо</span>
+    <span class="l-api">запрос по сети</span>
+    <span class="l-disk">запись на диск</span>
+    <span class="l-pkg">пакет с новой версией</span>
+  </div>
+
+  <div class="reader">
+    <section class="card">
+      <p class="eyebrow">Шаги сценария</p>
+      <h2 id="scenario-title"></h2>
+      <p class="hint" id="scenario-intro"></p>
+      <ol class="steps" id="steps"></ol>
+    </section>
+    <section class="card detail">
+      <p class="eyebrow">Блок схемы</p>
+      <h2 id="detail-title">Нажми на любой блок</h2>
+      <div id="detail-body"><p class="hint">Появится, что это за часть системы, что она хранит и с кем общается.</p></div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var SCENARIOS = {
+    api: {
+      title: 'Письмо из приложения',
+      intro: 'Приложение отдаёт письмо панели, панель передаёт его на MTA, MTA доставляет получателю.',
+      steps: [
+        { path: 'p-app-web', kind: 'api', label: 'Приложение отправляет письмо в панель', text: 'Обычный запрос по сети с ключом доступа, который выдан в панели.', focus: ['n-app', 'n-web'] },
+        { path: 'p-web-db', kind: 'disk', label: 'Панель записывает отправку в базу', text: 'Проверяет, что домен отправителя известен и раскатан хотя бы на один MTA.', focus: ['n-web', 'n-db'] },
+        { path: 'p-web-mx1', kind: 'api', label: 'Панель передаёт письмо на MTA', text: 'Выбирает сервер по очереди или по весам. Если MTA не отвечает, пробует следующий.', focus: ['n-web', 'n-mx1-api'] },
+        { path: 'p-api-queue', kind: 'disk', label: 'MTA кладёт письмо в очередь', text: 'Очередь лежит в файле на диске, поэтому письмо не потеряется при перезапуске.', focus: ['n-mx1-api', 'n-mx1-queue'] },
+        { path: 'p-queue-sender', kind: 'mail', label: 'Отправщик забирает письмо', text: 'Проверяет режим домена и лимиты, подписывает письмо DKIM-ключом с диска.', focus: ['n-mx1-queue', 'n-mx1-sender', 'n-mx1-files'] },
+        { path: 'p-sender-dns', kind: 'api', label: 'Узнаёт, где сервер получателя', text: 'Запрос в DNS за MX-записью домена получателя.', focus: ['n-mx1-sender', 'n-dns'] },
+        { path: 'p-sender-out', kind: 'mail', label: 'Доставляет получателю', text: 'При временной ошибке повторяет 5 раз с паузами. Если не вышло, письмо уходит в отдельную очередь ошибок.', focus: ['n-mx1-sender', 'n-recipients'] },
+        { path: 'p-mx1-web', kind: 'api', label: 'Статус возвращается в панель', text: 'Воркер панели раз в 5 секунд спрашивает MTA, что с письмом, и обновляет историю отправок.', focus: ['n-mx1-api', 'n-web'] }
+      ]
+    },
+    campaign: {
+      title: 'Рассылка из панели',
+      intro: 'Оператор запускает кампанию. Панель сама готовит письма и раскидывает их по MTA.',
+      steps: [
+        { path: 'p-browser-web', kind: 'api', label: 'Оператор запускает кампанию', text: 'Выбирает шаблон и список получателей, жмёт «Отправить».', focus: ['n-browser', 'n-web'] },
+        { path: 'p-web-db', kind: 'disk', label: 'Панель создаёт задание', text: 'На каждого получателя строка в базе. Это очередь панели, отдельная от очереди MTA.', focus: ['n-web', 'n-db'] },
+        { path: 'p-web-db', kind: 'mail', reverse: true, label: 'Воркер готовит письма', text: 'Берёт получателей пачками, подставляет в шаблон имя и переменные, картинки заменяет на ссылки.', focus: ['n-db', 'n-web'] },
+        { path: 'p-web-mx1', kind: 'mail', label: 'Первое письмо на mx1', text: 'Каждое письмо уходит отдельным запросом.', focus: ['n-web', 'n-mx1-api'] },
+        { path: 'p-web-mx2', kind: 'mail', label: 'Следующее на mx2', text: 'Серверы чередуются, нагрузка и репутация IP делятся между ними. Дальше каждое письмо идёт как в первом сценарии.', focus: ['n-web', 'n-mx2'] },
+        { path: 'p-mx1-web', kind: 'api', label: 'Прогресс собирается обратно', text: 'Воркер опрашивает статусы и показывает в панели: отправлено, доставлено, ошибка.', focus: ['n-mx1-api', 'n-web'] }
+      ]
+    },
+    deploy: {
+      title: 'Раскатка домена на MTA',
+      intro: 'Домены, DKIM-ключи и шаблоны живут в базе панели. На MTA они попадают только по кнопке Deploy.',
+      steps: [
+        { path: 'p-browser-web', kind: 'api', label: 'Оператор создаёт домен и ключ', text: 'Ключ DKIM панель генерирует сама.', focus: ['n-browser', 'n-web'] },
+        { path: 'p-web-db', kind: 'disk', label: 'Сохранено в базе панели', text: 'Пока это только запись в панели, MTA о домене не знает.', focus: ['n-web', 'n-db'] },
+        { path: 'p-web-mx1', kind: 'api', label: 'Deploy: панель шлёт ключ и настройки домена', text: 'Режим домена, лимиты, приватный ключ. Отдельно на каждый MTA.', focus: ['n-web', 'n-mx1-api'] },
+        { path: 'p-api-files', kind: 'disk', label: 'MTA пишет это в файлы', text: 'Ключ в папку dkim, настройки в domains.yaml. Основной конфиг MTA не трогается, рестарт не нужен.', focus: ['n-mx1-api', 'n-mx1-files'] },
+        { path: 'p-web-mx1', kind: 'api', label: 'Deploy шаблона', text: 'Шаблон тоже уходит на MTA и хранится там рядом с очередью.', focus: ['n-web', 'n-mx1-queue'] },
+        { path: 'p-sender-dns', kind: 'api', label: 'Проверка DNS', text: 'Панель просит MTA проверить, что SPF, DKIM и DMARC опубликованы. Публикуешь записи ты у регистратора.', focus: ['n-mx1-sender', 'n-dns'] }
+      ]
+    },
+    release: {
+      title: 'Новая версия',
+      intro: 'Сборка уже автоматическая. Установка на серверы пока руками, план CI/CD делает её автоматической.',
+      steps: [
+        { path: 'p-tag-actions', kind: 'pkg', label: 'Ставим тег версии', text: 'Push тега запускает сборку в GitHub.', focus: ['n-tag', 'n-actions'] },
+        { path: 'p-actions-release', kind: 'pkg', label: 'GitHub собирает пакет', text: 'Тесты, сборка обоих бинарников, deb-пакет с панелью и MTA внутри.', focus: ['n-actions', 'n-release'] },
+        { path: 'p-release-mx', kind: 'pkg', label: 'Обновляются MTA', text: 'Сейчас: вручную по SSH. План: GitHub сам ставит пакет на каждый MTA по очереди и проверяет, что сервис поднялся.', focus: ['n-release', 'n-mx1-api', 'n-mx2'] },
+        { path: 'p-release-panel', kind: 'pkg', label: 'Обновляется панель', text: 'Тот же пакет. Перед рестартом делается копия базы панели.', focus: ['n-release', 'n-web'] }
+      ]
+    }
+  };
+
+  var DETAILS = {
+    'n-app': { title: 'Твоё приложение', rows: [['Что это', 'Любой сервис, которому надо отправить письмо.'], ['Куда ходит', 'В панель по сети, с ключом доступа из панели. К MTA напрямую не обращается.']] },
+    'n-browser': { title: 'Оператор', rows: [['Что делает', 'Заводит домены и ключи, делает шаблоны, запускает рассылки, смотрит очереди всех MTA.'], ['Где', 'Веб-панель на сервере панели, вход по логину или через корпоративный SSO.']] },
+    'n-web': { title: 'sendry-web', rows: [['Что это', 'Один процесс на сервере панели: веб-интерфейс, API для приложений и фоновый воркер рассылок.'], ['Что знает', 'Список MTA с адресами и ключами из файла web.yaml.'], ['Что хранит', 'Всё в базе панели. На MTA ничего не пишет напрямую, только через их API.'], ['Чего не умеет', 'Сам письма не доставляет. Без живого MTA отправка не работает.']] },
+    'n-db': { title: 'База панели', rows: [['Что это', 'Один файл SQLite на сервере панели.'], ['Что внутри', 'Пользователи, ключи доступа, домены, DKIM-ключи, шаблоны, картинки, списки получателей, кампании, история отправок.'], ['Важно', 'Единственная копия всего этого. Перед обновлением нужен бэкап.']] },
+    'n-mx1-api': { title: 'Приём писем на MTA', rows: [['Откуда письма', 'От панели по сети с ключом MTA. Или напрямую по SMTP от старых программ с логином и паролем.'], ['Что ещё принимает', 'Команды от панели: добавить домен, загрузить ключ, положить шаблон, показать очередь.']] },
+    'n-mx1-queue': { title: 'Очередь MTA', rows: [['Что это', 'Один файл на диске MTA.'], ['Что внутри', 'Письма со статусами, очередь ошибок, шаблоны, тестовые письма sandbox.'], ['Чистка', 'Доставленные удаляются через 7 дней, ошибки через 30.']] },
+    'n-mx1-sender': { title: 'Отправщик', rows: [['Что делает', 'Каждые 10 секунд берёт письма из очереди, 4 потока.'], ['Проверки', 'Режим домена (боевой, тестовый, перенаправление, копия), лимиты на час и день.'], ['Доставка', 'Подписывает DKIM, находит сервер получателя через DNS, отдаёт по SMTP. 5 попыток с паузами.']] },
+    'n-mx1-files': { title: 'Домены и DKIM-ключи на MTA', rows: [['Откуда', 'Кладёт панель при нажатии Deploy.'], ['Что это', 'Файл domains.yaml с настройками доменов и папка dkim с приватными ключами.'], ['Нюанс', 'Основной конфиг MTA панель не трогает. Домены из domains.yaml имеют приоритет над ним.']] },
+    'n-mx2': { title: 'Остальные MTA', rows: [['Что общего', 'Тот же пакет, та же логика.'], ['Что своё', 'Своя очередь, свой domains.yaml, своя копия ключей. Панель раскатывает домен на каждый отдельно.'], ['Зачем несколько', 'Разные IP для репутации, запас на случай падения, больше писем в час.']] },
+    'n-recipients': { title: 'Получатели', rows: [['Как находим', 'По MX-записи домена получателя в DNS.'], ['Что они проверяют', 'SPF: IP нашего MTA разрешён для домена. DKIM: подпись сходится с ключом в DNS. Репутацию IP.']] },
+    'n-dns': { title: 'DNS', rows: [['Читаем', 'Где сервер получателя.'], ['Публикуем', 'Для каждого своего домена: SPF с IP всех MTA, публичный DKIM-ключ, DMARC. Панель умеет проверять, что записи на месте.']] },
+    'n-tag': { title: 'Тег версии', rows: [['Что это', 'Метка в git вида v0.4.21. Её push запускает сборку.']] },
+    'n-actions': { title: 'Сборка в GitHub', rows: [['Что делает', 'Тесты, сборка sendry и sendry-web, deb и rpm пакеты, Docker-образ.'], ['Результат', 'Один deb-пакет, внутри и панель, и MTA. На каждом сервере включается только нужный сервис.']] },
+    'n-release': { title: 'Релиз', rows: [['Что это', 'Страница релиза в GitHub с пакетами плюс APT-репозиторий.'], ['Сейчас', 'Серверы обновляются вручную: mx1 на 0.4.15, панель на 0.4.19, последний релиз 0.4.20.'], ['План', 'После релиза GitHub по SSH обновляет сначала MTA по одному, потом панель, с проверкой и бэкапом.']] }
+  };
+
+  var svg = document.getElementById('map');
+  var packet = document.getElementById('packet');
+  var packetLabel = document.getElementById('packet-label');
+  var tabs = document.getElementById('tabs');
+  var stepsEl = document.getElementById('steps');
+  var titleEl = document.getElementById('scenario-title');
+  var introEl = document.getElementById('scenario-intro');
+  var capNum = document.getElementById('cap-num');
+  var capLbl = document.getElementById('cap-lbl');
+  var capTxt = document.getElementById('cap-txt');
+  var btnPlay = document.getElementById('btn-play');
+  var btnNext = document.getElementById('btn-next');
+  var btnPrev = document.getElementById('btn-prev');
+  var btnReset = document.getElementById('btn-reset');
+  var detailTitle = document.getElementById('detail-title');
+  var detailBody = document.getElementById('detail-body');
+
+  var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var current = 'api';
+  var stepIndex = -1;
+  var playing = false;
+  var animFrame = null;
+  var timer = null;
+  var ICONS = { mail: '✉', api: '→', disk: '▮', pkg: '↓' };
+
+  function clearFocus() {
+    Array.prototype.forEach.call(svg.querySelectorAll('.node.focus'), function (n) { n.classList.remove('focus'); });
+    Array.prototype.forEach.call(svg.querySelectorAll('.edge.active'), function (e) { e.classList.remove('active'); });
+  }
+
+  function renderTabs() {
+    tabs.innerHTML = '';
+    Object.keys(SCENARIOS).forEach(function (key) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'tab';
+      b.setAttribute('role', 'tab');
+      b.setAttribute('aria-selected', key === current ? 'true' : 'false');
+      b.textContent = SCENARIOS[key].title;
+      b.addEventListener('click', function () { selectScenario(key); });
+      tabs.appendChild(b);
+    });
+  }
+
+  function renderSteps() {
+    var sc = SCENARIOS[current];
+    titleEl.textContent = sc.title;
+    introEl.textContent = sc.intro;
+    stepsEl.innerHTML = '';
+    sc.steps.forEach(function (s, i) {
+      var li = document.createElement('li');
+      li.innerHTML = '<span class="num">' + (i + 1) + '</span><span>' + s.label + '</span>';
+      li.addEventListener('click', function () { stopPlaying(); goTo(i); });
+      stepsEl.appendChild(li);
+    });
+    updateSteps();
+  }
+
+  function updateSteps() {
+    var sc = SCENARIOS[current];
+    Array.prototype.forEach.call(stepsEl.children, function (li, i) {
+      li.classList.toggle('current', i === stepIndex);
+      li.classList.toggle('done', i < stepIndex);
+    });
+    btnNext.disabled = stepIndex >= sc.steps.length - 1;
+    btnPrev.disabled = stepIndex <= 0;
+    if (stepIndex < 0) {
+      capNum.textContent = '1';
+      capLbl.textContent = sc.intro;
+      capTxt.textContent = 'Нажми «Запустить» или «Шаг».';
+    } else {
+      var s = sc.steps[stepIndex];
+      capNum.textContent = String(stepIndex + 1);
+      capLbl.textContent = s.label;
+      capTxt.textContent = s.text;
+    }
+  }
+
+  function selectScenario(key) {
+    stopPlaying();
+    current = key;
+    stepIndex = -1;
+    clearFocus();
+    packet.classList.remove('show');
+    renderTabs();
+    renderSteps();
+  }
+
+  function goTo(i, done) {
+    var sc = SCENARIOS[current];
+    if (i < 0 || i >= sc.steps.length) return;
+    stepIndex = i;
+    updateSteps();
+    clearFocus();
+    var step = sc.steps[i];
+    var path = document.getElementById(step.path);
+    if (path) path.classList.add('active');
+    (step.focus || []).forEach(function (id) {
+      var n = document.getElementById(id);
+      if (n) n.classList.add('focus');
+    });
+    animatePacket(path, step.kind, !!step.reverse, done);
+  }
+
+  function animatePacket(path, kind, reverse, done) {
+    if (animFrame) cancelAnimationFrame(animFrame);
+    packet.setAttribute('class', 'packet show k-' + kind);
+    packetLabel.textContent = ICONS[kind] || '•';
+    if (!path) { if (done) done(); return; }
+    var len = path.getTotalLength();
+    var dur = reduced ? 0 : Math.max(900, Math.min(1800, len * 5));
+    var start = null;
+    function place(t) {
+      var p = path.getPointAtLength(reverse ? len * (1 - t) : len * t);
+      packet.setAttribute('transform', 'translate(' + p.x.toFixed(1) + ' ' + p.y.toFixed(1) + ')');
+    }
+    if (dur === 0) { place(1); if (done) done(); return; }
+    function frame(ts) {
+      if (start === null) start = ts;
+      var t = Math.min(1, (ts - start) / dur);
+      var e = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+      place(e);
+      if (t < 1) { animFrame = requestAnimationFrame(frame); }
+      else { animFrame = null; if (done) done(); }
+    }
+    animFrame = requestAnimationFrame(frame);
+  }
+
+  function playNext() {
+    if (!playing) return;
+    if (stepIndex >= SCENARIOS[current].steps.length - 1) { stopPlaying(); return; }
+    goTo(stepIndex + 1, function () { timer = setTimeout(playNext, 1600); });
+  }
+  function startPlaying() {
+    if (stepIndex >= SCENARIOS[current].steps.length - 1) stepIndex = -1;
+    playing = true;
+    btnPlay.textContent = '❚❚ Пауза';
+    playNext();
+  }
+  function stopPlaying() {
+    playing = false;
+    if (timer) { clearTimeout(timer); timer = null; }
+    btnPlay.textContent = '▶ Запустить';
+  }
+
+  btnPlay.addEventListener('click', function () { if (playing) stopPlaying(); else startPlaying(); });
+  btnNext.addEventListener('click', function () { stopPlaying(); goTo(stepIndex + 1); });
+  btnPrev.addEventListener('click', function () { stopPlaying(); goTo(stepIndex - 1); });
+  btnReset.addEventListener('click', function () { stopPlaying(); stepIndex = -1; clearFocus(); packet.classList.remove('show'); updateSteps(); });
+
+  function showDetail(id) {
+    var d = DETAILS[id];
+    if (!d) return;
+    Array.prototype.forEach.call(svg.querySelectorAll('.node.selected'), function (n) { n.classList.remove('selected'); });
+    var node = document.getElementById(id);
+    if (node) node.classList.add('selected');
+    detailTitle.textContent = d.title;
+    var html = '<dl>';
+    d.rows.forEach(function (r) { html += '<div><dt>' + r[0] + '</dt><dd>' + r[1] + '</dd></div>'; });
+    detailBody.innerHTML = html + '</dl>';
+  }
+  Array.prototype.forEach.call(svg.querySelectorAll('.node'), function (n) {
+    n.addEventListener('click', function () { showDetail(n.id); });
+    n.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showDetail(n.id); } });
+  });
+
+  renderTabs();
+  renderSteps();
+})();
+</script>

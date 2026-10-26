@@ -30,8 +30,6 @@ type APIKeyCreateOptions struct {
 	ExpiresAt       *time.Time
 	RateLimitMinute int
 	RateLimitHour   int
-	TrackOpens      bool
-	TrackClicks     bool
 }
 
 // Create creates a new API key and returns the full key (only shown once)
@@ -79,17 +77,14 @@ func (r *APIKeyRepository) Create(opts APIKeyCreateOptions) (*models.APIKeyCreat
 		CreatedAt:       time.Now(),
 		ExpiresAt:       opts.ExpiresAt,
 		Active:          true,
-		TrackOpens:      opts.TrackOpens,
-		TrackClicks:     opts.TrackClicks,
 	}
 
 	_, err := r.db.Exec(`
-		INSERT INTO api_keys (id, name, key_hash, key_prefix, permissions, allowed_domains, rate_limit_minute, rate_limit_hour, created_by, created_at, expires_at, active, track_opens, track_clicks)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		INSERT INTO api_keys (id, name, key_hash, key_prefix, permissions, allowed_domains, rate_limit_minute, rate_limit_hour, created_by, created_at, expires_at, active)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		apiKey.ID, apiKey.Name, apiKey.KeyHash, apiKey.KeyPrefix, apiKey.Permissions, domainsJSON,
 		apiKey.RateLimitMinute, apiKey.RateLimitHour,
 		apiKey.CreatedBy, apiKey.CreatedAt, apiKey.ExpiresAt, 1,
-		apiKey.TrackOpens, apiKey.TrackClicks,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create API key: %w", err)
@@ -111,13 +106,11 @@ func (r *APIKeyRepository) GetByID(id string) (*models.APIKey, error) {
 	err := r.db.QueryRow(`
 		SELECT id, name, key_hash, key_prefix, permissions, COALESCE(allowed_domains, '[]'),
 		       COALESCE(rate_limit_minute, 0), COALESCE(rate_limit_hour, 0),
-		       created_by, created_at, last_used_at, expires_at, active,
-		       track_opens, track_clicks
+		       created_by, created_at, last_used_at, expires_at, active
 		FROM api_keys WHERE id = ?`, id,
 	).Scan(&k.ID, &k.Name, &k.KeyHash, &k.KeyPrefix, &k.Permissions, &domainsJSON,
 		&rateLimitMinute, &rateLimitHour,
-		&k.CreatedBy, &k.CreatedAt, &lastUsedAt, &expiresAt, &k.Active,
-		&k.TrackOpens, &k.TrackClicks)
+		&k.CreatedBy, &k.CreatedAt, &lastUsedAt, &expiresAt, &k.Active)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -153,13 +146,11 @@ func (r *APIKeyRepository) GetByHash(keyHash string) (*models.APIKey, error) {
 	err := r.db.QueryRow(`
 		SELECT id, name, key_hash, key_prefix, permissions, COALESCE(allowed_domains, '[]'),
 		       COALESCE(rate_limit_minute, 0), COALESCE(rate_limit_hour, 0),
-		       created_by, created_at, last_used_at, expires_at, active,
-		       track_opens, track_clicks
+		       created_by, created_at, last_used_at, expires_at, active
 		FROM api_keys WHERE key_hash = ?`, keyHash,
 	).Scan(&k.ID, &k.Name, &k.KeyHash, &k.KeyPrefix, &k.Permissions, &domainsJSON,
 		&rateLimitMinute, &rateLimitHour,
-		&k.CreatedBy, &k.CreatedAt, &lastUsedAt, &expiresAt, &k.Active,
-		&k.TrackOpens, &k.TrackClicks)
+		&k.CreatedBy, &k.CreatedAt, &lastUsedAt, &expiresAt, &k.Active)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -191,8 +182,8 @@ func (r *APIKeyRepository) List(filter models.APIKeyFilter) ([]models.APIKeyWith
 	args := []any{}
 
 	if filter.Search != "" {
-		countQuery += " AND name LIKE ?"
-		args = append(args, "%"+filter.Search+"%")
+		countQuery += " AND ulower(name) LIKE ? ESCAPE '\\'"
+		args = append(args, searchPattern(filter.Search))
 	}
 
 	var total int
@@ -204,7 +195,6 @@ func (r *APIKeyRepository) List(filter models.APIKeyFilter) ([]models.APIKeyWith
 		SELECT k.id, k.name, k.key_hash, k.key_prefix, k.permissions, COALESCE(k.allowed_domains, '[]'),
 		       COALESCE(k.rate_limit_minute, 0), COALESCE(k.rate_limit_hour, 0),
 		       k.created_by, k.created_at, k.last_used_at, k.expires_at, k.active,
-		       k.track_opens, k.track_clicks,
 		       COALESCE(s.send_count, 0) as send_count
 		FROM api_keys k
 		LEFT JOIN (
@@ -215,7 +205,7 @@ func (r *APIKeyRepository) List(filter models.APIKeyFilter) ([]models.APIKeyWith
 		WHERE 1=1`
 
 	if filter.Search != "" {
-		query += " AND k.name LIKE ?"
+		query += " AND ulower(k.name) LIKE ? ESCAPE '\\'"
 	}
 
 	query += " ORDER BY k.created_at DESC"
@@ -241,7 +231,7 @@ func (r *APIKeyRepository) List(filter models.APIKeyFilter) ([]models.APIKeyWith
 
 		if err := rows.Scan(&k.ID, &k.Name, &k.KeyHash, &k.KeyPrefix, &k.Permissions, &domainsJSON,
 			&k.RateLimitMinute, &k.RateLimitHour,
-			&k.CreatedBy, &k.CreatedAt, &lastUsedAt, &expiresAt, &k.Active, &k.TrackOpens, &k.TrackClicks, &k.SendCount); err != nil {
+			&k.CreatedBy, &k.CreatedAt, &lastUsedAt, &expiresAt, &k.Active, &k.SendCount); err != nil {
 			return nil, 0, err
 		}
 
@@ -315,19 +305,6 @@ func (r *APIKeyRepository) Update(id string, name string, allowedDomains []strin
 		return err
 	}
 
-	affected, _ := result.RowsAffected()
-	if affected == 0 {
-		return fmt.Errorf("API key not found")
-	}
-	return nil
-}
-
-// UpdateTracking sets the open/click tracking defaults of an API key
-func (r *APIKeyRepository) UpdateTracking(id string, trackOpens, trackClicks bool) error {
-	result, err := r.db.Exec("UPDATE api_keys SET track_opens = ?, track_clicks = ? WHERE id = ?", trackOpens, trackClicks, id)
-	if err != nil {
-		return err
-	}
 	affected, _ := result.RowsAffected()
 	if affected == 0 {
 		return fmt.Errorf("API key not found")

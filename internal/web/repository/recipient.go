@@ -61,8 +61,8 @@ func (r *RecipientRepository) ListLists(filter models.RecipientListFilter) ([]mo
 	args := []any{}
 
 	if filter.Search != "" {
-		countQuery += " AND (name LIKE ? OR description LIKE ?)"
-		args = append(args, "%"+filter.Search+"%", "%"+filter.Search+"%")
+		countQuery += " AND (ulower(name) LIKE ? ESCAPE '\\' OR ulower(description) LIKE ? ESCAPE '\\')"
+		args = append(args, searchPattern(filter.Search), searchPattern(filter.Search))
 	}
 
 	var total int
@@ -72,13 +72,13 @@ func (r *RecipientRepository) ListLists(filter models.RecipientListFilter) ([]mo
 
 	// Get lists
 	query := `
-		SELECT id, name, description, source_type, total_count, active_count, created_at, updated_at
+		SELECT id, name, COALESCE(description, ''), source_type, total_count, active_count, created_at, updated_at
 		FROM recipient_lists WHERE 1=1`
 
 	args = []any{}
 	if filter.Search != "" {
-		query += " AND (name LIKE ? OR description LIKE ?)"
-		args = append(args, "%"+filter.Search+"%", "%"+filter.Search+"%")
+		query += " AND (ulower(name) LIKE ? ESCAPE '\\' OR ulower(description) LIKE ? ESCAPE '\\')"
+		args = append(args, searchPattern(filter.Search), searchPattern(filter.Search))
 	}
 
 	query += " ORDER BY updated_at DESC"
@@ -190,8 +190,8 @@ func (r *RecipientRepository) ListRecipients(filter models.RecipientFilter) ([]m
 	args := []any{filter.ListID}
 
 	if filter.Search != "" {
-		countQuery += " AND (email LIKE ? OR name LIKE ?)"
-		args = append(args, "%"+filter.Search+"%", "%"+filter.Search+"%")
+		countQuery += " AND (ulower(email) LIKE ? ESCAPE '\\' OR ulower(name) LIKE ? ESCAPE '\\')"
+		args = append(args, searchPattern(filter.Search), searchPattern(filter.Search))
 	}
 	if filter.Status != "" {
 		countQuery += " AND status = ?"
@@ -214,8 +214,8 @@ func (r *RecipientRepository) ListRecipients(filter models.RecipientFilter) ([]m
 
 	args = []any{filter.ListID}
 	if filter.Search != "" {
-		query += " AND (email LIKE ? OR name LIKE ?)"
-		args = append(args, "%"+filter.Search+"%", "%"+filter.Search+"%")
+		query += " AND (ulower(email) LIKE ? ESCAPE '\\' OR ulower(name) LIKE ? ESCAPE '\\')"
+		args = append(args, searchPattern(filter.Search), searchPattern(filter.Search))
 	}
 	if filter.Status != "" {
 		query += " AND status = ?"

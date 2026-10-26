@@ -1,39 +1,43 @@
 {{define "content"}}
 <div class="page-header">
     <div>
-        <h1>Job: {{slice .Job.ID 0 8}}...</h1>
-        <p class="text-muted">Campaign: <a href="/campaigns/{{.Job.CampaignID}}">{{.Job.CampaignName}}</a></p>
+        <h1><span data-i18n="cmp.run_colon">Run:</span> {{slice .Job.ID 0 8}}...</h1>
+        <p class="text-muted"><span data-i18n="cmp.campaign_colon">Campaign:</span> <a href="/campaigns/{{.Job.CampaignID}}">{{.Job.CampaignName}}</a></p>
     </div>
     <div class="header-actions">
         {{if eq .Job.Status "running"}}
         <form method="post" action="/jobs/{{.Job.ID}}/pause" style="display:inline">
-            <button type="submit" class="btn btn-warning">Pause</button>
+            <button type="submit" class="btn btn-warning" data-i18n="pause">Pause</button>
         </form>
         {{else if eq .Job.Status "paused"}}
         <form method="post" action="/jobs/{{.Job.ID}}/resume" style="display:inline">
-            <button type="submit" class="btn btn-primary">Resume</button>
+            <button type="submit" class="btn btn-primary" data-i18n="resume">Resume</button>
         </form>
         {{end}}
         {{if and (or (eq .Job.Status "completed") (eq .Job.Status "failed")) (gt .Stats.Failed 0)}}
-        <form method="post" action="/jobs/{{.Job.ID}}/retry" style="display:inline" onsubmit="return confirm('Retry failed items?')">
-            <button type="submit" class="btn btn-primary">Retry failed</button>
+        <form method="post" action="/jobs/{{.Job.ID}}/retry" style="display:inline" onsubmit="return confirm(I18n.t('cmp.confirm_retry_failed'))">
+            <button type="submit" class="btn btn-primary" data-i18n="cmp.retry_failed">Retry failed</button>
         </form>
         {{end}}
+        {{if eq .Job.Status "scheduled"}}
+        <a href="/campaigns/{{.Job.CampaignID}}/launch?job={{.Job.ID}}" class="btn" data-i18n="cmp.sched_change">Change</a>
+        {{end}}
         {{if or (eq .Job.Status "running") (eq .Job.Status "paused") (eq .Job.Status "scheduled")}}
-        <form method="post" action="/jobs/{{.Job.ID}}/cancel" style="display:inline" onsubmit="return confirm('Cancel this job?')">
-            <button type="submit" class="btn btn-danger">Cancel</button>
+        <form method="post" action="/jobs/{{.Job.ID}}/cancel" style="display:inline" onsubmit="return confirm(I18n.t('cmp.confirm_cancel_run'))">
+            <button type="submit" class="btn btn-danger" data-i18n="cancel">Cancel</button>
         </form>
         {{end}}
     </div>
 </div>
 
-{{if .Success}}<div class="alert alert-success">{{.Success}}</div>{{end}}
-{{if .NoPublicURL}}
-<div class="alert alert-error">
-    <strong>Sending is on hold:</strong> the public URL for unsubscribe links is not configured, pending emails are not sent.
-    Set the tracking domain in <a href="/settings/tracking">Settings &gt; Tracking</a> or <code>server.public_url</code> in the config: the job continues by itself.
+{{if and (eq .Job.Status "scheduled") .Job.ScheduledAt}}
+<div class="alert alert-warning">
+    <strong data-i18n="cmp.sched_for">Scheduled for</strong>
+    {{template "local_time" .Job.ScheduledAt}}
 </div>
 {{end}}
+{{if .Retried}}<div class="alert alert-success">{{.Retried}} <span data-i18n="cmp.retried_n">failed items queued for retry</span></div>{{end}}
+{{if .NoPublicURL}}{{template "no_public_url" .}}{{end}}
 
 <div class="tabs" style="margin-bottom: 1rem">
     <a href="/jobs/{{.Job.ID}}" class="tab active" data-i18n="trk.tab_overview">Overview</a>
@@ -41,30 +45,61 @@
     <a href="/jobs/{{.Job.ID}}/clickmap" class="tab" data-i18n="trk.tab_clickmap">Click map</a>
 </div>
 
-<div class="stats-grid">
-    <div class="stat-card">
-        <div class="stat-value">{{.Stats.Total}}</div>
-        <div class="stat-label">Total</div>
+<div class="card" style="margin-bottom: 1.5rem">
+    <div class="card-header">
+        <h2 data-i18n="common.progress">Progress</h2>
+        <div>
+            {{if .Job.DryRun}}<span class="badge badge-warning"><span data-i18n="cmp.dry_run_caps">DRY-RUN</span> ({{.Job.DryRunLimit}})</span>{{end}}
+            {{template "job_status" .}}
+        </div>
     </div>
-    <div class="stat-card">
-        <div class="stat-value" style="color: var(--warning)">{{.Stats.Pending}}</div>
-        <div class="stat-label">Pending</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-value" style="color: var(--primary)">{{.Stats.Queued}}</div>
-        <div class="stat-label">Queued</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-value" style="color: var(--success)">{{.Stats.Sent}}</div>
-        <div class="stat-label">Sent</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-value" style="color: var(--error)">{{.Stats.Failed}}</div>
-        <div class="stat-label">Failed</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-value" style="color: var(--text-muted)">{{.Stats.Skipped}}</div>
-        <div class="stat-label">Skipped</div>
+    <div class="card-body">
+        <div class="dl-head">
+            <span class="dl-progress">{{.Progress}}%</span>
+            <span class="dl-caption"><strong>{{add (add .Stats.Sent .Stats.Failed) .Stats.Skipped}}</strong> <span data-i18n="cmp.of">of</span> <strong>{{.Stats.Total}}</strong> <span data-i18n="cmp.processed">recipients processed</span></span>
+        </div>
+        {{/* Final states first (sent, skipped, failed), then in-flight ones;
+             pending is the unfilled remainder of the track */}}
+        <div class="dl-bar" aria-hidden="true">
+            {{if gt .Stats.Sent 0}}<a class="dl-seg dl-sent" style="flex-grow: {{.Stats.Sent}}" href="/jobs/{{.Job.ID}}/items?status=sent#results" tabindex="-1"></a>{{end}}
+            {{if gt .Stats.Skipped 0}}<a class="dl-seg dl-skipped" style="flex-grow: {{.Stats.Skipped}}" href="/jobs/{{.Job.ID}}/items?status=skipped#results" tabindex="-1"></a>{{end}}
+            {{if gt .Stats.Failed 0}}<a class="dl-seg dl-failed" style="flex-grow: {{.Stats.Failed}}" href="/jobs/{{.Job.ID}}/items?status=failed#results" tabindex="-1"></a>{{end}}
+            {{if gt .Stats.Queued 0}}<a class="dl-seg dl-queued" style="flex-grow: {{.Stats.Queued}}" href="/jobs/{{.Job.ID}}/items?status=queued#results" tabindex="-1"></a>{{end}}
+            {{if gt .Stats.Pending 0}}<a class="dl-seg dl-pending" style="flex-grow: {{.Stats.Pending}}" href="/jobs/{{.Job.ID}}/items?status=pending#results" tabindex="-1"></a>{{end}}
+            {{if eq .Stats.Total 0}}<span class="dl-seg dl-pending" style="flex-grow: 1"></span>{{end}}
+        </div>
+        <ul class="dl-legend">
+            <li class="dl-item{{if eq .Stats.Sent 0}} is-zero{{end}}">
+                <span class="dl-swatch dl-sent"></span>
+                <a href="/jobs/{{.Job.ID}}/items?status=sent#results" data-i18n="cmp.sent" data-i18n-title="cmp.sent_hint">Sent</a>
+                <span class="dl-count">{{.Stats.Sent}}</span>
+                <span class="dl-share">{{printf "%.0f" (pct .Stats.Sent .Stats.Total)}}%</span>
+            </li>
+            <li class="dl-item{{if eq .Stats.Skipped 0}} is-zero{{end}}">
+                <span class="dl-swatch dl-skipped"></span>
+                <a href="/jobs/{{.Job.ID}}/items?status=skipped#results" data-i18n="cmp.skipped">Skipped</a>
+                <span class="dl-count">{{.Stats.Skipped}}</span>
+                <span class="dl-share">{{printf "%.0f" (pct .Stats.Skipped .Stats.Total)}}%</span>
+            </li>
+            <li class="dl-item{{if eq .Stats.Failed 0}} is-zero{{end}}">
+                <span class="dl-swatch dl-failed"></span>
+                <a href="/jobs/{{.Job.ID}}/items?status=failed#results" data-i18n="cmp.failed_n">Failed</a>
+                <span class="dl-count">{{.Stats.Failed}}</span>
+                <span class="dl-share">{{printf "%.0f" (pct .Stats.Failed .Stats.Total)}}%</span>
+            </li>
+            <li class="dl-item{{if eq .Stats.Queued 0}} is-zero{{end}}">
+                <span class="dl-swatch dl-queued"></span>
+                <a href="/jobs/{{.Job.ID}}/items?status=queued#results" data-i18n="cmp.queued" data-i18n-title="cmp.queued_hint">Queued</a>
+                <span class="dl-count">{{.Stats.Queued}}</span>
+                <span class="dl-share">{{printf "%.0f" (pct .Stats.Queued .Stats.Total)}}%</span>
+            </li>
+            <li class="dl-item{{if eq .Stats.Pending 0}} is-zero{{end}}">
+                <span class="dl-swatch dl-pending"></span>
+                <a href="/jobs/{{.Job.ID}}/items?status=pending#results" data-i18n="cmp.pending">Pending</a>
+                <span class="dl-count">{{.Stats.Pending}}</span>
+                <span class="dl-share">{{printf "%.0f" (pct .Stats.Pending .Stats.Total)}}%</span>
+            </li>
+        </ul>
     </div>
 </div>
 
@@ -75,91 +110,81 @@
 {{if .Errors}}
 <div class="card" style="margin-bottom: 1.5rem">
     <div class="card-header">
-        <h2>Delivery Errors</h2>
+        <h2 data-i18n="cmp.delivery_errors">Delivery Errors</h2>
     </div>
     <div class="card-body">
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Error Type</th>
-                    <th>Failed</th>
-                    <th>Retrying</th>
-                </tr>
-            </thead>
-            <tbody>
-                {{range .Errors}}
-                <tr>
-                    <td>{{.Type.Label}}</td>
-                    <td>{{if .Failed}}<a href="/jobs/{{$.Job.ID}}/items?status=failed&error_type={{.Type}}">{{.Failed}}</a>{{else}}<span class="text-muted">0</span>{{end}}</td>
-                    <td>{{if .Retrying}}<a href="/jobs/{{$.Job.ID}}/items?status=queued&error_type={{.Type}}">{{.Retrying}}</a>{{else}}<span class="text-muted">0</span>{{end}}</td>
-                </tr>
-                {{end}}
-            </tbody>
-        </table>
-        <p class="text-muted">Retrying: messages still in the MTA queue after a failed delivery attempt.</p>
+        <script type="application/json" id="delivery-errors-data">{{toJSON .Errors}}</script>
+        <div class="err-panels" id="delivery-errors-panels" data-items-url="/jobs/{{.Job.ID}}/items"></div>
+        <noscript>
+            <div class="table-scroll">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Error Type</th>
+                        <th>Failed</th>
+                        <th>Retrying</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Errors}}
+                    <tr>
+                        <td>{{.Type.Label}}</td>
+                        <td>{{if .Failed}}<a href="/jobs/{{$.Job.ID}}/items?status=failed&error_type={{.Type}}#results">{{.Failed}}</a>{{else}}<span class="text-muted">0</span>{{end}}</td>
+                        <td>{{if .Retrying}}<a href="/jobs/{{$.Job.ID}}/items?status=queued&error_type={{.Type}}#results">{{.Retrying}}</a>{{else}}<span class="text-muted">0</span>{{end}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+            </div>
+        </noscript>
     </div>
+    <script src="/static/js/delivery-errors.js"></script>
 </div>
 {{end}}
-
-<div class="card" style="margin-bottom: 1.5rem">
-    <div class="card-header">
-        <h2>Progress</h2>
-        <div>
-            {{if .Job.DryRun}}<span class="badge badge-warning">DRY-RUN ({{.Job.DryRunLimit}})</span>{{end}}
-            <span class="badge badge-{{.Job.Status}}">{{.Job.Status}}</span>
-        </div>
-    </div>
-    <div class="card-body">
-        <div class="progress" style="height: 24px">
-            <div class="progress-bar" style="width: {{.Progress}}%"></div>
-        </div>
-        <p style="text-align: center; margin-top: 0.5rem">{{.Progress}}% complete</p>
-    </div>
-</div>
 
 <div class="grid-2">
     <div class="card">
         <div class="card-header">
-            <h2>Job Details</h2>
+            <h2 data-i18n="cmp.run_details">Run Details</h2>
         </div>
         <div class="card-body">
             <dl class="details-list">
-                <dt>Job ID</dt>
+                <dt data-i18n="cmp.run_id">Run ID</dt>
                 <dd><code>{{.Job.ID}}</code></dd>
 
-                <dt>Recipient List</dt>
+                <dt data-i18n="cmp.recipient_list">Recipient List</dt>
                 <dd><a href="/recipients/{{.Job.RecipientListID}}">{{.Job.ListName}}</a></dd>
 
-                <dt>Strategy</dt>
-                <dd>{{.Job.Strategy}}</dd>
+                <dt data-i18n="cmp.strategy_short">Strategy</dt>
+                <dd data-i18n="strategy.{{.Job.Strategy}}">{{.Job.Strategy}}</dd>
 
                 {{if .Job.DryRun}}
-                <dt>Test Mode</dt>
-                <dd><span class="badge badge-warning">Dry-run</span> (first {{.Job.DryRunLimit}} recipients)</dd>
+                <dt data-i18n="cmp.test_mode">Test Mode</dt>
+                <dd><span class="badge badge-warning" data-i18n="cmp.dry_run">Dry-run</span> (<span data-i18n="cmp.first">first</span> {{.Job.DryRunLimit}} <span data-i18n="cmp.recipients_lc">recipients</span>)</dd>
                 {{end}}
 
-                <dt>Servers</dt>
+                <dt data-i18n="servers">Servers</dt>
                 <dd>
                     {{range .Servers}}
                     <span class="badge">{{.}}</span>
                     {{end}}
                 </dd>
 
-                <dt>Created</dt>
+                <dt data-i18n="common.created">Created</dt>
                 <dd>{{.Job.CreatedAt.Format "2006-01-02 15:04:05"}}</dd>
 
                 {{if .Job.ScheduledAt}}
-                <dt>Scheduled</dt>
+                <dt data-i18n="cmp.scheduled_col">Scheduled</dt>
                 <dd>{{.Job.ScheduledAt.Format "2006-01-02 15:04:05"}}</dd>
                 {{end}}
 
                 {{if .Job.StartedAt}}
-                <dt>Started</dt>
+                <dt data-i18n="cmp.started">Started</dt>
                 <dd>{{.Job.StartedAt.Format "2006-01-02 15:04:05"}}</dd>
                 {{end}}
 
                 {{if .Job.CompletedAt}}
-                <dt>Completed</dt>
+                <dt data-i18n="cmp.completed_col">Completed</dt>
                 <dd>{{.Job.CompletedAt.Format "2006-01-02 15:04:05"}}</dd>
                 {{end}}
             </dl>
@@ -168,31 +193,33 @@
 
     <div class="card">
         <div class="card-header">
-            <h2>Recent Items</h2>
-            <a href="/jobs/{{.Job.ID}}/items" class="btn btn-sm">View All</a>
+            <h2 data-i18n="cmp.recent_items">Recent Items</h2>
+            <a href="/jobs/{{.Job.ID}}/items" class="btn btn-sm" data-i18n="cmp.view_all_btn">View All</a>
         </div>
         <div class="card-body">
             {{if .Items}}
+            <div class="table-scroll">
             <table class="table">
                 <thead>
                     <tr>
-                        <th>Email</th>
-                        <th>Status</th>
-                        <th>Server</th>
+                        <th data-i18n="email">Email</th>
+                        <th data-i18n="status">Status</th>
+                        <th data-i18n="common.server">Server</th>
                     </tr>
                 </thead>
                 <tbody>
                     {{range .Items}}
                     <tr>
                         <td>{{.Email}}{{if .UnsubscribedAt}} <span class="badge badge-secondary" data-i18n="trk.unsub_badge">unsubscribed</span>{{end}}</td>
-                        <td><span class="badge badge-{{.Status}}">{{.Status}}</span></td>
+                        <td><span class="badge badge-{{.Status}}" data-i18n="status.{{.Status}}"{{if eq .Status "queued"}} data-i18n-title="cmp.queued_hint"{{end}}>{{.Status}}</span></td>
                         <td>{{.ServerName}}</td>
                     </tr>
                     {{end}}
                 </tbody>
             </table>
+            </div>
             {{else}}
-            <p class="empty-state">No items yet</p>
+            <p class="empty-state" data-i18n="cmp.no_items_yet">No items yet</p>
             {{end}}
         </div>
     </div>

@@ -7,32 +7,32 @@
         {{end}}
     </div>
     <div class="header-actions">
-        <a href="/templates/{{.Template.ID}}/test" class="btn btn-secondary">Send Test</a>
-        <a href="/templates/{{.Template.ID}}/export" class="btn btn-secondary">Export</a>
-        <a href="/templates/{{.Template.ID}}/builder" class="btn btn-primary">Edit</a>
+        <a href="/templates/{{.Template.ID}}/test" class="btn btn-secondary" data-i18n="tpl.send_test">Send Test</a>
+        <a href="/templates/{{.Template.ID}}/export" class="btn btn-secondary" data-i18n="tpl.export">Export</a>
+        <a href="/templates/{{.Template.ID}}/builder" class="btn btn-primary" data-i18n="edit">Edit</a>
     </div>
 </div>
 
 <div class="grid-2">
     <div class="card">
         <div class="card-header">
-            <h2>Details</h2>
+            <h2 data-i18n="common.details">Details</h2>
         </div>
         <div class="card-body">
             <dl class="details-list">
-                <dt>Folder</dt>
-                <dd>{{if .Template.Folder}}{{.Template.Folder}}{{else}}<span class="text-muted">None</span>{{end}}</dd>
+                <dt data-i18n="tpl.folder">Folder</dt>
+                <dd>{{if .Template.Folder}}{{.Template.Folder}}{{else}}<span class="text-muted" data-i18n="common.none">None</span>{{end}}</dd>
 
-                <dt>Subject</dt>
+                <dt data-i18n="common.subject">Subject</dt>
                 <dd><code>{{.Template.Subject}}</code></dd>
 
-                <dt>Current Version</dt>
+                <dt data-i18n="current_version">Current Version</dt>
                 <dd>v{{.Template.CurrentVersion}}</dd>
 
-                <dt>Created</dt>
+                <dt data-i18n="common.created">Created</dt>
                 <dd>{{.Template.CreatedAt.Format "2006-01-02 15:04:05"}}</dd>
 
-                <dt>Updated</dt>
+                <dt data-i18n="common.updated">Updated</dt>
                 <dd>{{.Template.UpdatedAt.Format "2006-01-02 15:04:05"}}</dd>
             </dl>
         </div>
@@ -40,17 +40,18 @@
 
     <div class="card">
         <div class="card-header">
-            <h2>Deployment Status</h2>
+            <h2 data-i18n="tpl.deployment_status">Deployment Status</h2>
         </div>
         <div class="card-body">
             {{if .Servers}}
+            <div class="table-scroll">
             <table class="table">
                 <thead>
                     <tr>
-                        <th>Server</th>
-                        <th>Env</th>
-                        <th>Version</th>
-                        <th>Action</th>
+                        <th data-i18n="common.server">Server</th>
+                        <th data-i18n="tpl.env">Env</th>
+                        <th data-i18n="tpl.version">Version</th>
+                        <th data-i18n="tpl.action">Action</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -61,12 +62,12 @@
                         <td>
                             {{if .Deployed}}
                                 {{if .OutOfSync}}
-                                <span class="badge badge-warning">v{{.DeployedVersion}} (out of sync)</span>
+                                <span class="badge badge-warning">v{{.DeployedVersion}} (<span data-i18n="tpl.out_of_sync_lc">out of sync</span>)</span>
                                 {{else}}
                                 <span class="badge badge-success">v{{.DeployedVersion}}</span>
                                 {{end}}
                             {{else}}
-                            <span class="text-muted">Not deployed</span>
+                            <span class="text-muted" data-i18n="tpl.not_deployed">Not deployed</span>
                             {{end}}
                         </td>
                         <td>
@@ -74,12 +75,12 @@
                                 <input type="hidden" name="server" value="{{.Name}}">
                                 {{if .Deployed}}
                                     {{if .OutOfSync}}
-                                    <button type="submit" class="btn btn-sm btn-warning">Update</button>
+                                    <button type="submit" class="btn btn-sm btn-warning" data-i18n="tpl.update">Update</button>
                                     {{else}}
-                                    <button type="submit" class="btn btn-sm btn-secondary">Redeploy</button>
+                                    <button type="submit" class="btn btn-sm btn-secondary" data-i18n="tpl.redeploy">Redeploy</button>
                                     {{end}}
                                 {{else}}
-                                <button type="submit" class="btn btn-sm btn-primary">Deploy</button>
+                                <button type="submit" class="btn btn-sm btn-primary" data-i18n="template_deploy">Deploy</button>
                                 {{end}}
                             </form>
                         </td>
@@ -87,8 +88,9 @@
                     {{end}}
                 </tbody>
             </table>
+            </div>
             {{else}}
-            <p class="empty-state">No servers configured</p>
+            <p class="empty-state" data-i18n="monitoring.servers.empty">No servers configured</p>
             {{end}}
         </div>
     </div>
@@ -96,18 +98,18 @@
 
 <div class="card">
     <div class="card-header">
-        <h2>Preview</h2>
+        <h2 data-i18n="template_preview">Preview</h2>
         <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
-            <span class="text-muted" style="font-size:0.8rem;">Width:</span>
-            <button type="button" class="btn btn-sm btn-primary" data-tplview-width="600">Desktop · 600px</button>
-            <button type="button" class="btn btn-sm btn-secondary" data-tplview-width="320">Mobile · 320px</button>
+            <span class="text-muted" style="font-size:0.8rem;" data-i18n="tpl.width">Width:</span>
+            <button type="button" class="btn btn-sm btn-primary" data-tplview-width="600" data-i18n="tpl.desktop_600">Desktop · 600px</button>
+            <button type="button" class="btn btn-sm btn-secondary" data-tplview-width="320" data-i18n="tpl.mobile_320">Mobile · 320px</button>
             <span class="text-muted" id="tplview-status" style="font-size:0.8rem; margin-left:0.5rem;"></span>
         </div>
     </div>
     <div class="card-body">
         <div style="background:#f5f5f5; padding:1.5rem 1rem; border-radius:var(--radius); display:flex; justify-content:center;">
             <div id="tplview-shell" style="width:600px; max-width:100%; transition:width 0.15s; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
-                <iframe id="tplview-frame" style="width:100%; height:720px; border:none; display:block;"></iframe>
+                <iframe id="tplview-frame" sandbox="" title="Preview" style="width:100%; height:720px; border:none; display:block;"></iframe>
             </div>
         </div>
     </div>
@@ -117,31 +119,31 @@
     <div class="card-header" style="cursor:pointer;" id="source-toggle">
         <h2 style="display:flex; align-items:center; gap:0.5rem;">
             <span id="source-toggle-icon" style="display:inline-block; transition:transform 0.15s;">▶</span>
-            Source
+            <span data-i18n="tpl.source">Source</span>
         </h2>
-        <span class="text-muted" style="font-size:0.85rem;">Click to view raw HTML / plain text</span>
+        <span class="text-muted" style="font-size:0.85rem;" data-i18n="tpl.source_hint">Click to view raw HTML / plain text</span>
     </div>
     <div class="card-body" id="source-body" style="display:none;">
         <div class="tabs" style="margin-bottom:0.75rem;">
             <button class="tab active" data-tab="html">HTML</button>
-            <button class="tab" data-tab="text">Plain Text</button>
+            <button class="tab" data-tab="text" data-i18n="tpl.plain_text">Plain Text</button>
         </div>
         <div id="tab-html" class="tab-content active">
             {{if .Template.HTML}}
             <pre class="code-preview"><code>{{.Template.HTML}}</code></pre>
             {{else}}
-            <p class="text-muted">No HTML content</p>
+            <p class="text-muted" data-i18n="tpl.no_html">No HTML content</p>
             {{end}}
         </div>
         <div id="tab-text" class="tab-content" style="display:none">
             {{if .Template.Text}}
             <pre class="code-preview"><code>{{.Template.Text}}</code></pre>
             {{else}}
-            <p class="text-muted">No plain text content</p>
+            <p class="text-muted" data-i18n="tpl.no_text">No plain text content</p>
             {{end}}
         </div>
         <p class="text-muted" style="font-size:0.85rem; margin-top:0.75rem;">
-            To edit the content open the <a href="/templates/{{.Template.ID}}/builder">Builder</a>.
+            <span data-i18n="tpl.edit_hint_pre">To edit the content open the</span> <a href="/templates/{{.Template.ID}}/builder" data-i18n="tpl.builder">Builder</a>.
         </p>
     </div>
 </div>
@@ -149,12 +151,12 @@
 {{if .VariablesShape}}
 <div class="card">
     <div class="card-header">
-        <h2>Variables — expected payload shape</h2>
+        <h2 data-i18n="tpl.vars_shape">Variables — expected payload shape</h2>
     </div>
     <div class="card-body">
         <p class="text-muted" style="margin-top:0; font-size:0.85rem;">
-            Auto-detected from the template body. Strings are placeholders; arrays come from {{"{{range}}"}} blocks.
-            Use this as the contract for the backend that calls <code>/v1/send/template</code>.
+            <span data-i18n="tpl.vars_shape_hint1">Auto-detected from the template body. Strings are placeholders; arrays come from</span> {{"{{range}}"}} <span data-i18n="tpl.vars_shape_hint2">blocks.</span>
+            <span data-i18n="tpl.vars_shape_hint3">Use this as the contract for the backend that calls</span> <code>/v1/send/template</code>.
         </p>
         <pre class="code-preview"><code>{{.VariablesShape}}</code></pre>
     </div>
@@ -163,13 +165,13 @@
 
 <div class="card">
     <div class="card-header">
-        <h2>Actions</h2>
+        <h2 data-i18n="actions">Actions</h2>
     </div>
     <div class="card-body actions-bar">
-        <a href="/templates/{{.Template.ID}}/versions" class="btn">View History</a>
-        <form method="post" action="/templates/{{.Template.ID}}" onsubmit="return confirm('Are you sure you want to delete this template?')">
+        <a href="/templates/{{.Template.ID}}/versions" class="btn" data-i18n="tpl.view_history">View History</a>
+        <form method="post" action="/templates/{{.Template.ID}}" onsubmit="return confirm(I18n.t('tpl.confirm_delete'))">
             <input type="hidden" name="_method" value="DELETE">
-            <button type="submit" class="btn btn-danger">Delete Template</button>
+            <button type="submit" class="btn btn-danger" data-i18n="tpl.delete_template">Delete Template</button>
         </form>
     </div>
 </div>
@@ -216,7 +218,7 @@ document.querySelectorAll('.tab').forEach(function(tab) {
     sample.Subject = subject;
 
     function render() {
-        if (status) { status.textContent = 'Rendering…'; status.style.color = ''; }
+        if (status) { status.textContent = I18n.t('tpl.rendering'); status.style.color = ''; }
         fetch('/builder/render-preview', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -228,10 +230,10 @@ document.querySelectorAll('.tab').forEach(function(tab) {
         }).then(function(rendered) {
             rendered = SendryPreview.stripWrapperDarkModeCSS(rendered);
             frame.srcdoc = rendered;
-            if (status) { status.textContent = 'OK'; status.style.color = 'var(--text-muted)'; }
+            if (status) { status.textContent = I18n.t('tpl.ok'); status.style.color = 'var(--text-muted)'; }
         }).catch(function(err) {
-            frame.srcdoc = '<pre style="padding:1rem; color:crimson; white-space:pre-wrap;">' + err.message + '</pre>';
-            if (status) { status.textContent = 'Error'; status.style.color = 'crimson'; }
+            frame.srcdoc = '';
+            if (status) { status.textContent = I18n.t('common.error') + ': ' + err.message; status.style.color = 'crimson'; }
         });
     }
     if (document.readyState === 'loading') {

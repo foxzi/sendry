@@ -75,7 +75,7 @@ func TestJobRetry_ResetsFailedItems(t *testing.T) {
 	}
 
 	view = jobRequest(h, h.JobView, http.MethodGet, "/jobs/"+jobID+"?retried=2", jobID)
-	if body := view.Body.String(); !strings.Contains(body, "2 failed items queued for retry") || strings.Contains(body, "Retry failed") {
+	if body := view.Body.String(); !strings.Contains(body, `2 <span data-i18n="cmp.retried_n">`) || strings.Contains(body, "Retry failed") {
 		t.Errorf("job page after retry: %d", view.Code)
 	}
 }
@@ -96,14 +96,14 @@ func TestJobView_NoPublicURLWarning(t *testing.T) {
 	if err := d.QueryRow(`SELECT id FROM send_jobs`).Scan(&jobID); err != nil {
 		t.Fatal(err)
 	}
-	const warn = "Sending is on hold"
+	const warn = "The proxying domain is not set."
 	if body := jobRequest(h, h.JobView, http.MethodGet, "/jobs/"+jobID, jobID).Body.String(); strings.Contains(body, warn) {
 		t.Error("warning shown with a public URL")
 	}
 	// The public URL was removed after the job started (e.g. an upgrade)
 	h.cfg.Server.PublicURL = ""
 	if body := jobRequest(h, h.JobView, http.MethodGet, "/jobs/"+jobID, jobID).Body.String(); !strings.Contains(body, warn) {
-		t.Error("no warning for a job that cannot send")
+		t.Error("no warning for a job sent without unsubscribe links")
 	}
 	mustExec(t, d, `UPDATE send_jobs SET status = 'cancelled'`)
 	if body := jobRequest(h, h.JobView, http.MethodGet, "/jobs/"+jobID, jobID).Body.String(); strings.Contains(body, warn) {
@@ -130,7 +130,6 @@ func TestDeleteInUse_Conflict(t *testing.T) {
 	for name, rec := range map[string]*httptest.ResponseRecorder{
 		"list":      del(h.RecipientListDelete, "/recipients/l1", map[string]string{"id": "l1"}),
 		"recipient": del(h.RecipientDelete, "/recipients/l1/recipients/ra", map[string]string{"id": "l1", "recipientId": "ra"}),
-		"variant":   del(h.CampaignVariantDelete, "/campaigns/c1/variants/v1", map[string]string{"id": "c1", "variantId": "v1"}),
 		"template":  del(h.TemplateDelete, "/templates/t1", map[string]string{"id": "t1"}),
 	} {
 		if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "Cannot delete") {

@@ -2,48 +2,48 @@
 <div class="page-header">
     <h1>{{.Block.Name}}</h1>
     <div class="header-actions">
-        <a href="/templates/builder" class="btn btn-secondary">Use in Builder</a>
-        <a href="/blocks/{{.Block.ID}}/edit" class="btn btn-primary">Edit</a>
-        <form method="post" action="/blocks/{{.Block.ID}}/delete" style="display:inline;" onsubmit="return confirm('Delete this block?')">
-            <button type="submit" class="btn btn-danger">Delete</button>
+        <a href="/templates/builder" class="btn btn-secondary" data-i18n="tpl.use_in_builder">Use in Builder</a>
+        <a href="/blocks/{{.Block.ID}}/edit" class="btn btn-primary" data-i18n="edit">Edit</a>
+        <form method="post" action="/blocks/{{.Block.ID}}/delete" style="display:inline;" onsubmit="return confirm(I18n.t('tpl.confirm_delete_block'))">
+            <button type="submit" class="btn btn-danger" data-i18n="delete">Delete</button>
         </form>
     </div>
 </div>
 
 <div class="card" style="margin-bottom:1rem;">
     <div class="card-body">
+        <div class="table-scroll">
         <table class="detail-table">
             <tr>
-                <th>Category</th>
+                <th data-i18n="tpl.category">Category</th>
                 <td><span class="badge">{{.Block.Category}}</span></td>
             </tr>
             {{if .Block.PreviewText}}
             <tr>
-                <th>Description</th>
+                <th data-i18n="common.description">Description</th>
                 <td>{{.Block.PreviewText}}</td>
             </tr>
             {{end}}
             <tr>
-                <th>Created</th>
+                <th data-i18n="common.created">Created</th>
                 <td>{{.Block.CreatedAt.Format "2006-01-02 15:04"}}</td>
             </tr>
             <tr>
-                <th>Updated</th>
+                <th data-i18n="common.updated">Updated</th>
                 <td>{{.Block.UpdatedAt.Format "2006-01-02 15:04"}}</td>
             </tr>
         </table>
+        </div>
     </div>
 </div>
 
 <div class="card">
     <div class="card-header">
-        <h2 class="card-title">Used in templates</h2>
+        <h2 class="card-title" data-i18n="tpl.used_in">Used in templates</h2>
     </div>
     <div class="card-body">
         {{if .UsedIn}}
-        <p class="text-muted" style="margin-bottom:0.5rem;">
-            Editing this block automatically rebuilds the HTML of every template below.
-        </p>
+        <p class="text-muted" style="margin-bottom:0.5rem;" data-i18n="tpl.used_in_hint">Editing this block automatically rebuilds the HTML of every template below.</p>
         <ul style="margin:0; padding-left:1.25rem;">
             {{range .UsedIn}}
             <li>
@@ -53,52 +53,47 @@
             {{end}}
         </ul>
         {{else}}
-        <p class="text-muted" style="margin:0;">
-            This block is not yet referenced by any template. Add it via the email builder
-            and any future edits to the block will flow through to those templates automatically.
-        </p>
+        <p class="text-muted" style="margin:0;" data-i18n="tpl.not_used">This block is not yet referenced by any template. Add it via the email builder and any future edits to the block will flow through to those templates automatically.</p>
         {{end}}
     </div>
 </div>
 
 <div class="card" style="margin-bottom:1rem;">
     <div class="card-header">
-        <h2 class="card-title">Appearance</h2>
+        <h2 class="card-title" data-i18n="tpl.appearance">Appearance</h2>
     </div>
     <div class="card-body">
         <div class="form-row">
             <div class="form-group">
-                <label for="appearance-radius">Border radius (px)</label>
+                <label for="appearance-radius" data-i18n="tpl.border_radius">Border radius (px)</label>
                 <input type="number" id="appearance-radius" min="0" max="64" step="1" class="input"
                     value="{{.Block.BorderRadius}}">
             </div>
             <div class="form-group">
-                <label for="appearance-pad-v">Content padding — vertical (px)</label>
+                <label for="appearance-pad-v" data-i18n="tpl.content_pad_v">Content padding — vertical (px)</label>
                 <input type="number" id="appearance-pad-v" min="0" max="200" step="2" class="input"
                     value="{{.Block.PaddingV}}">
             </div>
             <div class="form-group">
-                <label for="appearance-pad-h">Content padding — horizontal (px)</label>
+                <label for="appearance-pad-h" data-i18n="tpl.content_pad_h">Content padding — horizontal (px)</label>
                 <input type="number" id="appearance-pad-h" min="0" max="200" step="2" class="input"
                     value="{{.Block.PaddingH}}">
             </div>
             <div class="form-group">
-                <label for="appearance-bg">Background</label>
+                <label for="appearance-bg" data-i18n="tpl.background">Background</label>
                 <div style="display:flex; align-items:center; gap:0.5rem;">
                     <input type="color" id="appearance-bg" class="input" style="height:38px; padding:2px; max-width:100px;"
                         value="{{if .Block.Background}}{{.Block.Background}}{{else}}#FFFFFF{{end}}">
                     <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; font-weight:normal;">
                         <input type="checkbox" id="appearance-bg-none" {{if not .Block.Background}}checked{{end}}>
-                        None
+                        <span data-i18n="common.none">None</span>
                     </label>
                 </div>
             </div>
         </div>
+        <p class="text-muted" style="font-size:0.8rem; margin:0.4rem 0 0;" data-i18n="tpl.radius_bg_hint">Border radius needs a background to be visible — when radius &gt; 0 and background is "None", a white wrapper is added automatically.</p>
         <p class="text-muted" style="font-size:0.8rem; margin:0.4rem 0 0;">
-            Border radius needs a background to be visible — when radius &gt; 0 and background is "None", a white wrapper is added automatically.
-        </p>
-        <p class="text-muted" style="font-size:0.8rem; margin:0.4rem 0 0;">
-            Saved automatically. Changes auto-rebuild every template that uses this block.
+            <span data-i18n="tpl.autosave_hint">Saved automatically. Changes auto-rebuild every template that uses this block.</span>
             <span id="appearance-status" style="margin-left:0.5rem;"></span>
         </p>
     </div>
@@ -107,8 +102,8 @@
 <div class="card">
     <div class="card-header">
         <div class="tabs">
-            <button class="tab active" data-tab="preview">Preview</button>
-            <button class="tab" data-tab="source">HTML Source</button>
+            <button class="tab active" data-tab="preview" data-i18n="template_preview">Preview</button>
+            <button class="tab" data-tab="source" data-i18n="tpl.html_source">HTML Source</button>
         </div>
     </div>
     <div class="card-body">
@@ -116,19 +111,19 @@
             <div style="display:flex; flex-direction:column; gap:1rem;">
                 <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
                     <span class="text-muted" style="font-size:0.85rem;">
-                        Rendered with sample data — to tweak the JSON open the block in
-                        <a href="/blocks/{{.Block.ID}}/edit">Edit mode</a>.
+                        <span data-i18n="tpl.rendered_sample">Rendered with sample data — to tweak the JSON open the block in</span>
+                        <a href="/blocks/{{.Block.ID}}/edit" data-i18n="tpl.edit_mode">Edit mode</a>.
                     </span>
                     <span style="border-left:1px solid var(--border); height:24px; margin:0 0.25rem;"></span>
-                    <span class="text-muted" style="font-size:0.8rem;">Width:</span>
-                    <button type="button" class="btn btn-sm btn-primary" data-livepreview-width="600">Desktop · 600px</button>
-                    <button type="button" class="btn btn-sm btn-secondary" data-livepreview-width="320">Mobile · 320px</button>
+                    <span class="text-muted" style="font-size:0.8rem;" data-i18n="tpl.width">Width:</span>
+                    <button type="button" class="btn btn-sm btn-primary" data-livepreview-width="600" data-i18n="tpl.desktop_600">Desktop · 600px</button>
+                    <button type="button" class="btn btn-sm btn-secondary" data-livepreview-width="320" data-i18n="tpl.mobile_320">Mobile · 320px</button>
                     <span class="text-muted" id="livepreview-status" style="font-size:0.8rem; margin-left:auto;"></span>
                 </div>
 
                 <div style="background:#f5f5f5; padding:1.5rem 1rem; border-radius:var(--radius); display:flex; justify-content:center;">
                     <div id="livepreview-shell" style="width:600px; max-width:100%; transition:width 0.15s; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
-                        <iframe id="livepreview-frame" style="width:100%; height:720px; border:none; display:block;"></iframe>
+                        <iframe id="livepreview-frame" sandbox="" title="Preview" style="width:100%; height:720px; border:none; display:block;"></iframe>
                     </div>
                 </div>
             </div>
@@ -161,7 +156,7 @@
     try { samplePayload = JSON.parse({{toJSON .SampleJSON}}); } catch (e) { samplePayload = {}; }
 
     function render() {
-        status.textContent = 'Rendering…'; status.style.color = '';
+        status.textContent = I18n.t('tpl.rendering'); status.style.color = '';
         fetch('/blocks/' + blockId + '/preview', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -173,10 +168,10 @@
         }).then(function(html) {
             html = SendryPreview.stripWrapperDarkModeCSS(html);
             frame.srcdoc = html;
-            status.textContent = 'OK';
+            status.textContent = I18n.t('tpl.ok');
             status.style.color = 'var(--text-muted)';
         }).catch(function(err) {
-            status.textContent = 'Error: ' + err.message;
+            status.textContent = I18n.t('common.error') + ': ' + err.message;
             status.style.color = 'crimson';
         });
     }
@@ -198,7 +193,7 @@
     var apBgNone = document.getElementById('appearance-bg-none');
     var apTimer = null;
     function saveAppearance() {
-        if (apStatus) { apStatus.textContent = 'Saving…'; apStatus.style.color = ''; }
+        if (apStatus) { apStatus.textContent = I18n.t('tpl.saving'); apStatus.style.color = ''; }
 
         var bgValue = (apBgNone && apBgNone.checked) ? '' : (apBg ? apBg.value : '');
         var payload = {
@@ -216,10 +211,10 @@
             if (!r.ok) return r.text().then(function(t) { throw new Error(t); });
             return r.json();
         }).then(function() {
-            if (apStatus) { apStatus.textContent = 'Saved'; apStatus.style.color = 'var(--text-muted)'; }
+            if (apStatus) { apStatus.textContent = I18n.t('tpl.saved'); apStatus.style.color = 'var(--text-muted)'; }
             render();
         }).catch(function(err) {
-            if (apStatus) { apStatus.textContent = 'Save failed: ' + err.message; apStatus.style.color = 'crimson'; }
+            if (apStatus) { apStatus.textContent = I18n.t('tpl.save_failed') + ': ' + err.message; apStatus.style.color = 'crimson'; }
         });
     }
     apInputs.forEach(function(el) {

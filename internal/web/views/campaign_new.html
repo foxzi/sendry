@@ -1,66 +1,32 @@
 {{define "content"}}
 <div class="page-header">
-    <h1>New Campaign</h1>
+    <h1 id="cf-page-title" data-i18n="cmp.new_campaign_title">New Campaign</h1>
+    <a href="/campaigns" class="btn btn-secondary" data-i18n="cancel">Cancel</a>
 </div>
 
-<form method="post" action="/campaigns" class="card">
-    <div class="card-body">
-        <div class="form-group">
-            <label for="name">Campaign Name *</label>
-            <input type="text" id="name" name="name" required class="input" placeholder="Welcome Series">
+<div class="cf" id="cf" data-mode="create">
+    <form method="post" action="/campaigns" id="cf-form" novalidate>
+        <!-- the browser's time zone offset: the date in an automatic name is the user's -->
+        <input type="hidden" id="tz_offset" name="tz_offset">
+        {{template "cf_letter" .}}
+
+        <div class="cf-final">
+            <button type="submit" id="cf-save" name="action" value="save" class="btn" data-i18n="cmp.wz_save">Save</button>
+            <button type="submit" id="cf-launch" name="action" value="launch" class="btn btn-primary" data-i18n="cmp.wz_save_launch">Save and send&hellip;</button>
+            <p class="cf-final-help" id="cf-final-help"></p>
         </div>
+    </form>
+</div>
 
-        <div class="form-group">
-            <label for="description">Description</label>
-            <textarea id="description" name="description" class="input" rows="2" placeholder="Brief description of this campaign"></textarea>
-        </div>
-
-        <h3 style="margin: 1.5rem 0 1rem">Sender Information</h3>
-
-        <div class="form-row">
-            <div class="form-group">
-                <label for="from_email">From Email *</label>
-                <input type="email" id="from_email" name="from_email" required class="input" placeholder="hello@example.com">
-            </div>
-            <div class="form-group">
-                <label for="from_name">From Name</label>
-                <input type="text" id="from_name" name="from_name" class="input" placeholder="Company Name">
-            </div>
-        </div>
-
-        <div class="form-group">
-            <label for="reply_to">Reply-To (optional)</label>
-            <input type="email" id="reply_to" name="reply_to" class="input" placeholder="support@example.com">
-        </div>
-
-        <div class="form-group">
-            <label for="tags">Tags (JSON array)</label>
-            <input type="text" id="tags" name="tags" class="input" placeholder='["newsletter", "marketing"]'>
-            <small class="form-help">Tags are passed to Sendry for categorization</small>
-        </div>
-
-        <h3 style="margin: 1.5rem 0 1rem">Трекинг</h3>
-
-        <div class="form-group">
-            <label class="checkbox-label">
-                <input type="checkbox" name="track_opens" value="on"{{if .TrackOpens}} checked{{end}}>
-                Отслеживать открытия
-            </label>
-            <label class="checkbox-label">
-                <input type="checkbox" name="track_clicks" value="on"{{if .TrackClicks}} checked{{end}}>
-                Отслеживать клики
-            </label>
-            <label class="checkbox-label">
-                <input type="checkbox" name="add_utm" value="on">
-                Добавлять метки UTM в ссылки
-            </label>
-            <small class="form-help">Открытия считаются по пикселю, клики по ссылкам через панель. Метки: utm_source, utm_medium, utm_campaign, sc, sr, sl (нужны для связи заказов с рассылкой). Ссылка отписки в письмах рассылки добавляется всегда.</small>
-        </div>
-    </div>
-
-    <div class="card-footer">
-        <a href="/campaigns" class="btn btn-secondary">Cancel</a>
-        <button type="submit" class="btn btn-primary">Create Campaign</button>
-    </div>
-</form>
+<script>
+window.CF_CONFIG = {
+    mode: "create",
+    campaignId: "",
+    noPublicURL: {{if .NoPublicURL}}true{{else}}false{{end}},
+    isAdmin: {{if .User.IsAdmin}}true{{else}}false{{end}},
+    userEmail: {{toJSON .UserEmail}},
+    senderDomains: {{toJSON .SenderDomains}}
+};
+</script>
+<script src="/static/js/campaign-flow.js"></script>
 {{end}}

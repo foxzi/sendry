@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/foxzi/sendry/internal/web/models"
@@ -141,8 +142,8 @@ func (r *DomainRepository) List(filter models.DomainFilter) ([]models.DomainList
 	args := []interface{}{}
 
 	if filter.Search != "" {
-		query += " AND d.domain LIKE ?"
-		args = append(args, "%"+filter.Search+"%")
+		query += " AND ulower(d.domain) LIKE ? ESCAPE '\\'"
+		args = append(args, searchPattern(filter.Search))
 	}
 	if filter.Mode != "" {
 		query += " AND d.mode = ?"
@@ -266,4 +267,38 @@ func nullString(s string) sql.NullString {
 		return sql.NullString{}
 	}
 	return sql.NullString{String: s, Valid: true}
+}
+
+// SenderState is what the campaign wizard shows about a sender domain
+type SenderState struct {
+	Deployed    bool // deployed to at least one server (outdated config still counts)
+	DKIMEnabled bool
+}
+
+// SenderStates returns the sender state of every domain, keyed by the
+// lower-case domain name, in one query
+func (r *DomainRepository) SenderStates() (map[string]SenderState, error) {
+	rows, err := r.db.Query(`
+		SELECT d.domain, d.dkim_enabled,
+			COALESCE(SUM(CASE WHEN dd.status IN ('deployed', 'outdated') THEN 1 ELSE 0 END), 0)
+		FROM domains d
+		LEFT JOIN domain_deployments dd ON d.id = dd.domain_id
+		GROUP BY d.id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	states := map[string]SenderState{}
+	for rows.Next() {
+		var name string
+		var s SenderState
+		var deployments int
+		if err := rows.Scan(&name, &s.DKIMEnabled, &deployments); err != nil {
+			return nil, err
+		}
+		s.Deployed = deployments > 0
+		states[strings.ToLower(name)] = s
+	}
+	return states, rows.Err()
 }

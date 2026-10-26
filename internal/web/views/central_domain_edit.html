@@ -1,8 +1,8 @@
 {{define "content"}}
 <div class="page-header">
-    <h1>Edit Domain: {{.Domain.Domain}}</h1>
+    <h1><span data-i18n="infra.edit_domain">Edit Domain</span>: {{.Domain.Domain}}</h1>
     <div class="header-actions">
-        <a href="/domains/{{.Domain.ID}}" class="btn btn-secondary">Cancel</a>
+        <a href="/domains/{{.Domain.ID}}" class="btn btn-secondary" data-i18n="cancel">Cancel</a>
     </div>
 </div>
 
@@ -12,64 +12,63 @@
             <input type="hidden" name="_method" value="PUT">
 
             <div class="form-group">
-                <label for="domain">Domain Name</label>
+                <label for="domain" data-i18n="infra.domain_name_label">Domain Name</label>
                 <input type="text" id="domain" name="domain" class="form-control"
                        value="{{.Domain.Domain}}" readonly disabled>
-                <small class="text-muted">Domain name cannot be changed</small>
+                <small class="text-muted" data-i18n="infra.domain_name_cannot_be_changed">Domain name cannot be changed</small>
             </div>
 
             <div class="form-group">
-                <label for="mode">Mode</label>
+                <label for="mode" data-i18n="common.mode">Mode</label>
                 <select id="mode" name="mode" class="form-control" onchange="toggleModeFields()">
                     {{range .Modes}}
-                    <option value="{{.}}" {{if eq . $.Domain.Mode}}selected{{end}}>{{.}}</option>
+                    <option value="{{.}}" {{if eq . $.Domain.Mode}}selected{{end}} data-i18n="infra.mode.{{.}}">{{.}}</option>
                     {{end}}
                 </select>
-                <small class="text-muted">
+                <small class="text-muted" data-i18n="infra.production_normal_delivery_sandbox_capture_only">
                     production: normal delivery | sandbox: capture only | redirect: send to other addresses | bcc: copy to archive
                 </small>
             </div>
 
             <div id="redirect-fields" {{if ne .Domain.Mode "redirect"}}style="display: none;"{{end}}>
                 <div class="form-group">
-                    <label for="redirect_to">Redirect To</label>
+                    <label for="redirect_to" data-i18n="infra.redirect_to">Redirect To</label>
                     <textarea id="redirect_to" name="redirect_to" class="form-control" rows="3"
                               placeholder="qa@example.com&#10;test@example.com">{{range .Domain.RedirectTo}}{{.}}
 {{end}}</textarea>
-                    <small class="text-muted">One email per line</small>
+                    <small class="text-muted" data-i18n="infra.one_email_per_line">One email per line</small>
                 </div>
             </div>
 
             <div id="bcc-fields" {{if ne .Domain.Mode "bcc"}}style="display: none;"{{end}}>
                 <div class="form-group">
-                    <label for="bcc_to">BCC To</label>
+                    <label for="bcc_to" data-i18n="infra.bcc_to">BCC To</label>
                     <textarea id="bcc_to" name="bcc_to" class="form-control" rows="3"
                               placeholder="archive@example.com">{{range .Domain.BCCTo}}{{.}}
 {{end}}</textarea>
-                    <small class="text-muted">One email per line</small>
+                    <small class="text-muted" data-i18n="infra.one_email_per_line">One email per line</small>
                 </div>
             </div>
 
             <div class="form-group">
-                <label for="default_from">Default From Address</label>
+                <label for="default_from" data-i18n="infra.default_from_address">Default From Address</label>
                 <input type="email" id="default_from" name="default_from" class="form-control"
                        value="{{.Domain.DefaultFrom}}" placeholder="noreply@example.com">
             </div>
 
-            <h3>DKIM Settings</h3>
+            <h3 data-i18n="infra.dkim_settings">DKIM Settings</h3>
             <div class="form-group">
                 <label class="checkbox-label">
                     <input type="checkbox" name="dkim_enabled" id="dkim_enabled"
                            {{if .Domain.DKIMEnabled}}checked{{end}} onchange="toggleDKIMFields()">
-                    Enable DKIM Signing
-                </label>
+                    <span data-i18n="infra.enable_dkim_signing">Enable DKIM Signing</span> </label>
             </div>
 
             <div id="dkim-fields" {{if not .Domain.DKIMEnabled}}style="display: none;"{{end}}>
                 <div class="form-group">
-                    <label for="dkim_key_id">DKIM Key</label>
+                    <label for="dkim_key_id" data-i18n="infra.dkim_key">DKIM Key</label>
                     <select id="dkim_key_id" name="dkim_key_id" class="form-control">
-                        <option value="">-- Select existing key --</option>
+                        <option value="" data-i18n="infra.select_existing_key">-- Select existing key --</option>
                         {{range .DKIMKeys}}
                         <option value="{{.ID}}" data-domain="{{.Domain}}" data-selector="{{.Selector}}"
                                 {{if eq .ID $.Domain.DKIMKeyID}}selected{{end}}>
@@ -78,44 +77,43 @@
                         {{end}}
                     </select>
                     <small class="text-muted">
-                        Select a DKIM key that matches the domain, or <a href="/dkim/new" target="_blank">create new key</a>
+                        <span data-i18n="infra.select_a_dkim_key_that_matches_the_domain_or">Select a DKIM key that matches the domain, or</span> <a href="/dkim/new" target="_blank" data-i18n="infra.create_new_key">create new key</a>
                     </small>
                 </div>
 
                 <div class="form-group">
-                    <label for="dkim_selector">DKIM Selector</label>
+                    <label for="dkim_selector" data-i18n="infra.dkim_selector">DKIM Selector</label>
                     <input type="text" id="dkim_selector" name="dkim_selector" class="form-control"
                            value="{{if .Domain.DKIMSelector}}{{.Domain.DKIMSelector}}{{else}}mail{{end}}" placeholder="mail">
                 </div>
             </div>
 
-            <h3>Rate Limits</h3>
+            <h3 data-i18n="infra.rate_limits">Rate Limits</h3>
             <div class="form-row">
                 <div class="form-group col-md-4">
-                    <label for="rate_limit_hour">Messages per Hour</label>
+                    <label for="rate_limit_hour" data-i18n="infra.messages_per_hour">Messages per Hour</label>
                     <input type="number" id="rate_limit_hour" name="rate_limit_hour" class="form-control"
                            min="0" value="{{.Domain.RateLimitHour}}" placeholder="1000">
                 </div>
                 <div class="form-group col-md-4">
-                    <label for="rate_limit_day">Messages per Day</label>
+                    <label for="rate_limit_day" data-i18n="infra.messages_per_day">Messages per Day</label>
                     <input type="number" id="rate_limit_day" name="rate_limit_day" class="form-control"
                            min="0" value="{{.Domain.RateLimitDay}}" placeholder="10000">
                 </div>
                 <div class="form-group col-md-4">
-                    <label for="rate_limit_recipients">Recipients per Message</label>
+                    <label for="rate_limit_recipients" data-i18n="infra.recipients_per_message">Recipients per Message</label>
                     <input type="number" id="rate_limit_recipients" name="rate_limit_recipients" class="form-control"
                            min="0" value="{{.Domain.RateLimitRecipients}}" placeholder="100">
                 </div>
             </div>
 
             <div class="alert alert-warning">
-                <strong>Note:</strong> Changing domain settings will mark all deployments as outdated.
-                You will need to sync or redeploy to update the servers.
+                <strong data-i18n="infra.note">Note:</strong> <span data-i18n="infra.changing_domain_settings_will_mark_all">Changing domain settings will mark all deployments as outdated. You will need to sync or redeploy to update the servers.</span>
             </div>
 
             <div class="form-actions">
-                <button type="submit" class="btn btn-primary">Save Changes</button>
-                <a href="/domains/{{.Domain.ID}}" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary" data-i18n="infra.save_changes">Save changes</button>
+                <a href="/domains/{{.Domain.ID}}" class="btn btn-secondary" data-i18n="cancel">Cancel</a>
             </div>
         </form>
     </div>

@@ -1,0 +1,838 @@
+<!doctype html>
+<!-- Исторический прототип, не поддерживается. Реализация: internal/web/views/_campaign_flow.html и internal/web/static/js/campaign-flow.js; описание: docs/campaign-flow.ru.md -->
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Путь новой рассылки</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: demo chrome on top (variant switcher + step strip), then each screen as a mock of the sendry-web panel with notes beside it. Colors follow the panel's own style.css. */
+:root {
+    --bg: #eef1f5;
+    --surface: #ffffff;
+    --panel-bg: #f9fafb;
+    --text: #111827;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --primary: #3b82f6;
+    --primary-dark: #2563eb;
+    --primary-soft: #e8f0fe;
+    --success: #0f9f6e;
+    --success-soft: #e3f6ee;
+    --warning: #b7791f;
+    --warning-soft: #fdf3dc;
+    --error: #dc2626;
+    --error-soft: #fde8e8;
+    --sidebar-bg: #1c2533;
+    --sidebar-text: #aeb8c6;
+    --sidebar-active: rgba(255,255,255,.10);
+    --urlbar: #e7ebf0;
+    --note-bg: #fffdf6;
+    --note-border: #eadfbf;
+    --shadow: 0 1px 3px rgba(15,23,42,.08), 0 8px 24px rgba(15,23,42,.06);
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --r: 8px;
+}
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --bg: #0c111a; --surface: #1f2937; --panel-bg: #111827; --text: #f3f4f6; --muted: #9ca3af;
+        --border: #374151; --primary: #5b9bff; --primary-dark: #3b82f6; --primary-soft: #1d2b45;
+        --success: #34d399; --success-soft: #12322a; --warning: #fbbf24; --warning-soft: #3a2f12;
+        --error: #f87171; --error-soft: #3b1a1a; --sidebar-bg: #0b1220; --sidebar-text: #9aa6b8;
+        --sidebar-active: rgba(255,255,255,.09); --urlbar: #18202d; --note-bg: #1a1a14; --note-border: #3d3820;
+        --shadow: 0 1px 3px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.3);
+        color-scheme: dark;
+    }
+}
+:root[data-theme="dark"] {
+    --bg: #0c111a; --surface: #1f2937; --panel-bg: #111827; --text: #f3f4f6; --muted: #9ca3af;
+    --border: #374151; --primary: #5b9bff; --primary-dark: #3b82f6; --primary-soft: #1d2b45;
+    --success: #34d399; --success-soft: #12322a; --warning: #fbbf24; --warning-soft: #3a2f12;
+    --error: #f87171; --error-soft: #3b1a1a; --sidebar-bg: #0b1220; --sidebar-text: #9aa6b8;
+    --sidebar-active: rgba(255,255,255,.09); --urlbar: #18202d; --note-bg: #1a1a14; --note-border: #3d3820;
+    --shadow: 0 1px 3px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.3);
+    color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font-family: var(--font); line-height: 1.5; }
+.wrap { max-width: 1240px; margin: 0 auto; padding-block: 28px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1 { font-size: 1.6rem; line-height: 1.2; margin: 0 0 6px; text-wrap: balance; }
+.lead { color: var(--muted); margin: 0 0 22px; max-width: 70ch; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* Variant switcher */
+.switch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
+.switch button { text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; cursor: pointer; display: grid; gap: 2px; }
+.switch button:hover { border-color: var(--primary); }
+.switch button[aria-selected="true"] { border: 2px solid var(--primary); padding: 11px 13px; }
+.switch .sw-name { font-weight: 600; }
+.switch .sw-meta { color: var(--muted); font-size: .85rem; }
+.switch .sw-count { font-variant-numeric: tabular-nums; font-size: .8rem; color: var(--muted); }
+.switch .sw-count b { color: var(--text); }
+
+/* Step strip */
+.strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 14px; }
+.strip .st { border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 4px 12px 4px 6px; font-size: .85rem; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.strip .st .n { width: 20px; height: 20px; border-radius: 50%; background: var(--border); display: inline-grid; place-items: center; font-size: .75rem; font-variant-numeric: tabular-nums; }
+.strip .st.on { border-color: var(--primary); color: var(--primary); }
+.strip .st.on .n { background: var(--primary); color: #fff; }
+.strip .hop { color: var(--muted); font-size: .8rem; }
+.strip .hop.page { color: var(--error); font-weight: 600; }
+.strip .nav { margin-left: auto; display: flex; gap: 6px; }
+.strip .nav button { border: 1px solid var(--border); background: var(--surface); border-radius: 6px; padding: 4px 12px; cursor: pointer; }
+.strip .nav button:disabled { opacity: .4; cursor: default; }
+
+/* Screen = mock + notes */
+.screen { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
+.notes { background: var(--note-bg); border: 1px solid var(--note-border); border-radius: 10px; padding: 14px 16px; font-size: .9rem; display: grid; gap: 10px; }
+.notes h3 { margin: 0; font-size: 1rem; }
+.notes ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.notes .tag { display: inline-block; font-size: .72rem; font-weight: 600; letter-spacing: .02em; padding: 1px 8px; border-radius: 999px; }
+.tag.bad { background: var(--error-soft); color: var(--error); }
+.tag.good { background: var(--success-soft); color: var(--success); }
+.notes .hint { color: var(--muted); font-size: .82rem; }
+
+/* Mock panel frame */
+.pf { border-radius: 10px; overflow: hidden; box-shadow: var(--shadow); border: 1px solid var(--border); background: var(--panel-bg); }
+.pf-url { background: var(--urlbar); padding: 7px 12px; display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: .78rem; color: var(--muted); border-bottom: 1px solid var(--border); }
+.pf-url .dots { display: inline-flex; gap: 5px; }
+.pf-url .dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--border); display: block; }
+.pf-url .addr { background: var(--surface); border-radius: 6px; padding: 2px 10px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.pf-url .addr.changed { animation: flash 1s ease-out; }
+@keyframes flash { from { background: var(--warning-soft); color: var(--text); } }
+.pf-body { display: flex; min-height: 520px; }
+.sb { flex: 0 0 168px; background: var(--sidebar-bg); color: var(--sidebar-text); padding: 14px 10px; font-size: .84rem; display: flex; flex-direction: column; gap: 2px; }
+.sb .brand { color: #fff; font-weight: 600; padding: 0 8px 12px; }
+.sb .grp { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; opacity: .6; padding: 10px 8px 4px; }
+.sb .it { padding: 6px 8px; border-radius: 6px; }
+.sb .it.on { background: var(--sidebar-active); color: #fff; }
+.main { flex: 1; min-width: 0; padding: 18px 20px 24px; display: grid; gap: 14px; align-content: start; }
+.ph { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
+.ph h2 { font-size: 1.25rem; margin: 0; }
+.ph .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); }
+.card-h { padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.card-h h4 { margin: 0; font-size: .95rem; }
+.card-b { padding: 14px; display: grid; gap: 12px; }
+.btn { border: 1px solid var(--border); background: var(--surface); border-radius: 6px; padding: 6px 14px; font-size: .88rem; cursor: pointer; white-space: nowrap; }
+.btn:hover { border-color: var(--muted); }
+.btn-p { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn-p:hover { background: var(--primary-dark); border-color: var(--primary-dark); }
+.btn-sm { padding: 2px 10px; font-size: .8rem; }
+.btn[data-go] { position: relative; }
+.btn.lead-btn { box-shadow: 0 0 0 3px var(--primary-soft); }
+.lnk { color: var(--primary); cursor: pointer; background: none; border: 0; padding: 0; font-size: inherit; }
+.lnk:hover { text-decoration: underline; }
+.fg { display: grid; gap: 4px; }
+.fg label, .lbl { font-size: .82rem; font-weight: 600; }
+.fg small { color: var(--muted); font-size: .76rem; }
+.in { width: 100%; border: 1px solid var(--border); background: var(--surface); border-radius: 6px; padding: 6px 10px; font-size: .88rem; min-width: 0; }
+textarea.in { font-family: var(--mono); font-size: .8rem; min-height: 54px; resize: vertical; }
+.row2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.chk { display: flex; gap: 8px; align-items: center; font-size: .88rem; }
+.muted { color: var(--muted); }
+.small { font-size: .8rem; }
+.sec-t { font-size: .95rem; font-weight: 600; margin: 4px 0 0; }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 10px 12px; }
+.stat .v { font-size: 1.3rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat .k { color: var(--muted); font-size: .78rem; }
+.tbl { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.tbl th, .tbl td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); }
+.tbl th { color: var(--muted); font-weight: 600; font-size: .76rem; }
+.empty { color: var(--muted); font-size: .85rem; text-align: center; padding: 14px; }
+.alert { border-radius: 6px; padding: 9px 12px; font-size: .85rem; }
+.alert-w { background: var(--warning-soft); color: var(--text); border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent); }
+.alert-e { background: var(--error-soft); border: 1px solid color-mix(in srgb, var(--error) 35%, transparent); }
+.alert-s { background: var(--success-soft); border: 1px solid color-mix(in srgb, var(--success) 35%, transparent); }
+details.more { border: 1px dashed var(--border); border-radius: 6px; padding: 8px 12px; }
+details.more summary { cursor: pointer; font-size: .86rem; color: var(--primary); }
+details.more[open] summary { margin-bottom: 10px; }
+details.more .inner { display: grid; gap: 12px; }
+.tabs-m { display: flex; gap: 2px; border-bottom: 1px solid var(--border); font-size: .85rem; }
+.tabs-m span { padding: 6px 12px; color: var(--muted); }
+.tabs-m span.on { color: var(--primary); border-bottom: 2px solid var(--primary); margin-bottom: -1px; }
+
+/* Native-dialog imitation */
+.dlg-wrap { position: relative; }
+.dlg-shade { position: absolute; inset: 0; background: rgba(15,23,42,.35); display: grid; place-items: start center; padding-top: 40px; border-radius: var(--r); }
+.dlg { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; width: min(360px, 90%); padding: 16px; box-shadow: var(--shadow); display: grid; gap: 12px; font-size: .9rem; }
+.dlg .host { font-size: .78rem; color: var(--muted); }
+.dlg .b { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* Readiness checklist */
+.ready { display: grid; gap: 0; }
+.ready .r { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: .88rem; }
+.ready .r:last-child { border-bottom: 0; }
+.ico { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: .72rem; font-weight: 700; color: #fff; margin-top: 1px; }
+.ico.ok { background: var(--success); }
+.ico.wait { background: transparent; border: 2px solid var(--border); }
+.ico.warn { background: var(--warning); }
+.r .t { font-weight: 600; }
+.r .d { color: var(--muted); font-size: .8rem; }
+
+/* Wizard stepper (variant A) */
+.wz { display: flex; flex-wrap: wrap; gap: 0; border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; background: var(--surface); }
+.wz span { flex: 1 1 0; min-width: 90px; padding: 8px 12px; font-size: .84rem; color: var(--muted); border-right: 1px solid var(--border); display: flex; gap: 8px; align-items: center; }
+.wz span:last-child { border-right: 0; }
+.wz span b { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid currentColor; display: inline-grid; place-items: center; font-size: .72rem; flex: none; }
+.wz span.done { color: var(--success); }
+.wz span.cur { color: var(--primary); background: var(--primary-soft); font-weight: 600; }
+.wz-foot { display: flex; justify-content: space-between; gap: 8px; align-items: center; flex-wrap: wrap; }
+.draft { font-size: .78rem; color: var(--muted); }
+
+/* Template gallery */
+.gal-tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.chip { border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; font-size: .78rem; background: var(--surface); cursor: pointer; }
+.chip.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+.gal { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; }
+.tc { border: 1px solid var(--border); border-radius: var(--r); background: var(--surface); padding: 6px; cursor: pointer; text-align: left; display: grid; gap: 6px; }
+.tc:hover { border-color: var(--primary); }
+.tc.sel { border: 2px solid var(--primary); padding: 5px; }
+.tc .nm { font-size: .78rem; font-weight: 600; line-height: 1.25; }
+.tc .fd { font-size: .7rem; color: var(--muted); }
+
+/* Mini e-mail thumbnail */
+.mail { --c: #2f7d32; --c2: #f4b400; background: #fff; border: 1px solid #e3e6ea; border-radius: 4px; overflow: hidden; display: grid; color: #1f2937; }
+.mail .mh { background: var(--c); color: #fff; font-size: .58rem; font-weight: 700; padding: 4px 6px; }
+.mail .mb { background: color-mix(in srgb, var(--c2) 30%, #fff); padding: 8px 6px; font-size: .62rem; font-weight: 700; line-height: 1.2; }
+.mail .ml { padding: 5px 6px 7px; display: grid; gap: 3px; }
+.mail .ml i { display: block; height: 3px; border-radius: 2px; background: #e5e7eb; }
+.mail .ml i:nth-child(2) { width: 80%; }
+.mail .ml i:nth-child(3) { width: 60%; }
+.mail .cta { justify-self: start; margin: 0 6px 7px; background: var(--c); color: #fff; font-size: .5rem; padding: 2px 6px; border-radius: 3px; }
+.mail.big { max-width: 520px; width: 100%; margin: 0 auto; }
+.mail.big .mh { font-size: .9rem; padding: 10px 16px; }
+.mail.big .mb { font-size: 1.15rem; padding: 26px 16px; }
+.mail.big .ml { padding: 14px 16px; gap: 8px; }
+.mail.big .ml i { height: 7px; }
+.mail.big .cta { font-size: .8rem; padding: 7px 16px; margin: 0 16px 14px; border-radius: 5px; }
+.mail.big .ft { font-size: .7rem; color: #6b7280; padding: 8px 16px 14px; border-top: 1px solid #eee; }
+.mail.big .ft u { color: #2563eb; }
+.mail.phone { max-width: 250px; }
+.mail.phone .mb { font-size: .95rem; padding: 20px 12px; }
+.prev-frame { background: var(--panel-bg); border: 1px solid var(--border); border-radius: var(--r); padding: 14px; }
+
+/* Picker with preview (variant B) */
+.pick { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 12px; align-items: start; }
+
+/* Lists (variant A, step 2) */
+.lists { display: grid; gap: 8px; }
+.lst { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; border: 1px solid var(--border); border-radius: var(--r); padding: 10px 12px; background: var(--surface); cursor: pointer; font-size: .88rem; }
+.lst.sel { border: 2px solid var(--primary); padding: 9px 11px; }
+.lst .num { font-variant-numeric: tabular-nums; text-align: right; }
+.lst .num small { display: block; color: var(--muted); font-size: .74rem; }
+
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface); padding: 4px 12px; font-size: .8rem; cursor: pointer; }
+.seg button.on { background: var(--primary); color: #fff; }
+
+.sum { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; font-size: .86rem; margin: 0; }
+.sum dt { color: var(--muted); }
+.sum dd { margin: 0; }
+.radio-row { display: flex; gap: 16px; flex-wrap: wrap; }
+
+@media (max-width: 900px) {
+    .screen { grid-template-columns: minmax(0, 1fr); }
+    .sb { display: none; }
+}
+@media (max-width: 560px) {
+    .switch { grid-template-columns: minmax(0, 1fr); }
+    .row2, .pick { grid-template-columns: minmax(0, 1fr); }
+    .stats { grid-template-columns: minmax(0, 1fr); }
+    .main { padding: 14px 12px 18px; }
+    .strip .nav { margin-left: 0; width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { .pf-url .addr.changed { animation: none; } }
+</style>
+
+<div class="wrap">
+    <h1>Путь новой рассылки: как сейчас и два варианта</h1>
+    <p class="lead">Пример: рассылка «Осенняя распродажа» на список «Подписчики рассылки». Нажимайте кнопки внутри макета или шаги сверху. Адресная строка подсвечивается, когда открывается новая страница.</p>
+
+    <div class="switch" role="tablist" aria-label="Вариант">
+        <button role="tab" id="tab-now" aria-selected="true" data-flow="now">
+            <span class="sw-name">Сейчас</span>
+            <span class="sw-meta">Как устроено в панели сегодня</span>
+            <span class="sw-count"><b>4</b> страницы, <b>5</b> переходов</span>
+        </button>
+        <button role="tab" id="tab-b" aria-selected="false" data-flow="b">
+            <span class="sw-name">Вариант Б: починить страницы</span>
+            <span class="sw-meta">Те же страницы, шаблон в форме создания</span>
+            <span class="sw-count"><b>3</b> страницы, <b>2</b> перехода</span>
+        </button>
+        <button role="tab" id="tab-a" aria-selected="false" data-flow="a">
+            <span class="sw-name">Вариант А: мастер</span>
+            <span class="sw-meta">Всё на одной странице, 4 шага</span>
+            <span class="sw-count"><b>1</b> страница, <b>0</b> переходов</span>
+        </button>
+    </div>
+
+    <div class="strip" id="strip"></div>
+
+    <!-- ===================== NOW ===================== -->
+    <div class="flow" data-flow="now">
+
+        <div class="screen" data-title="Новая рассылка" data-url="/campaigns/new" data-nav="Рассылки">
+            <div class="pf"><div class="main">
+                <div class="ph"><h2>Новая рассылка</h2><div class="acts"><button class="btn">Назад к рассылкам</button></div></div>
+                <div class="card"><div class="card-b">
+                    <div class="fg"><label>Название *</label><input class="in" value="Осенняя распродажа"></div>
+                    <div class="fg"><label>Описание</label><input class="in" value=""></div>
+                    <div class="row2">
+                        <div class="fg"><label>Email отправителя *</label><input class="in" value="news@semena.example"></div>
+                        <div class="fg"><label>Имя отправителя</label><input class="in" value="Семена"></div>
+                    </div>
+                    <div class="fg"><label>Reply-To</label><input class="in" value=""></div>
+                    <div class="fg"><label>Переменные (JSON)</label><textarea class="in">{"discount": "20%"}</textarea></div>
+                    <div class="fg"><label>Теги (JSON-массив)</label><input class="in" value='["newsletter", "marketing"]'><small>Теги передаются в Sendry для категоризации</small></div>
+                    <div class="sec-t">Трекинг</div>
+                    <label class="chk"><input type="checkbox" checked> Отслеживать открытия</label>
+                    <label class="chk"><input type="checkbox" checked> Отслеживать клики</label>
+                    <label class="chk"><input type="checkbox"> Добавлять UTM-метки к ссылкам</label>
+                    <div style="display:flex; gap:8px"><button class="btn btn-p lead-btn" data-go="next">Создать рассылку</button><button class="btn">Отмена</button></div>
+                </div></div>
+            </div></div>
+            <aside class="notes">
+                <h3>Шаг 1. Форма создания</h3>
+                <ul>
+                    <li><span class="tag bad">проблема</span> Самого письма здесь нет: шаблон выбрать нельзя.</li>
+                    <li>Переменные и теги вводятся в JSON.</li>
+                    <li>После сохранения непонятно, что делать дальше.</li>
+                </ul>
+            </aside>
+        </div>
+
+        <div class="screen" data-title="Карточка" data-url="/campaigns/7f3a…" data-nav="Рассылки">
+            <div class="pf"><div class="main">
+                <div class="ph"><h2>Осенняя распродажа</h2><div class="acts"><button class="btn btn-p">Отправить рассылку</button><button class="btn">Редактировать</button></div></div>
+                <div class="stats">
+                    <div class="stat"><div class="v">0</div><div class="k">Отправлено</div></div>
+                    <div class="stat"><div class="v">0%</div><div class="k">Открытия</div></div>
+                    <div class="stat"><div class="v">0%</div><div class="k">Клики</div></div>
+                </div>
+                <div class="row2">
+                    <div class="card"><div class="card-h"><h4>Данные рассылки</h4></div><div class="card-b small">
+                        <div><span class="muted">От кого:</span> Семена &lt;news@semena.example&gt;</div>
+                        <div><span class="muted">Теги:</span> ["newsletter", "marketing"]</div>
+                    </div></div>
+                    <div class="card"><div class="card-h"><h4>Варианты шаблонов</h4><button class="lnk small lead-lnk" data-go="next">Управление</button></div><div class="empty">Нет вариантов</div></div>
+                </div>
+                <div class="card"><div class="card-h"><h4>Последние запуски</h4></div><div class="empty">Запусков ещё не было</div></div>
+            </div></div>
+            <aside class="notes">
+                <h3>Шаг 2. Карточка рассылки</h3>
+                <ul>
+                    <li><span class="tag bad">проблема</span> Главная синяя кнопка — «Отправить», хотя письма ещё нет.</li>
+                    <li>Выбор письма спрятан за маленькой ссылкой «Управление» в блоке «Варианты шаблонов».</li>
+                    <li>Статистика с нулями занимает место, пока отправлять нечего.</li>
+                </ul>
+                <p class="hint">Нажмите «Управление» в блоке справа.</p>
+            </aside>
+        </div>
+
+        <div class="screen" data-title="Варианты" data-url="/campaigns/7f3a…/variants" data-nav="Рассылки">
+            <div class="pf"><div class="main">
+                <div class="ph"><h2>Варианты: Осенняя распродажа</h2><div class="acts"><button class="btn" data-go="next">Назад к рассылке</button></div></div>
+                <div class="card"><div class="card-h"><h4>Варианты</h4></div>
+                    <table class="tbl"><thead><tr><th>Название</th><th>Шаблон</th><th>Вес</th><th></th></tr></thead>
+                    <tbody><tr><td>A</td><td>demo-tracking-autumn-sale</td><td>100</td><td><button class="btn btn-sm">Удалить</button></td></tr></tbody></table>
+                </div>
+                <div class="card"><div class="card-h"><h4>Добавить вариант</h4></div><div class="card-b">
+                    <div class="row2">
+                        <div class="fg"><label>Название варианта *</label><input class="in" placeholder="Вариант A"></div>
+                        <div class="fg"><label>Вес (1–100)</label><input class="in" value="100"></div>
+                    </div>
+                    <div class="fg"><label>Шаблон *</label>
+                        <select class="in" size="6">
+                            <option>abandoned-cart-reminder</option><option>birthday-coupon</option><option selected>demo-tracking-autumn-sale</option><option>demo-tracking-new-arrivals</option><option>newsletter-2025-09</option><option>newsletter-2025-10</option><option>promo-black-friday</option><option>promo-summer-sale</option><option>promo-summer-sale-v2</option><option>welcome-series-1</option><option>welcome-series-2</option><option>… ещё 35</option>
+                        </select>
+                        <small>46 названий, ни поиска, ни превью</small>
+                    </div>
+                    <div class="fg"><label>Тема (переопределение)</label><input class="in"></div>
+                    <div><button class="btn btn-p">Добавить вариант</button></div>
+                </div></div>
+            </div></div>
+            <aside class="notes">
+                <h3>Шаг 3. Выбор письма</h3>
+                <ul>
+                    <li><span class="tag bad">проблема</span> Чтобы просто выбрать письмо, нужно придумать имя варианта и вес для A/B-теста.</li>
+                    <li>Шаблон ищется в списке из 46 технических названий, превью нет.</li>
+                    <li>После добавления пользователь остаётся на этой странице, обратно в карточку нужно вернуться самому.</li>
+                </ul>
+                <p class="hint">Вариант уже добавлен. Нажмите «Назад к рассылке».</p>
+            </aside>
+        </div>
+
+        <div class="screen" data-title="Снова карточка" data-url="/campaigns/7f3a…" data-nav="Рассылки">
+            <div class="pf"><div class="main">
+                <div class="ph"><h2>Осенняя распродажа</h2><div class="acts"><button class="btn btn-p lead-btn" data-go="next">Отправить рассылку</button><button class="btn">Редактировать</button></div></div>
+                <div class="stats">
+                    <div class="stat"><div class="v">0</div><div class="k">Отправлено</div></div>
+                    <div class="stat"><div class="v">0%</div><div class="k">Открытия</div></div>
+                    <div class="stat"><div class="v">0%</div><div class="k">Клики</div></div>
+                </div>
+                <div class="row2">
+                    <div class="card"><div class="card-h"><h4>Данные рассылки</h4></div><div class="card-b small">
+                        <div><span class="muted">От кого:</span> Семена &lt;news@semena.example&gt;</div>
+                    </div></div>
+                    <div class="card"><div class="card-h"><h4>Варианты шаблонов</h4><button class="lnk small">Управление</button></div>
+                        <table class="tbl"><tbody><tr><td>A</td><td>demo-tracking-autumn-sale</td><td>100%</td></tr></tbody></table>
+                    </div>
+                </div>
+            </div></div>
+            <aside class="notes">
+                <h3>Шаг 4. Обратно в карточку</h3>
+                <ul>
+                    <li>Та же страница, что на шаге 2. Отправка открывается только отсюда.</li>
+                    <li>В карточке не видно, что всё готово: нет «письмо выбрано», нет «кому».</li>
+                </ul>
+            </aside>
+        </div>
+
+        <div class="screen" data-title="Отправка" data-url="/campaigns/7f3a…/send" data-nav="Рассылки">
+            <div class="pf"><div class="main">
+                <div class="ph"><h2>Отправка: Осенняя распродажа</h2><div class="acts"><button class="btn">Назад к рассылке</button></div></div>
+                <div class="card"><div class="card-b">
+                    <div class="sec-t">1. Выберите получателей</div>
+                    <div class="fg"><label>Список получателей *</label><select class="in"><option>Подписчики рассылки (301)</option></select></div>
+                    <div class="sec-t">2. Выберите серверы</div>
+                    <label class="chk"><input type="checkbox" checked> mx1.semena.example</label>
+                    <div class="sec-t">3. Стратегия распределения</div>
+                    <select class="in"><option>Round robin</option><option>По весам</option><option>multi_send.weights из конфига</option></select>
+                    <div class="sec-t">4. Тестовый режим</div>
+                    <label class="chk"><input type="checkbox"> Тестовый режим: отправить первым N получателям</label>
+                    <div class="sec-t">5. Расписание</div>
+                    <input class="in" type="text" value="" placeholder="дд.мм.гггг --:-- (пусто = сейчас)">
+                    <div><button class="btn btn-p lead-btn" data-go="next">Отправить рассылку</button></div>
+                </div></div>
+            </div></div>
+            <aside class="notes">
+                <h3>Шаг 5. Страница отправки</h3>
+                <ul>
+                    <li>Сервер один, но выбор серверов и стратегии всё равно обязательный шаг. Есть пункт на жаргоне: «multi_send.weights из конфига».</li>
+                    <li><span class="tag bad">проблема</span> «Тестовый режим» отправляет письма первым N <em>реальным</em> подписчикам, себе пробное письмо отсюда не отправить.</li>
+                    <li>В списке 301 адрес, но 9 из них отписались. Сколько человек реально получат письмо, не сказано.</li>
+                </ul>
+            </aside>
+        </div>
+
+        <div class="screen" data-title="Подтверждение" data-url="/campaigns/7f3a…/send" data-nav="Рассылки">
+            <div class="pf"><div class="main dlg-wrap">
+                <div class="ph"><h2>Отправка: Осенняя распродажа</h2></div>
+                <div class="card"><div class="card-b" style="min-height:300px">
+                    <div class="sec-t">1. Выберите получателей</div>
+                    <select class="in"><option>Подписчики рассылки (301)</option></select>
+                    <div class="sec-t muted">…</div>
+                </div></div>
+                <div class="dlg-shade"><div class="dlg" role="dialog" aria-label="Подтверждение браузера">
+                    <div class="host">Страница 127.0.0.1:8088 сообщает</div>
+                    <div>Отправить рассылку?</div>
+                    <div class="b"><button class="btn">Отмена</button><button class="btn btn-p">OK</button></div>
+                </div></div>
+            </div></div>
+            <aside class="notes">
+                <h3>Шаг 6. Подтверждение</h3>
+                <ul>
+                    <li><span class="tag bad">проблема</span> Стандартное окно браузера: ни числа получателей, ни темы, ни превью. Человек жмёт «OK», не видя, что уйдёт и скольким.</li>
+                </ul>
+                <p class="hint">Итого: 4 разные страницы, 5 переходов, письмо ни разу не показали.</p>
+            </aside>
+        </div>
+    </div>
+
+    <!-- ===================== VARIANT B ===================== -->
+    <div class="flow" data-flow="b" hidden>
+
+        <div class="screen" data-title="Новая рассылка" data-url="/campaigns/new" data-nav="Рассылки">
+            <div class="pf"><div class="main">
+                <div class="ph"><h2>Новая рассылка</h2><div class="acts"><button class="btn">Назад к рассылкам</button></div></div>
+                <div class="card"><div class="card-b">
+                    <div class="fg"><label>Название *</label><input class="in" value="Осенняя распродажа"><small>Видно только вам, получатели его не увидят</small></div>
+                    <div class="row2">
+                        <div class="fg"><label>Email отправителя *</label><input class="in" value="news@semena.example"></div>
+                        <div class="fg"><label>Имя отправителя</label><input class="in" value="Семена"></div>
+                    </div>
+                    <div class="sec-t">Письмо</div>
+                    <div class="pick">
+                        <div class="fg"><label for="b-tpl">Шаблон *</label>
+                            <select class="in" id="b-tpl">
+                                <option value="autumn" selected>Осенняя распродажа −20% (demo-tracking-autumn-sale)</option>
+                                <option value="news">Новинки октября (demo-tracking-new-arrivals)</option>
+                                <option value="welcome">Добро пожаловать (welcome-series-1)</option>
+                                <option value="bf">Чёрная пятница (promo-black-friday)</option>
+                            </select>
+                            <small>Поиск по названию, папки шаблонов. Справа превью выбранного.</small>
+                            <div class="fg" style="margin-top:8px"><label>Тема письма</label><input class="in" id="b-subj" value="Осенняя распродажа: −20% на все семена"><small>Подставлена из шаблона, можно поменять</small></div>
+                        </div>
+                        <div id="b-thumb"></div>
+                    </div>
+                    <details class="more"><summary>Дополнительно: Reply-To, теги, переменные</summary><div class="inner">
+                        <div class="fg"><label>Reply-To</label><input class="in"></div>
+                        <div class="fg"><label>Теги</label><input class="in" value="newsletter, marketing"><small>Через запятую</small></div>
+                    </div></details>
+                    <div class="sec-t">Трекинг</div>
+                    <label class="chk"><input type="checkbox" checked> Отслеживать открытия</label>
+                    <label class="chk"><input type="checkbox" checked> Отслеживать клики</label>
+                    <div><button class="btn btn-p lead-btn" data-go="next">Создать рассылку</button></div>
+                </div></div>
+            </div></div>
+            <aside class="notes">
+                <h3>Шаг 1. Форма создания</h3>
+                <ul>
+                    <li><span class="tag good">изменено</span> Шаблон выбирается сразу, с превью. Под капотом он становится вариантом A с весом 100, имя и вес придумывать не нужно.</li>
+                    <li>Тема подставляется из шаблона.</li>
+                    <li>Reply-To, теги и переменные убраны под «Дополнительно», теги вводятся через запятую, без JSON.</li>
+                </ul>
+                <p class="hint">Попробуйте поменять шаблон в списке.</p>
+            </aside>
+        </div>
+
+        <div class="screen" data-title="Карточка" data-url="/campaigns/7f3a…" data-nav="Рассылки">
+            <div class="pf"><div class="main">
+                <div class="ph"><h2>Осенняя распродажа</h2><div class="acts"><button class="btn btn-p lead-btn" data-go="next">Отправить рассылку</button><button class="btn">Редактировать</button></div></div>
+                <div class="tabs-m"><span class="on">Обзор</span><span>Письмо (A/B-тест)</span><span>Запуски</span></div>
+                <div class="alert alert-w"><strong>Не задан проксирующий домен.</strong> Письма уходят без ссылки отписки, открытия и клики не отслеживаются. Попросите администратора указать его в настройках трекинга.</div>
+                <div class="card"><div class="card-h"><h4>Готовность к отправке</h4><span class="small muted">2 из 3</span></div><div class="card-b" style="padding-block:4px">
+                    <div class="ready">
+                        <div class="r"><span class="ico ok">✓</span><div><div class="t">Письмо</div><div class="d">«Осенняя распродажа −20%», тема «Осенняя распродажа: −20% на все семена»</div><button class="lnk small">+ Добавить второй вариант для A/B-теста</button></div><button class="btn btn-sm">Изменить</button></div>
+                        <div class="r"><span class="ico ok">✓</span><div><div class="t">Отправитель</div><div class="d">Семена &lt;news@semena.example&gt;</div></div><button class="btn btn-sm">Изменить</button></div>
+                        <div class="r"><span class="ico wait"></span><div><div class="t">Кому</div><div class="d">Список выбирается при отправке</div></div><span></span></div>
+                    </div>
+                </div></div>
+                <div class="card"><div class="card-h"><h4>Запуски</h4></div><div class="empty">Запусков ещё не было. Статистика появится после первой отправки.</div></div>
+            </div></div>
+            <aside class="notes">
+                <h3>Шаг 2. Карточка рассылки</h3>
+                <ul>
+                    <li><span class="tag good">изменено</span> Вместо пустой статистики показан блок «Готовность»: что уже есть и чего не хватает.</li>
+                    <li>Если письмо не выбрано, главная кнопка сверху «Выбрать письмо», а не «Отправить».</li>
+                    <li>Вкладка «Варианты» переименована в «Письмо (A/B-тест)», второй вариант добавляется отдельной ссылкой, только если нужен тест.</li>
+                    <li>Жёлтая плашка про домен уже сделана в пункте 2.</li>
+                </ul>
+            </aside>
+        </div>
+
+        <div class="screen" data-title="Отправка" data-url="/campaigns/7f3a…/send" data-nav="Рассылки">
+            <div class="pf"><div class="main">
+                <div class="ph"><h2>Отправка: Осенняя распродажа</h2><div class="acts"><button class="btn">Назад к рассылке</button></div></div>
+                <div class="card"><div class="card-b">
+                    <div class="fg"><label>Кому *</label><select class="in"><option>Подписчики рассылки</option><option>Клиенты 2025</option></select>
+                        <small><b style="color:var(--text)">292</b> получат письмо. 9 отписались, им не отправим.</small></div>
+                    <div class="fg"><span class="lbl">Когда</span>
+                        <div class="radio-row"><label class="chk"><input type="radio" name="b-when" checked> Сейчас</label><label class="chk"><input type="radio" name="b-when"> Запланировать</label></div></div>
+                    <label class="chk"><input type="checkbox"> Сначала отправить только первым <input class="in" style="width:64px;display:inline-block" value="10"> получателям (пилот)</label>
+                    <details class="more"><summary>Дополнительно: серверы и распределение</summary><div class="inner">
+                        <label class="chk"><input type="checkbox" checked> mx1.semena.example</label>
+                        <select class="in"><option>Поровну между серверами</option><option>По весам серверов</option></select>
+                    </div></details>
+                    <div><button class="btn btn-p lead-btn" data-go="next">Отправить 292 получателям</button></div>
+                </div></div>
+            </div></div>
+            <aside class="notes">
+                <h3>Шаг 3. Отправка</h3>
+                <ul>
+                    <li><span class="tag good">изменено</span> Сразу видно, сколько человек получат письмо и сколько отписавшихся пропустим.</li>
+                    <li>Серверы и стратегия убраны под «Дополнительно». Если сервер один, туда заглядывать не нужно.</li>
+                    <li>«Тестовый режим» переименован в честное «пилот: только первым N получателям».</li>
+                    <li>На кнопке написано, сколько писем уйдёт.</li>
+                </ul>
+            </aside>
+        </div>
+
+        <div class="screen" data-title="Подтверждение" data-url="/campaigns/7f3a…/send" data-nav="Рассылки">
+            <div class="pf"><div class="main">
+                <div class="ph"><h2>Отправка: Осенняя распродажа</h2></div>
+                <div class="card"><div class="card-h"><h4>Проверьте перед отправкой</h4></div><div class="card-b">
+                    <dl class="sum">
+                        <dt>Письмо</dt><dd>Осенняя распродажа −20%</dd>
+                        <dt>Тема</dt><dd>Осенняя распродажа: −20% на все семена</dd>
+                        <dt>От кого</dt><dd>Семена &lt;news@semena.example&gt;</dd>
+                        <dt>Кому</dt><dd>292 получателя из списка «Подписчики рассылки»</dd>
+                        <dt>Когда</dt><dd>Сейчас</dd>
+                    </dl>
+                    <div class="alert alert-w small">Письма уйдут без ссылки отписки: не задан проксирующий домен.</div>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap"><button class="btn btn-p" data-go="0">Отправить 292 получателям</button><button class="btn" data-go="prev">Вернуться к настройкам</button></div>
+                </div></div>
+            </div></div>
+            <aside class="notes">
+                <h3>Шаг 4. Подтверждение</h3>
+                <ul>
+                    <li><span class="tag good">изменено</span> Вместо окна браузера — сводка на той же странице: что, кому, от кого, когда.</li>
+                    <li>Предупреждения повторяются здесь, чтобы их нельзя было пропустить.</li>
+                </ul>
+                <p class="hint">Итого: 3 страницы, 2 перехода. Переделка небольшая: те же страницы, другие поля и подписи.</p>
+            </aside>
+        </div>
+    </div>
+
+    <!-- ===================== VARIANT A ===================== -->
+    <div class="flow" data-flow="a" hidden>
+
+        <div class="screen" data-title="Письмо" data-url="/campaigns/new" data-nav="Рассылки">
+            <div class="pf"><div class="main">
+                <div class="ph"><h2>Новая рассылка</h2><span class="draft">Черновик сохранён</span></div>
+                <div class="wz"><span class="cur"><b>1</b>Письмо</span><span><b>2</b>Кому</span><span><b>3</b>Проверка</span><span><b>4</b>Отправка</span></div>
+                <div class="card"><div class="card-b">
+                    <div class="row2">
+                        <div class="fg"><label>Название рассылки *</label><input class="in" value="Осенняя распродажа"></div>
+                        <div class="fg"><label>От кого *</label><input class="in" value="Семена <news@semena.example>"></div>
+                    </div>
+                    <div class="fg"><span class="lbl">Шаблон письма *</span>
+                        <div class="gal-tools"><input class="in" style="max-width:220px" placeholder="Поиск по шаблонам"><span class="chip on">Все</span><span class="chip">Акции</span><span class="chip">Новости</span><span class="chip">Welcome</span></div>
+                    </div>
+                    <div class="gal" id="a-gal"></div>
+                    <div class="fg"><label>Тема письма</label><input class="in" id="a-subj" value="Осенняя распродажа: −20% на все семена"></div>
+                    <div><button class="lnk small">+ Добавить второй вариант письма (A/B-тест)</button></div>
+                </div></div>
+                <div class="wz-foot"><span></span><button class="btn btn-p lead-btn" data-go="next">Далее: кому</button></div>
+            </div></div>
+            <aside class="notes">
+                <h3>Шаг 1. Письмо</h3>
+                <ul>
+                    <li><span class="tag good">изменено</span> Шаблоны показаны карточками с миниатюрами, есть поиск и папки. Выбор в один клик.</li>
+                    <li>A/B-тест доступен, но спрятан в ссылку под формой.</li>
+                    <li>Черновик сохраняется сам, можно уйти и вернуться.</li>
+                </ul>
+                <p class="hint">Нажмите на другую карточку шаблона.</p>
+            </aside>
+        </div>
+
+        <div class="screen" data-title="Кому" data-url="/campaigns/new" data-nav="Рассылки">
+            <div class="pf"><div class="main">
+                <div class="ph"><h2>Новая рассылка</h2><span class="draft">Черновик сохранён</span></div>
+                <div class="wz"><span class="done"><b>✓</b>Письмо</span><span class="cur"><b>2</b>Кому</span><span><b>3</b>Проверка</span><span><b>4</b>Отправка</span></div>
+                <div class="card"><div class="card-b">
+                    <span class="lbl">Список получателей</span>
+                    <div class="lists" id="a-lists">
+                        <div class="lst sel" tabindex="0"><input type="radio" name="a-list" checked aria-label="Подписчики рассылки"><div><b>Подписчики рассылки</b><div class="small muted">Обновлён 20 октября</div></div><div class="num">292<small>9 отписались</small></div></div>
+                        <div class="lst" tabindex="0"><input type="radio" name="a-list" aria-label="Клиенты 2025"><div><b>Клиенты 2025</b><div class="small muted">Импорт из CSV, 3 сентября</div></div><div class="num">1 184<small>27 отписались</small></div></div>
+                        <div class="lst" tabindex="0"><input type="radio" name="a-list" aria-label="Тестовая группа"><div><b>Тестовая группа</b><div class="small muted">Сотрудники</div></div><div class="num">5<small>0 отписались</small></div></div>
+                    </div>
+                    <span class="small muted">Отписавшимся письмо не отправится.</span>
+                </div></div>
+                <div class="wz-foot"><button class="btn" data-go="prev">Назад</button><button class="btn btn-p lead-btn" data-go="next">Далее: проверка</button></div>
+            </div></div>
+            <aside class="notes">
+                <h3>Шаг 2. Кому</h3>
+                <ul>
+                    <li><span class="tag good">изменено</span> Получатели выбираются до отправки, а не на последней странице.</li>
+                    <li>У каждого списка видно, сколько реально получат письмо.</li>
+                </ul>
+            </aside>
+        </div>
+
+        <div class="screen" data-title="Проверка" data-url="/campaigns/new" data-nav="Рассылки">
+            <div class="pf"><div class="main">
+                <div class="ph"><h2>Новая рассылка</h2><span class="draft">Черновик сохранён</span></div>
+                <div class="wz"><span class="done"><b>✓</b>Письмо</span><span class="done"><b>✓</b>Кому</span><span class="cur"><b>3</b>Проверка</span><span><b>4</b>Отправка</span></div>
+                <div class="row2" style="grid-template-columns: minmax(0,1.3fr) minmax(0,1fr)">
+                    <div class="card"><div class="card-h"><h4>Как увидит получатель</h4><div class="seg" id="a-dev"><button class="on" data-dev="pc">Компьютер</button><button data-dev="ph">Телефон</button></div></div>
+                        <div class="card-b"><div class="small"><span class="muted">Тема:</span> <span id="a-prev-subj">Осенняя распродажа: −20% на все семена</span></div><div class="prev-frame" id="a-prev"></div></div></div>
+                    <div style="display:grid; gap:14px; align-content:start">
+                        <div class="card"><div class="card-h"><h4>Пробное письмо</h4></div><div class="card-b">
+                            <input class="in" value="ux-audit@example.test" aria-label="Адрес для пробного письма">
+                            <div><button class="btn" id="a-test">Отправить мне</button></div>
+                            <div class="alert alert-s small" id="a-test-ok" hidden>Пробное письмо отправлено на ux-audit@example.test</div>
+                        </div></div>
+                        <div class="card"><div class="card-h"><h4>Готовность</h4></div><div class="card-b" style="padding-block:4px">
+                            <div class="ready">
+                                <div class="r"><span class="ico ok">✓</span><div><div class="t">Ссылка отписки в шаблоне</div></div><span></span></div>
+                                <div class="r"><span class="ico ok">✓</span><div><div class="t">Домен semena.example</div><div class="d">Развёрнут на сервере, DKIM включён</div></div><span></span></div>
+                                <div class="r"><span class="ico warn">!</span><div><div class="t">Проксирующий домен не задан</div><div class="d">Письма уйдут без отписки, открытия и клики не посчитаются. Попросите администратора.</div></div><span></span></div>
+                            </div>
+                        </div></div>
+                    </div>
+                </div>
+                <div class="wz-foot"><button class="btn" data-go="prev">Назад</button><button class="btn btn-p lead-btn" data-go="next">Далее: отправка</button></div>
+            </div></div>
+            <aside class="notes">
+                <h3>Шаг 3. Проверка</h3>
+                <ul>
+                    <li><span class="tag good">новое</span> Превью письма на компьютере и телефоне.</li>
+                    <li><span class="tag good">новое</span> «Отправить мне»: пробное письмо себе, а не первым N подписчикам.</li>
+                    <li>Чек-лист готовности: что в порядке и что сломано, с подсказкой, кого просить.</li>
+                </ul>
+                <p class="hint">Переключите «Телефон» и нажмите «Отправить мне».</p>
+            </aside>
+        </div>
+
+        <div class="screen" data-title="Отправка" data-url="/campaigns/new" data-nav="Рассылки">
+            <div class="pf"><div class="main">
+                <div class="ph"><h2>Новая рассылка</h2><span class="draft">Черновик сохранён</span></div>
+                <div class="wz"><span class="done"><b>✓</b>Письмо</span><span class="done"><b>✓</b>Кому</span><span class="done"><b>✓</b>Проверка</span><span class="cur"><b>4</b>Отправка</span></div>
+                <div class="card"><div class="card-b">
+                    <div class="fg"><span class="lbl">Когда</span>
+                        <div class="radio-row"><label class="chk"><input type="radio" name="a-when" checked> Сейчас</label><label class="chk"><input type="radio" name="a-when"> Запланировать</label></div></div>
+                    <label class="chk"><input type="checkbox"> Сначала отправить только первым <input class="in" style="width:64px;display:inline-block" value="10"> получателям (пилот)</label>
+                    <details class="more"><summary>Дополнительно: серверы и распределение</summary><div class="inner">
+                        <label class="chk"><input type="checkbox" checked> mx1.semena.example</label>
+                    </div></details>
+                    <dl class="sum">
+                        <dt>Письмо</dt><dd id="a-sum-tpl">Осенняя распродажа −20%</dd>
+                        <dt>От кого</dt><dd>Семена &lt;news@semena.example&gt;</dd>
+                        <dt>Кому</dt><dd id="a-sum-list">292 получателя из списка «Подписчики рассылки»</dd>
+                    </dl>
+                    <div class="alert alert-s small" id="a-done" hidden>Рассылка запущена. <button class="lnk">Открыть запуск</button></div>
+                </div></div>
+                <div class="wz-foot"><button class="btn" data-go="prev">Назад</button><button class="btn btn-p lead-btn" id="a-send">Отправить 292 получателям</button></div>
+            </div></div>
+            <aside class="notes">
+                <h3>Шаг 4. Отправка</h3>
+                <ul>
+                    <li>Сводка видна прямо на шаге, отдельное окно подтверждения не нужно: всё уже проверили на шаге 3.</li>
+                    <li>Технические настройки под «Дополнительно».</li>
+                </ul>
+                <p class="hint">Итого: одна страница, адрес не меняется. Переделка большая: страницы создания и отправки собираются заново, нужны миниатюры шаблонов, пробное письмо, черновики.</p>
+            </aside>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var NAV = [["Обзор"], ["grp", "Почта"], ["Рассылки"], ["Шаблоны"], ["Аудитория"], ["Отправки по API"], ["grp", "Система"], ["Инфраструктура"]];
+    var TEMPLATES = {
+        autumn: { name: "Осенняя распродажа −20%", file: "demo-tracking-autumn-sale", folder: "Акции", c: "#2f7d32", c2: "#f4b400", head: "Семена", banner: "Осенняя распродажа −20%", subj: "Осенняя распродажа: −20% на все семена" },
+        news: { name: "Новинки октября", file: "demo-tracking-new-arrivals", folder: "Новости", c: "#1f5f8b", c2: "#7cc4f0", head: "Семена", banner: "Новые сорта томатов", subj: "Новинки октября: 12 сортов томатов" },
+        welcome: { name: "Добро пожаловать", file: "welcome-series-1", folder: "Welcome", c: "#6b4fa0", c2: "#d7c6f5", head: "Семена", banner: "Рады знакомству!", subj: "Добро пожаловать в «Семена»" },
+        bf: { name: "Чёрная пятница", file: "promo-black-friday", folder: "Акции", c: "#111827", c2: "#f97316", head: "Семена", banner: "Чёрная пятница −40%", subj: "Чёрная пятница: −40% только 3 дня" },
+        digest: { name: "Дайджест сентября", file: "newsletter-2025-09", folder: "Новости", c: "#0f766e", c2: "#99f6e4", head: "Семена", banner: "Что посеять в сентябре", subj: "Дайджест: что посеять в сентябре" },
+        cart: { name: "Брошенная корзина", file: "abandoned-cart-reminder", folder: "Триггерные", c: "#b45309", c2: "#fde68a", head: "Семена", banner: "Вы кое-что забыли", subj: "В корзине остались семена" }
+    };
+    function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+    function mailHTML(t, extra) {
+        var big = extra && extra.big;
+        return '<div class="mail' + (big ? " big" : "") + (extra && extra.phone ? " phone" : "") + '" style="--c:' + t.c + ';--c2:' + t.c2 + '">' +
+            '<div class="mh">' + esc(t.head) + '</div><div class="mb">' + esc(t.banner) + '</div>' +
+            '<div class="ml"><i></i><i></i><i></i></div><div class="cta">В каталог</div>' +
+            (big ? '<div class="ft">Вы получили письмо, потому что подписались на новости. <u>Отписаться</u></div>' : '') + '</div>';
+    }
+
+    // Build panel chrome (url bar + sidebar) around every mock
+    document.querySelectorAll(".screen").forEach(function (scr) {
+        var pf = scr.querySelector(".pf");
+        var main = pf.querySelector(".main");
+        var url = document.createElement("div");
+        url.className = "pf-url";
+        url.innerHTML = '<span class="dots"><i></i><i></i><i></i></span><span class="addr">127.0.0.1:8088' + esc(scr.dataset.url) + '</span>';
+        var body = document.createElement("div");
+        body.className = "pf-body";
+        var sb = document.createElement("nav");
+        sb.className = "sb";
+        sb.setAttribute("aria-hidden", "true");
+        sb.innerHTML = '<div class="brand">Sendry</div>' + NAV.map(function (n) {
+            return n[0] === "grp" ? '<div class="grp">' + n[1] + '</div>' : '<div class="it' + (n[0] === scr.dataset.nav ? " on" : "") + '">' + n[0] + '</div>';
+        }).join("");
+        pf.insertBefore(url, main);
+        pf.insertBefore(body, main);
+        body.appendChild(sb);
+        body.appendChild(main);
+    });
+
+    // Flow / step navigation
+    var flows = {};
+    document.querySelectorAll(".flow").forEach(function (f) { flows[f.dataset.flow] = { el: f, screens: Array.prototype.slice.call(f.querySelectorAll(".screen")), i: 0 }; });
+    var cur = "now";
+    try { var saved = localStorage.getItem("cfd-flow"); if (saved && flows[saved]) cur = saved; } catch (e) {}
+    if (location.hash && flows[location.hash.slice(1)]) cur = location.hash.slice(1);
+    var strip = document.getElementById("strip");
+
+    function renderStrip() {
+        var f = flows[cur];
+        var html = "";
+        f.screens.forEach(function (s, k) {
+            if (k > 0) {
+                var newPage = s.dataset.url !== f.screens[k - 1].dataset.url;
+                html += '<span class="hop' + (newPage ? " page" : "") + '" title="' + (newPage ? "переход на другую страницу" : "та же страница") + '">' + (newPage ? "→ стр." : "→") + '</span>';
+            }
+            html += '<button class="st' + (k === f.i ? " on" : "") + '" data-step="' + k + '"><span class="n">' + (k + 1) + '</span>' + esc(s.dataset.title) + '</button>';
+        });
+        html += '<span class="nav"><button id="prev"' + (f.i === 0 ? " disabled" : "") + '>Назад</button><button id="next"' + (f.i === f.screens.length - 1 ? " disabled" : "") + '>Дальше</button></span>';
+        strip.innerHTML = html;
+    }
+    function show(flow, i, fromClick) {
+        var f = flows[flow];
+        var prevUrl = f.screens[f.i] && f.screens[f.i].dataset.url;
+        f.i = Math.max(0, Math.min(f.screens.length - 1, i));
+        f.screens.forEach(function (s, k) { s.hidden = k !== f.i; });
+        if (fromClick && prevUrl !== f.screens[f.i].dataset.url) {
+            var a = f.screens[f.i].querySelector(".addr");
+            a.classList.remove("changed"); void a.offsetWidth; a.classList.add("changed");
+        }
+        renderStrip();
+    }
+    function setFlow(flow) {
+        cur = flow;
+        Object.keys(flows).forEach(function (k) { flows[k].el.hidden = k !== flow; });
+        document.querySelectorAll(".switch button").forEach(function (b) { b.setAttribute("aria-selected", String(b.dataset.flow === flow)); });
+        try { localStorage.setItem("cfd-flow", flow); } catch (e) {}
+        show(flow, flows[flow].i, false);
+    }
+    document.querySelector(".switch").addEventListener("click", function (e) {
+        var b = e.target.closest("button[data-flow]"); if (b) setFlow(b.dataset.flow);
+    });
+    strip.addEventListener("click", function (e) {
+        var b = e.target.closest("button"); if (!b) return;
+        var f = flows[cur];
+        if (b.id === "prev") show(cur, f.i - 1, true);
+        else if (b.id === "next") show(cur, f.i + 1, true);
+        else if (b.dataset.step) show(cur, +b.dataset.step, true);
+    });
+    document.addEventListener("click", function (e) {
+        var b = e.target.closest("[data-go]"); if (!b) return;
+        var f = flows[cur], g = b.dataset.go;
+        show(cur, g === "next" ? f.i + 1 : g === "prev" ? f.i - 1 : +g, true);
+        window.scrollTo({ top: strip.offsetTop - 12, behavior: "smooth" });
+    });
+
+    // Variant B: template picker with thumbnail
+    var bSel = document.getElementById("b-tpl"), bThumb = document.getElementById("b-thumb"), bSubj = document.getElementById("b-subj");
+    function bUpdate() { var t = TEMPLATES[bSel.value]; bThumb.innerHTML = mailHTML(t); bSubj.value = t.subj; }
+    bSel.addEventListener("change", bUpdate); bUpdate();
+
+    // Variant A: gallery, lists, preview, test mail, send
+    var aSel = "autumn", aGal = document.getElementById("a-gal");
+    function aRenderGal() {
+        aGal.innerHTML = Object.keys(TEMPLATES).map(function (k) {
+            var t = TEMPLATES[k];
+            return '<button class="tc' + (k === aSel ? " sel" : "") + '" data-tpl="' + k + '" aria-pressed="' + (k === aSel) + '">' + mailHTML(t) + '<span class="nm">' + esc(t.name) + '</span><span class="fd">' + esc(t.folder) + '</span></button>';
+        }).join("");
+    }
+    var dev = "pc";
+    function aRenderPrev() {
+        var t = TEMPLATES[aSel];
+        document.getElementById("a-prev").innerHTML = mailHTML(t, { big: true, phone: dev === "ph" });
+        document.getElementById("a-prev-subj").textContent = document.getElementById("a-subj").value;
+        document.getElementById("a-sum-tpl").textContent = t.name;
+    }
+    aGal.addEventListener("click", function (e) {
+        var b = e.target.closest("[data-tpl]"); if (!b) return;
+        aSel = b.dataset.tpl; document.getElementById("a-subj").value = TEMPLATES[aSel].subj;
+        aRenderGal(); aRenderPrev();
+    });
+    document.getElementById("a-subj").addEventListener("input", aRenderPrev);
+    document.getElementById("a-dev").addEventListener("click", function (e) {
+        var b = e.target.closest("[data-dev]"); if (!b) return;
+        dev = b.dataset.dev;
+        this.querySelectorAll("button").forEach(function (x) { x.classList.toggle("on", x === b); });
+        aRenderPrev();
+    });
+    var lists = document.getElementById("a-lists");
+    lists.addEventListener("click", function (e) {
+        var row = e.target.closest(".lst"); if (!row) return;
+        lists.querySelectorAll(".lst").forEach(function (r) { r.classList.toggle("sel", r === row); r.querySelector("input").checked = r === row; });
+        var n = row.querySelector(".num").firstChild.textContent.trim(), name = row.querySelector("b").textContent;
+        document.getElementById("a-sum-list").textContent = n + " получателей из списка «" + name + "»";
+        document.getElementById("a-send").textContent = "Отправить " + n + " получателям";
+    });
+    lists.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.target.click(); } });
+    document.getElementById("a-test").addEventListener("click", function () { document.getElementById("a-test-ok").hidden = false; });
+    document.getElementById("a-send").addEventListener("click", function () { document.getElementById("a-done").hidden = false; });
+    aRenderGal(); aRenderPrev();
+
+    setFlow(cur);
+})();
+</script>

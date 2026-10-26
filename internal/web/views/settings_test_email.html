@@ -1,8 +1,8 @@
 {{define "content"}}
 <div class="page-header">
-    <h1 data-i18n="send_test_email">Send Test Email</h1>
-    <div class="header-actions">
-        <a href="/settings" class="btn btn-secondary" data-i18n="back_to_settings">Back to Settings</a>
+    <div>
+        <h1 data-i18n="send_test_email">Send Test Email</h1>
+        <p class="text-muted" data-i18n="admin.send_a_message_through_any_mta_server_to_check">Send a message through any MTA server to check delivery</p>
     </div>
 </div>
 
@@ -27,7 +27,7 @@
             <div class="form-group">
                 <label for="server" data-i18n="mta_server">MTA Server</label>
                 <select id="server" name="server" class="input" required>
-                    <option value="">-- Select Server --</option>
+                    <option value="" data-i18n="admin.select_server">-- Select Server --</option>
                     {{range .Servers}}
                     <option value="{{.Name}}">{{.Name}} ({{.Env}})</option>
                     {{end}}
@@ -46,12 +46,12 @@
 
             <div class="form-group">
                 <label for="subject" data-i18n="subject">Subject</label>
-                <input type="text" id="subject" name="subject" class="input" required placeholder="Test email">
+                <input type="text" id="subject" name="subject" class="input" required data-i18n-placeholder="sub.test_email" placeholder="Test email">
             </div>
 
             <div class="form-group">
                 <label for="body" data-i18n="body">Body</label>
-                <textarea id="body" name="body" class="input" rows="6" required placeholder="This is a test email from Sendry Web."></textarea>
+                <textarea id="body" name="body" class="input" rows="6" required data-i18n-placeholder="infra.this_is_a_test_email_from_sendry_web" placeholder="This is a test email from Sendry Web."></textarea>
             </div>
 
             <div class="form-group">

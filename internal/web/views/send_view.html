@@ -1,8 +1,8 @@
 {{define "content"}}
 <div class="page-header">
     <div class="page-header-left">
-        <a href="/sends" class="btn btn-secondary">&larr; Back</a>
-        <h1>Send Details</h1>
+        <a href="/sends" class="btn btn-secondary" data-i18n="cmp.back_to_sends">&larr; Back to API sends</a>
+        <h1 data-i18n="cmp.send_details">Send Details</h1>
     </div>
 </div>
 
@@ -10,29 +10,30 @@
     <div class="card-header">
         <h2>
             {{if eq .Send.Status "sent"}}
-            <span class="badge badge-completed">Sent</span>
+            <span class="badge badge-completed" data-i18n="cmp.sent">Sent</span>
             {{else if eq .Send.Status "failed"}}
-            <span class="badge badge-failed">Failed</span>
+            <span class="badge badge-failed" data-i18n="cmp.failed">Failed</span>
             {{else if eq .Send.Status "queued"}}
-            <span class="badge badge-scheduled">Queued</span>
+            <span class="badge badge-scheduled" data-i18n="cmp.queued">Queued</span>
             {{else}}
-            <span class="badge badge-scheduled">{{.Send.Status}}</span>
+            <span class="badge badge-scheduled" data-i18n="status.{{.Send.Status}}">{{.Send.Status}}</span>
             {{end}}
             {{.Send.Subject}}
         </h2>
     </div>
     <div class="card-body">
+        <div class="table-scroll">
         <table class="details-table">
             <tr>
-                <th>ID</th>
+                <th data-i18n="common.id">ID</th>
                 <td><code>{{.Send.ID}}</code></td>
             </tr>
             <tr>
-                <th>From</th>
+                <th data-i18n="common.from">From</th>
                 <td>{{.Send.FromAddress}}</td>
             </tr>
             <tr>
-                <th>To</th>
+                <th data-i18n="common.to">To</th>
                 <td>
                     {{range .ToAddresses}}
                     <span class="badge">{{.}}</span>
@@ -60,58 +61,59 @@
             </tr>
             {{end}}
             <tr>
-                <th>Subject</th>
+                <th data-i18n="common.subject">Subject</th>
                 <td>{{.Send.Subject}}</td>
             </tr>
             {{if .TemplateName}}
             <tr>
-                <th>Template</th>
+                <th data-i18n="cmp.template">Template</th>
                 <td><a href="/templates/{{.Send.TemplateID}}">{{.TemplateName}}</a></td>
             </tr>
             {{end}}
             <tr>
-                <th>Domain</th>
+                <th data-i18n="common.domain">Domain</th>
                 <td>{{.Send.SenderDomain}}</td>
             </tr>
             <tr>
-                <th>Server</th>
+                <th data-i18n="common.server">Server</th>
                 <td>{{.Send.ServerName}}</td>
             </tr>
             {{if .Send.ServerMsgID}}
             <tr>
-                <th>Server Message ID</th>
+                <th data-i18n="cmp.server_msg_id">Server Message ID</th>
                 <td><code>{{.Send.ServerMsgID}}</code></td>
             </tr>
             {{end}}
             {{if .APIKeyName}}
             <tr>
-                <th>API Key</th>
+                <th data-i18n="cmp.api_key">API Key</th>
                 <td>{{.APIKeyName}}</td>
             </tr>
             {{end}}
             {{if .Send.ClientIP}}
             <tr>
-                <th>Client IP</th>
+                <th data-i18n="cmp.client_ip">Client IP</th>
                 <td>{{.Send.ClientIP}}</td>
             </tr>
             {{end}}
             <tr>
-                <th>Created</th>
+                <th data-i18n="common.created">Created</th>
                 <td>{{.Send.CreatedAt.Format "2006-01-02 15:04:05"}}</td>
             </tr>
             {{if .Send.SentAt}}
             <tr>
-                <th>Sent</th>
+                <th data-i18n="cmp.sent">Sent</th>
                 <td>{{.Send.SentAt.Format "2006-01-02 15:04:05"}}</td>
             </tr>
             {{end}}
             {{if .Send.ErrorMessage}}
             <tr>
-                <th>Error</th>
-                <td><span class="badge">{{(errorType .Send.ErrorMessage).Label}}</span> <span class="text-danger">{{.Send.ErrorMessage}}</span></td>
+                <th data-i18n="common.error">Error</th>
+                <td><span class="badge" data-i18n="error_type.{{errorType .Send.ErrorMessage}}">{{(errorType .Send.ErrorMessage).Label}}</span> <span class="text-danger">{{.Send.ErrorMessage}}</span></td>
             </tr>
             {{end}}
         </table>
+        </div>
     </div>
 </div>
 
@@ -125,6 +127,7 @@
     </div>
     <div class="card-body">
         {{if .Events}}
+        <div class="table-scroll">
         <table class="table">
             <thead>
                 <tr>
@@ -146,21 +149,19 @@
                         {{else if eq .Type "unsubscribe"}}<span data-i18n="trk.ev_unsub">Unsubscribe</span>
                         {{else}}{{.Type}}{{end}}
                     </td>
-                    <td>{{if .URL}}<span class="trk-url" title="{{.URL}}">{{.URL}}</span>{{else}}<span class="text-muted">-</span>{{end}}</td>
+                    <td>{{if .URL}}<span class="cell-truncate" title="{{.URL}}">{{.URL}}</span>{{else}}<span class="text-muted">-</span>{{end}}</td>
                     <td>{{if .IP}}{{.IP}}{{else}}<span class="text-muted">-</span>{{end}}</td>
-                    <td>{{if .UserAgent}}<span class="trk-url" title="{{.UserAgent}}">{{.UserAgent}}</span>{{else}}<span class="text-muted">-</span>{{end}}</td>
+                    <td>{{if .UserAgent}}<span class="cell-truncate" title="{{.UserAgent}}">{{.UserAgent}}</span>{{else}}<span class="text-muted">-</span>{{end}}</td>
                     <td>{{if .IsMachine}}<span class="badge badge-secondary" data-i18n="trk.machine">machine</span>{{end}}</td>
                 </tr>
                 {{end}}
             </tbody>
         </table>
+        </div>
         {{else}}
         <div class="empty-state"><p data-i18n="trk.no_events">No events yet</p></div>
         {{end}}
     </div>
 </div>
 
-<style>
-.trk-url { display: inline-block; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
-</style>
 {{end}}

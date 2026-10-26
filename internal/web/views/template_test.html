@@ -1,87 +1,85 @@
 {{define "content"}}
 <div class="page-header">
     <div>
-        <h1>Send Test Email</h1>
-        <p class="text-muted">Template: {{.Template.Name}}</p>
+        <h1 data-i18n="tpl.send_test_email">Send Test Email</h1>
+        <p class="text-muted"><span data-i18n="tpl.template_colon">Template:</span> {{.Template.Name}}</p>
     </div>
-    <a href="/templates/{{.Template.ID}}" class="btn btn-secondary">Back to Template</a>
+    <a href="/templates/{{.Template.ID}}" class="btn btn-secondary" data-i18n="tpl.back_to_template">Back to template</a>
 </div>
 
 <div class="grid-2">
     <div class="card">
         <div class="card-header">
-            <h2>Send Test</h2>
+            <h2 data-i18n="tpl.send_test">Send Test</h2>
         </div>
         <div class="card-body">
             <form method="POST" action="/templates/{{.Template.ID}}/test">
                 <div class="form-group">
-                    <label>Send through</label>
+                    <label data-i18n="tpl.send_through">Send through</label>
                     <div style="display:flex; gap:1rem; align-items:center; margin-bottom:0.5rem;">
                         <label style="display:flex; align-items:center; gap:0.4rem; font-weight:normal;">
                             <input type="radio" name="transport" value="sendry"
                                 {{if .Servers}}checked{{end}}>
-                            Sendry server
+                            <span data-i18n="tpl.sendry_server">Sendry server</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:0.4rem; font-weight:normal;">
                             <input type="radio" name="transport" value="smtp"
                                 {{if not .Servers}}checked{{end}}>
-                            My SMTP
+                            <span data-i18n="tpl.my_smtp">My SMTP</span>
                         </label>
                     </div>
                 </div>
 
                 <div class="form-group" data-transport="sendry">
-                    <label for="server">Sendry server</label>
+                    <label for="server" data-i18n="tpl.sendry_server">Sendry server</label>
                     {{if .Servers}}
                     <select name="server" id="server" class="form-control input">
-                        <option value="">Select server...</option>
+                        <option value="" data-i18n="tpl.select_server">Select server...</option>
                         {{range .Servers}}
                         <option value="{{.Name}}">{{.Name}} ({{.Env}})</option>
                         {{end}}
                     </select>
                     {{else}}
-                    <p class="text-muted" style="margin:0;">No sendry servers configured.</p>
+                    <p class="text-muted" style="margin:0;" data-i18n="tpl.no_sendry_servers">No sendry servers configured.</p>
                     {{end}}
                 </div>
 
                 <div class="form-group" data-transport="smtp">
-                    <label for="smtp_id">My SMTP server</label>
+                    <label for="smtp_id" data-i18n="tpl.my_smtp_server">My SMTP server</label>
                     <div style="display:flex; gap:0.5rem; align-items:center;">
                         <select name="smtp_id" id="smtp_id" class="form-control input" style="flex:1;">
-                            <option value="">{{if .UserSMTP}}Select SMTP...{{else}}No servers — add one →{{end}}</option>
+                            <option value="" data-i18n="{{if .UserSMTP}}tpl.select_smtp{{else}}tpl.no_smtp_add{{end}}">{{if .UserSMTP}}Select SMTP...{{else}}No servers — add one →{{end}}</option>
                             {{range .UserSMTP}}
                             <option value="{{.ID}}">{{.Name}} — {{.Host}}:{{.Port}}</option>
                             {{end}}
                         </select>
-                        <button type="button" class="btn btn-sm btn-secondary" id="smtp-mgr-toggle">
-                            Manage SMTP
-                        </button>
+                        <button type="button" class="btn btn-sm btn-secondary" id="smtp-mgr-toggle" data-i18n="tpl.manage_smtp">Manage SMTP</button>
                     </div>
                 </div>
 
                 <div class="form-group">
-                    <label for="from">From <span class="text-muted" style="font-weight:normal;">(sendry only)</span></label>
+                    <label for="from"><span data-i18n="common.from">From</span> <span class="text-muted" style="font-weight:normal;" data-i18n="tpl.sendry_only">(sendry only)</span></label>
                     <input type="email" name="from" id="from" class="form-control input" placeholder="sender@example.com">
-                    <span class="form-help">Sendry server only — for SMTP we use the server's own from address.</span>
+                    <span class="form-help" data-i18n="tpl.from_help">Sendry server only — for SMTP we use the server's own from address.</span>
                 </div>
 
                 <div class="form-group">
-                    <label for="to">To *</label>
+                    <label for="to" data-i18n="tpl.to_req">To *</label>
                     <input type="email" name="to" id="to" class="form-control input" required placeholder="recipient@example.com">
                 </div>
 
                 <div class="form-group">
                     <label for="variables" style="display:flex; align-items:center; justify-content:space-between;">
-                        <span>Sample data (JSON)</span>
-                        <button type="button" class="btn btn-sm btn-secondary" id="reset-sample">Reset to auto-generated</button>
+                        <span data-i18n="tpl.sample_data">Sample data (JSON)</span>
+                        <button type="button" class="btn btn-sm btn-secondary" id="reset-sample" data-i18n="tpl.reset_sample">Reset to auto-generated</button>
                     </label>
                     <textarea name="variables" id="variables" rows="14" class="form-control input"
                         style="font-family:monospace; font-size:13px;">{{.SampleJSON}}</textarea>
-                    <span class="form-help">Auto-generated from the template's variables. Edit values as needed; arrays and {{"{{range}}"}} blocks supported.</span>
+                    <span class="form-help"><span data-i18n="tpl.sample_help1">Auto-generated from the template's variables. Edit values as needed; arrays and</span> {{"{{range}}"}} <span data-i18n="tpl.sample_help2">blocks supported.</span></span>
                 </div>
 
                 <div class="form-group">
-                    <button type="submit" class="btn btn-primary">Send Test Email</button>
+                    <button type="submit" class="btn btn-primary" data-i18n="tpl.send_test_email">Send Test Email</button>
                 </div>
             </form>
         </div>
@@ -89,25 +87,25 @@
 
     <div class="card">
         <div class="card-header">
-            <h2>Template Info</h2>
+            <h2 data-i18n="tpl.template_info">Template Info</h2>
         </div>
         <div class="card-body">
             <dl class="details-list">
-                <dt>Subject</dt>
+                <dt data-i18n="common.subject">Subject</dt>
                 <dd><code>{{.Template.Subject}}</code></dd>
 
-                <dt>Version</dt>
+                <dt data-i18n="tpl.version">Version</dt>
                 <dd>v{{.Template.CurrentVersion}}</dd>
 
-                <dt>Has HTML</dt>
-                <dd>{{if .Template.HTML}}Yes{{else}}No{{end}}</dd>
+                <dt data-i18n="tpl.has_html">Has HTML</dt>
+                <dd>{{if .Template.HTML}}<span data-i18n="common.yes">Yes</span>{{else}}<span data-i18n="common.no">No</span>{{end}}</dd>
 
-                <dt>Has Text</dt>
-                <dd>{{if .Template.Text}}Yes{{else}}No{{end}}</dd>
+                <dt data-i18n="tpl.has_text">Has Text</dt>
+                <dd>{{if .Template.Text}}<span data-i18n="common.yes">Yes</span>{{else}}<span data-i18n="common.no">No</span>{{end}}</dd>
             </dl>
 
             <div class="mt-3">
-                <a href="/templates/{{.Template.ID}}/preview" class="btn btn-sm" target="_blank">Preview Template</a>
+                <a href="/templates/{{.Template.ID}}/preview" class="btn btn-sm" target="_blank" data-i18n="tpl.preview_template">Preview Template</a>
             </div>
         </div>
     </div>
@@ -117,73 +115,74 @@
      style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; align-items:flex-start; justify-content:center; padding:3rem 1rem; overflow-y:auto;">
 <div class="card" id="smtp-mgr-card" style="max-width:780px; width:100%; max-height:calc(100vh - 4rem); overflow-y:auto; background:var(--bg, #fff);">
     <div class="card-header" style="display:flex; align-items:center; justify-content:space-between;">
-        <h2 style="margin:0;">My SMTP servers</h2>
+        <h2 style="margin:0;" data-i18n="tpl.my_smtp_servers">My SMTP servers</h2>
         <div style="display:flex; gap:0.5rem;">
-            <button type="button" class="btn btn-sm btn-primary" id="smtp-add-toggle">+ Add server</button>
-            <button type="button" class="btn btn-sm btn-secondary" id="smtp-mgr-close" aria-label="Close">✕</button>
+            <button type="button" class="btn btn-sm btn-primary" id="smtp-add-toggle" data-i18n="tpl.add_server">+ Add server</button>
+            <button type="button" class="btn btn-sm btn-secondary" id="smtp-mgr-close" aria-label="Close" data-i18n-title="common.close" title="Close">✕</button>
         </div>
     </div>
     <div class="card-body">
         <div id="smtp-form-wrap" style="display:none; border:1px solid var(--border); border-radius:var(--radius); padding:1rem; margin-bottom:1rem;">
-            <h3 style="margin-top:0;">Add SMTP server</h3>
+            <h3 style="margin-top:0;" data-i18n="tpl.add_smtp_server">Add SMTP server</h3>
             <div class="form-row">
                 <div class="form-group">
-                    <label>Name *</label>
-                    <input type="text" id="smtp-form-name" class="input" placeholder="My mail.ru">
+                    <label data-i18n="tpl.name_req">Name *</label>
+                    <input type="text" id="smtp-form-name" class="input" placeholder="My mail.ru" data-i18n-placeholder="tpl.smtp_name_ph">
                 </div>
                 <div class="form-group">
-                    <label>Encryption</label>
+                    <label data-i18n="tpl.encryption">Encryption</label>
                     <select id="smtp-form-encryption" class="input">
                         <option value="ssl">SSL/TLS (465)</option>
                         <option value="starttls">STARTTLS (587)</option>
-                        <option value="none">None</option>
+                        <option value="none" data-i18n="common.none">None</option>
                     </select>
                 </div>
             </div>
             <div class="form-row">
                 <div class="form-group" style="flex:2;">
-                    <label>Host *</label>
+                    <label data-i18n="tpl.host_req">Host *</label>
                     <input type="text" id="smtp-form-host" class="input" placeholder="smtp.mail.ru">
                 </div>
                 <div class="form-group">
-                    <label>Port *</label>
+                    <label data-i18n="tpl.port_req">Port *</label>
                     <input type="number" id="smtp-form-port" class="input" value="465" min="1" max="65535">
                 </div>
             </div>
             <div class="form-row">
                 <div class="form-group">
-                    <label>Username *</label>
+                    <label data-i18n="tpl.username_req">Username *</label>
                     <input type="text" id="smtp-form-username" class="input" autocomplete="off">
                 </div>
                 <div class="form-group">
-                    <label>Password *</label>
+                    <label data-i18n="tpl.password_req">Password *</label>
                     <input type="password" id="smtp-form-password" class="input" autocomplete="new-password">
                 </div>
             </div>
             <div class="form-row">
                 <div class="form-group">
-                    <label>From address *</label>
+                    <label data-i18n="tpl.from_address_req">From address *</label>
                     <input type="email" id="smtp-form-from-address" class="input" placeholder="noreply@example.com">
                 </div>
                 <div class="form-group">
-                    <label>From name</label>
+                    <label data-i18n="tpl.from_name">From name</label>
                     <input type="text" id="smtp-form-from-name" class="input">
                 </div>
             </div>
             <div style="display:flex; gap:0.5rem; align-items:center; margin-top:0.5rem;">
-                <button type="button" class="btn btn-primary btn-sm" id="smtp-form-save">Save</button>
-                <button type="button" class="btn btn-secondary btn-sm" id="smtp-form-cancel">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" id="smtp-form-save" data-i18n="save">Save</button>
+                <button type="button" class="btn btn-secondary btn-sm" id="smtp-form-cancel" data-i18n="cancel">Cancel</button>
                 <span id="smtp-form-status" class="text-muted" style="font-size:0.85rem;"></span>
             </div>
         </div>
 
+        <div class="table-scroll">
         <table class="table" id="smtp-list-table">
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Host : Port</th>
-                    <th>Encryption</th>
-                    <th>From</th>
+                    <th data-i18n="name">Name</th>
+                    <th data-i18n="tpl.host_port">Host : Port</th>
+                    <th data-i18n="tpl.encryption">Encryption</th>
+                    <th data-i18n="common.from">From</th>
                     <th></th>
                 </tr>
             </thead>
@@ -195,30 +194,31 @@
                     <td><span class="badge">{{.Encryption}}</span></td>
                     <td>{{if .FromName}}{{.FromName}} &lt;{{.FromAddress}}&gt;{{else}}{{.FromAddress}}{{end}}</td>
                     <td style="text-align:right; white-space:nowrap;">
-                        <button type="button" class="btn btn-sm btn-secondary" data-smtp-test="{{.ID}}">Test</button>
-                        <button type="button" class="btn btn-sm btn-danger" data-smtp-delete="{{.ID}}">Delete</button>
+                        <button type="button" class="btn btn-sm btn-secondary" data-smtp-test="{{.ID}}" data-i18n="tpl.test">Test</button>
+                        <button type="button" class="btn btn-sm btn-danger" data-smtp-delete="{{.ID}}" data-i18n="delete">Delete</button>
                     </td>
                 </tr>
                 {{end}}
                 {{if not .UserSMTP}}
-                <tr id="smtp-empty-row"><td colspan="5" class="text-muted" style="text-align:center;">No SMTP servers yet.</td></tr>
+                <tr id="smtp-empty-row"><td colspan="5" class="text-muted" style="text-align:center;" data-i18n="tpl.no_smtp">No SMTP servers yet.</td></tr>
                 {{end}}
             </tbody>
         </table>
+        </div>
     </div>
 </div>
 </div>
 
 <div class="card">
     <div class="card-header">
-        <h2>Notes</h2>
+        <h2 data-i18n="tpl.notes">Notes</h2>
     </div>
     <div class="card-body">
         <ul>
-            <li>Test emails will have <code>[TEST]</code> prefix in subject</li>
-            <li>Global variables will be substituted if defined</li>
-            <li>For sandbox servers, email will be captured instead of sent</li>
-            <li>Check server queue/sandbox to verify delivery</li>
+            <li><span data-i18n="tpl.note1_a">Test emails will have</span> <code>[TEST]</code> <span data-i18n="tpl.note1_b">prefix in subject</span></li>
+            <li data-i18n="tpl.note2">Global variables will be substituted if defined</li>
+            <li data-i18n="tpl.note3">For sandbox servers, email will be captured instead of sent</li>
+            <li data-i18n="tpl.note4">Check server queue/sandbox to verify delivery</li>
         </ul>
     </div>
 </div>
@@ -325,7 +325,7 @@
         fd.append('encryption', document.getElementById('smtp-form-encryption').value);
         fd.append('from_address', document.getElementById('smtp-form-from-address').value);
         fd.append('from_name', document.getElementById('smtp-form-from-name').value);
-        if (statusEl) { statusEl.textContent = 'Saving…'; statusEl.style.color = ''; }
+        if (statusEl) { statusEl.textContent = I18n.t('tpl.saving'); statusEl.style.color = ''; }
         fetch('/settings/smtp', {
             method: 'POST',
             credentials: 'same-origin',
@@ -334,13 +334,13 @@
         }).then(function(r) {
             // 303/0 in opaqueredirect both indicate success here
             if (r.type === 'opaqueredirect' || r.ok) {
-                if (statusEl) { statusEl.textContent = 'Saved — refreshing…'; statusEl.style.color = 'var(--text-muted)'; }
+                if (statusEl) { statusEl.textContent = I18n.t('tpl.saved_refreshing'); statusEl.style.color = 'var(--text-muted)'; }
                 window.location.reload();
                 return;
             }
             return r.text().then(function(t) { throw new Error(t || ('HTTP ' + r.status)); });
         }).catch(function(err) {
-            if (statusEl) { statusEl.textContent = 'Failed: ' + err.message; statusEl.style.color = 'crimson'; }
+            if (statusEl) { statusEl.textContent = I18n.t('tpl.failed') + ': ' + err.message; statusEl.style.color = 'crimson'; }
         });
     });
 
@@ -349,28 +349,28 @@
         b.addEventListener('click', function() {
             var id = this.getAttribute('data-smtp-test');
             var orig = this.textContent; var self = this;
-            self.textContent = 'Testing…'; self.disabled = true;
+            self.textContent = I18n.t('tpl.testing'); self.disabled = true;
             fetch('/settings/smtp/' + id + '/test', { method: 'POST', credentials: 'same-origin' })
                 .then(function(r) { return r.json().then(function(j) { return {ok: r.ok, data: j}; }); })
                 .then(function(res) {
-                    if (res.ok && res.data.ok) alert('OK — sent to ' + (res.data.to || 'from address'));
-                    else alert('Failed: ' + (res.data.error || 'unknown'));
+                    if (res.ok && res.data.ok) alert(I18n.t('tpl.ok_sent_to') + ' ' + (res.data.to || I18n.t('tpl.from_address_lc')));
+                    else alert(I18n.t('tpl.failed') + ': ' + (res.data.error || I18n.t('common.unknown').toLowerCase()));
                 })
-                .catch(function(e) { alert('Failed: ' + e.message); })
+                .catch(function(e) { alert(I18n.t('tpl.failed') + ': ' + e.message); })
                 .finally(function() { self.textContent = orig; self.disabled = false; });
         });
     });
 
     document.querySelectorAll('[data-smtp-delete]').forEach(function(b) {
         b.addEventListener('click', function() {
-            if (!confirm('Delete this SMTP server?')) return;
+            if (!confirm(I18n.t('tpl.confirm_delete_smtp'))) return;
             var id = this.getAttribute('data-smtp-delete');
             fetch('/settings/smtp/' + id + '/delete', {
                 method: 'POST', credentials: 'same-origin', redirect: 'manual'
             }).then(function(r) {
                 if (r.type === 'opaqueredirect' || r.ok) window.location.reload();
-                else alert('Delete failed: HTTP ' + r.status);
-            }).catch(function(e) { alert('Delete failed: ' + e.message); });
+                else alert(I18n.t('tpl.delete_failed') + ': HTTP ' + r.status);
+            }).catch(function(e) { alert(I18n.t('tpl.delete_failed') + ': ' + e.message); });
         });
     });
 })();

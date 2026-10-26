@@ -1,34 +1,34 @@
 {{define "content"}}
 <div class="page-header">
-    <h1>Message Details</h1>
+    <h1 data-i18n="infra.message_details">Message Details</h1>
     <div class="header-actions">
-        <a href="/servers/{{.ServerName}}/queue" class="btn btn-secondary">Back to Queue</a>
+        <a href="/servers/{{.ServerName}}/queue" class="btn btn-secondary" data-i18n="infra.back_to_queue">Back to queue</a>
     </div>
 </div>
 
 <div class="card">
     <div class="card-header">
-        <h3>Message Info</h3>
+        <h3 data-i18n="infra.message_info">Message Info</h3>
     </div>
     <div class="card-body">
         <dl class="info-list">
-            <dt>ID</dt>
+            <dt data-i18n="common.id">ID</dt>
             <dd>{{.Message.ID}}</dd>
-            <dt>Status</dt>
-            <dd>{{.Message.Status}}</dd>
-            <dt>From</dt>
+            <dt data-i18n="status">Status</dt>
+            <dd data-i18n="status.{{.Message.Status}}">{{.Message.Status}}</dd>
+            <dt data-i18n="from">From</dt>
             <dd>{{.Message.From}}</dd>
-            <dt>To</dt>
+            <dt data-i18n="to">To</dt>
             <dd>{{range .Message.To}}{{.}} {{end}}</dd>
-            <dt>Retry Count</dt>
+            <dt data-i18n="infra.retry_count">Retry Count</dt>
             <dd>{{.Message.RetryCount}}</dd>
             {{if .Message.LastError}}
-            <dt>Last Error</dt>
+            <dt data-i18n="infra.last_error">Last Error</dt>
             <dd class="text-danger">{{.Message.LastError}}</dd>
             {{end}}
-            <dt>Created</dt>
+            <dt data-i18n="common.created">Created</dt>
             <dd>{{.Message.CreatedAt}}</dd>
-            <dt>Updated</dt>
+            <dt data-i18n="common.updated">Updated</dt>
             <dd>{{.Message.UpdatedAt}}</dd>
         </dl>
     </div>
@@ -36,7 +36,7 @@
 
 <div class="form-actions" style="margin-top: 1rem;">
     <form method="post" action="/servers/{{.ServerName}}/queue/{{.Message.ID}}/delete" style="display: inline;">
-        <button type="submit" class="btn btn-danger" onclick="return confirm('Delete this message from queue?')">Delete Message</button>
+        <button type="submit" class="btn btn-danger" onclick="return confirm(I18n.t('infra.delete_this_message_from_queue'))" data-i18n="infra.delete_message">Delete Message</button>
     </form>
 </div>
 {{end}}

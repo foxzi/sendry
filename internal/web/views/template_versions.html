@@ -1,27 +1,28 @@
 {{define "content"}}
 <div class="page-header">
     <div>
-        <h1>{{.Template.Name}} - Version History</h1>
-        <p class="text-muted">Current version: v{{.Template.CurrentVersion}}</p>
+        <h1>{{.Template.Name}} - <span data-i18n="tpl.version_history">Version History</span></h1>
+        <p class="text-muted"><span data-i18n="tpl.current_version_colon">Current version:</span> v{{.Template.CurrentVersion}}</p>
     </div>
     <div class="header-actions">
-        <a href="/templates/{{.Template.ID}}/diff" class="btn btn-secondary">Compare Versions</a>
-        <a href="/templates/{{.Template.ID}}" class="btn btn-secondary">Back to Template</a>
+        <a href="/templates/{{.Template.ID}}/diff" class="btn btn-secondary" data-i18n="tpl.compare_versions">Compare Versions</a>
+        <a href="/templates/{{.Template.ID}}" class="btn btn-secondary" data-i18n="tpl.back_to_template">Back to template</a>
     </div>
 </div>
 
 <div class="card">
     <div class="card-body">
         {{if .Versions}}
+        <div class="table-scroll">
         <table class="table">
             <thead>
                 <tr>
-                    <th>Version</th>
-                    <th>Subject</th>
-                    <th>Change Note</th>
-                    <th>Created By</th>
-                    <th>Created At</th>
-                    <th>Actions</th>
+                    <th data-i18n="tpl.version">Version</th>
+                    <th data-i18n="common.subject">Subject</th>
+                    <th data-i18n="tpl.change_note">Change Note</th>
+                    <th data-i18n="tpl.created_by">Created By</th>
+                    <th data-i18n="tpl.created_at">Created At</th>
+                    <th data-i18n="actions">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -30,7 +31,7 @@
                     <td>
                         v{{.Version}}
                         {{if eq .Version $.Template.CurrentVersion}}
-                        <span class="badge badge-success">Current</span>
+                        <span class="badge badge-success" data-i18n="tpl.current">Current</span>
                         {{end}}
                     </td>
                     <td><code>{{.Subject}}</code></td>
@@ -38,14 +39,15 @@
                     <td>{{if .CreatedBy}}{{.CreatedBy}}{{else}}<span class="text-muted">-</span>{{end}}</td>
                     <td>{{.CreatedAt.Format "2006-01-02 15:04:05"}}</td>
                     <td>
-                        <a href="/templates/{{$.Template.ID}}/preview?version={{.Version}}" class="btn btn-sm" target="_blank">Preview</a>
+                        <a href="/templates/{{$.Template.ID}}/preview?version={{.Version}}" class="btn btn-sm" target="_blank" data-i18n="template_preview">Preview</a>
                     </td>
                 </tr>
                 {{end}}
             </tbody>
         </table>
+        </div>
         {{else}}
-        <p class="empty-state">No version history available</p>
+        <p class="empty-state" data-i18n="tpl.no_versions">No version history available</p>
         {{end}}
     </div>
 </div>

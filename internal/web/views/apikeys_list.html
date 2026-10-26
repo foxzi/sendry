@@ -1,51 +1,59 @@
 {{define "content"}}
 <div class="page-header">
-    <h1>API Keys</h1>
+    <div>
+        <h1 data-i18n="sub.api_keys">API keys</h1>
+        <p class="text-muted" data-i18n="admin.keys_for_sending_through_the_http_api">Keys for sending through the HTTP API</p>
+    </div>
     <div class="header-actions">
-        <button onclick="document.getElementById('create-modal').style.display='flex'" class="btn btn-primary">New API Key</button>
+        <button onclick="document.getElementById('create-modal').style.display='flex'" class="btn btn-primary" data-i18n="admin.new_api_key">New API key</button>
     </div>
 </div>
 
 {{if .NewKey}}
 <div class="alert alert-success alert-persistent">
-    <strong>API Key Created!</strong>
-    <p>Copy this key now. It won't be shown again:</p>
+    <strong data-i18n="admin.api_key_created">API Key Created!</strong>
+    <p data-i18n="admin.copy_this_key_now_it_won_t_be_shown_again">Copy this key now. It won't be shown again:</p>
     <code class="api-key-display">{{.NewKey}}</code>
-    <button onclick="navigator.clipboard.writeText('{{.NewKey}}'); this.textContent='Copied!'" class="btn btn-sm">Copy</button>
+    <button onclick="navigator.clipboard.writeText('{{.NewKey}}'); this.textContent=I18n.t('admin.copied')" class="btn btn-sm" data-i18n="common.copy">Copy</button>
 </div>
 {{end}}
 
-<div class="card">
+<div class="card scroll-target" id="results" data-partial>
     <div class="card-header">
         <form class="filter-form" method="get" action="/settings/api-keys">
-            <input type="text" name="search" value="{{.Search}}" placeholder="Search..." class="input">
-            <button type="submit" class="btn">Search</button>
+            <input type="text" name="search" value="{{.Search}}" data-i18n-placeholder="infra.search" placeholder="Search..." class="input">
+            <button type="submit" class="btn" data-i18n="search">Search</button>
         </form>
     </div>
     <div class="card-body">
         {{if .APIKeys}}
         <div class="table-wrap">
-        <table class="table">
+        <table class="table apikeys-table">
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Key Prefix</th>
-                    <th>Allowed Domains</th>
-                    <th>Sends</th>
-                    <th>Rate Limits</th>
-                    <th>Created</th>
-                    <th>Last Used</th>
-                    <th>Expires</th>
-                    <th>Status</th>
-                    <th>Actions</th>
+                    <th data-i18n="name">Name</th>
+                    <th data-i18n="admin.allowed_domains">Allowed Domains</th>
+                    <th data-i18n="admin.sends">Sends</th>
+                    <th data-i18n="infra.rate_limits">Rate Limits</th>
+                    <th data-i18n="admin.last_used">Last Used</th>
+                    <th data-i18n="actions">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 {{range .APIKeys}}
                 <tr>
-                    <td>{{.Name}}</td>
-                    <td class="key-prefix">{{.KeyPrefix}}...</td>
-                    <td class="domains-cell">
+                    <td class="name-cell">
+                        <div class="cell-title">
+                            <span>{{.Name}}</span>
+                            {{if .Active}}
+                            <span class="badge badge-completed" data-i18n="admin.active">Active</span>
+                            {{else}}
+                            <span class="badge badge-failed" data-i18n="admin.inactive">Inactive</span>
+                            {{end}}
+                        </div>
+                        <div class="key-prefix" title="{{.KeyPrefix}}">{{.KeyPrefix}}...</div>
+                    </td>
+                    <td class="domains-cell" data-label="Allowed domains" data-i18n-label="admin.allowed_domains">
                         {{if .AllowedDomains}}
                         {{$total := len .AllowedDomains}}
                         <span class="domain-badges">
@@ -55,41 +63,46 @@
                             {{end}}
                         </span>
                         {{else}}
-                        <span class="text-secondary">All</span>
+                        <span class="text-secondary" data-i18n="common.all">All</span>
                         {{end}}
                     </td>
-                    <td>{{.SendCount}}</td>
-                    <td class="rate-cell">
+                    <td data-label="Sends" data-i18n-label="admin.sends">{{.SendCount}}</td>
+                    <td class="rate-cell" data-label="Rate limits" data-i18n-label="infra.rate_limits">
                         {{if or .RateLimitMinute .RateLimitHour}}
-                            {{if .RateLimitMinute}}<span class="rate-line">{{.RateLimitMinute}}/min</span>{{end}}
-                            {{if .RateLimitHour}}<span class="rate-line">{{.RateLimitHour}}/hr</span>{{end}}
+                            {{if .RateLimitMinute}}<span class="rate-line">{{.RateLimitMinute}}/<span data-i18n="admin.min">min</span></span>{{end}}
+                            {{if .RateLimitHour}}<span class="rate-line">{{.RateLimitHour}}/<span data-i18n="admin.hr">hr</span></span>{{end}}
                         {{else}}
                         <span class="text-secondary">-</span>
                         {{end}}
                     </td>
-                    <td class="date-cell">{{.CreatedAt.Format "2006-01-02"}}</td>
-                    <td class="date-cell">{{if .LastUsedAt}}{{.LastUsedAt.Format "2006-01-02 15:04"}}{{else}}<span class="text-secondary">-</span>{{end}}</td>
-                    <td class="date-cell">{{if .ExpiresAt}}{{.ExpiresAt.Format "2006-01-02"}}{{else}}<span class="text-secondary">-</span>{{end}}</td>
-                    <td>
-                        {{if .Active}}
-                        <span class="badge badge-completed">Active</span>
-                        {{else}}
-                        <span class="badge badge-failed">Inactive</span>
-                        {{end}}
+                    <td class="date-cell" data-label="Last used" data-i18n-label="admin.last_used">
+                        {{if .LastUsedAt}}{{.LastUsedAt.Format "2006-01-02 15:04"}}{{else}}<span class="text-secondary" data-i18n="admin.never_used">never</span>{{end}}
+                        <div class="cell-sub"><span data-i18n="admin.created_on">created</span> {{.CreatedAt.Format "2006-01-02"}}</div>
+                        {{if .ExpiresAt}}<div class="cell-sub"><span data-i18n="admin.expires_on">expires</span> {{.ExpiresAt.Format "2006-01-02"}}</div>{{end}}
                     </td>
                     <td class="actions">
-                        <button onclick="editKey('{{.ID}}', '{{.Name}}', [{{range $i, $d := .AllowedDomains}}{{if $i}},{{end}}'{{$d}}'{{end}}], {{.RateLimitMinute}}, {{.RateLimitHour}}, {{.TrackOpens}}, {{.TrackClicks}})" class="btn btn-sm">Edit</button>
-                        <form method="post" action="/settings/api-keys/{{.ID}}/toggle" style="display: inline;">
+                        <div class="icon-actions">
+                        <button type="button" class="btn-icon-sm" onclick="editKey('{{.ID}}', '{{.Name}}', [{{range $i, $d := .AllowedDomains}}{{if $i}},{{end}}'{{$d}}'{{end}}], {{.RateLimitMinute}}, {{.RateLimitHour}})" title="Edit" data-i18n-title="edit" aria-label="Edit">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                        </button>
+                        <form method="post" action="/settings/api-keys/{{.ID}}/toggle">
                             {{if .Active}}
-                            <button type="submit" class="btn btn-sm btn-warning">Deactivate</button>
+                            <button type="submit" class="btn-icon-sm btn-icon-warning" title="Deactivate" data-i18n-title="admin.deactivate" aria-label="Deactivate">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+                            </button>
                             {{else}}
-                            <button type="submit" class="btn btn-sm btn-success">Activate</button>
+                            <button type="submit" class="btn-icon-sm btn-icon-success" title="Activate" data-i18n-title="admin.activate" aria-label="Activate">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+                            </button>
                             {{end}}
                         </form>
-                        <form method="post" action="/settings/api-keys/{{.ID}}" style="display: inline;">
+                        <form method="post" action="/settings/api-keys/{{.ID}}">
                             <input type="hidden" name="_method" value="DELETE">
-                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this API key?')">Delete</button>
+                            <button type="submit" class="btn-icon-sm btn-icon-danger" onclick="return confirm(I18n.t('admin.delete_this_api_key'))" title="Delete" data-i18n-title="delete" aria-label="Delete">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                            </button>
                         </form>
+                        </div>
                     </td>
                 </tr>
                 {{end}}
@@ -100,18 +113,18 @@
         {{if gt .TotalPages 1}}
         <div class="pagination">
             {{if gt .Page 1}}
-            <a href="/settings/api-keys?page={{sub .Page 1}}{{if .Search}}&search={{.Search}}{{end}}" class="btn btn-sm">&laquo; Prev</a>
+            <a href="/settings/api-keys?page={{sub .Page 1}}{{if .Search}}&search={{.Search}}{{end}}" class="btn btn-sm"><span data-i18n="admin.prev">&laquo; Prev</span></a>
             {{end}}
-            <span class="pagination-info">Page {{.Page}} of {{.TotalPages}} ({{.Total}} total)</span>
+            <span class="pagination-info"><span data-i18n="common.page">Page</span> {{.Page}} <span data-i18n="common.of">of</span> {{.TotalPages}} ({{.Total}} <span data-i18n="admin.total">total</span>)</span>
             {{if lt .Page .TotalPages}}
-            <a href="/settings/api-keys?page={{add .Page 1}}{{if .Search}}&search={{.Search}}{{end}}" class="btn btn-sm">Next &raquo;</a>
+            <a href="/settings/api-keys?page={{add .Page 1}}{{if .Search}}&search={{.Search}}{{end}}" class="btn btn-sm"><span data-i18n="admin.next">Next &raquo;</span></a>
             {{end}}
         </div>
         {{end}}
         {{else}}
         <div class="empty-state">
-            <p>No API keys found</p>
-            <p class="text-muted">Create an API key to start sending emails via the API</p>
+            <p data-i18n="admin.no_api_keys_found">No API keys found</p>
+            <p class="text-muted" data-i18n="admin.create_an_api_key_to_start_sending_emails_via">Create an API key to start sending emails via the API</p>
         </div>
         {{end}}
     </div>
@@ -121,31 +134,31 @@
 <div id="create-modal" class="modal" style="display: none;">
     <div class="modal-content">
         <div class="modal-header">
-            <h2>Create API Key</h2>
+            <h2 data-i18n="admin.create_api_key">Create API Key</h2>
             <button type="button" onclick="document.getElementById('create-modal').style.display='none'" class="close">&times;</button>
         </div>
         <form method="post" action="/settings/api-keys">
             <div class="modal-body">
                 <div class="form-group">
-                    <label for="name">Name</label>
-                    <input type="text" id="name" name="name" class="input" required placeholder="e.g. Production App">
+                    <label for="name" data-i18n="name">Name</label>
+                    <input type="text" id="name" name="name" class="input" required data-i18n-placeholder="admin.e_g_production_app" placeholder="e.g. Production App">
                 </div>
                 <div class="form-group">
-                    <label for="expires_at">Expires (optional)</label>
+                    <label for="expires_at" data-i18n="admin.expires_optional">Expires (optional)</label>
                     <input type="date" id="expires_at" name="expires_at" class="input">
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="rate_limit_minute">Rate Limit / Minute</label>
-                        <input type="number" id="rate_limit_minute" name="rate_limit_minute" class="input" min="0" placeholder="0 = unlimited">
+                        <label for="rate_limit_minute" data-i18n="admin.rate_limit_minute">Rate Limit / Minute</label>
+                        <input type="number" id="rate_limit_minute" name="rate_limit_minute" class="input" min="0" data-i18n-placeholder="admin.0_unlimited" placeholder="0 = unlimited">
                     </div>
                     <div class="form-group">
-                        <label for="rate_limit_hour">Rate Limit / Hour</label>
-                        <input type="number" id="rate_limit_hour" name="rate_limit_hour" class="input" min="0" placeholder="0 = unlimited">
+                        <label for="rate_limit_hour" data-i18n="admin.rate_limit_hour">Rate Limit / Hour</label>
+                        <input type="number" id="rate_limit_hour" name="rate_limit_hour" class="input" min="0" data-i18n-placeholder="admin.0_unlimited" placeholder="0 = unlimited">
                     </div>
                 </div>
                 <div class="form-group">
-                    <label>Allowed Domains <small class="text-muted">(leave empty for all domains)</small></label>
+                    <label><span data-i18n="admin.allowed_domains">Allowed Domains</span> <small class="text-muted" data-i18n="admin.leave_empty_for_all_domains">(leave empty for all domains)</small></label>
                     <div class="checkbox-list">
                         {{range $.Domains}}
                         <label class="checkbox-item">
@@ -153,25 +166,14 @@
                             <span>{{.Domain}}</span>
                         </label>
                         {{else}}
-                        <p class="text-muted">No domains configured. <a href="/domains">Add domains</a></p>
+                        <p class="text-muted"><span data-i18n="admin.no_domains_configured">No domains configured.</span> <a href="/domains" data-i18n="admin.add_domains">Add domains</a></p>
                         {{end}}
                     </div>
                 </div>
-                <div class="form-group">
-                    <label class="checkbox-label">
-                        <input type="checkbox" name="track_opens" value="on">
-                        Отслеживать открытия (по умолчанию для ключа)
-                    </label>
-                    <label class="checkbox-label">
-                        <input type="checkbox" name="track_clicks" value="on">
-                        Отслеживать клики (по умолчанию для ключа)
-                    </label>
-                    <small class="text-muted">Поля track_opens / track_clicks в запросе перекрывают эти значения.</small>
-                </div>
             </div>
             <div class="modal-footer">
-                <button type="button" onclick="document.getElementById('create-modal').style.display='none'" class="btn btn-secondary">Cancel</button>
-                <button type="submit" class="btn btn-primary">Create</button>
+                <button type="button" onclick="document.getElementById('create-modal').style.display='none'" class="btn btn-secondary" data-i18n="cancel">Cancel</button>
+                <button type="submit" class="btn btn-primary" data-i18n="create">Create</button>
             </div>
         </form>
     </div>
@@ -181,27 +183,27 @@
 <div id="edit-modal" class="modal" style="display: none;">
     <div class="modal-content">
         <div class="modal-header">
-            <h2>Edit API Key</h2>
+            <h2 data-i18n="admin.edit_api_key">Edit API Key</h2>
             <button type="button" onclick="document.getElementById('edit-modal').style.display='none'" class="close">&times;</button>
         </div>
         <form method="post" action="" id="edit-form">
             <div class="modal-body">
                 <div class="form-group">
-                    <label for="edit_name">Name</label>
+                    <label for="edit_name" data-i18n="name">Name</label>
                     <input type="text" id="edit_name" name="name" class="input" required>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="edit_rate_limit_minute">Rate Limit / Minute</label>
-                        <input type="number" id="edit_rate_limit_minute" name="rate_limit_minute" class="input" min="0" placeholder="0 = unlimited">
+                        <label for="edit_rate_limit_minute" data-i18n="admin.rate_limit_minute">Rate Limit / Minute</label>
+                        <input type="number" id="edit_rate_limit_minute" name="rate_limit_minute" class="input" min="0" data-i18n-placeholder="admin.0_unlimited" placeholder="0 = unlimited">
                     </div>
                     <div class="form-group">
-                        <label for="edit_rate_limit_hour">Rate Limit / Hour</label>
-                        <input type="number" id="edit_rate_limit_hour" name="rate_limit_hour" class="input" min="0" placeholder="0 = unlimited">
+                        <label for="edit_rate_limit_hour" data-i18n="admin.rate_limit_hour">Rate Limit / Hour</label>
+                        <input type="number" id="edit_rate_limit_hour" name="rate_limit_hour" class="input" min="0" data-i18n-placeholder="admin.0_unlimited" placeholder="0 = unlimited">
                     </div>
                 </div>
                 <div class="form-group">
-                    <label>Allowed Domains <small class="text-muted">(leave empty for all domains)</small></label>
+                    <label><span data-i18n="admin.allowed_domains">Allowed Domains</span> <small class="text-muted" data-i18n="admin.leave_empty_for_all_domains">(leave empty for all domains)</small></label>
                     <div class="checkbox-list" id="edit-domains-list">
                         {{range $.Domains}}
                         <label class="checkbox-item">
@@ -209,34 +211,21 @@
                             <span>{{.Domain}}</span>
                         </label>
                         {{else}}
-                        <p class="text-muted">No domains configured. <a href="/domains">Add domains</a></p>
+                        <p class="text-muted"><span data-i18n="admin.no_domains_configured">No domains configured.</span> <a href="/domains" data-i18n="admin.add_domains">Add domains</a></p>
                         {{end}}
                     </div>
                 </div>
-                <div class="form-group">
-                    <label class="checkbox-label">
-                        <input type="checkbox" name="track_opens" id="edit_track_opens" value="on">
-                        Отслеживать открытия (по умолчанию для ключа)
-                    </label>
-                    <label class="checkbox-label">
-                        <input type="checkbox" name="track_clicks" id="edit_track_clicks" value="on">
-                        Отслеживать клики (по умолчанию для ключа)
-                    </label>
-                    <small class="text-muted">Поля track_opens / track_clicks в запросе перекрывают эти значения.</small>
-                </div>
             </div>
             <div class="modal-footer">
-                <button type="button" onclick="document.getElementById('edit-modal').style.display='none'" class="btn btn-secondary">Cancel</button>
-                <button type="submit" class="btn btn-primary">Save</button>
+                <button type="button" onclick="document.getElementById('edit-modal').style.display='none'" class="btn btn-secondary" data-i18n="cancel">Cancel</button>
+                <button type="submit" class="btn btn-primary" data-i18n="save">Save</button>
             </div>
         </form>
     </div>
 </div>
 
 <script>
-function editKey(id, name, allowedDomains, rateLimitMinute, rateLimitHour, trackOpens, trackClicks) {
-    document.getElementById('edit_track_opens').checked = !!trackOpens;
-    document.getElementById('edit_track_clicks').checked = !!trackClicks;
+function editKey(id, name, allowedDomains, rateLimitMinute, rateLimitHour) {
     document.getElementById('edit-form').action = '/settings/api-keys/' + id + '/edit';
     document.getElementById('edit_name').value = name;
     document.getElementById('edit_rate_limit_minute').value = rateLimitMinute || '';
@@ -254,7 +243,7 @@ function toggleDomains(btn, extraCount) {
     const badges = btn.closest('.domain-badges');
     const collapsed = badges.querySelector('.domain-extra').classList.contains('domain-hidden');
     badges.querySelectorAll('.domain-extra').forEach(el => el.classList.toggle('domain-hidden', !collapsed));
-    btn.textContent = collapsed ? 'less' : '+' + extraCount;
+    btn.textContent = collapsed ? I18n.t('admin.less') : '+' + extraCount;
     btn.setAttribute('aria-expanded', collapsed ? 'true' : 'false');
     const noun = extraCount === 1 ? 'domain' : 'domains';
     btn.setAttribute('aria-label', collapsed ? 'Hide ' + extraCount + ' extra ' + noun : 'Show ' + extraCount + ' more ' + noun);
@@ -354,18 +343,54 @@ function toggleDomains(btn, extraCount) {
     width: 16px;
     height: 16px;
 }
+.apikeys-table {
+    table-layout: auto;
+}
+.apikeys-table th,
+.apikeys-table td {
+    vertical-align: top;
+}
+.apikeys-table .name-cell {
+    min-width: 160px;
+}
+.cell-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    font-weight: 500;
+}
+.cell-sub {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+.key-prefix {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 220px;
+}
 .domains-cell {
-    max-width: 340px;
+    min-width: 140px;
 }
 .domain-badges {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: flex-start;
     gap: 0.25rem;
 }
 .badge-info {
-    background: var(--primary-dark);
-    color: white;
     font-size: 0.75rem;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: left;
+}
+.domain-badges {
+    min-width: 0;
 }
 .domain-hidden {
     display: none;
@@ -373,40 +398,85 @@ function toggleDomains(btn, extraCount) {
 .badge-more {
     border: none;
     cursor: pointer;
-    background: var(--secondary);
-    color: white;
+    font-family: inherit;
     font-size: 0.75rem;
 }
-.key-prefix {
-    font-family: inherit;
-    color: var(--text-secondary, #666);
-}
-.table .btn {
-    font-family: inherit;
-}
-.table .actions {
+.rate-line {
+    display: block;
     white-space: nowrap;
 }
-.table .actions form {
-    display: inline-block;
+.date-cell {
+    white-space: nowrap;
 }
-.table .actions .btn {
-    margin: 2px;
+.apikeys-table .actions {
+    width: 1%;
+}
+.icon-actions {
+    display: flex;
+    gap: 0.25rem;
+    align-items: center;
+}
+.icon-actions form {
+    display: contents;
+}
+/* Narrow screens: each key becomes a block with labelled fields */
+@media (max-width: 1150px) {
+    .apikeys-table,
+    .apikeys-table tbody,
+    .apikeys-table tr,
+    .apikeys-table td {
+        display: block;
+    }
+    .apikeys-table thead {
+        display: none;
+    }
+    .apikeys-table tr {
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 0.75rem 1rem;
+        margin-bottom: 0.75rem;
+    }
+    .table-wrap .apikeys-table td {
+        border: 0;
+        padding: 0.25rem 0;
+    }
+    .apikeys-table td[data-label]::before {
+        content: attr(data-label);
+        display: inline-block;
+        min-width: 7.5rem;
+        color: var(--text-muted);
+        font-size: 0.8rem;
+        vertical-align: top;
+    }
+    .apikeys-table td[data-label] {
+        display: grid;
+        grid-template-columns: 7.5rem minmax(0, 1fr);
+        column-gap: 0.5rem;
+        align-items: start;
+    }
+    .apikeys-table td[data-label] .cell-sub {
+        grid-column: 2;
+        white-space: normal;
+    }
+    .apikeys-table .name-cell {
+        padding-bottom: 0.5rem;
+    }
+    .apikeys-table .actions {
+        width: auto;
+        padding-top: 0.5rem;
+    }
+    .apikeys-table .date-cell {
+        white-space: normal;
+    }
 }
 .table-wrap {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    margin: 0 -1.5rem;
-    padding: 0 1.5rem;
 }
 .table-wrap .table th,
 .table-wrap .table td {
     padding: 0.6rem 0.5rem;
     font-size: 0.875rem;
-    vertical-align: middle;
-}
-.table-wrap .table th {
-    white-space: nowrap;
 }
 .table-wrap .table th:first-child,
 .table-wrap .table td:first-child {
@@ -415,21 +485,6 @@ function toggleDomains(btn, extraCount) {
 .table-wrap .table th:last-child,
 .table-wrap .table td:last-child {
     padding-right: 0;
-}
-.table-wrap .actions .btn {
-    padding: 0.25rem 0.5rem;
-}
-.rate-line {
-    display: block;
-}
-.table .key-prefix,
-.table .date-cell,
-.table .rate-cell,
-.table .actions {
-    white-space: nowrap;
-}
-.table .domain-badges {
-    white-space: normal;
 }
 </style>
 {{end}}

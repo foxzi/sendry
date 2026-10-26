@@ -31,24 +31,13 @@ func (h *Handlers) JobList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get stats for each job
-	jobsWithStats := make([]map[string]any, len(jobs))
-	for i, job := range jobs {
-		stats, _ := h.jobs.GetStats(job.ID)
-		jobsWithStats[i] = map[string]any{
-			"Job":      job,
-			"Stats":    stats,
-			"Progress": stats.Progress(),
-		}
-	}
-
 	totalPages := (total + limit - 1) / limit
 
 	data := map[string]any{
-		"Title":      "Jobs",
+		"Title":      "Runs",
 		"Active":     "jobs",
 		"User":       h.getUserFromContext(r),
-		"Jobs":       jobsWithStats,
+		"Jobs":       h.jobsWithStats(jobs),
 		"Total":      total,
 		"Page":       page,
 		"TotalPages": totalPages,
@@ -56,6 +45,28 @@ func (h *Handlers) JobList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.render(w, "jobs", data)
+}
+
+// jobsWithStats builds template rows (Job, Stats, Progress) for a list of jobs.
+func (h *Handlers) jobsWithStats(jobs []models.SendJob) []map[string]any {
+	ids := make([]string, len(jobs))
+	for i, job := range jobs {
+		ids[i] = job.ID
+	}
+	all, err := h.jobs.GetStatsBatch(ids)
+	if err != nil {
+		h.logger.Error("failed to get job stats", "error", err)
+	}
+	rows := make([]map[string]any, len(jobs))
+	for i, job := range jobs {
+		stats := all[job.ID]
+		rows[i] = map[string]any{
+			"Job":      job,
+			"Stats":    stats,
+			"Progress": stats.Progress(),
+		}
+	}
+	return rows
 }
 
 func (h *Handlers) JobView(w http.ResponseWriter, r *http.Request) {
@@ -111,10 +122,10 @@ func (h *Handlers) JobView(w http.ResponseWriter, r *http.Request) {
 		"Tracking": trackingCards(campaign, trackingStats, statsErr),
 	}
 	if n, _ := strconv.Atoi(r.URL.Query().Get("retried")); n > 0 {
-		data["Success"] = strconv.Itoa(n) + " failed items queued for retry"
+		data["Retried"] = n
 	}
-	// The worker sends nothing without the public origin (unsubscribe links):
-	// the items stay pending until it is configured, so say why
+	// Without the public origin the worker sends with no unsubscribe links and
+	// no tracking, so warn while the run still has mail to send
 	if stats.Pending > 0 && (job.Status == "running" || job.Status == "scheduled" || job.Status == "paused") {
 		if origin, err := h.publicOrigin(); err == nil && origin == "" {
 			data["NoPublicURL"] = true
@@ -262,7 +273,8 @@ func (h *Handlers) JobCancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/jobs/"+id, http.StatusSeeOther)
+	// the campaign page's cancel button returns there
+	http.Redirect(w, r, localReturnPath(r.FormValue("return"), "/jobs/"+id), http.StatusSeeOther)
 }
 
 func (h *Handlers) JobRetry(w http.ResponseWriter, r *http.Request) {

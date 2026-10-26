@@ -1,15 +1,15 @@
 {{define "content"}}
 <div class="page-header">
-    <h1>Preview: {{.Template.Name}}</h1>
-    <a href="/templates/{{.Template.ID}}" class="btn btn-secondary">Back to Template</a>
+    <h1><span data-i18n="tpl.preview_title">Preview</span>: {{.Template.Name}}</h1>
+    <a href="/templates/{{.Template.ID}}" class="btn btn-secondary" data-i18n="tpl.back_to_template">Back to template</a>
 </div>
 
 <div class="card">
     <div class="card-header">
-        <strong>Subject:</strong> {{.Subject}}
+        <strong data-i18n="tpl.subject_colon">Subject:</strong> {{.Subject}}
     </div>
     <div class="card-body preview-frame">
-        <iframe srcdoc="{{.HTML}}" class="preview-iframe"></iframe>
+        <iframe srcdoc="{{.HTML}}" sandbox="" class="preview-iframe"></iframe>
     </div>
 </div>
 

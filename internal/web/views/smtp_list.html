@@ -1,24 +1,25 @@
 {{define "content"}}
 <div class="page-header">
     <div>
-        <h1>My SMTP Servers</h1>
-        <p class="text-muted">Configure outbound SMTP providers used for "Send test" on templates. Credentials are
+        <h1 data-i18n="admin.my_smtp_servers">My SMTP Servers</h1>
+        <p class="text-muted" data-i18n="admin.configure_outbound_smtp_providers_used_for_send">Configure outbound SMTP providers used for "Send test" on templates. Credentials are
             stored encrypted and only visible to you.</p>
     </div>
-    <a href="/settings/smtp/new" class="btn btn-primary">Add SMTP Server</a>
+    <a href="/settings/smtp/new" class="btn btn-primary" data-i18n="admin.add_smtp_server">Add SMTP server</a>
 </div>
 
 <div class="card">
     <div class="card-body">
         {{if .Servers}}
+        <div class="table-scroll">
         <table class="table">
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Host : Port</th>
-                    <th>Encryption</th>
-                    <th>From</th>
-                    <th>Username</th>
+                    <th data-i18n="name">Name</th>
+                    <th data-i18n="admin.host_port">Host : Port</th>
+                    <th data-i18n="admin.encryption">Encryption</th>
+                    <th data-i18n="from">From</th>
+                    <th data-i18n="admin.username">Username</th>
                     <th></th>
                 </tr>
             </thead>
@@ -31,19 +32,20 @@
                     <td>{{if .FromName}}{{.FromName}} &lt;{{.FromAddress}}&gt;{{else}}{{.FromAddress}}{{end}}</td>
                     <td>{{.Username}}</td>
                     <td style="text-align:right; white-space:nowrap;">
-                        <button class="btn btn-sm btn-secondary" data-test-smtp="{{.ID}}">Test</button>
-                        <a class="btn btn-sm btn-secondary" href="/settings/smtp/{{.ID}}/edit">Edit</a>
+                        <button class="btn btn-sm btn-secondary" data-test-smtp="{{.ID}}" data-i18n="admin.test">Test</button>
+                        <a class="btn btn-sm btn-secondary" href="/settings/smtp/{{.ID}}/edit" data-i18n="edit">Edit</a>
                         <form method="post" action="/settings/smtp/{{.ID}}/delete" style="display:inline;"
-                            onsubmit="return confirm('Delete this SMTP server?')">
-                            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                            onsubmit="return confirm(I18n.t('admin.delete_this_smtp_server'))">
+                            <button type="submit" class="btn btn-sm btn-danger" data-i18n="delete">Delete</button>
                         </form>
                     </td>
                 </tr>
                 {{end}}
             </tbody>
         </table>
+        </div>
         {{else}}
-        <p class="empty-state">No SMTP servers yet. Add one to enable "Send test" through your own provider.</p>
+        <p class="empty-state" data-i18n="admin.no_smtp_servers_yet_add_one_to_enable_send_test">No SMTP servers yet. Add one to enable "Send test" through your own provider.</p>
         {{end}}
     </div>
 </div>
@@ -54,18 +56,18 @@ document.querySelectorAll('[data-test-smtp]').forEach(function(btn) {
         var id = this.getAttribute('data-test-smtp');
         var orig = this.textContent;
         var self = this;
-        self.textContent = 'Testing…';
+        self.textContent = I18n.t('admin.testing');
         self.disabled = true;
         fetch('/settings/smtp/' + id + '/test', { method: 'POST', credentials: 'same-origin' })
             .then(function(r) { return r.json().then(function(j) { return {ok: r.ok, data: j}; }); })
             .then(function(res) {
                 if (res.ok && res.data.ok) {
-                    alert('OK — sent test email to ' + (res.data.to || 'from address'));
+                    alert(I18n.t('admin.ok_sent_test_email_to') + ' ' + (res.data.to || I18n.t('admin.from_address')));
                 } else {
-                    alert('Failed: ' + (res.data.error || 'unknown error'));
+                    alert(I18n.t('admin.failed') + ' ' + (res.data.error || I18n.t('admin.unknown_error')));
                 }
             })
-            .catch(function(e) { alert('Failed: ' + e.message); })
+            .catch(function(e) { alert(I18n.t('admin.failed') + ' ' + e.message); })
             .finally(function() { self.textContent = orig; self.disabled = false; });
     });
 });

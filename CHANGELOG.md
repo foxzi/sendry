@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- sendry-web: a scheduled launch can be changed: `POST /jobs/{id}/schedule` (same form as the send, only in status `scheduled`) updates the list, servers, strategy and time and rebuilds the items in one transaction; an empty time starts it now. The campaign page shows a card per scheduled launch (time in the browser's time zone) with Change and Cancel; `POST /jobs/{id}/cancel` accepts a `return` path under `/campaigns/`; the worker starts a scheduled job only if it is still scheduled and due
 - sendry-web: open, click and unsubscribe tracking (the MTA is unchanged). Public endpoints `GET /t/o/{token}.gif`, `GET /t/c/{token}`, `GET /u/{token}`, `POST /u/{token}` (button and RFC 8058 one-click) with HMAC-signed tokens, no auth, bypassing `server.allowed_ips`
 - sendry-web: Settings → Tracking (proxying domain, opens/clicks defaults), stored in the DB
 - sendry-web: campaign options track opens, track clicks, add UTM tags; API key flags `track_opens`/`track_clicks` and the same request fields on `POST /api/v1/send` and `/api/v1/send/template`
@@ -32,9 +33,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sendry-web: the open rate of a job uses the campaign's open tracking at job start, not the current setting
 - sendry-web: resubscribing removes the address from the unsubscribe statistics of past jobs
 - sendry-web: only success messages hide after 5 seconds; warnings and errors (`alert-danger` too) stay, and so does the one-time display of a new API key
+- **Upgrade note (breaking, API)**, sendry-web: the per-API-key `track_opens`/`track_clicks` flags and the global opens/clicks defaults of Settings → Tracking (v0.6.0) are removed, the migration drops them. `POST /api/v1/send` and `/api/v1/send/template` track opens or clicks only when the request has `"track_opens": true` / `"track_clicks": true`; clients that relied on the key defaults silently stop being tracked. Before upgrading, find such keys with `SELECT id, name FROM api_keys WHERE track_opens = 1 OR track_clicks = 1`
+- sendry-web: without a public address (`server.public_url` or Settings → Tracking) campaign jobs are no longer held: mail is sent without the unsubscribe link, `List-Unsubscribe` headers and open/click tracking (replaces the upgrade note above). The campaign, send and job pages warn about it, the worker logs a warning once per job. Gmail and Yahoo require one-click unsubscribe from bulk senders, so set the address before sending to large lists
+- sendry-web: engagement rates (Open Rate, CTR, unsubscribe %) are counted over sent messages, handed over to the recipient's server; the "Delivered" row, which also counted messages still waiting in the MTA queue, is replaced by "Sent" and matches the run progress. The "Queued" and "Sent" statuses of a run have hints on what they mean
+- sendry-web: campaigns are created, edited and sent on one page of rows (sender, content, variables, tracking, name); the old edit, variables and variants pages redirect to the campaign page, campaign tags are no longer shown or saved
+- sendry-web: a campaign is sent from its own launch page `GET /campaigns/{id}/launch` instead of a separate send page or a dialog (`GET /campaigns/{id}/send` redirects there). The steps go To → When → Check, and the check step ends with one button naming the action ("Send to N recipients" / "Schedule for <date>"); after it you land on the campaign page, where the launch is listed. The new campaign page only builds the letter and ends with "Save" and "Save and send…" (the latter opens the launch page); `POST /campaigns` no longer starts a send. `GET /campaigns/{id}/launch?job={id}` opens a scheduled launch of the campaign with its list, servers and time filled in and posts to `POST /jobs/{id}/schedule`
 - MTA: the `path` label of `sendry_api_requests_total` / `sendry_api_request_duration_seconds` is `unmatched` for requests that match no route (scanners added a series per probed URL, kept forever since counters are persisted)
 
+### Security
+- sendry-web: template, block and builder previews render in sandboxed iframes, and block HTML on the builder canvas is stripped of scripts, event handlers and `javascript:` links: a template or block saved by any user ran its scripts in the panel of whoever opened it (an admin included)
+- sendry-web: `/uploads/` is served with a sandbox CSP (an uploaded SVG could run scripts on the panel origin) and without directory listings
+- sendry-web: state-changing requests of the panel are rejected unless the browser marks them same-origin (`Sec-Fetch-Site`, or `Origin` for older browsers); the `SameSite=Lax` session cookie alone let sibling subdomains post on behalf of a signed-in user
+- sendry-web: every response carries `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff` and `Referrer-Policy: same-origin`
+- sendry-web: test emails sent from the campaign page are written to the audit log
+
 ### Fixed
+- sendry-web: a campaign can no longer be sent to a list with no active recipients (the empty run showed up as completed); such lists cannot be picked on the send step
+- sendry-web: a launch form the server rejects (list emptied meanwhile, invalid time, pilot over 100) comes back as the launch page with the message and the choices kept, instead of a bare error; the pilot limit of 100 is checked on the server too
+- sendry-web: the open tracking snapshot of a scheduled launch follows the campaign setting until it starts (changed on the campaign page or by editing the launch), so the open rate matches the pixel actually sent; editing a pilot launch shows its fixed pilot size in the summary
+- sendry-web: the date in an automatic campaign name is the browser's, as shown on the page, not the server's
+- sendry-web: searches ignore letter case in any alphabet ("демо" finds "Демо") and match `%` and `_` literally
+- sendry-web: a search with no results says so instead of "no campaigns yet"; the campaign wizard and an open campaign row ask before leaving with unsaved input
+- sendry-web: a completed run with failed emails is marked "completed with errors"; the readiness check, the tracking settings and the campaign banner agree on what happens without a proxying domain
 - Security: sendry-web `server.allowed_ips` could be bypassed by sending a forged `X-Forwarded-For` / `X-Real-IP` header; the panel IP filter and the audit log IP now honour these headers only from `server.trusted_proxies`. The right-most untrusted `X-Forwarded-For` address wins and `X-Real-IP` is used only without `X-Forwarded-For`, since Caddy passes a client-supplied `X-Real-IP` through; the ansible Caddyfile and `docs/caddy-sendry-web.md` also overwrite `X-Real-IP`
 - Security: MTA `api.allowed_ips` and `metrics.allowed_ips` could be bypassed with a forged `X-Forwarded-For` / `X-Real-IP` header from any address; these headers now count only from loopback (a reverse proxy on the same host)
 - sendry-web: tracking events were lost under concurrent requests (`database is locked`): transactions now take the SQLite write lock at start (`_txlock=immediate`)

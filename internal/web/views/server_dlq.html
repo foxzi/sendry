@@ -1,36 +1,37 @@
 {{define "content"}}
 <div class="page-header">
-    <h1>{{.ServerName}} - Dead Letter Queue</h1>
+    <h1>{{.ServerName}} - <span data-i18n="infra.dead_letter_queue_2">Dead Letter Queue</span></h1>
     <div class="header-actions">
         {{if .Messages}}
         <form method="post" action="/servers/{{.ServerName}}/dlq/purge" style="display: inline;">
-            <button type="submit" class="btn btn-danger" onclick="return confirm('Delete ALL messages from DLQ? This cannot be undone.')">Clear DLQ</button>
+            <button type="submit" class="btn btn-danger" onclick="return confirm(I18n.t('infra.delete_all_messages_from_dlq_this_cannot_be'))" data-i18n="infra.clear_dlq">Clear DLQ</button>
         </form>
         {{end}}
-        <a href="/servers/{{.ServerName}}" class="btn btn-secondary">Back to Server</a>
+        <a href="/servers/{{.ServerName}}" class="btn btn-secondary" data-i18n="infra.back_to_server">Back to server</a>
     </div>
 </div>
 
 <div class="card">
     <div class="card-header">
-        <span>{{.Total}} messages in DLQ</span>
+        <span>{{.Total}} <span data-i18n="queue.messages_in_dlq">messages in DLQ</span></span>
         {{if .Messages}}
-        <input type="text" id="dlq-search" class="form-control" placeholder="Search by ID, From, To, Subject..."
+        <input type="text" id="dlq-search" class="form-control" data-i18n-placeholder="infra.search_by_id_from_to_subject" placeholder="Search by ID, From, To, Subject..."
                style="max-width: 300px; display: inline-block; margin-left: 1rem;">
         {{end}}
     </div>
     <div class="card-body">
         {{if .Messages}}
+        <div class="table-scroll">
         <table class="table" id="dlq-table">
             <thead>
                 <tr>
-                    <th class="sortable" data-col="0">ID</th>
-                    <th class="sortable" data-col="1">From</th>
-                    <th class="sortable" data-col="2">To</th>
-                    <th class="sortable" data-col="3">Subject</th>
-                    <th class="sortable" data-col="4">Status</th>
-                    <th class="sortable" data-col="5">Created</th>
-                    <th>Actions</th>
+                    <th class="sortable" data-col="0" data-i18n="common.id">ID</th>
+                    <th class="sortable" data-col="1" data-i18n="from">From</th>
+                    <th class="sortable" data-col="2" data-i18n="to">To</th>
+                    <th class="sortable" data-col="3" data-i18n="subject">Subject</th>
+                    <th class="sortable" data-col="4" data-i18n="status">Status</th>
+                    <th class="sortable" data-col="5" data-i18n="common.created">Created</th>
+                    <th data-i18n="actions">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -40,24 +41,25 @@
                     <td>{{.From}}</td>
                     <td>{{.To}}</td>
                     <td>{{.Subject}}</td>
-                    <td class="text-danger">{{.Status}}</td>
+                    <td data-i18n="status.{{.Status}}" class="text-danger">{{.Status}}</td>
                     <td>{{.CreatedAt}}</td>
                     <td class="actions">
                         <form method="post" action="/servers/{{$.ServerName}}/dlq/{{.ID}}/retry" style="display: inline;">
-                            <button type="submit" class="btn btn-sm" onclick="return confirm('Retry this message?')">Retry</button>
+                            <button type="submit" class="btn btn-sm" onclick="return confirm(I18n.t('infra.retry_this_message'))" data-i18n="infra.retry">Retry</button>
                         </form>
                         <form method="post" action="/servers/{{$.ServerName}}/dlq/{{.ID}}/delete" style="display: inline;">
-                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this message from DLQ?')">Delete</button>
+                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm(I18n.t('infra.delete_this_message_from_dlq'))" data-i18n="delete">Delete</button>
                         </form>
                     </td>
                 </tr>
                 {{end}}
             </tbody>
         </table>
+        </div>
         {{else}}
         <div class="empty-state">
-            <p>DLQ is empty</p>
-            <p class="text-muted">Failed messages that exceeded retry limit will appear here</p>
+            <p data-i18n="queue.dlq_empty">DLQ is empty</p>
+            <p class="text-muted" data-i18n="infra.failed_messages_that_exceeded_retry_limit_will">Failed messages that exceeded retry limit will appear here</p>
         </div>
         {{end}}
     </div>

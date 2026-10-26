@@ -23,8 +23,16 @@ var standaloneTemplates = map[string]bool{
 
 // Template functions
 var funcs = template.FuncMap{
-	"add": func(a, b int) int { return a + b },
-	"sub": func(a, b int) int { return a - b },
+	"navSection": navSection,
+	"add":        func(a, b int) int { return a + b },
+	"sub":        func(a, b int) int { return a - b },
+	// pct is the share of a in b, percent; 0 when b is empty
+	"pct": func(a, b int) float64 {
+		if b <= 0 {
+			return 0
+		}
+		return float64(a) * 100 / float64(b)
+	},
 	"slice": func(s string, start, end int) string {
 		if start >= len(s) {
 			return ""
@@ -41,6 +49,25 @@ var funcs = template.FuncMap{
 		}
 		s := strings.ReplaceAll(string(b), "</", `<\/`)
 		return template.JS(s)
+	},
+	// softBreaks escapes s and allows line breaks after commas, so compact
+	// JSON wraps between fields instead of in the middle of a key.
+	"softBreaks": func(s string) template.HTML {
+		return template.HTML(strings.ReplaceAll(template.HTMLEscapeString(s), ",", ",<wbr>"))
+	},
+	// emailBreak escapes an address and lets it wrap before the "@",
+	// so a narrow column shows "name" / "@domain" instead of a cut domain.
+	"emailBreak": func(s string) template.HTML {
+		return template.HTML(strings.ReplaceAll(template.HTMLEscapeString(s), "@", "<wbr>@"))
+	},
+	// jsonList decodes a JSON string array stored in a text column;
+	// anything else comes back as a single item.
+	"jsonList": func(s string) []string {
+		var list []string
+		if err := json.Unmarshal([]byte(s), &list); err != nil {
+			return []string{s}
+		}
+		return list
 	},
 	"errorType":   stats.ClassifyError,
 	"currentYear": func() int { return time.Now().Year() },
@@ -63,6 +90,12 @@ func New() (*Engine, error) {
 		return nil, err
 	}
 
+	// Files starting with "_" hold shared definitions: they are parsed into the
+	// layout set (so every page sees them) and are not pages themselves.
+	if _, err := layoutTmpl.ParseFS(templatesFS, "_*.html"); err != nil {
+		return nil, err
+	}
+
 	// Parse each page template
 	entries, err := fs.ReadDir(templatesFS, ".")
 	if err != nil {
@@ -70,7 +103,7 @@ func New() (*Engine, error) {
 	}
 
 	for _, entry := range entries {
-		if entry.IsDir() || entry.Name() == "layout.html" {
+		if entry.IsDir() || entry.Name() == "layout.html" || strings.HasPrefix(entry.Name(), "_") {
 			continue
 		}
 
@@ -121,4 +154,27 @@ func (e *Engine) Render(w io.Writer, name string, data any) error {
 		return err
 	}
 	return tmpl.Execute(w, data)
+}
+
+// navSection maps a page's Active value to its navigation section id.
+// Unknown or non-string values return an empty string.
+func navSection(v any) string {
+	active, _ := v.(string)
+	switch active {
+	case "dashboard":
+		return "overview"
+	case "campaigns", "jobs":
+		return "campaigns"
+	case "templates", "blocks", "media", "variables":
+		return "templates"
+	case "recipients":
+		return "audience"
+	case "sends":
+		return "sends"
+	case "servers", "queue", "domains", "dkim", "monitoring", "test_email":
+		return "infra"
+	case "settings", "users", "apikeys", "tracking", "audit":
+		return "admin"
+	}
+	return ""
 }

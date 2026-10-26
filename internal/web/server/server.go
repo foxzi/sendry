@@ -100,7 +100,7 @@ func (s *Server) setupRoutes() http.Handler {
 	// Static files (embedded)
 	mux.Handle("GET /static/", http.StripPrefix("/static/", static.Handler()))
 
-	mux.Handle("GET /uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(s.cfg.Server.UploadPath))))
+	mux.Handle("GET /uploads/", http.StripPrefix("/uploads/", middleware.Uploads(s.cfg.Server.UploadPath)))
 
 	// Auth routes (public)
 	// Public tracking endpoints (signed tokens, no auth, not IP-filtered)
@@ -151,6 +151,7 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("POST /templates/{id}/test", h.TemplateTest)
 	protected.HandleFunc("POST /templates/{id}/deploy", h.TemplateDeploy)
 	protected.HandleFunc("GET /templates/{id}/preview", h.TemplatePreview)
+	protected.HandleFunc("GET /templates/{id}/frame", h.TemplateFrame)
 
 	// Media
 	protected.HandleFunc("GET /media", h.MediaList)
@@ -196,16 +197,17 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("GET /campaigns", h.CampaignList)
 	protected.HandleFunc("GET /campaigns/new", h.CampaignNew)
 	protected.HandleFunc("POST /campaigns", h.CampaignCreate)
+	protected.HandleFunc("POST /campaigns/wizard/preview", h.CampaignWizardPreview)
+	protected.HandleFunc("POST /campaigns/wizard/test", h.CampaignWizardTest)
 	protected.HandleFunc("GET /campaigns/{id}", h.CampaignView)
-	protected.HandleFunc("GET /campaigns/{id}/edit", h.CampaignEdit)
-	protected.HandleFunc("PUT /campaigns/{id}", h.CampaignUpdate)
+	protected.HandleFunc("POST /campaigns/{id}/section/{row}", h.CampaignSection)
 	protected.HandleFunc("DELETE /campaigns/{id}", h.CampaignDelete)
-	protected.HandleFunc("GET /campaigns/{id}/variables", h.CampaignVariables)
-	protected.HandleFunc("PUT /campaigns/{id}/variables", h.CampaignVariablesUpdate)
-	protected.HandleFunc("GET /campaigns/{id}/variants", h.CampaignVariants)
-	protected.HandleFunc("POST /campaigns/{id}/variants", h.CampaignVariantCreate)
-	protected.HandleFunc("DELETE /campaigns/{id}/variants/{variantId}", h.CampaignVariantDelete)
-	protected.HandleFunc("GET /campaigns/{id}/send", h.CampaignSendPage)
+	// pages that were folded into the campaign page
+	protected.HandleFunc("GET /campaigns/{id}/edit", h.CampaignRedirect)
+	protected.HandleFunc("GET /campaigns/{id}/variables", h.CampaignRedirect)
+	protected.HandleFunc("GET /campaigns/{id}/variants", h.CampaignRedirect)
+	protected.HandleFunc("GET /campaigns/{id}/send", h.CampaignSendRedirect)
+	protected.HandleFunc("GET /campaigns/{id}/launch", h.CampaignLaunch)
 	protected.HandleFunc("POST /campaigns/{id}/send", h.CampaignSend)
 	protected.HandleFunc("GET /campaigns/{id}/jobs", h.CampaignJobs)
 
@@ -216,6 +218,7 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("POST /jobs/{id}/pause", h.JobPause)
 	protected.HandleFunc("POST /jobs/{id}/resume", h.JobResume)
 	protected.HandleFunc("POST /jobs/{id}/cancel", h.JobCancel)
+	protected.HandleFunc("POST /jobs/{id}/schedule", h.JobSchedule)
 	protected.HandleFunc("POST /jobs/{id}/retry", h.JobRetry)
 
 	// Central DKIM Management
@@ -320,11 +323,12 @@ func (s *Server) setupRoutes() http.Handler {
 
 	// Wrap protected routes with auth middleware
 	authMiddleware := middleware.Auth(s.cfg, s.db, s.logger)
-	mux.Handle("/", authMiddleware(protected))
+	mux.Handle("/", authMiddleware(middleware.SameOrigin(protected)))
 
 	// Apply global middleware
 	handler := middleware.MethodOverride(mux)
 	handler = middleware.Logger(s.logger)(handler)
+	handler = middleware.SecurityHeaders(handler)
 	handler = middleware.Recovery(s.logger)(handler)
 
 	// Apply IP filter if configured. Public tracking paths (/t/, /u/) are

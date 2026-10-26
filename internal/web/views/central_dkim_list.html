@@ -1,23 +1,27 @@
 {{define "content"}}
 <div class="page-header">
-    <h1>DKIM Keys</h1>
+    <div>
+        <h1 data-i18n="infra.dkim_keys">DKIM keys</h1>
+        <p class="text-muted" data-i18n="infra.signing_keys_managed_centrally_and_deployed_to">Signing keys managed centrally and deployed to servers</p>
+    </div>
     <div class="header-actions">
-        <a href="/dkim/new" class="btn btn-primary">New DKIM Key</a>
+        <a href="/dkim/new" class="btn btn-primary" data-i18n="infra.new_dkim_key">New DKIM key</a>
     </div>
 </div>
 
 <div class="card">
     <div class="card-body">
         {{if .Keys}}
+        <div class="table-scroll">
         <table class="table">
             <thead>
                 <tr>
-                    <th>Domain</th>
-                    <th>Selector</th>
-                    <th>DNS Name</th>
-                    <th>Deployments</th>
-                    <th>Created</th>
-                    <th>Actions</th>
+                    <th data-i18n="common.domain">Domain</th>
+                    <th data-i18n="infra.selector">Selector</th>
+                    <th data-i18n="infra.dns_name">DNS Name</th>
+                    <th data-i18n="infra.deployments">Deployments</th>
+                    <th data-i18n="common.created">Created</th>
+                    <th data-i18n="actions">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -28,24 +32,25 @@
                     <td><code>{{.DNSName}}</code></td>
                     <td>
                         {{if .DeploymentCount}}
-                        <span class="badge badge-running">{{.DeploymentCount}} server(s)</span>
+                        <span class="badge badge-running">{{.DeploymentCount}} <span data-i18n="infra.server_s">server(s)</span></span>
                         {{else}}
-                        <span class="badge badge-draft">Not deployed</span>
+                        <span class="badge badge-draft" data-i18n="infra.not_deployed">Not deployed</span>
                         {{end}}
                     </td>
                     <td>{{.CreatedAt.Format "2006-01-02"}}</td>
                     <td>
-                        <a href="/dkim/{{.ID}}" class="btn btn-sm btn-secondary">View</a>
+                        <a href="/dkim/{{.ID}}" class="btn btn-sm btn-secondary" data-i18n="view">View</a>
                     </td>
                 </tr>
                 {{end}}
             </tbody>
         </table>
+        </div>
         {{else}}
         <div class="empty-state">
-            <p>No DKIM keys configured</p>
-            <p class="text-muted">Create a DKIM key to enable email signing</p>
-            <a href="/dkim/new" class="btn btn-primary">Create DKIM Key</a>
+            <p data-i18n="infra.no_dkim_keys_configured">No DKIM keys configured</p>
+            <p class="text-muted" data-i18n="infra.create_a_dkim_key_to_enable_email_signing">Create a DKIM key to enable email signing</p>
+            <a href="/dkim/new" class="btn btn-primary" data-i18n="infra.create_dkim_key">Create DKIM Key</a>
         </div>
         {{end}}
     </div>

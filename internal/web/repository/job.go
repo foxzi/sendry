@@ -3,7 +3,9 @@ package repository
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/foxzi/sendry/internal/web/models"
@@ -251,6 +253,13 @@ func (r *JobRepository) CreateItems(items []models.SendJobItem) error {
 	}
 	defer tx.Rollback()
 
+	if err := insertItems(tx, items); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func insertItems(tx *sql.Tx, items []models.SendJobItem) error {
 	stmt, err := tx.Prepare(`
 		INSERT INTO send_job_items (id, job_id, recipient_id, variant_id, server_name, status, error, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
@@ -273,8 +282,78 @@ func (r *JobRepository) CreateItems(items []models.SendJobItem) error {
 			return err
 		}
 	}
+	return nil
+}
 
+// ErrJobNotScheduled is returned by RescheduleJob for a job that is not
+// (or no longer) scheduled.
+var ErrJobNotScheduled = errors.New("job is not scheduled")
+
+// RescheduleJob changes the list, servers, strategy and time of a scheduled
+// job and replaces its items, in one transaction: the guarded first update
+// takes the write lock, so the worker never sees a half-built job and a job
+// it has just started is not touched (ErrJobNotScheduled). A nil scheduledAt
+// starts the job (status running). trackOpens is the campaign's open
+// tracking as of now, the snapshot the statistics of the job use.
+func (r *JobRepository) RescheduleJob(id, listID, servers, strategy string, scheduledAt *time.Time, trackOpens bool, items []models.SendJobItem, skipped int) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	now := time.Now()
+	status := "scheduled"
+	var startedAt *time.Time
+	if scheduledAt == nil {
+		status = "running"
+		startedAt = &now
+	}
+	res, err := tx.Exec(`
+		UPDATE send_jobs SET recipient_list_id = ?, servers = ?, strategy = ?, scheduled_at = ?, track_opens = ?,
+			status = ?, started_at = COALESCE(started_at, ?), skipped_unsubscribed = ?, updated_at = ?
+		WHERE id = ? AND status = 'scheduled'`,
+		listID, servers, strategy, scheduledAt, trackOpens, status, startedAt, skipped, now, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrJobNotScheduled
+	}
+
+	if _, err := tx.Exec("DELETE FROM send_job_items WHERE job_id = ?", id); err != nil {
+		return err
+	}
+	if err := insertItems(tx, items); err != nil {
+		return err
+	}
 	return tx.Commit()
+}
+
+// SetScheduledTrackOpens updates the open tracking snapshot of the scheduled
+// jobs of a campaign: they have not sent anything yet, so the pixel they will
+// carry follows the campaign setting changed now.
+func (r *JobRepository) SetScheduledTrackOpens(campaignID string, trackOpens bool) error {
+	_, err := r.db.Exec(`
+		UPDATE send_jobs SET track_opens = ?, updated_at = ?
+		WHERE campaign_id = ? AND status = 'scheduled'`,
+		trackOpens, time.Now(), campaignID)
+	return err
+}
+
+// StartDueJob starts a scheduled job whose time has come; false when it is
+// not due (rescheduled meanwhile) or no longer scheduled (cancelled).
+func (r *JobRepository) StartDueJob(id string) (bool, error) {
+	now := time.Now()
+	res, err := r.db.Exec(`
+		UPDATE send_jobs SET status = 'running', started_at = COALESCE(started_at, ?), updated_at = ?
+		WHERE id = ? AND status = 'scheduled' AND scheduled_at <= datetime('now')`,
+		now, now, id)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
 }
 
 // ListItems returns job items with filtering.
@@ -447,6 +526,43 @@ func (r *JobRepository) GetStats(jobID string) (models.JobStats, error) {
 	).Scan(&stats.Total, &stats.Pending, &stats.Queued, &stats.Sent, &stats.Failed, &stats.Skipped)
 
 	return stats, err
+}
+
+// GetStatsBatch returns the item stats of several jobs in one query, keyed by
+// job ID; jobs without items are absent (zero stats).
+func (r *JobRepository) GetStatsBatch(jobIDs []string) (map[string]models.JobStats, error) {
+	stats := make(map[string]models.JobStats, len(jobIDs))
+	if len(jobIDs) == 0 {
+		return stats, nil
+	}
+	args := make([]any, len(jobIDs))
+	for i, id := range jobIDs {
+		args[i] = id
+	}
+	rows, err := r.db.Query(`
+		SELECT job_id,
+			COUNT(*),
+			SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END),
+			SUM(CASE WHEN status = 'queued' THEN 1 ELSE 0 END),
+			SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END),
+			SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END),
+			SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END)
+		FROM send_job_items
+		WHERE job_id IN (?`+strings.Repeat(", ?", len(jobIDs)-1)+`)
+		GROUP BY job_id`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		var s models.JobStats
+		if err := rows.Scan(&id, &s.Total, &s.Pending, &s.Queued, &s.Sent, &s.Failed, &s.Skipped); err != nil {
+			return nil, err
+		}
+		stats[id] = s
+	}
+	return stats, rows.Err()
 }
 
 // GetRunningJobs returns all jobs with status 'running'

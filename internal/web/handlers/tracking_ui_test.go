@@ -74,8 +74,7 @@ func TestTrackingSettingsSave(t *testing.T) {
 	}
 
 	rec = postForm(h.TrackingSettingsSave, "/settings/tracking", url.Values{
-		"base_url":      {"lnk.example.com"},
-		"opens_default": {"1"},
+		"base_url": {"lnk.example.com"},
 	})
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("code = %d, body %s", rec.Code, rec.Body.String())
@@ -84,7 +83,7 @@ func TestTrackingSettingsSave(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.BaseURL != "https://lnk.example.com" || !s.OpensDefault || s.ClicksDefault {
+	if s.BaseURL != "https://lnk.example.com" {
 		t.Errorf("unexpected settings %+v", s)
 	}
 
@@ -225,7 +224,7 @@ func TestJobViewRendersTrackingStats(t *testing.T) {
 	if rec.Code != 200 {
 		t.Fatalf("code %d: %s", rec.Code, body)
 	}
-	for _, want := range []string{"Opened (unique)", "Open rate", "CTR", "CTOR", "/jobs/" + j.ID + "/clickmap"} {
+	for _, want := range []string{"Opened (unique)", "eng-funnel", "CTR", "CTOR", "/jobs/" + j.ID + "/clickmap", "dl-bar"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("job view lacks %q", want)
 		}
