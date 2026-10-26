@@ -6,6 +6,8 @@
 
 <div class="cf" id="cf" data-mode="create">
     <form method="post" action="/campaigns" id="cf-form" novalidate>
+        <!-- the browser's time zone offset: the date in an automatic name is the user's -->
+        <input type="hidden" id="tz_offset" name="tz_offset">
         {{template "cf_letter" .}}
 
         <div class="cf-final">

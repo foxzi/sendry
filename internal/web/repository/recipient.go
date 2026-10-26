@@ -72,7 +72,7 @@ func (r *RecipientRepository) ListLists(filter models.RecipientListFilter) ([]mo
 
 	// Get lists
 	query := `
-		SELECT id, name, description, source_type, total_count, active_count, created_at, updated_at
+		SELECT id, name, COALESCE(description, ''), source_type, total_count, active_count, created_at, updated_at
 		FROM recipient_lists WHERE 1=1`
 
 	args = []any{}

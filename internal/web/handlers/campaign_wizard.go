@@ -252,7 +252,7 @@ func (h *Handlers) CampaignCreate(w http.ResponseWriter, r *http.Request) {
 				subject = t.Subject
 			}
 		}
-		c.Name = autoCampaignName(subject, time.Now())
+		c.Name = autoCampaignName(subject, clientNow(r.FormValue("tz_offset")))
 	}
 
 	// The campaign and its variants are stored together or not at all
@@ -294,6 +294,18 @@ var (
 	templateVarRe = regexp.MustCompile(`\{\{.*?\}\}`)
 	spacesRe      = regexp.MustCompile(`\s+`)
 )
+
+// clientNow is the current time in the browser's time zone, given its
+// getTimezoneOffset() in minutes (the tz_offset form field): the date in an
+// automatic campaign name then matches the one the page showed. Without a
+// usable offset it is the server's time.
+func clientNow(offset string) time.Time {
+	now := time.Now()
+	if m, err := strconv.Atoi(offset); err == nil && m > -16*60 && m < 16*60 {
+		return now.In(time.FixedZone("", -m*60))
+	}
+	return now
+}
 
 // autoCampaignName makes the name of a campaign without one: the subject
 // without {{variables}} and with a date, "Spring sale, 02.01.2006"; just
@@ -601,6 +613,13 @@ func (h *Handlers) CampaignSection(w http.ResponseWriter, r *http.Request) {
 			c.TrackOpens, c.TrackClicks = false, false
 		}
 		serr = h.updateCampaign(c)
+		// Launches that have not started yet will carry the pixel as set now,
+		// so their statistics snapshot follows
+		if serr == nil {
+			if err := h.jobs.SetScheduledTrackOpens(c.ID, c.TrackOpens); err != nil {
+				h.logger.Error("failed to update tracking of scheduled jobs", "campaign_id", c.ID, "error", err)
+			}
+		}
 	case "about":
 		c.Name = strings.TrimSpace(r.FormValue("name"))
 		c.Description = r.FormValue("description")

@@ -121,8 +121,13 @@ func TestJobSchedule_RejectsBadInput(t *testing.T) {
 		"bad time":     {"recipient_list_id": {"l1"}, "servers": {"mx1"}, "scheduled_at": {"tomorrow"}},
 		"bad strategy": {"recipient_list_id": {"l1"}, "servers": {"mx1"}, "strategy": {"x"}},
 	} {
-		if rec := postJobSchedule(h, id, form); rec.Code != http.StatusBadRequest {
+		rec := postJobSchedule(h, id, form)
+		if rec.Code != http.StatusBadRequest {
 			t.Errorf("%s: %d", name, rec.Code)
+		}
+		// the edit page comes back with the message, still posting to the job
+		if body := rec.Body.String(); !strings.Contains(body, `class="alert alert-danger"`) || !strings.Contains(body, `action="/jobs/`+id+`/schedule"`) {
+			t.Errorf("%s: not the edit page: %.200s", name, body)
 		}
 	}
 	// nothing changed

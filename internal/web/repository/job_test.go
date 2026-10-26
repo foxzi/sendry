@@ -391,7 +391,47 @@ func TestJobRepository_StartDueJob(t *testing.T) {
 	if ok, _ := repo.StartDueJob(jobID); ok {
 		t.Error("cancelled job started")
 	}
-	if err := repo.RescheduleJob(jobID, "l1", `["mx1"]`, "round-robin", nil, nil, 0); !errors.Is(err, ErrJobNotScheduled) {
+	if err := repo.RescheduleJob(jobID, "l1", `["mx1"]`, "round-robin", nil, false, nil, 0); !errors.Is(err, ErrJobNotScheduled) {
 		t.Errorf("reschedule of a cancelled job: %v", err)
+	}
+}
+
+// The open tracking snapshot of a scheduled job follows the campaign: it is
+// taken again when the launch is changed and when the campaign setting
+// changes, and left alone on jobs that have started.
+func TestJobRepository_ScheduledTrackOpens(t *testing.T) {
+	db := setupTestDB(t)
+	jobID := setupJobWithItems(t, db, nil)
+	repo := NewJobRepository(db)
+	trackOpens := func(id string) int {
+		var v sql.NullInt64
+		if err := db.QueryRow(`SELECT track_opens FROM send_jobs WHERE id = ?`, id).Scan(&v); err != nil {
+			t.Fatal(err)
+		}
+		return int(v.Int64)
+	}
+
+	mustExec(t, db, `UPDATE send_jobs SET status = 'scheduled', scheduled_at = datetime('now', '+1 hour'), track_opens = 0 WHERE id = ?`, jobID)
+	later := time.Now().Add(2 * time.Hour)
+	if err := repo.RescheduleJob(jobID, "l1", `["mx1"]`, "round-robin", &later, true, nil, 0); err != nil {
+		t.Fatal(err)
+	}
+	if trackOpens(jobID) != 1 {
+		t.Error("reschedule did not take the tracking snapshot")
+	}
+
+	if err := repo.SetScheduledTrackOpens("c1", false); err != nil {
+		t.Fatal(err)
+	}
+	if trackOpens(jobID) != 0 {
+		t.Error("campaign change did not reach the scheduled job")
+	}
+
+	mustExec(t, db, `UPDATE send_jobs SET status = 'running' WHERE id = ?`, jobID)
+	if err := repo.SetScheduledTrackOpens("c1", true); err != nil {
+		t.Fatal(err)
+	}
+	if trackOpens(jobID) != 0 {
+		t.Error("a running job's snapshot changed")
 	}
 }

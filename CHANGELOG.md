@@ -49,6 +49,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - sendry-web: a campaign can no longer be sent to a list with no active recipients (the empty run showed up as completed); such lists cannot be picked on the send step
+- sendry-web: a launch form the server rejects (list emptied meanwhile, invalid time, pilot over 100) comes back as the launch page with the message and the choices kept, instead of a bare error; the pilot limit of 100 is checked on the server too
+- sendry-web: the open tracking snapshot of a scheduled launch follows the campaign setting until it starts (changed on the campaign page or by editing the launch), so the open rate matches the pixel actually sent; editing a pilot launch shows its fixed pilot size in the summary
+- sendry-web: the date in an automatic campaign name is the browser's, as shown on the page, not the server's
 - sendry-web: searches ignore letter case in any alphabet ("демо" finds "Демо") and match `%` and `_` literally
 - sendry-web: a search with no results says so instead of "no campaigns yet"; the campaign wizard and an open campaign row ask before leaving with unsaved input
 - sendry-web: a completed run with failed emails is marked "completed with errors"; the readiness check, the tracking settings and the campaign banner agree on what happens without a proxying domain

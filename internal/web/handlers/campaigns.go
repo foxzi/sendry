@@ -164,6 +164,81 @@ func (h *Handlers) CampaignLaunch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	pick := h.defaultPick()
+	if job != nil {
+		pick = h.pickFromJob(job)
+	}
+	h.launchPage(w, r, c, job, pick, http.StatusOK, "")
+}
+
+// launchPick is what the launch form has filled in: the choices of the
+// scheduled launch being edited, or the ones just posted when the form comes
+// back with an error. ScheduledUTC is RFC 3339 or "" for "now".
+type launchPick struct {
+	ListID       string
+	Servers      map[string]bool
+	Strategy     string
+	DryRun       bool
+	DryRunLimit  int
+	ScheduledUTC string
+}
+
+// defaultPick is a new launch: every server, no list, no pilot
+func (h *Handlers) defaultPick() launchPick {
+	servers := make(map[string]bool, len(h.cfg.Sendry.Servers))
+	for _, s := range h.cfg.Sendry.Servers {
+		servers[s.Name] = true
+	}
+	return launchPick{Servers: servers, DryRunLimit: defaultDryRunLimit}
+}
+
+// pickFromJob is the form filled with a scheduled launch
+func (h *Handlers) pickFromJob(job *models.SendJob) launchPick {
+	var names []string
+	if err := json.Unmarshal([]byte(job.Servers), &names); err != nil {
+		h.logger.Error("job servers are not a JSON array", "job_id", job.ID, "error", err)
+	}
+	pick := launchPick{
+		ListID:      job.RecipientListID,
+		Servers:     make(map[string]bool, len(names)),
+		Strategy:    job.Strategy,
+		DryRun:      job.DryRun,
+		DryRunLimit: job.DryRunLimit,
+	}
+	for _, name := range names {
+		pick.Servers[name] = true
+	}
+	if job.ScheduledAt != nil {
+		pick.ScheduledUTC = job.ScheduledAt.UTC().Format(time.RFC3339)
+	}
+	return pick
+}
+
+// pickFromParams is the form filled with what was posted
+func pickFromParams(p jobParams) launchPick {
+	pick := launchPick{
+		ListID:      p.RecipientListID,
+		Servers:     make(map[string]bool, len(p.Servers)),
+		Strategy:    p.Strategy,
+		DryRun:      p.DryRun,
+		DryRunLimit: p.DryRunLimit,
+	}
+	if pick.DryRunLimit <= 0 {
+		pick.DryRunLimit = defaultDryRunLimit
+	}
+	for _, name := range p.Servers {
+		pick.Servers[name] = true
+	}
+	if p.ScheduledAt != nil {
+		pick.ScheduledUTC = p.ScheduledAt.UTC().Format(time.RFC3339)
+	}
+	return pick
+}
+
+// launchPage renders the launch page of a campaign with the form filled from
+// pick; job is the scheduled launch being edited or nil. A non-empty errMsg
+// is shown above the form with the given status.
+func (h *Handlers) launchPage(w http.ResponseWriter, r *http.Request, c *models.Campaign, job *models.SendJob, pick launchPick, status int, errMsg string) {
 	data, err := h.campaignFlowData(r, "launch", c)
 	if err != nil {
 		h.logger.Error("failed to build launch page", "error", err)
@@ -172,6 +247,15 @@ func (h *Handlers) CampaignLaunch(w http.ResponseWriter, r *http.Request) {
 	}
 	data["Title"] = c.Name + " - Launch"
 	data["Job"] = job
+	data["Pick"] = pick
+	data["Error"] = errMsg
+	// The pilot of a scheduled launch is fixed when it is created: the page
+	// shows it instead of the pilot fields
+	fixedPilot := 0
+	if job != nil && job.DryRun {
+		fixedPilot = job.DryRunLimit
+	}
+	data["FixedPilot"] = fixedPilot
 	// Without a letter there is nothing to send: say so instead of a form
 	// that fails on the last step
 	variants, err := h.campaigns.GetVariants(c.ID)
@@ -179,23 +263,27 @@ func (h *Handlers) CampaignLaunch(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("failed to get variants", "error", err)
 	}
 	data["NoContent"] = len(activeVariants(variants)) == 0
-	chosen := map[string]bool{}
-	scheduledUTC := ""
-	if job != nil {
-		var names []string
-		if err := json.Unmarshal([]byte(job.Servers), &names); err != nil {
-			h.logger.Error("job servers are not a JSON array", "job_id", job.ID, "error", err)
-		}
-		for _, name := range names {
-			chosen[name] = true
-		}
-		if job.ScheduledAt != nil {
-			scheduledUTC = job.ScheduledAt.UTC().Format(time.RFC3339)
-		}
+	if status != http.StatusOK {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(status)
 	}
-	data["JobServers"] = chosen
-	data["ScheduledUTC"] = scheduledUTC
 	h.render(w, "campaign_launch", data)
+}
+
+// launchFail answers a launch form that was not accepted: a validation error
+// (4xx) shows the form again with the message and the choices kept, anything
+// else is a bare error.
+func (h *Handlers) launchFail(w http.ResponseWriter, r *http.Request, c *models.Campaign, job *models.SendJob, p jobParams, serr *statusError) {
+	if serr.status >= http.StatusInternalServerError {
+		h.error(w, serr.status, serr.message)
+		return
+	}
+	h.logger.Warn("launch form rejected", "campaign_id", c.ID, "status", serr.status, "message", serr.message)
+	pick := pickFromParams(p)
+	if job != nil {
+		pick.DryRun, pick.DryRunLimit = job.DryRun, job.DryRunLimit
+	}
+	h.launchPage(w, r, c, job, pick, serr.status, serr.message)
 }
 
 // activeVariants returns the variants that are sent (weight > 0), in order
@@ -225,7 +313,7 @@ func (h *Handlers) CampaignSend(w http.ResponseWriter, r *http.Request) {
 
 	params, perr := parseJobParams(r)
 	if perr != nil {
-		h.error(w, perr.status, perr.message)
+		h.launchFail(w, r, c, nil, params, perr)
 		return
 	}
 
@@ -233,17 +321,25 @@ func (h *Handlers) CampaignSend(w http.ResponseWriter, r *http.Request) {
 	variants, err := h.campaigns.GetVariants(id)
 	variants = activeVariants(variants)
 	if err != nil || len(variants) == 0 {
-		h.error(w, http.StatusBadRequest, "Campaign has no variants configured")
+		h.launchFail(w, r, c, nil, params, &statusError{http.StatusBadRequest, "Campaign has no variants configured"})
 		return
 	}
 
 	if _, perr := h.startJob(r, c, variants, params); perr != nil {
-		h.error(w, perr.status, perr.message)
+		h.launchFail(w, r, c, nil, params, perr)
 		return
 	}
 	// the launch shows up on the campaign page
 	http.Redirect(w, r, "/campaigns/"+c.ID, http.StatusSeeOther)
 }
+
+// The pilot (dry run) sends to the first recipients of the list only: this
+// many without a number given, and never more than the maximum (the form
+// says the same)
+const (
+	defaultDryRunLimit = 10
+	maxDryRunLimit     = 100
+)
 
 // statusError is an error to answer a request with
 type statusError struct {
@@ -289,7 +385,10 @@ func parseJobParams(r *http.Request) (jobParams, *statusError) {
 	if p.DryRun {
 		p.DryRunLimit, _ = strconv.Atoi(r.FormValue("dry_run_limit"))
 		if p.DryRunLimit <= 0 {
-			p.DryRunLimit = 10 // default
+			p.DryRunLimit = defaultDryRunLimit
+		}
+		if p.DryRunLimit > maxDryRunLimit {
+			return p, &statusError{http.StatusBadRequest, "The pilot sends to at most " + strconv.Itoa(maxDryRunLimit) + " recipients"}
 		}
 	}
 

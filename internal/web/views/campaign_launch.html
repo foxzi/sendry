@@ -11,6 +11,7 @@
     <a href="/campaigns/{{.Campaign.ID}}" class="btn btn-secondary" data-i18n="cancel">Cancel</a>
 </div>
 
+{{if .Error}}<div class="alert alert-danger" role="alert">{{.Error}}</div>{{end}}
 {{if .NoPublicURL}}{{template "no_public_url" .}}{{end}}
 
 {{if .NoContent}}
@@ -31,6 +32,7 @@ window.CF_CONFIG = {
     mode: "launch",
     campaignId: {{toJSON .Campaign.ID}},
     editing: {{if .Job}}true{{else}}false{{end}},
+    fixedPilot: {{toJSON .FixedPilot}},
     noPublicURL: {{if .NoPublicURL}}true{{else}}false{{end}},
     isAdmin: {{if .User.IsAdmin}}true{{else}}false{{end}},
     userEmail: {{toJSON .UserEmail}},

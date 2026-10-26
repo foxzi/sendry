@@ -520,7 +520,7 @@ func TestCampaignLaunch_EditScheduled(t *testing.T) {
 	h.cfg.Sendry.Servers = []config.SendryServer{{Name: "mx1"}, {Name: "mx2"}}
 	for _, q := range []string{
 		`INSERT INTO campaigns (id, name, description, from_email, from_name, reply_to, variables, tags) VALUES ('c2', 'other', '', 'x@example.com', '', '', '', '')`,
-		`INSERT INTO send_jobs (id, campaign_id, recipient_list_id, status, scheduled_at, servers, strategy, stats) VALUES ('j1', 'c1', 'l1', 'scheduled', '2030-05-06 07:08:00', '["mx2"]', 'random', '{}')`,
+		`INSERT INTO send_jobs (id, campaign_id, recipient_list_id, status, scheduled_at, servers, strategy, stats, dry_run, dry_run_limit) VALUES ('j1', 'c1', 'l1', 'scheduled', '2030-05-06 07:08:00', '["mx2"]', 'random', '{}', 1, 7)`,
 		`INSERT INTO send_jobs (id, campaign_id, recipient_list_id, status, servers, strategy, stats) VALUES ('j2', 'c1', 'l1', 'running', '["mx1"]', 'random', '{}')`,
 		`INSERT INTO send_jobs (id, campaign_id, recipient_list_id, status, scheduled_at, servers, strategy, stats) VALUES ('j3', 'c2', 'l1', 'scheduled', '2030-05-06 07:08:00', '["mx1"]', 'random', '{}')`,
 	} {
@@ -542,10 +542,16 @@ func TestCampaignLaunch_EditScheduled(t *testing.T) {
 		`data-utc="2030-05-06T07:08:00Z"`,
 		`<option value="random" selected`,
 		`name="servers" value="mx2" checked`,
+		// the pilot of the launch is shown as fixed, and the script knows it for the summary
+		`data-i18n="cmp.wz_pilot_fixed" data-i18n-arg-n="7"`,
+		`fixedPilot: 7,`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("edit page lacks %q", want)
 		}
+	}
+	if strings.Contains(body, `name="dry_run"`) {
+		t.Error("edit page offers the pilot fields")
 	}
 	if !regexp.MustCompile(`name="recipient_list_id" value="l1"[^>]* checked`).MatchString(body) {
 		t.Error("the list of the job is not chosen")
@@ -565,6 +571,118 @@ func TestCampaignLaunch_EditScheduled(t *testing.T) {
 	} {
 		if rec := getLaunch(h, target); rec.Code != http.StatusNotFound {
 			t.Errorf("%s: status %d, want 404", name, rec.Code)
+		}
+	}
+}
+
+// A launch form the server does not accept comes back as the launch page
+// with the message and the choices kept, not as a bare error text.
+func TestCampaignSend_RejectedFormKeepsThePage(t *testing.T) {
+	h, d := newCampaignTestHandlers(t, "https://panel.example.com")
+	h.cfg.Sendry.Servers = []config.SendryServer{{Name: "mx1"}, {Name: "mx2"}}
+	mustExec(t, d, `INSERT INTO recipient_lists (id, name, source_type) VALUES ('empty', 'empty', 'manual')`)
+
+	rec := postCampaignSend(h, url.Values{"recipient_list_id": {"empty"}, "servers": {"mx2"}, "strategy": {"random"},
+		"dry_run": {"on"}, "dry_run_limit": {"5"}, "scheduled_at": {"2099-03-10T09:00"}, "tz": {"UTC"}})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status %d", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+		t.Fatalf("content type %q: %s", ct, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`<div class="alert alert-danger" role="alert">The recipient list has no active recipients</div>`,
+		`action="/campaigns/c1/send"`,
+		`name="cf_when" value="later" checked`,
+		`data-utc="2099-03-10T09:00:00Z"`,
+		`name="dry_run" id="dry_run" value="on" checked`,
+		`name="dry_run_limit" class="input cf-num" value="5"`,
+		`<option value="random" selected`,
+		`name="servers" value="mx2" checked`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("page lacks %q", want)
+		}
+	}
+	if strings.Contains(body, `name="servers" value="mx1" checked`) {
+		t.Error("a server that was not picked is checked")
+	}
+	if n := countRows(t, d, `SELECT COUNT(*) FROM send_jobs`); n != 0 {
+		t.Errorf("%d jobs created", n)
+	}
+
+	// the pilot limit is checked on the server too
+	rec = postCampaignSend(h, url.Values{"recipient_list_id": {"l1"}, "servers": {"mx1"}, "dry_run": {"on"}, "dry_run_limit": {"500"}})
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "at most 100 recipients") {
+		t.Errorf("pilot of 500: %d %s", rec.Code, rec.Body.String())
+	}
+	if n := countRows(t, d, `SELECT COUNT(*) FROM send_jobs`); n != 0 {
+		t.Errorf("%d jobs created", n)
+	}
+
+	// a new launch page has every server checked and the default pilot size
+	body = getLaunch(h, "/campaigns/c1/launch").Body.String()
+	if !strings.Contains(body, `name="servers" value="mx1" checked`) || !strings.Contains(body, `name="servers" value="mx2" checked`) {
+		t.Error("new launch page does not check every server")
+	}
+	if !strings.Contains(body, `name="dry_run_limit" class="input cf-num" value="10"`) {
+		t.Error("new launch page has no default pilot size")
+	}
+}
+
+// Switching the tracking row changes the pixel the launches not started yet
+// will carry: their statistics snapshot follows the campaign.
+func TestCampaignSection_TrackUpdatesScheduledJobs(t *testing.T) {
+	h, d := newCampaignTestHandlers(t, "https://panel.example.com")
+	mustExec(t, d, `UPDATE campaigns SET track_opens = 1 WHERE id = 'c1'`)
+	id := scheduleTestJob(t, h, d)
+	mustExec(t, d, `INSERT INTO send_jobs (id, campaign_id, recipient_list_id, status, servers, strategy, stats, track_opens, started_at) VALUES ('done', 'c1', 'l1', 'completed', '["mx1"]', 'random', '{}', 1, CURRENT_TIMESTAMP)`)
+	trackOpens := func(jobID string) int {
+		return countRows(t, d, `SELECT track_opens FROM send_jobs WHERE id = ?`, jobID)
+	}
+	if trackOpens(id) != 1 {
+		t.Fatalf("scheduled job starts with track_opens %d", trackOpens(id))
+	}
+
+	if rec, msg := postSection(h, "c1", "track", url.Values{"track_clicks": {"on"}}); rec.Code != http.StatusOK {
+		t.Fatalf("track off: %d %s", rec.Code, msg)
+	}
+	if trackOpens(id) != 0 {
+		t.Error("scheduled job keeps the pixel the campaign no longer has")
+	}
+	if trackOpens("done") != 1 {
+		t.Error("a finished job's snapshot changed")
+	}
+
+	if rec, msg := postSection(h, "c1", "track", url.Values{"track_opens": {"on"}}); rec.Code != http.StatusOK {
+		t.Fatalf("track on: %d %s", rec.Code, msg)
+	}
+	if trackOpens(id) != 1 {
+		t.Error("scheduled job does not get the pixel back")
+	}
+
+	// changing the launch takes the snapshot again as well
+	mustExec(t, d, `UPDATE campaigns SET track_opens = 0 WHERE id = 'c1'`)
+	if rec := postJobSchedule(h, id, url.Values{"recipient_list_id": {"l1"}, "servers": {"mx1"}, "scheduled_at": {"2099-04-01T10:30"}, "tz": {"UTC"}}); rec.Code != http.StatusSeeOther {
+		t.Fatalf("reschedule: %d %s", rec.Code, rec.Body.String())
+	}
+	if trackOpens(id) != 0 {
+		t.Error("rescheduled job keeps the old snapshot")
+	}
+}
+
+func TestClientNow(t *testing.T) {
+	// getTimezoneOffset() is minutes behind UTC: Moscow (UTC+3) gives -180
+	if got := clientNow("-180").Format("-07:00"); got != "+03:00" {
+		t.Errorf("offset -180: zone %s", got)
+	}
+	if got := clientNow("300").Format("-07:00"); got != "-05:00" {
+		t.Errorf("offset 300: zone %s", got)
+	}
+	for _, bad := range []string{"", "x", "9999", "-9999"} {
+		if got := clientNow(bad); got.Location() != time.Local {
+			t.Errorf("offset %q: location %v, want the server's", bad, got.Location())
 		}
 	}
 }

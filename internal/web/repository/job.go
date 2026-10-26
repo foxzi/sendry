@@ -293,8 +293,9 @@ var ErrJobNotScheduled = errors.New("job is not scheduled")
 // job and replaces its items, in one transaction: the guarded first update
 // takes the write lock, so the worker never sees a half-built job and a job
 // it has just started is not touched (ErrJobNotScheduled). A nil scheduledAt
-// starts the job (status running).
-func (r *JobRepository) RescheduleJob(id, listID, servers, strategy string, scheduledAt *time.Time, items []models.SendJobItem, skipped int) error {
+// starts the job (status running). trackOpens is the campaign's open
+// tracking as of now, the snapshot the statistics of the job use.
+func (r *JobRepository) RescheduleJob(id, listID, servers, strategy string, scheduledAt *time.Time, trackOpens bool, items []models.SendJobItem, skipped int) error {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return err
@@ -309,10 +310,10 @@ func (r *JobRepository) RescheduleJob(id, listID, servers, strategy string, sche
 		startedAt = &now
 	}
 	res, err := tx.Exec(`
-		UPDATE send_jobs SET recipient_list_id = ?, servers = ?, strategy = ?, scheduled_at = ?,
+		UPDATE send_jobs SET recipient_list_id = ?, servers = ?, strategy = ?, scheduled_at = ?, track_opens = ?,
 			status = ?, started_at = COALESCE(started_at, ?), skipped_unsubscribed = ?, updated_at = ?
 		WHERE id = ? AND status = 'scheduled'`,
-		listID, servers, strategy, scheduledAt, status, startedAt, skipped, now, id)
+		listID, servers, strategy, scheduledAt, trackOpens, status, startedAt, skipped, now, id)
 	if err != nil {
 		return err
 	}
@@ -327,6 +328,17 @@ func (r *JobRepository) RescheduleJob(id, listID, servers, strategy string, sche
 		return err
 	}
 	return tx.Commit()
+}
+
+// SetScheduledTrackOpens updates the open tracking snapshot of the scheduled
+// jobs of a campaign: they have not sent anything yet, so the pixel they will
+// carry follows the campaign setting changed now.
+func (r *JobRepository) SetScheduledTrackOpens(campaignID string, trackOpens bool) error {
+	_, err := r.db.Exec(`
+		UPDATE send_jobs SET track_opens = ?, updated_at = ?
+		WHERE campaign_id = ? AND status = 'scheduled'`,
+		trackOpens, time.Now(), campaignID)
+	return err
 }
 
 // StartDueJob starts a scheduled job whose time has come; false when it is

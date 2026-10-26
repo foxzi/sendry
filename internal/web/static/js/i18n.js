@@ -425,11 +425,18 @@ var I18n = (function() {
         var text = lookup(key);
         if (text === undefined) text = key;
         if (params) {
-            for (var p in params) {
-                text = text.replace('{' + p + '}', params[p]);
-            }
+            for (var p in params) text = fillParam(text, p, params[p]);
         }
         return text;
+    }
+
+    // Replaces the first {name} in text with value as is: String.replace
+    // would read "$&" or "$'" in a campaign name or domain as a pattern
+    function fillParam(text, name, value) {
+        var marker = '{' + name + '}';
+        var i = text.indexOf(marker);
+        if (i < 0) return text;
+        return text.slice(0, i) + String(value) + text.slice(i + marker.length);
     }
 
     function setLang(lang) {
@@ -455,7 +462,7 @@ var I18n = (function() {
             if (v === undefined) return;
             for (var i = 0; i < el.attributes.length; i++) {
                 var a = el.attributes[i];
-                if (a.name.indexOf('data-i18n-arg-') === 0) v = v.replace('{' + a.name.slice(14) + '}', a.value);
+                if (a.name.indexOf('data-i18n-arg-') === 0) v = fillParam(v, a.name.slice(14), a.value);
             }
             el.textContent = v;
         });

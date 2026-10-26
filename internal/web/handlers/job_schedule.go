@@ -39,10 +39,20 @@ func (h *Handlers) JobSchedule(w http.ResponseWriter, r *http.Request) {
 		h.error(w, http.StatusBadRequest, "Only a scheduled job can be changed, status: "+job.Status)
 		return
 	}
+	c, err := h.campaigns.GetByID(job.CampaignID)
+	if err != nil {
+		h.logger.Error("failed to get campaign", "error", err)
+		h.error(w, http.StatusInternalServerError, "Failed to load campaign")
+		return
+	}
+	if c == nil {
+		h.error(w, http.StatusNotFound, "Campaign not found")
+		return
+	}
 
 	params, perr := parseJobParams(r)
 	if perr != nil {
-		h.error(w, perr.status, perr.message)
+		h.launchFail(w, r, c, job, params, perr)
 		return
 	}
 	// the dry-run settings are fixed when the launch is created
@@ -52,13 +62,13 @@ func (h *Handlers) JobSchedule(w http.ResponseWriter, r *http.Request) {
 	variants, err := h.campaigns.GetVariants(job.CampaignID)
 	variants = activeVariants(variants)
 	if err != nil || len(variants) == 0 {
-		h.error(w, http.StatusBadRequest, "Campaign has no variants configured")
+		h.launchFail(w, r, c, job, params, &statusError{http.StatusBadRequest, "Campaign has no variants configured"})
 		return
 	}
 
 	items, recipients, unsubscribed, perr := h.buildJobItems(variants, params)
 	if perr != nil {
-		h.error(w, perr.status, perr.message)
+		h.launchFail(w, r, c, job, params, perr)
 		return
 	}
 	for i := range items {
@@ -66,7 +76,8 @@ func (h *Handlers) JobSchedule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	serversJSON, _ := json.Marshal(params.Servers)
-	err = h.jobs.RescheduleJob(id, params.RecipientListID, string(serversJSON), params.Strategy, params.ScheduledAt, items, unsubscribed)
+	trackOpens := c.TrackOpens && h.hasPublicOrigin() // no pixel without the public origin
+	err = h.jobs.RescheduleJob(id, params.RecipientListID, string(serversJSON), params.Strategy, params.ScheduledAt, trackOpens, items, unsubscribed)
 	if errors.Is(err, repository.ErrJobNotScheduled) {
 		h.error(w, http.StatusBadRequest, "The launch has already started or was cancelled")
 		return
@@ -90,10 +101,10 @@ func (h *Handlers) scheduledJobs(campaignID string) []map[string]any {
 		h.logger.Error("failed to list scheduled jobs", "error", err)
 		return nil
 	}
-	out := make([]map[string]any, 0, len(jobs))
-	for _, job := range jobs {
-		stats, _ := h.jobs.GetStats(job.ID)
-		out = append(out, map[string]any{"Job": job, "Recipients": stats.Pending})
+	rows := h.jobsWithStats(jobs)
+	out := make([]map[string]any, len(rows))
+	for i, row := range rows {
+		out[i] = map[string]any{"Job": row["Job"], "Recipients": row["Stats"].(models.JobStats).Pending}
 	}
 	return out
 }

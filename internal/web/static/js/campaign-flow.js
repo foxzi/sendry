@@ -496,7 +496,10 @@
             return withTz ? text + ' (' + tzLabel + ')' : text;
         }
 
+        // The pilot limit, or null for a full send. A scheduled launch being
+        // edited keeps the pilot it was created with (the page has no fields for it)
         function pilotCount() {
+            if (cfg.fixedPilot > 0) return cfg.fixedPilot;
             if (!pilotEl || !pilotEl.checked) return null;
             var n = parseInt(limitEl.value, 10);
             return n >= 1 ? Math.min(n, 100) : null;
@@ -1336,8 +1339,10 @@
         // choices of a launch only on the final button
         var touched = false;
         if (form && mode !== 'edit') {
-            form.addEventListener('input', function () { touched = true; });
-            form.addEventListener('change', function () { touched = true; });
+            // the test email address is not part of what is saved
+            var touch = function (e) { if (e.target.id !== 'cf-test-to') touched = true; };
+            form.addEventListener('input', touch);
+            form.addEventListener('change', touch);
         }
         window.addEventListener('beforeunload', function (e) {
             if (submitting) return;
