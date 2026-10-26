@@ -273,7 +273,8 @@ func (h *Handlers) JobCancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/jobs/"+id, http.StatusSeeOther)
+	// the campaign page's cancel button returns there
+	http.Redirect(w, r, localReturnPath(r.FormValue("return"), "/jobs/"+id), http.StatusSeeOther)
 }
 
 func (h *Handlers) JobRetry(w http.ResponseWriter, r *http.Request) {

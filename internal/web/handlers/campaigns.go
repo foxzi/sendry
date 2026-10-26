@@ -78,6 +78,7 @@ func (h *Handlers) CampaignView(w http.ResponseWriter, r *http.Request) {
 	}
 	data["Tracking"] = trackingCards(c, trackingStats, err)
 	data["Jobs"] = h.jobsWithStats(recentJobs)
+	data["Scheduled"] = h.scheduledJobs(id)
 
 	h.render(w, "campaign_view", data)
 }
@@ -127,10 +128,74 @@ func (h *Handlers) hasPublicOrigin() bool {
 	return origin != ""
 }
 
-// CampaignSendRedirect sends the old send page to the campaign page with the
-// send dialog open (#send); the dialog posts to CampaignSend.
+// CampaignSendRedirect sends the old send page to the launch page.
 func (h *Handlers) CampaignSendRedirect(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, "/campaigns/"+r.PathValue("id")+"#send", http.StatusMovedPermanently)
+	http.Redirect(w, r, "/campaigns/"+r.PathValue("id")+"/launch", http.StatusMovedPermanently)
+}
+
+// CampaignLaunch shows the launch page of a campaign: who, when and the
+// review. With ?job=<id> it edits a scheduled launch of the campaign (the
+// form posts to the job then); any other job is a 404.
+func (h *Handlers) CampaignLaunch(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	c, err := h.campaigns.GetByID(id)
+	if err != nil {
+		h.logger.Error("failed to get campaign", "error", err)
+		h.error(w, http.StatusInternalServerError, "Failed to load campaign")
+		return
+	}
+	if c == nil {
+		h.error(w, http.StatusNotFound, "Campaign not found")
+		return
+	}
+
+	var job *models.SendJob
+	if jobID := r.URL.Query().Get("job"); jobID != "" {
+		job, err = h.jobs.GetByID(jobID)
+		if err != nil {
+			h.logger.Error("failed to get job", "error", err)
+			h.error(w, http.StatusInternalServerError, "Failed to load launch")
+			return
+		}
+		if job == nil || job.CampaignID != c.ID || job.Status != "scheduled" {
+			h.error(w, http.StatusNotFound, "Scheduled launch not found")
+			return
+		}
+	}
+
+	data, err := h.campaignFlowData(r, "launch", c)
+	if err != nil {
+		h.logger.Error("failed to build launch page", "error", err)
+		h.error(w, http.StatusInternalServerError, "Failed to load the page")
+		return
+	}
+	data["Title"] = c.Name + " - Launch"
+	data["Job"] = job
+	// Without a letter there is nothing to send: say so instead of a form
+	// that fails on the last step
+	variants, err := h.campaigns.GetVariants(c.ID)
+	if err != nil {
+		h.logger.Error("failed to get variants", "error", err)
+	}
+	data["NoContent"] = len(activeVariants(variants)) == 0
+	chosen := map[string]bool{}
+	scheduledUTC := ""
+	if job != nil {
+		var names []string
+		if err := json.Unmarshal([]byte(job.Servers), &names); err != nil {
+			h.logger.Error("job servers are not a JSON array", "job_id", job.ID, "error", err)
+		}
+		for _, name := range names {
+			chosen[name] = true
+		}
+		if job.ScheduledAt != nil {
+			scheduledUTC = job.ScheduledAt.UTC().Format(time.RFC3339)
+		}
+	}
+	data["JobServers"] = chosen
+	data["ScheduledUTC"] = scheduledUTC
+	h.render(w, "campaign_launch", data)
 }
 
 // activeVariants returns the variants that are sent (weight > 0), in order
@@ -172,12 +237,12 @@ func (h *Handlers) CampaignSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	job, perr := h.startJob(r, c, variants, params)
-	if perr != nil {
+	if _, perr := h.startJob(r, c, variants, params); perr != nil {
 		h.error(w, perr.status, perr.message)
 		return
 	}
-	http.Redirect(w, r, "/jobs/"+job.ID, http.StatusSeeOther)
+	// the launch shows up on the campaign page
+	http.Redirect(w, r, "/campaigns/"+c.ID, http.StatusSeeOther)
 }
 
 // statusError is an error to answer a request with
@@ -243,15 +308,9 @@ func parseJobParams(r *http.Request) (jobParams, *statusError) {
 // startJob creates the send job of a campaign with an item per recipient of
 // the list, and starts it unless it is scheduled. variants must not be empty.
 func (h *Handlers) startJob(r *http.Request, c *models.Campaign, variants []models.CampaignVariant, p jobParams) (*models.SendJob, *statusError) {
-	// Get recipients: active ones up to the dry-run limit (all without it)
-	recipients, unsubscribed, err := h.jobRecipients(p.RecipientListID, p.DryRunLimit)
-	if err != nil {
-		h.logger.Error("failed to get recipients", "error", err)
-		return nil, &statusError{http.StatusInternalServerError, "Failed to get recipients"}
-	}
-	if len(recipients) == 0 {
-		// Nobody to send to: an empty run would only show up as "completed"
-		return nil, &statusError{http.StatusBadRequest, "The recipient list has no active recipients"}
+	items, recipients, unsubscribed, perr := h.buildJobItems(variants, p)
+	if perr != nil {
+		return nil, perr
 	}
 
 	// Create servers JSON
@@ -276,32 +335,8 @@ func (h *Handlers) startJob(r *http.Request, c *models.Campaign, variants []mode
 		h.logger.Error("failed to create job", "error", err)
 		return nil, &statusError{http.StatusInternalServerError, "Failed to create job"}
 	}
-
-	// Create job items
-	items := make([]models.SendJobItem, len(recipients), len(recipients)+len(unsubscribed))
-	nextServer := h.serverPicker(p.Strategy, p.Servers)
-	nextVariant := weightedPicker(variants)
-
-	for i, recipient := range recipients {
-		items[i] = models.SendJobItem{
-			JobID:       job.ID,
-			RecipientID: recipient.ID,
-			VariantID:   variants[nextVariant()].ID,
-			ServerName:  p.Servers[nextServer()],
-		}
-	}
-
-	// Unsubscribed recipients get skipped items, so skips are counted per
-	// recipient like everything else (and campaign stats can count them once)
-	for _, recipient := range unsubscribed {
-		items = append(items, models.SendJobItem{
-			JobID:       job.ID,
-			RecipientID: recipient.ID,
-			VariantID:   variants[0].ID,
-			ServerName:  p.Servers[0],
-			Status:      models.JobItemStatusSkipped,
-			Error:       models.SkipReasonUnsubscribed,
-		})
+	for i := range items {
+		items[i].JobID = job.ID
 	}
 
 	if err := h.jobs.CreateItems(items); err != nil {
@@ -309,8 +344,8 @@ func (h *Handlers) startJob(r *http.Request, c *models.Campaign, variants []mode
 		return nil, &statusError{http.StatusInternalServerError, "Failed to create job items"}
 	}
 
-	if len(unsubscribed) > 0 {
-		if err := h.jobs.SetSkippedUnsubscribed(job.ID, len(unsubscribed)); err != nil {
+	if unsubscribed > 0 {
+		if err := h.jobs.SetSkippedUnsubscribed(job.ID, unsubscribed); err != nil {
 			h.logger.Error("failed to store skipped count", "job_id", job.ID, "error", err)
 		}
 	}
@@ -322,8 +357,52 @@ func (h *Handlers) startJob(r *http.Request, c *models.Campaign, variants []mode
 	}
 
 	h.settings.LogAction(r, middleware.GetUserID(r), middleware.GetUserEmail(r),
-		"send", "campaign", c.ID, `{"job_id":"`+job.ID+`","recipients":`+strconv.Itoa(len(recipients))+`}`)
+		"send", "campaign", c.ID, `{"job_id":"`+job.ID+`","recipients":`+strconv.Itoa(recipients)+`}`)
 	return job, nil
+}
+
+// buildJobItems builds the items of a launch from the recipient list: one per
+// active recipient (up to the dry-run limit) with the variant and server
+// assigned, and skipped items for the unsubscribed ones passed over. The items
+// have no JobID yet. It returns them with the number of active and of
+// unsubscribed recipients; a list without active recipients is a 400.
+func (h *Handlers) buildJobItems(variants []models.CampaignVariant, p jobParams) ([]models.SendJobItem, int, int, *statusError) {
+	// Get recipients: active ones up to the dry-run limit (all without it)
+	recipients, unsubscribed, err := h.jobRecipients(p.RecipientListID, p.DryRunLimit)
+	if err != nil {
+		h.logger.Error("failed to get recipients", "error", err)
+		return nil, 0, 0, &statusError{http.StatusInternalServerError, "Failed to get recipients"}
+	}
+	if len(recipients) == 0 {
+		// Nobody to send to: an empty run would only show up as "completed"
+		return nil, 0, 0, &statusError{http.StatusBadRequest, "The recipient list has no active recipients"}
+	}
+
+	// Create job items
+	items := make([]models.SendJobItem, len(recipients), len(recipients)+len(unsubscribed))
+	nextServer := h.serverPicker(p.Strategy, p.Servers)
+	nextVariant := weightedPicker(variants)
+
+	for i, recipient := range recipients {
+		items[i] = models.SendJobItem{
+			RecipientID: recipient.ID,
+			VariantID:   variants[nextVariant()].ID,
+			ServerName:  p.Servers[nextServer()],
+		}
+	}
+
+	// Unsubscribed recipients get skipped items, so skips are counted per
+	// recipient like everything else (and campaign stats can count them once)
+	for _, recipient := range unsubscribed {
+		items = append(items, models.SendJobItem{
+			RecipientID: recipient.ID,
+			VariantID:   variants[0].ID,
+			ServerName:  p.Servers[0],
+			Status:      models.JobItemStatusSkipped,
+			Error:       models.SkipReasonUnsubscribed,
+		})
+	}
+	return items, len(recipients), len(unsubscribed), nil
 }
 
 func (h *Handlers) CampaignJobs(w http.ResponseWriter, r *http.Request) {

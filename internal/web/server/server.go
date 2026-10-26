@@ -207,6 +207,7 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("GET /campaigns/{id}/variables", h.CampaignRedirect)
 	protected.HandleFunc("GET /campaigns/{id}/variants", h.CampaignRedirect)
 	protected.HandleFunc("GET /campaigns/{id}/send", h.CampaignSendRedirect)
+	protected.HandleFunc("GET /campaigns/{id}/launch", h.CampaignLaunch)
 	protected.HandleFunc("POST /campaigns/{id}/send", h.CampaignSend)
 	protected.HandleFunc("GET /campaigns/{id}/jobs", h.CampaignJobs)
 
@@ -217,6 +218,7 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("POST /jobs/{id}/pause", h.JobPause)
 	protected.HandleFunc("POST /jobs/{id}/resume", h.JobResume)
 	protected.HandleFunc("POST /jobs/{id}/cancel", h.JobCancel)
+	protected.HandleFunc("POST /jobs/{id}/schedule", h.JobSchedule)
 	protected.HandleFunc("POST /jobs/{id}/retry", h.JobRetry)
 
 	// Central DKIM Management

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -18,7 +19,7 @@ func setupJobWithItems(t *testing.T, db *sql.DB, items [][2]string) string {
 	mustExec(t, db, `INSERT INTO campaigns (id, name, from_email) VALUES ('c1', 'camp', 'a@example.com')`)
 	mustExec(t, db, `INSERT INTO templates (id, name, subject) VALUES ('t1', 'tpl', 's')`)
 	mustExec(t, db, `INSERT INTO campaign_variants (id, campaign_id, name, template_id) VALUES ('v1', 'c1', 'A', 't1')`)
-	mustExec(t, db, `INSERT INTO send_jobs (id, campaign_id, recipient_list_id, status) VALUES ('job-1', 'c1', 'l1', 'running')`)
+	mustExec(t, db, `INSERT INTO send_jobs (id, campaign_id, recipient_list_id, status, started_at) VALUES ('job-1', 'c1', 'l1', 'running', CURRENT_TIMESTAMP)`)
 
 	repo := NewJobRepository(db)
 	for i, it := range items {
@@ -363,5 +364,34 @@ func TestJobRepository_UpdateStatusKeepsStartedAt(t *testing.T) {
 	}
 	if !strings.HasPrefix(started, "2026-01-01") {
 		t.Errorf("started_at = %s, want the first start", started)
+	}
+}
+
+// A scheduled job starts only when due and still scheduled: the worker must not
+// start a job that was cancelled or moved to a later time after it read it.
+func TestJobRepository_StartDueJob(t *testing.T) {
+	db := setupTestDB(t)
+	jobID := setupJobWithItems(t, db, nil)
+	repo := NewJobRepository(db)
+
+	mustExec(t, db, `UPDATE send_jobs SET status = 'scheduled', scheduled_at = datetime('now', '+1 hour') WHERE id = ?`, jobID)
+	if ok, err := repo.StartDueJob(jobID); err != nil || ok {
+		t.Fatalf("future job started: %v %v", ok, err)
+	}
+
+	mustExec(t, db, `UPDATE send_jobs SET scheduled_at = datetime('now', '-1 minute') WHERE id = ?`, jobID)
+	if ok, err := repo.StartDueJob(jobID); err != nil || !ok {
+		t.Fatalf("due job not started: %v %v", ok, err)
+	}
+	if ok, _ := repo.StartDueJob(jobID); ok {
+		t.Error("running job started again")
+	}
+
+	mustExec(t, db, `UPDATE send_jobs SET status = 'cancelled' WHERE id = ?`, jobID)
+	if ok, _ := repo.StartDueJob(jobID); ok {
+		t.Error("cancelled job started")
+	}
+	if err := repo.RescheduleJob(jobID, "l1", `["mx1"]`, "round-robin", nil, nil, 0); !errors.Is(err, ErrJobNotScheduled) {
+		t.Errorf("reschedule of a cancelled job: %v", err)
 	}
 }

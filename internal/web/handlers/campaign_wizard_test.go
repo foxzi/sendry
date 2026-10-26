@@ -6,8 +6,6 @@ import (
 	"net/url"
 	"strings"
 	"testing"
-
-	"github.com/foxzi/sendry/internal/web/config"
 )
 
 func postCampaignCreate(h *Handlers, form url.Values) *httptest.ResponseRecorder {
@@ -103,33 +101,36 @@ func TestCampaignCreate_Save(t *testing.T) {
 	}
 }
 
-func TestCampaignCreate_Send(t *testing.T) {
+func TestCampaignCreate_Launch(t *testing.T) {
 	h, d := newCampaignTestHandlers(t, "https://panel.example.com")
-	h.cfg.Sendry.Servers = []config.SendryServer{{Name: "mx1"}}
-	d.Exec(`UPDATE recipient_lists SET description = '' WHERE description IS NULL`) // the fixture leaves it NULL
 
-	rec := postCampaignCreate(h, url.Values{"name": {"n"}, "from_email": {"a@example.com"}, "template_id": {"t1"},
-		"action": {"send"}, "recipient_list_id": {"l1"}, "servers": {"mx1"}})
+	// the campaign is created and the person goes on to its launch page; no job yet
+	rec := postCampaignCreate(h, url.Values{"name": {"n"}, "from_email": {"a@example.com"}, "template_id": {"t1"}, "action": {"launch"}})
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
 	}
-	var jobID, status string
-	if err := d.QueryRow(`SELECT j.id, j.status FROM send_jobs j JOIN campaigns c ON c.id = j.campaign_id WHERE c.name = 'n'`).Scan(&jobID, &status); err != nil {
+	var id string
+	if err := d.QueryRow(`SELECT id FROM campaigns WHERE name = 'n'`).Scan(&id); err != nil {
 		t.Fatal(err)
 	}
-	if loc := rec.Header().Get("Location"); loc != "/jobs/"+jobID {
+	if loc := rec.Header().Get("Location"); loc != "/campaigns/"+id+"/launch" {
 		t.Errorf("redirect to %q", loc)
 	}
-	if status != "running" {
-		t.Errorf("job status %q", status)
+	var jobs int
+	d.QueryRow(`SELECT COUNT(*) FROM send_jobs`).Scan(&jobs)
+	if jobs != 0 {
+		t.Errorf("%d jobs created by the wizard", jobs)
 	}
-	var items, pending int
-	if err := d.QueryRow(`SELECT COUNT(*), SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) FROM send_job_items WHERE job_id = ?`, jobID).Scan(&items, &pending); err != nil {
-		t.Fatal(err)
+
+	// the send fields of an old form are not read any more
+	rec = postCampaignCreate(h, url.Values{"name": {"n2"}, "from_email": {"a@example.com"}, "template_id": {"t1"},
+		"recipient_list_id": {"l1"}, "servers": {"mx1"}})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
 	}
-	// l1 holds three active recipients and one unsubscribed (a skipped item)
-	if items != 4 || pending != 3 {
-		t.Errorf("items %d pending %d, want 4 and 3", items, pending)
+	d.QueryRow(`SELECT COUNT(*) FROM send_jobs`).Scan(&jobs)
+	if jobs != 0 {
+		t.Errorf("%d jobs created by the wizard", jobs)
 	}
 }
 
@@ -162,18 +163,11 @@ func TestCampaignCreate_ValidationCreatesNothing(t *testing.T) {
 		{"ab without split", with("ab_enabled", "on", "template_id_b", "t1")},
 		{"ab split out of range", with("ab_enabled", "on", "template_id_b", "t1", "split_a", "100")},
 		{"ab unknown template b", with("ab_enabled", "on", "template_id_b", "nope", "split_a", "50")},
-		{"send without list", with("action", "send", "servers", "mx1")},
-		{"send unknown list", with("action", "send", "recipient_list_id", "nope", "servers", "mx1")},
-		{"send without servers", with("action", "send", "recipient_list_id", "l1")},
-		{"send unknown server", with("action", "send", "recipient_list_id", "l1", "servers", "zzz")},
-		{"send bad strategy", with("action", "send", "recipient_list_id", "l1", "servers", "mx1", "strategy", "x")},
-		{"send bad schedule", with("action", "send", "recipient_list_id", "l1", "servers", "mx1", "scheduled_at", "tomorrow")},
+		{"old send action", with("action", "send")},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h, d := newCampaignTestHandlers(t, "https://panel.example.com")
-			h.cfg.Sendry.Servers = []config.SendryServer{{Name: "mx1"}}
-			d.Exec(`UPDATE recipient_lists SET description = '' WHERE description IS NULL`)
 			rec := postCampaignCreate(h, tt.form)
 			if rec.Code != http.StatusBadRequest {
 				t.Fatalf("status %d: %s", rec.Code, rec.Body.String())

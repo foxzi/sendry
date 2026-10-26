@@ -192,6 +192,17 @@ func TestTracking_JobAndCampaignStats(t *testing.T) {
 		t.Errorf("OpenRate = %v", got.OpenRate())
 	}
 
+	// scheduled jobs and ones cancelled before their time have items but sent
+	// nothing: campaign stats leave them out
+	for _, status := range []string{"scheduled", "cancelled"} {
+		mustExec(t, db, `INSERT INTO send_jobs (id, campaign_id, recipient_list_id, status) VALUES (?, 'c1', 'l1', ?)`, "job-"+status, status)
+		mustExec(t, db, `INSERT INTO send_job_items (id, job_id, recipient_id, variant_id, server_name) VALUES (?, ?, 'r3', 'v1', 'mx1')`, "item-"+status, "job-"+status)
+	}
+	got, err = repo.CampaignStats("c1")
+	if err != nil || got != want {
+		t.Errorf("CampaignStats with unstarted jobs = %+v, %v; want %+v", got, err, want)
+	}
+
 	empty, err := repo.JobStats("missing")
 	if err != nil || empty != (models.TrackingStats{}) {
 		t.Errorf("empty = %+v, %v", empty, err)
@@ -376,8 +387,8 @@ func TestTracking_StatsBase(t *testing.T) {
 		VALUES ('job-dry', 'c1', 'l1', 'completed', 1)`)
 	mustExec(t, db, `INSERT INTO send_job_items (id, job_id, recipient_id, status) VALUES ('dry-1', 'job-dry', 'r0', 'sent')`)
 	mustExec(t, db, `INSERT INTO send_job_items (id, job_id, recipient_id, variant_id, server_name, status, error) VALUES ('dry-2', 'job-dry', 'r1', 'v1', 'mx1', 'skipped', ?)`, skip)
-	mustExec(t, db, `INSERT INTO send_jobs (id, campaign_id, recipient_list_id, status)
-		VALUES ('job-2', 'c1', 'l1', 'completed')`)
+	mustExec(t, db, `INSERT INTO send_jobs (id, campaign_id, recipient_list_id, status, started_at)
+		VALUES ('job-2', 'c1', 'l1', 'completed', CURRENT_TIMESTAMP)`)
 	mustExec(t, db, `INSERT INTO recipients (id, list_id, email) VALUES ('r4', 'l1', 'user4@example.org')`)
 	mustExec(t, db, `INSERT INTO recipients (id, list_id, email) VALUES ('r5', 'l1', 'user5@example.org')`)
 	mustExec(t, db, `INSERT INTO send_job_items (id, job_id, recipient_id, variant_id, server_name, status, error) VALUES ('s1', 'job-1', 'r4', 'v1', 'mx1', 'skipped', ?)`, skip)

@@ -19,6 +19,9 @@
             <button type="submit" class="btn btn-primary" data-i18n="cmp.retry_failed">Retry failed</button>
         </form>
         {{end}}
+        {{if eq .Job.Status "scheduled"}}
+        <a href="/campaigns/{{.Job.CampaignID}}/launch?job={{.Job.ID}}" class="btn" data-i18n="cmp.sched_change">Change</a>
+        {{end}}
         {{if or (eq .Job.Status "running") (eq .Job.Status "paused") (eq .Job.Status "scheduled")}}
         <form method="post" action="/jobs/{{.Job.ID}}/cancel" style="display:inline" onsubmit="return confirm(I18n.t('cmp.confirm_cancel_run'))">
             <button type="submit" class="btn btn-danger" data-i18n="cancel">Cancel</button>
@@ -27,6 +30,12 @@
     </div>
 </div>
 
+{{if and (eq .Job.Status "scheduled") .Job.ScheduledAt}}
+<div class="alert alert-warning">
+    <strong data-i18n="cmp.sched_for">Scheduled for</strong>
+    {{template "local_time" .Job.ScheduledAt}}
+</div>
+{{end}}
 {{if .Retried}}<div class="alert alert-success">{{.Retried}} <span data-i18n="cmp.retried_n">failed items queued for retry</span></div>{{end}}
 {{if .NoPublicURL}}{{template "no_public_url" .}}{{end}}
 

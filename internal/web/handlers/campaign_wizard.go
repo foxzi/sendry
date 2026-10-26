@@ -98,7 +98,7 @@ func campaignVarPairs(raw string) ([]VarPair, error) {
 }
 
 // campaignFlowData returns the data of the campaign pages: mode is create
-// (new campaign) or edit (campaign page with the send dialog), c is the
+// (new campaign), edit (campaign page) or launch (launch page), c is the
 // campaign (a blank one for create).
 func (h *Handlers) campaignFlowData(r *http.Request, mode string, c *models.Campaign) (map[string]any, error) {
 	if c == nil {
@@ -228,11 +228,12 @@ func (h *Handlers) CampaignCreate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// "save" stays on the campaign page, "launch" goes on to its launch page
 	action := r.FormValue("action")
 	if action == "" {
 		action = "save"
 	}
-	if action != "save" && action != "send" {
+	if action != "save" && action != "launch" {
 		h.error(w, http.StatusBadRequest, "Unknown action")
 		return
 	}
@@ -254,37 +255,7 @@ func (h *Handlers) CampaignCreate(w http.ResponseWriter, r *http.Request) {
 		c.Name = autoCampaignName(subject, time.Now())
 	}
 
-	var params jobParams
-	if action == "send" {
-		var perr *statusError
-		if params, perr = parseJobParams(r); perr != nil {
-			h.error(w, perr.status, perr.message)
-			return
-		}
-		list, err := h.recipients.GetListByID(params.RecipientListID)
-		if err != nil {
-			h.logger.Error("failed to get recipient list", "error", err)
-			h.error(w, http.StatusInternalServerError, "Failed to load recipient list")
-			return
-		}
-		if list == nil {
-			h.error(w, http.StatusBadRequest, "Recipient list not found")
-			return
-		}
-		known := map[string]bool{}
-		for _, s := range h.cfg.Sendry.Servers {
-			known[s.Name] = true
-		}
-		for _, name := range params.Servers {
-			if !known[name] {
-				h.error(w, http.StatusBadRequest, "Server not found: "+name)
-				return
-			}
-		}
-	}
-
 	// The campaign and its variants are stored together or not at all
-	stored := make([]models.CampaignVariant, 0, len(variants))
 	err := h.campaigns.InTx(func(repo *repository.CampaignRepository) error {
 		if err := repo.Create(c); err != nil {
 			return err
@@ -300,7 +271,6 @@ func (h *Handlers) CampaignCreate(w http.ResponseWriter, r *http.Request) {
 			if err := repo.AddVariant(v); err != nil {
 				return err
 			}
-			stored = append(stored, *v)
 		}
 		return nil
 	})
@@ -313,22 +283,11 @@ func (h *Handlers) CampaignCreate(w http.ResponseWriter, r *http.Request) {
 	h.settings.LogAction(r, middleware.GetUserID(r), middleware.GetUserEmail(r),
 		"create", "campaign", c.ID, auditJSON(map[string]any{"name": c.Name}))
 
-	if action == "save" {
-		http.Redirect(w, r, "/campaigns/"+c.ID, http.StatusSeeOther)
+	if action == "launch" {
+		http.Redirect(w, r, "/campaigns/"+c.ID+"/launch", http.StatusSeeOther)
 		return
 	}
-
-	// GetVariants orders them like the send dialog does, and fills the IDs
-	if fresh, err := h.campaigns.GetVariants(c.ID); err == nil && len(fresh) > 0 {
-		stored = fresh
-	}
-	job, perr := h.startJob(r, c, stored, params)
-	if perr != nil {
-		// the campaign is saved; the person can send it from its page
-		h.error(w, perr.status, perr.message)
-		return
-	}
-	http.Redirect(w, r, "/jobs/"+job.ID, http.StatusSeeOther)
+	http.Redirect(w, r, "/campaigns/"+c.ID, http.StatusSeeOther)
 }
 
 var (

@@ -282,9 +282,13 @@ func (w *Worker) startScheduledJobs() {
 		default:
 		}
 
-		// Update job status to running
-		if err := w.jobs.UpdateStatus(job.ID, "running"); err != nil {
+		// Guarded: a job cancelled or rescheduled since the list was read stays as is
+		started, err := w.jobs.StartDueJob(job.ID)
+		if err != nil {
 			w.logger.Error("failed to start scheduled job", "job_id", job.ID, "error", err)
+			continue
+		}
+		if !started {
 			continue
 		}
 

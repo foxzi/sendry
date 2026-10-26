@@ -1,0 +1,42 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        {{if .Job}}
+        <h1 id="cf-page-title" data-i18n="cmp.launch_edit">Edit launch</h1>
+        <p class="text-muted">{{.Campaign.Name}}</p>
+        {{else}}
+        <h1 id="cf-page-title" data-i18n="cmp.launch_new" data-i18n-arg-name="{{.Campaign.Name}}">New launch: «{{.Campaign.Name}}»</h1>
+        {{end}}
+    </div>
+    <a href="/campaigns/{{.Campaign.ID}}" class="btn btn-secondary" data-i18n="cancel">Cancel</a>
+</div>
+
+{{if .NoPublicURL}}{{template "no_public_url" .}}{{end}}
+
+{{if .NoContent}}
+<div class="alert alert-warning">
+    <span data-i18n="cmp.launch_no_content">The campaign has no letter yet. Choose the content first.</span>
+    <a href="/campaigns/{{.Campaign.ID}}" data-i18n="cmp.launch_to_campaign">Go to the campaign</a>
+</div>
+{{else}}
+<div class="cf" id="cf" data-mode="launch" data-campaign-id="{{.Campaign.ID}}">
+    {{template "cf_letter_data" .}}
+    <form method="post" action="{{if .Job}}/jobs/{{.Job.ID}}/schedule{{else}}/campaigns/{{.Campaign.ID}}/send{{end}}" id="cf-form" novalidate>
+        {{template "cf_send" .}}
+    </form>
+</div>
+
+<script>
+window.CF_CONFIG = {
+    mode: "launch",
+    campaignId: {{toJSON .Campaign.ID}},
+    editing: {{if .Job}}true{{else}}false{{end}},
+    noPublicURL: {{if .NoPublicURL}}true{{else}}false{{end}},
+    isAdmin: {{if .User.IsAdmin}}true{{else}}false{{end}},
+    userEmail: {{toJSON .UserEmail}},
+    senderDomains: {{toJSON .SenderDomains}}
+};
+</script>
+<script src="/static/js/campaign-flow.js"></script>
+{{end}}
+{{end}}

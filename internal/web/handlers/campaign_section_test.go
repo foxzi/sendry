@@ -5,10 +5,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/foxzi/sendry/internal/web/config"
 	"github.com/foxzi/sendry/internal/web/models"
 )
 
@@ -401,7 +403,7 @@ func TestCampaignSendRedirect(t *testing.T) {
 	req.SetPathValue("id", "c1")
 	rec := httptest.NewRecorder()
 	h.CampaignSendRedirect(rec, req)
-	if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != "/campaigns/c1#send" {
+	if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != "/campaigns/c1/launch" {
 		t.Errorf("%d %s", rec.Code, rec.Header().Get("Location"))
 	}
 }
@@ -420,7 +422,7 @@ func assertInOrder(t *testing.T, body string, parts ...string) {
 	}
 }
 
-func TestCampaignView_SendDialog(t *testing.T) {
+func TestCampaignView_LaunchLinks(t *testing.T) {
 	h, _ := newCampaignTestHandlers(t, "https://panel.example.com")
 	req := httptest.NewRequest(http.MethodGet, "/campaigns/c1", nil)
 	req.SetPathValue("id", "c1")
@@ -431,26 +433,143 @@ func TestCampaignView_SendDialog(t *testing.T) {
 	}
 	body := rec.Body.String()
 
-	// the letter rows on the page, then the dialog: To, When, Check, and the
-	// one final button in the check step, posting to the send handler
-	assertInOrder(t, body,
-		`data-row="from"`, `data-row="about"`,
-		`id="cf-send-modal" hidden`, `role="dialog" aria-modal="true"`, `data-act="send-close"`,
-		`action="/campaigns/c1/send"`,
-		`data-row="to"`, `data-row="when"`, `data-row="check"`, `id="cf-recap"`, `sandbox=""`, `id="cf-send"`,
-		`</form>`)
-	if n := strings.Count(body, `name="action" value=`); n != 1 {
-		t.Errorf("%d final buttons, want 1", n)
+	// the letter rows only: sending is on its own page, behind a link
+	assertInOrder(t, body, `data-row="from"`, `data-row="about"`)
+	for _, gone := range []string{`cf-send-modal`, `data-cf-send-open`, `data-row="to"`, `data-row="when"`, `data-row="check"`, `action="/campaigns/c1/send"`} {
+		if strings.Contains(body, gone) {
+			t.Errorf("campaign page still has %q", gone)
+		}
 	}
-	if strings.Contains(body, `href="/campaigns/c1/send"`) {
-		t.Error("link to the old send page")
-	}
-	if !strings.Contains(body, `data-cf-send-open`) {
-		t.Error("no button that opens the send dialog")
+	if n := strings.Count(body, `href="/campaigns/c1/launch"`); n != 2 {
+		t.Errorf("%d links to the launch page, want 2 (header and empty state)", n)
 	}
 }
 
-func TestCampaignNew_StepOrder(t *testing.T) {
+func getLaunch(h *Handlers, target string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodGet, target, nil)
+	req.SetPathValue("id", "c1")
+	rec := httptest.NewRecorder()
+	h.CampaignLaunch(rec, req)
+	return rec
+}
+
+func TestCampaignLaunch_NoContent(t *testing.T) {
+	h, d := newCampaignTestHandlers(t, "https://panel.example.com")
+	h.cfg.Sendry.Servers = []config.SendryServer{{Name: "mx1"}}
+	d.Exec(`DELETE FROM campaign_variants WHERE campaign_id = 'c1'`)
+	rec := getLaunch(h, "/campaigns/c1/launch")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `cmp.launch_no_content`) || strings.Contains(body, `id="cf-form"`) {
+		t.Error("a campaign without a letter gets the send form instead of the notice")
+	}
+}
+
+func TestCampaignLaunch_Page(t *testing.T) {
+	h, _ := newCampaignTestHandlers(t, "https://panel.example.com")
+	h.cfg.Sendry.Servers = []config.SendryServer{{Name: "mx1"}}
+	rec := getLaunch(h, "/campaigns/c1/launch")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+
+	// To, When, Check with the one final button, in a form posting to the send handler;
+	// no letter rows, the letter comes as hidden data for the review
+	assertInOrder(t, body,
+		`cmp.launch_new`, `href="/campaigns/c1"`,
+		`action="/campaigns/c1/send"`,
+		`data-row="to"`, `data-row="when"`, `data-row="check"`, `id="cf-recap"`, `id="cf-preview" class="cf-preview" sandbox="allow-same-origin"`, `id="cf-send"`,
+		`</form>`)
+	if strings.Contains(body, `data-row="from"`) || strings.Contains(body, `data-row="content"`) {
+		t.Error("the launch page has letter rows")
+	}
+	if !strings.Contains(body, `id="from_email" value="news@example.com"`) || !strings.Contains(body, `id="template_id" name="template_id" value="t1"`) {
+		t.Error("the letter is not on the page for the review")
+	}
+	if n := strings.Count(body, `<button type="submit"`); n != 1 {
+		t.Errorf("%d submit buttons, want 1", n)
+	}
+	if strings.Contains(body, `cmp.launch_edit`) || strings.Contains(body, `data-utc=`) {
+		t.Error("a new launch page looks like the edit one")
+	}
+	if !strings.Contains(body, `name="dry_run"`) {
+		t.Error("no pilot option on a new launch")
+	}
+
+	if rec := getLaunch(h, "/campaigns/c1/launch?job="); rec.Code != http.StatusOK {
+		t.Errorf("empty job: status %d", rec.Code)
+	}
+}
+
+func TestCampaignLaunch_UnknownCampaign(t *testing.T) {
+	h, _ := newCampaignTestHandlers(t, "")
+	req := httptest.NewRequest(http.MethodGet, "/campaigns/nope/launch", nil)
+	req.SetPathValue("id", "nope")
+	rec := httptest.NewRecorder()
+	h.CampaignLaunch(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status %d", rec.Code)
+	}
+}
+
+func TestCampaignLaunch_EditScheduled(t *testing.T) {
+	h, d := newCampaignTestHandlers(t, "https://panel.example.com")
+	h.cfg.Sendry.Servers = []config.SendryServer{{Name: "mx1"}, {Name: "mx2"}}
+	for _, q := range []string{
+		`INSERT INTO campaigns (id, name, description, from_email, from_name, reply_to, variables, tags) VALUES ('c2', 'other', '', 'x@example.com', '', '', '', '')`,
+		`INSERT INTO send_jobs (id, campaign_id, recipient_list_id, status, scheduled_at, servers, strategy, stats) VALUES ('j1', 'c1', 'l1', 'scheduled', '2030-05-06 07:08:00', '["mx2"]', 'random', '{}')`,
+		`INSERT INTO send_jobs (id, campaign_id, recipient_list_id, status, servers, strategy, stats) VALUES ('j2', 'c1', 'l1', 'running', '["mx1"]', 'random', '{}')`,
+		`INSERT INTO send_jobs (id, campaign_id, recipient_list_id, status, scheduled_at, servers, strategy, stats) VALUES ('j3', 'c2', 'l1', 'scheduled', '2030-05-06 07:08:00', '["mx1"]', 'random', '{}')`,
+	} {
+		if _, err := d.Exec(q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+
+	rec := getLaunch(h, "/campaigns/c1/launch?job=j1")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	// prefilled from the job, posting to the job
+	for _, want := range []string{
+		`cmp.launch_edit`,
+		`action="/jobs/j1/schedule"`,
+		`name="cf_when" value="later" checked`,
+		`data-utc="2030-05-06T07:08:00Z"`,
+		`<option value="random" selected`,
+		`name="servers" value="mx2" checked`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("edit page lacks %q", want)
+		}
+	}
+	if !regexp.MustCompile(`name="recipient_list_id" value="l1"[^>]* checked`).MatchString(body) {
+		t.Error("the list of the job is not chosen")
+	}
+	if strings.Contains(body, `name="servers" value="mx1" checked`) {
+		t.Error("a server the job does not use is checked")
+	}
+	if strings.Contains(body, `action="/campaigns/c1/send"`) {
+		t.Error("edit page posts to the send handler")
+	}
+
+	// only a scheduled launch of this very campaign can be edited
+	for name, target := range map[string]string{
+		"running job": "/campaigns/c1/launch?job=j2",
+		"foreign job": "/campaigns/c1/launch?job=j3",
+		"unknown job": "/campaigns/c1/launch?job=nope",
+	} {
+		if rec := getLaunch(h, target); rec.Code != http.StatusNotFound {
+			t.Errorf("%s: status %d, want 404", name, rec.Code)
+		}
+	}
+}
+
+func TestCampaignNew_Rows(t *testing.T) {
 	h, _ := newCampaignTestHandlers(t, "https://panel.example.com")
 	rec := httptest.NewRecorder()
 	h.CampaignNew(rec, httptest.NewRequest(http.MethodGet, "/campaigns/new", nil))
@@ -459,14 +578,15 @@ func TestCampaignNew_StepOrder(t *testing.T) {
 	}
 	body := rec.Body.String()
 
-	// From, Content, optional rows, To, When, Check with the send button,
-	// "Save without sending" under the steps; no dialog
+	// From, Content, optional rows, then the two ways to save; no send steps, no dialog
 	assertInOrder(t, body,
 		`action="/campaigns"`,
 		`data-row="from"`, `data-row="content"`, `data-row="vars"`, `data-row="track"`, `data-row="about"`,
-		`data-row="to"`, `data-row="when"`, `data-row="check"`, `id="cf-send"`, `id="cf-save"`, `</form>`)
-	if strings.Contains(body, `cf-send-modal`) {
-		t.Error("the new campaign page has the send dialog")
+		`id="cf-save" name="action" value="save"`, `id="cf-launch" name="action" value="launch"`, `</form>`)
+	for _, gone := range []string{`cf-send-modal`, `data-row="to"`, `data-row="when"`, `data-row="check"`, `id="cf-send"`} {
+		if strings.Contains(body, gone) {
+			t.Errorf("the new campaign page has %q", gone)
+		}
 	}
 }
 

@@ -7,7 +7,12 @@
 <div class="cf" id="cf" data-mode="create">
     <form method="post" action="/campaigns" id="cf-form" novalidate>
         {{template "cf_letter" .}}
-        {{template "cf_send" .}}
+
+        <div class="cf-final">
+            <button type="submit" id="cf-save" name="action" value="save" class="btn" data-i18n="cmp.wz_save">Save</button>
+            <button type="submit" id="cf-launch" name="action" value="launch" class="btn btn-primary" data-i18n="cmp.wz_save_launch">Save and send&hellip;</button>
+            <p class="cf-final-help" id="cf-final-help"></p>
+        </div>
     </form>
 </div>
 

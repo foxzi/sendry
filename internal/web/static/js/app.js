@@ -229,8 +229,21 @@
         });
     }
 
+    // <time class="local-time" datetime="..."> shown in the browser's time zone
+    function initLocalTimes() {
+        var lang;
+        try { lang = localStorage.getItem('lang'); } catch (e) {}
+        document.querySelectorAll('time.local-time').forEach(function(el) {
+            var d = new Date(el.getAttribute('datetime'));
+            if (isNaN(d.getTime())) return;
+            el.textContent = d.toLocaleString(lang || undefined,
+                {dateStyle: 'medium', timeStyle: 'short'});
+        });
+    }
+
     // Initialize everything
     function init() {
+        initLocalTimes();
         initThemeToggle();
         initNavToggle();
         initSidebarCollapse();

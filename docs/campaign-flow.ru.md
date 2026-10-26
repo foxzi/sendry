@@ -1,4 +1,4 @@
-# Рассылка: создание, правка и отправка одними строками
+# Рассылка: создание, правка и запуск
 
 Заменяет пошаговый мастер (`campaign-wizard.ru.md`) и старые страницы правки.
 Макет: `docs/campaign-edit-demo.html`, вкладки «Создание, версия 2» и «Правка, версия 2».
@@ -6,27 +6,36 @@
 ## Идея
 
 Рассылка — это список строк. Строка в свёрнутом виде показывает сводку (что настроено),
-в развёрнутом — поля. Одни и те же строки на двух страницах:
+в развёрнутом — поля. Письмо и запуск — разные вещи, у каждой своя страница:
 
-| Страница | Режим (`Mode`) | Карточка «Письмо» | Карточка «Отправка» |
-|---|---|---|---|
-| `GET /campaigns/new` | `create` | шаги + необязательные строки | шаги, в «Проверке» кнопка «Отправить N получателям»; под шагами «Сохранить без отправки» |
-| `GET /campaigns/{id}` | `edit` | каждая строка правится и сохраняется отдельно | в диалоге «Отправить…»: шаги, в «Проверке» кнопка «Отправить N получателям» |
+- письмо (строки `from`, `content`, необязательные `vars`, `track`, `about`) собирают при создании
+  и правят на странице рассылки;
+- запуск (кому, когда, проверка) — одна страница `GET /campaigns/{id}/launch`, одинаковая для нового
+  запуска и для правки запланированного. Новый запуск начинается только оттуда.
 
-Строки «Письма»: `from` (От кого), `content` (Содержание), и в одной карточке-группе
+| Страница | Режим (`Mode`) | Что на ней |
+|---|---|---|
+| `GET /campaigns/new` | `create` | строки письма: шаги `from` → `content` + необязательные строки; внизу «Сохранить» и «Сохранить и отправить…» |
+| `GET /campaigns/{id}` | `edit` | строки письма, каждая правится и сохраняется отдельно; «Отправить…» — ссылка на страницу запуска |
+| `GET /campaigns/{id}/launch` | `launch` | шаги «Отправки»: `to` → `when` → `check`, в «Проверке» кнопка «Отправить N получателям» |
+| `GET /campaigns/{id}/launch?job={jobID}` | `launch` + `Job` | то же для запланированного запуска: поля заполнены, форма уходит в `POST /jobs/{jobID}/schedule` |
+
+Строки письма: `from` (От кого), `content` (Содержание), и в одной карточке-группе
 необязательные `vars` (Переменные), `track` (Трекинг), `about` (Название и описание).
-Строки «Отправки»: `to` (Кому), `when` (Когда), `check` (Проверка) — в этом порядке.
+Строки запуска: `to` (Кому), `when` (Когда), `check` (Проверка) — в этом порядке.
 
 ### Режим `create`
-- Шаги по порядку: `from` → `content` → `to` → `when` → `check`. Открыт один шаг. «Далее» проверяет
-  поля, сворачивает строку в сводку и открывает следующий шаг.
-- Строки ниже текущего шага заблокированы (пунктир, «Изменить» не показан).
+- Шаги по порядку: `from` → `content`. Открыт один шаг. «Далее» проверяет поля, сворачивает строку в сводку
+  и открывает следующий шаг. Мастер собирает только письмо; кому и когда отправлять — на странице запуска.
+- Строка ниже текущего шага заблокирована (пунктир, «Изменить» не показан).
 - `vars`, `track`, `about` заполнены по умолчанию, «Далее» их пропускает. Открываются после `content`.
   У группы подпись «Можно не менять».
 - Пройденную строку можно открыть снова: кнопка «Готово», после неё снова открывается текущий шаг.
-- «Сохранить без отправки» доступна после `content`. `check` — последний шаг, у него нет «Далее»:
-  внизу одна кнопка с конкретным действием — «Отправить N получателям» или «Запланировать на <дата время>».
-- На сервер до финальной кнопки ничего не пишется: всё внутри одной `<form action="/campaigns">`.
+- Внизу две кнопки, обе доступны после `content`: «Сохранить» (`action=save`, создаёт рассылку и ведёт на
+  `/campaigns/{id}`) и «Сохранить и отправить…» (`action=launch`, создаёт и ведёт на `/campaigns/{id}/launch`).
+  Задание на отправку мастер не создаёт.
+- На сервер до кнопки ничего не пишется: всё внутри одной `<form action="/campaigns">`. Пока в форме что-то
+  менялось, уход со страницы спрашивает подтверждение (`beforeunload`).
 - Название: если поле `name` пустое — тема версии A без `{{переменных}}` + `, ` + дата `ДД.ММ.ГГГГ`.
   JS показывает это название в заголовке страницы, сервер вычисляет его сам при сохранении.
 
@@ -38,20 +47,21 @@
 - «Отмена» возвращает поля к значениям на момент открытия.
 - Сверху карточки «Письмо» подсказка: «Изменения коснутся следующих отправок. Уже отправленные письма не меняются.»
 
-### Диалог отправки (в `edit`)
-- Кнопка «Отправить…» (`[data-cf-send-open]`) открывает диалог на той же странице; `#send` в адресе открывает его
-  при загрузке (туда ведёт старый `GET /campaigns/{id}/send`). Письмо в диалоге не правится: в шапке одна строка
-  (от кого, темы версий, трекинг), правка — в строках страницы.
-- Шаги `to` → `when` → `check`, как в `create`. В `check`: итог (список, сколько получат, когда, пилот),
+### Режим `launch`: страница запуска
+- Заголовок «Новый запуск: «<название>»» (в правке — «Изменить запуск»), справа ссылка «Отмена» на `/campaigns/{id}`.
+- Шаги `to` → `when` → `check`, открыт один. В `check`: итог (список, сколько получат, когда, пилот),
   превью A/B, пробное письмо, готовность и одна кнопка «Отправить N получателям» / «Запланировать на …».
-- `<form action="/campaigns/{id}/send">` охватывает только содержимое диалога.
-- Если при открытии диалога строка «Письма» открыта с несохранёнными изменениями — спрашивает, отменить ли их;
-  без согласия диалог не открывается. Письмо уходит в сохранённом виде.
-- Закрытие: крестик или Esc; если что-то уже выбрано — сначала спрашивает. После закрытия шаги начинаются заново.
-- `aria-modal`, фокус переходит внутрь и не выходит из диалога, прокрутка страницы под ним заблокирована,
-  на ширине телефона диалог во весь экран.
-- Если у рассылки нет версий (нет шаблона), строка `content` помечена предупреждением, кнопка отправки
-  выключена с пояснением.
+- Письмо на странице не правится: для превью, пробного письма и проверки домена отправителя оно лежит в скрытом
+  блоке `{{define "cf_letter_data"}}` (поля `from_email`, `variables`, `template_id` … и по карточке `.cf-tpl`
+  на использованный шаблон). Он стоит в `#cf` вне `<form>`, поэтому на сервер не уходит.
+- `<form action="/campaigns/{id}/send">`; после успеха `303` на `/campaigns/{id}`, где запуск виден в списке.
+- Если у рассылки нет версий (нет шаблона), кнопка отправки выключена с пояснением.
+- Правка запланированного запуска (`?job={jobID}`): допустим только запуск этой рассылки со статусом `scheduled`,
+  иначе 404. Список, серверы, стратегия и время заполнены из задания (время хранится в UTC: `#scheduled_at[data-utc]`,
+  JS переводит его в часовой пояс браузера); страница открывается сразу на `check`, остальные шаги пройдены.
+  Форма уходит в `POST /jobs/{jobID}/schedule` с теми же полями, что `POST /campaigns/{id}/send`
+  (`recipient_list_id`, `servers[]`, `strategy`, `scheduled_at`, `tz`, `tz_offset`); пилота в этом режиме нет.
+  «Отправить сейчас» вместо расписания остаётся доступным: тогда `scheduled_at` пуст.
 
 ## Сервер
 
@@ -60,7 +70,7 @@
 | Ключ | Тип | Что |
 |---|---|---|
 | `Title`, `Active`, `User` | как везде | `Active` = `campaigns` |
-| `Mode` | string | `create` / `edit` |
+| `Mode` | string | `create` / `edit` / `launch` |
 | `Campaign` | `*models.Campaign` | никогда не nil; для `create` — пустая, `TrackOpens`/`TrackClicks` = есть проксирующий домен |
 | `Content` | `CampaignContent` | см. ниже; для `create` нулевая, `SplitA` = 50 |
 | `Variables` | `[]VarPair` | `{Key, Value string}`, из `Campaign.Variables`, по ключу |
@@ -73,6 +83,8 @@
 | `NoPublicURL` | bool | нет проксирующего домена |
 
 Только на `GET /campaigns/{id}` дополнительно `Tracking` и `Jobs` (как сейчас).
+Только на `GET /campaigns/{id}/launch` дополнительно `Job` (`*models.SendJob`, nil для нового запуска),
+`JobServers` (`map[string]bool`, серверы задания) и `ScheduledUTC` (RFC 3339, пусто без расписания).
 
 `CampaignContent`: `ATemplateID, ASubject, BTemplateID, BSubject string; HasB bool; SplitA int; Extra int`.
 Строится из *активных* версий (weight > 0) в порядке `GetVariants`: первая — A, вторая — B.
@@ -89,8 +101,9 @@
 | `POST /campaigns` | создание (контракт мастера без `tags`; `name` необязателен) |
 | `GET /campaigns/{id}` | view `campaign_view` (`Mode=edit`) |
 | `POST /campaigns/{id}/section/{row}` | сохранить строку `from`/`content`/`vars`/`track`/`about` |
-| `GET /campaigns/{id}/send` | 301 на `/campaigns/{id}#send` (открывает диалог отправки) |
-| `POST /campaigns/{id}/send` | как сейчас; берёт только активные версии |
+| `GET /campaigns/{id}/launch[?job={jobID}]` | view `campaign_launch` (`Mode=launch`); с `job` — правка запланированного запуска, чужой или не `scheduled` — 404 |
+| `GET /campaigns/{id}/send` | 301 на `/campaigns/{id}/launch` |
+| `POST /campaigns/{id}/send` | как раньше; берёт только активные версии; успех — 303 на `/campaigns/{id}` |
 | `POST /campaigns/wizard/preview`, `/campaigns/wizard/test`, `GET /templates/{id}/frame` | без изменений |
 | `GET /campaigns/{id}/edit`, `/variables`, `/variants` | 301 на `/campaigns/{id}` |
 
@@ -124,22 +137,40 @@
 
 ### `POST /campaigns`
 
+Только создаёт рассылку и версии. Поле `action`: `save` или пусто — 303 на `/campaigns/{id}`, `launch` — 303 на
+`/campaigns/{id}/launch`, другое — 400. Полей отправки (`recipient_list_id`, `servers` …) форма не читает.
 Поле `tags` больше не читается (колонка в базе остаётся). Пустой `name` → `autoCampaignName(subject, now)`:
 тема версии A (или тема шаблона A, если тема пуста) без `{{…}}`, обрезанная по краям от пробелов и `,.!:;-`,
 сжатые пробелы, + `, ДД.ММ.ГГГГ`; если от темы ничего не осталось — `Campaign ДД.ММ.ГГГГ`.
 
+### `POST /jobs/{id}/schedule`: правка запланированного запуска
+
+Принимает ту же форму, что `POST /campaigns/{id}/send` (`recipient_list_id`, `servers[]`, `strategy`, `scheduled_at`, `tz`, `tz_offset`); проверка — `parseJobParams`. Только для статуса `scheduled`, иначе 400; неизвестный запуск — 404.
+
+- Список, серверы, стратегия и время обновляются, элементы строятся заново (`buildJobItems`, общий с созданием) по текущему составу списка. Настройки пробного запуска (dry-run) остаются как были. Список без активных получателей — 400, запуск не меняется.
+- Одна транзакция (`RescheduleJob`): условное `UPDATE ... WHERE status='scheduled'`, удаление старых элементов, вставка новых. Если запуск успел стартовать или отменён — 400. Пустое время запускает рассылку сразу (`running`).
+- Воркер стартует запуск условным `StartDueJob` (статус всё ещё `scheduled` и время пришло): отмена или перенос во время тика его не запустят.
+- Успех: 303 на `/campaigns/{campaign_id}`, в аудит пишется `reschedule`.
+- `POST /jobs/{id}/cancel` принимает поле `return`: учитываются только локальные пути `/campaigns/...`, иначе возврат на `/jobs/{id}`.
+
+На странице кампании каждый запланированный запуск — карточка «Запланирована на <время в часовом поясе браузера>, список, число получателей» с кнопками «Изменить» (`/campaigns/{id}/launch?job=<id>`) и «Отменить»; на странице запуска (`/jobs/{id}`) — плашка и «Изменить». Время выводит шаблон `local_time` (UTC в разметке, `app.js` переводит в местное).
+
 ## Разметка (контракт views ↔ JS ↔ CSS)
 
 Общие куски — в `views/_campaign_flow.html` (`views.go` подключает файлы с `_` в начале к layout как
-общие шаблоны и не делает из них страниц): `{{define "cf_letter"}}` и `{{define "cf_send"}}`.
+общие шаблоны и не делает из них страниц): `{{define "cf_letter"}}` (строки письма), `{{define "cf_send"}}`
+(шаги запуска) и `{{define "cf_letter_data"}}` (скрытое письмо для страницы запуска).
 Скрипты: `/static/js/i18n/campaign-flow.js` подключается в `layout.html` после `i18n/campaigns.js`;
-`/static/js/campaign-flow.js` — в конце content обеих страниц, перед ним
-`window.CF_CONFIG = {mode, campaignId, noPublicURL, isAdmin, userEmail, senderDomains}`.
+`/static/js/campaign-flow.js` — в конце content всех трёх страниц, перед ним
+`window.CF_CONFIG = {mode, campaignId, noPublicURL, isAdmin, userEmail, senderDomains}`
+(на странице запуска ещё `editing` — правка запланированного).
 
 ```
-div.cf#cf [data-mode=create|edit] [data-campaign-id]
-  (create) form#cf-form method=post action=/campaigns novalidate   — обёртка обеих карточек
-  h2.cf-title                       «Письмо» / «Отправка»
+div.cf#cf [data-mode=create|edit|launch] [data-campaign-id]
+  (create) form#cf-form method=post action=/campaigns novalidate   — обёртка карточки письма и кнопок
+  (launch) div[hidden] — письмо для превью (cf_letter_data), затем
+           form#cf-form method=post action=/campaigns/{id}/send | /jobs/{jobID}/schedule novalidate
+  h2.cf-title                       «Письмо»
   p.cf-note                         (edit) подсказка про следующие отправки
   div.cf-rows                       ряд карточек
     section.cf-row [data-row] [data-kind=step|opt]
@@ -158,23 +189,20 @@ div.cf#cf [data-mode=create|edit] [data-campaign-id]
     div.cf-group                    карточка необязательных строк
       p.cf-group-h                  (create) «Можно не менять»
       section.cf-row …
-  (edit) div.cf-modal#cf-send-modal [hidden]                    — диалог отправки
-    div.cf-modal-box [role=dialog][aria-modal=true][aria-labelledby=cf-send-title][tabindex=-1]
-      div.cf-modal-head: h2#cf-send-title, button.cf-modal-x [data-act=send-close], p.cf-modal-letter#cf-send-letter
-      form#cf-form.cf-modal-body method=post action=/campaigns/{id}/send novalidate — шаги «Отправки»
   (шаг check) div.cf-foot.cf-foot-send
     p.cf-final-help#cf-send-help    почему кнопка выключена
-    button#cf-send type=submit name=action value=send           текст ставит JS
-  div.cf-final                      (create) под шагами
-    button#cf-save type=submit name=action value=save  «Сохранить без отправки»
-    p.cf-final-help#cf-final-help
+    button#cf-send type=submit                                  (launch) текст ставит JS
+  div.cf-final                      (create) под строками письма
+    button#cf-save type=submit name=action value=save      «Сохранить»
+    button#cf-launch type=submit name=action value=launch  «Сохранить и отправить…»
+    p.cf-final-help#cf-final-help   почему кнопки выключены
 ```
 
 Ошибки у полей: `small.cf-err[data-err=<имя поля>][role=alert][hidden]` сразу после поля.
 
 Состояния строки (ставит JS): `.is-open`, `.is-locked`, `.is-done`; у точки `.cf-dot` классы
 `ok` (✓), `cur` (номер, синяя), `todo` (номер, серая), `opt` (пустой кружок), `warn` (!).
-Номера шагов JS проставляет сам; в диалоге шаги «Отправки» нумеруются с 1.
+Номера шагов JS проставляет сам; на странице запуска шаги нумеруются с 1.
 
 Поля по строкам (имена — как у `POST /campaigns` и `/section`):
 
@@ -220,7 +248,7 @@ div.cf#cf [data-mode=create|edit] [data-campaign-id]
 - `when`: `div.cf-radio-row` с `input[type=radio][name=cf_when][value=now|later]`;
   `div#cf-when-later[hidden]`: `input#scheduled_at[name=scheduled_at][type=datetime-local][disabled]`,
   `input[type=hidden]#tz[name=tz]`, `#tz_offset[name=tz_offset]`, `span#cf-tz-label`;
-  `input[type=checkbox]#dry_run[name=dry_run][value=on]`, `div.cf-pilot#cf-pilot[hidden]` с
+  `input[type=checkbox]#dry_run[name=dry_run][value=on]` (нет при правке запланированного), `div.cf-pilot#cf-pilot[hidden]` с
   `input#dry_run_limit[name=dry_run_limit][type=number][min=1][max=100][value=10][disabled]`;
   `details.cf-more` с `input[type=checkbox][name=servers][value][checked]` по серверам и `select#strategy[name=strategy]`.
 
@@ -233,7 +261,8 @@ div.cf#cf [data-mode=create|edit] [data-campaign-id]
 - Статичный текст разметки — ключи `cmp.cf_*` в `static/js/i18n/campaigns.js` (en и ru).
 - Текст, который собирает JS, — ключи `cf.*` в новом `static/js/i18n/campaign-flow.js` (en и ru);
   JS может брать и существующие `cmp.wz_*`, `trk.*`.
-- Старые ключи пока не удаляются; неиспользуемые вычищаются в конце.
+- Старые ключи пока не удаляются; неиспользуемые вычищаются в конце. Заголовок страницы запуска —
+  `cmp.launch_new` (с `data-i18n-arg-name`) и `cmp.launch_edit`; кнопки мастера — `cmp.wz_save`, `cmp.wz_save_launch`.
 
 ## Порядок работ
 

@@ -235,3 +235,6 @@ failed emails is marked so, it is not a plain success. Takes .Job and .Stats. */
     {{if .User.IsAdmin}}<span data-i18n="trk.set_domain_in">Set the domain in</span> <a href="/settings/tracking" data-i18n="trk.settings_link">Administration &gt; Tracking</a>.{{else}}<span data-i18n="trk.ask_admin">Ask an administrator to set it in the tracking settings.</span>{{end}}
 </div>
 {{end}}
+
+{{/* A time shown in the browser's time zone (app.js); the server text is UTC. */}}
+{{define "local_time"}}<time class="local-time" datetime="{{.UTC.Format "2006-01-02T15:04:05Z"}}">{{.UTC.Format "2006-01-02 15:04"}} UTC</time>{{end}}

@@ -2845,12 +2845,23 @@ label.cf-list:has(input:focus-visible) {
     overflow-x: auto;
 }
 
+.cf-preview-box {
+    margin-inline: auto;
+    overflow: hidden;
+}
+
+.cf-pv-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
 .cf-preview {
     display: block;
     flex: none;
     width: 600px;
-    height: 520px;
-    margin-inline: auto;
+    height: 520px; /* until the letter loads, then fitted to it */
+    transform-origin: top left;
     border: 0;
     border-radius: 4px;
     background: #fff;
@@ -3032,93 +3043,6 @@ label.cf-list:has(input:focus-visible) {
     color: var(--text-muted);
 }
 
-/* Send dialog of the campaign page: the head stays, the steps scroll; full screen on a phone */
-body.cf-noscroll {
-    overflow: hidden;
-}
-
-.cf-modal {
-    position: fixed;
-    inset: 0;
-    z-index: 100;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 2rem 1rem;
-    background: rgba(17, 24, 39, 0.55);
-}
-
-.cf-modal-box {
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    max-width: 760px;
-    max-height: calc(100vh - 4rem);
-    max-height: calc(100dvh - 4rem);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--bg);
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
-}
-
-.cf-modal-box:focus {
-    outline: none;
-}
-
-.cf-modal-head {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 0.25rem 1rem;
-    padding: 0.875rem 1.25rem;
-    border-bottom: 1px solid var(--border);
-    border-radius: var(--radius) var(--radius) 0 0;
-    background: var(--bg-card);
-}
-
-.cf-modal-head h2 {
-    font-size: 1.125rem;
-    font-weight: 600;
-    overflow-wrap: anywhere;
-}
-
-.cf-modal-x {
-    display: grid;
-    place-items: center;
-    width: 32px;
-    height: 32px;
-    border: 0;
-    border-radius: 6px;
-    background: none;
-    color: var(--text-muted);
-    font-size: 1.5rem;
-    line-height: 1;
-    cursor: pointer;
-}
-
-.cf-modal-x:hover {
-    background: var(--cf-band);
-    color: var(--text);
-}
-
-.cf-modal-letter {
-    grid-column: 1 / -1;
-    font-size: 0.8125rem;
-    color: var(--text-muted);
-    overflow-wrap: anywhere;
-}
-
-.cf-warn-text {
-    color: var(--error);
-    font-weight: 600;
-}
-
-.cf .cf-modal-body {
-    padding: 1rem 1.25rem 1.25rem;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-}
-
 /* Focus */
 .cf button:focus-visible,
 .cf summary:focus-visible,
@@ -3158,10 +3082,6 @@ body.cf-noscroll {
         width: 100%;
     }
 
-    .cf-preview {
-        height: 420px;
-    }
-
     .cf-stage {
         padding: 0.5rem;
     }
@@ -3184,25 +3104,24 @@ body.cf-noscroll {
     .cf-foot-send .btn {
         flex: 1 1 100%;
     }
+}
 
-    .cf-modal {
-        align-items: stretch;
-        padding: 0;
-    }
+/* Scheduled launch card (campaign page) */
+.scheduled-card {
+    border-left: 4px solid var(--warning);
+    margin-bottom: 1rem;
+}
 
-    .cf-modal-box {
-        max-width: none;
-        max-height: none;
-        border: 0;
-        border-radius: 0;
-    }
+.scheduled-body {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
 
-    .cf-modal-head {
-        padding: 0.75rem 1rem;
-        border-radius: 0;
-    }
-
-    .cf .cf-modal-body {
-        padding: 0.75rem 1rem 1rem;
-    }
+.scheduled-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
 }

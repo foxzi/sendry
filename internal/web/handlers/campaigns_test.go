@@ -140,6 +140,10 @@ func TestCampaignSend_ItemsWeightsAndSkipped(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
 	}
+	// the launch shows up on the campaign page
+	if loc := rec.Header().Get("Location"); loc != "/campaigns/c1" {
+		t.Errorf("redirect to %q", loc)
+	}
 
 	rows, err := d.Query(`SELECT i.recipient_id, i.variant_id FROM send_job_items i JOIN recipients r ON r.id = i.recipient_id
 		WHERE i.status = 'pending' ORDER BY r.created_at DESC`)

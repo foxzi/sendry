@@ -313,10 +313,12 @@ func (r *TrackingRepository) JobStats(jobID string) (models.TrackingStats, error
 }
 
 // CampaignStats aggregates engagement over the real (not dry-run) jobs of a
-// campaign. SkippedUnsub counts distinct recipients: an address skipped by
-// several jobs counts once.
+// campaign that have started: a scheduled job (or one cancelled before its
+// time) has items but sent nothing.
+// SkippedUnsub counts distinct recipients: an address skipped by several jobs
+// counts once.
 func (r *TrackingRepository) CampaignStats(campaignID string) (models.TrackingStats, error) {
-	return r.stats("j.campaign_id = ? AND COALESCE(j.dry_run, 0) = 0", campaignID)
+	return r.stats("j.campaign_id = ? AND COALESCE(j.dry_run, 0) = 0 AND j.started_at IS NOT NULL", campaignID)
 }
 
 // JobLinkStats returns click counts per link_id for a job, optionally for one
