@@ -153,6 +153,8 @@ func TestCampaignCreate_ValidationCreatesNothing(t *testing.T) {
 		form url.Values
 	}{
 		{"no from", with("from_email", "")},
+		{"from not an email", with("from_email", "news")},
+		{"reply-to not an email", with("reply_to", "x")},
 		{"no template", with("template_id", "")},
 		{"unknown template", with("template_id", "nope")},
 		{"bad variables", with("variables", "{not json")},

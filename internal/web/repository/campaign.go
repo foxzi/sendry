@@ -9,12 +9,38 @@ import (
 	"github.com/google/uuid"
 )
 
+// campaignDB is what the queries run on: the database or a transaction
+type campaignDB interface {
+	Exec(query string, args ...any) (sql.Result, error)
+	Query(query string, args ...any) (*sql.Rows, error)
+	QueryRow(query string, args ...any) *sql.Row
+}
+
 type CampaignRepository struct {
-	db *sql.DB
+	db   campaignDB
+	conn *sql.DB // nil inside InTx
 }
 
 func NewCampaignRepository(db *sql.DB) *CampaignRepository {
-	return &CampaignRepository{db: db}
+	return &CampaignRepository{db: db, conn: db}
+}
+
+// InTx runs fn with a repository bound to one transaction: committed when fn
+// returns nil, rolled back otherwise. Transactions take the write lock at
+// BEGIN, so concurrent InTx calls run one after another.
+func (r *CampaignRepository) InTx(fn func(tx *CampaignRepository) error) error {
+	if r.conn == nil {
+		return fn(r)
+	}
+	tx, err := r.conn.Begin()
+	if err != nil {
+		return err
+	}
+	if err := fn(&CampaignRepository{db: tx}); err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit()
 }
 
 // Create creates a new campaign

@@ -194,7 +194,7 @@
             var subBLbl = $('cf-subject-b-label');
             if (subLbl) subLbl.textContent = on ? t('cf.subject_ver', { v: 'A' }) : t('cf.subject');
             if (subBLbl) subBLbl.textContent = t('cf.subject_ver', { v: 'B' });
-            var galLbl = $('cf-gal-label'); // optional label above the gallery
+            var galLbl = $('cf-tpl-label');
             if (galLbl) galLbl.textContent = on ? t('cf.template_ver', { v: L }) : t('cf.template');
             setSelected(verInputs(curVer).tpl.value);
             renderSplit();
@@ -238,6 +238,8 @@
             if (!on) {
                 if (tplB) tplB.value = '';
                 if (subB) { subB.value = ''; subB.dataset.touched = ''; }
+                // a version B added later starts from an even split
+                if (splitEl) splitEl.value = 50;
                 setErr('template_id_b', '');
                 curVer = 'a';
             } else {
@@ -622,7 +624,6 @@
         // ---------- campaign name and page title ----------
 
         var titleEl = $('cf-page-title');
-        var defaultTitle = titleEl ? titleEl.textContent : '';
         var savedName = trimmed('name'); // for document.title in edit mode
 
         function pad2(n) { return n < 10 ? '0' + n : String(n); }
@@ -645,7 +646,7 @@
         // In create the name field stays empty; the title shows what the server will compute
         function renderTitle() {
             if (mode !== 'create') return;
-            if (titleEl) titleEl.textContent = campaignName() || defaultTitle;
+            if (titleEl) titleEl.textContent = campaignName() || t('cmp.new_campaign_title');
             if (rowMap.about && built.about) fill(rowMap.about);
         }
         var nameEl = $('name');
@@ -735,7 +736,7 @@
                 fields: snapFields(row).map(function (f) {
                     return { el: f, value: f.value, checked: f.checked, disabled: f.disabled, touched: f.dataset.touched };
                 }),
-                kv: rowName(row) === 'vars' ? kvPairs() : null,
+                kv: rowName(row) === 'vars' ? (varsPairs() || kvPairs()) : null,
                 json: jsonMode,
                 ver: curVer
             };
@@ -856,6 +857,8 @@
             }).then(function (res) {
                 if (res.ok && res.data && res.data.ok) {
                     row._cfSnap = null;
+                    // the list is what the row reopens with: bring it in line with the saved JSON
+                    if (name === 'vars' && jsonMode) { setKv(parseJsonPairs() || []); setJsonMode(false); }
                     fill(row);
                     if (name === 'about') updatePageHeader();
                     closeRow(row, true, false);
@@ -1102,6 +1105,8 @@
             if (!EMAIL_RE.test(to)) { show(t('cmp.wz_err_email'), false); return; }
             var info = variantInfo(pvVer);
             serializeVars();
+            // the first server picked for the run, if the page has the choice
+            var srv = root.querySelector('input[name="servers"]:checked');
             testBtn.disabled = true;
             show(t('cmp.wz_test_sending'));
             fetch('/campaigns/wizard/test', {
@@ -1115,6 +1120,7 @@
                     from_name: trimmed('from_name'),
                     reply_to: trimmed('reply_to'),
                     variables: val('variables').trim(),
+                    server: srv ? srv.value : '',
                     to: to
                 })
             }).then(function (r) {
@@ -1271,6 +1277,17 @@
             }, 0);
         });
 
+        // Back from the result page restores this one from the bfcache with the
+        // buttons still locked: unlock them, renderFinal sets what is allowed
+        window.addEventListener('pageshow', function (e) {
+            if (!e.persisted || !submitting) return;
+            submitting = false;
+            all(form, 'button[type="submit"]').forEach(function (b) { b.disabled = false; });
+            if ($('cf-send')) $('cf-send').disabled = false;
+            if ($('cf-save')) $('cf-save').disabled = false;
+            renderFinal();
+        });
+
         // Language switch: refresh the texts built by script
         all(document, '.lang-btn').forEach(function (b) {
             b.addEventListener('click', function () {
@@ -1278,6 +1295,7 @@
                     renderLists();
                     refillBuilt();
                     renderAB();
+                    renderTitle();
                     setJsonMode(jsonMode);
                     renderRows();
                     if (open && rowName(open) === 'check') renderReadiness();

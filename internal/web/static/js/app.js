@@ -57,7 +57,18 @@
                     var doc = new DOMParser().parseFromString(html, 'text/html');
                     var fresh = doc.getElementById(region.id);
                     if (!fresh) throw new Error('no #' + region.id + ' in response');
+                    // keep keyboard focus on the same control (e.g. an auto-submitted filter)
+                    var focused = document.activeElement;
+                    var focusSel = null;
+                    if (focused && region.contains(focused)) {
+                        if (focused.id) focusSel = '#' + CSS.escape(focused.id);
+                        else if (focused.name) focusSel = focused.tagName.toLowerCase() + '[name="' + CSS.escape(focused.name) + '"]';
+                    }
                     region.replaceWith(fresh);
+                    if (focusSel) {
+                        var again = fresh.querySelector(focusSel);
+                        if (again) again.focus({ preventScroll: true });
+                    }
                     I18n.apply();
                     initAutoFilters(fresh);
                     if (opts.push) {
@@ -90,8 +101,9 @@
         document.addEventListener('click', function(e) {
             if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
             var a = e.target.closest('a[href]');
-            if (!a || a.target) return;
-            var url = new URL(a.href, location.href);
+            // getAttribute: on SVG links (donut segments) href and target are not strings
+            if (!a || a.getAttribute('target')) return;
+            var url = new URL(a.getAttribute('href'), location.href);
             if (url.origin !== location.origin || url.pathname !== path) return;
             var region = regionFor(a, url);
             if (!region) return;

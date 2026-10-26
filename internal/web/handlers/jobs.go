@@ -49,9 +49,17 @@ func (h *Handlers) JobList(w http.ResponseWriter, r *http.Request) {
 
 // jobsWithStats builds template rows (Job, Stats, Progress) for a list of jobs.
 func (h *Handlers) jobsWithStats(jobs []models.SendJob) []map[string]any {
+	ids := make([]string, len(jobs))
+	for i, job := range jobs {
+		ids[i] = job.ID
+	}
+	all, err := h.jobs.GetStatsBatch(ids)
+	if err != nil {
+		h.logger.Error("failed to get job stats", "error", err)
+	}
 	rows := make([]map[string]any, len(jobs))
 	for i, job := range jobs {
-		stats, _ := h.jobs.GetStats(job.ID)
+		stats := all[job.ID]
 		rows[i] = map[string]any{
 			"Job":      job,
 			"Stats":    stats,

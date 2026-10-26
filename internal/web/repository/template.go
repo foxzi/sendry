@@ -415,3 +415,37 @@ func (r *TemplateRepository) GetFolders() ([]string, error) {
 	}
 	return folders, nil
 }
+
+// TemplateSummary is a template without its body, for pickers
+type TemplateSummary struct {
+	ID      string
+	Name    string
+	Folder  string
+	Subject string
+	// HasUnsubscribe: the HTML or text has "unsubscribe_url" between "{{"
+	// and "}}"; checked in SQL so the bodies are not loaded
+	HasUnsubscribe bool
+}
+
+// ListSummaries returns all templates without their bodies, recently updated first
+func (r *TemplateRepository) ListSummaries() ([]TemplateSummary, error) {
+	rows, err := r.db.Query(`
+		SELECT id, name, COALESCE(folder, ''), COALESCE(subject, ''),
+			COALESCE(html, '') LIKE '%{{%unsubscribe\_url%}}%' ESCAPE '\' OR COALESCE(text, '') LIKE '%{{%unsubscribe\_url%}}%' ESCAPE '\'
+		FROM templates
+		ORDER BY updated_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	list := []TemplateSummary{}
+	for rows.Next() {
+		var t TemplateSummary
+		if err := rows.Scan(&t.ID, &t.Name, &t.Folder, &t.Subject, &t.HasUnsubscribe); err != nil {
+			return nil, err
+		}
+		list = append(list, t)
+	}
+	return list, rows.Err()
+}

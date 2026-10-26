@@ -847,7 +847,11 @@
                     statusEl.textContent = tr('tpl.b_json_error', 'JSON parse error') + ': ' + e.message;
                     statusEl.style.color = 'crimson';
                 }
-                previewFrame.innerHTML = '<pre style="padding:1rem; color:crimson;">' + tr('tpl.b_json_error', 'JSON parse error') + ': ' + e.message + '</pre>';
+                // e.message quotes the input: text only
+                var pre = document.createElement('pre');
+                pre.style.cssText = 'padding:1rem; color:crimson;';
+                pre.textContent = tr('tpl.b_json_error', 'JSON parse error') + ': ' + e.message;
+                previewFrame.replaceChildren(pre);
                 return;
             }
         }

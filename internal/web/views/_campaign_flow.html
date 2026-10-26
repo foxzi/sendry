@@ -58,9 +58,9 @@ contract is described in docs/campaign-flow.ru.md. */}}
                 <input type="hidden" id="template_id_b" name="template_id_b" value="{{.Content.BTemplateID}}">
                 <input type="hidden" id="ab_enabled" name="ab_enabled" value="on"{{if not .Content.HasB}} disabled{{end}}>
 
-                <div class="cf-vtabs" role="group" aria-label="Version" data-i18n-label="cmp.cf_versions"{{if not .Content.HasB}} hidden{{end}}>
-                    <span class="cf-vtab"><button type="button" class="on" data-ver="a" data-i18n="cmp.cf_ver_a">Version A</button><button type="button" class="cf-vtab-x" data-act="ver-del" data-del="a" aria-label="Delete version A" data-i18n-label="cmp.cf_del_ver_a">&times;</button></span>
-                    <span class="cf-vtab"><button type="button" data-ver="b" data-i18n="cmp.cf_ver_b">Version B</button><button type="button" class="cf-vtab-x" data-act="ver-del" data-del="b" aria-label="Delete version B" data-i18n-label="cmp.cf_del_ver_b">&times;</button></span>
+                <div class="cf-vtabs" role="group" aria-label="Version" data-i18n-aria="cmp.cf_versions"{{if not .Content.HasB}} hidden{{end}}>
+                    <span class="cf-vtab"><button type="button" class="on" data-ver="a" data-i18n="cmp.cf_ver_a">Version A</button><button type="button" class="cf-vtab-x" data-act="ver-del" data-del="a" aria-label="Delete version A" data-i18n-aria="cmp.cf_del_ver_a">&times;</button></span>
+                    <span class="cf-vtab"><button type="button" data-ver="b" data-i18n="cmp.cf_ver_b">Version B</button><button type="button" class="cf-vtab-x" data-act="ver-del" data-del="b" aria-label="Delete version B" data-i18n-aria="cmp.cf_del_ver_b">&times;</button></span>
                 </div>
                 <p class="cf-ab-help" data-i18n="cmp.cf_ab_help"{{if not .Content.HasB}} hidden{{end}}>Each recipient gets one of the versions at random. The campaign statistics will show which one worked better.</p>
 
@@ -68,9 +68,9 @@ contract is described in docs/campaign-flow.ru.md. */}}
                     <span class="cf-label" id="cf-tpl-label" data-i18n="cmp.cf_template">Template</span>
                     {{if .Templates}}
                     <div class="cf-gal-tools">
-                        <input type="search" id="cf-tpl-search" class="input cf-search" autocomplete="off" placeholder="Search templates" data-i18n-placeholder="cmp.wz_tpl_search" aria-label="Search templates" data-i18n-label="cmp.wz_tpl_search">
+                        <input type="search" id="cf-tpl-search" class="input cf-search" autocomplete="off" placeholder="Search templates" data-i18n-placeholder="cmp.wz_tpl_search" aria-label="Search templates" data-i18n-aria="cmp.wz_tpl_search">
                         {{if .Folders}}
-                        <div class="cf-chips" role="group" aria-label="Folders" data-i18n-label="cmp.cf_folders">
+                        <div class="cf-chips" role="group" aria-label="Folders" data-i18n-aria="cmp.cf_folders">
                             <button type="button" class="cf-chip on" data-folder="" data-i18n="cmp.wz_all">All</button>
                             {{range .Folders}}<button type="button" class="cf-chip" data-folder="{{.}}">{{.}}</button>{{end}}
                         </div>
@@ -145,15 +145,15 @@ contract is described in docs/campaign-flow.ru.md. */}}
                     <div class="cf-kv" id="cf-kv">
                         {{range .Variables}}
                         <div class="cf-kv-row">
-                            <input type="text" class="input cf-kv-key" autocomplete="off" placeholder="discount" aria-label="Name" data-i18n-label="cmp.cf_kv_key" value="{{.Key}}">
-                            <input type="text" class="input cf-kv-val" autocomplete="off" placeholder="20%" aria-label="Value" data-i18n-label="cmp.cf_kv_val" value="{{.Value}}">
-                            <button type="button" class="cf-kv-del" data-act="kv-del" aria-label="Remove" data-i18n-label="cmp.cf_kv_del">&times;</button>
+                            <input type="text" class="input cf-kv-key" autocomplete="off" placeholder="discount" aria-label="Name" data-i18n-aria="cmp.cf_kv_key" value="{{.Key}}">
+                            <input type="text" class="input cf-kv-val" autocomplete="off" placeholder="20%" aria-label="Value" data-i18n-aria="cmp.cf_kv_val" value="{{.Value}}">
+                            <button type="button" class="cf-kv-del" data-act="kv-del" aria-label="Remove" data-i18n-aria="cmp.cf_kv_del">&times;</button>
                         </div>
                         {{else}}
                         <div class="cf-kv-row">
-                            <input type="text" class="input cf-kv-key" autocomplete="off" placeholder="discount" aria-label="Name" data-i18n-label="cmp.cf_kv_key">
-                            <input type="text" class="input cf-kv-val" autocomplete="off" placeholder="20%" aria-label="Value" data-i18n-label="cmp.cf_kv_val">
-                            <button type="button" class="cf-kv-del" data-act="kv-del" aria-label="Remove" data-i18n-label="cmp.cf_kv_del">&times;</button>
+                            <input type="text" class="input cf-kv-key" autocomplete="off" placeholder="discount" aria-label="Name" data-i18n-aria="cmp.cf_kv_key">
+                            <input type="text" class="input cf-kv-val" autocomplete="off" placeholder="20%" aria-label="Value" data-i18n-aria="cmp.cf_kv_val">
+                            <button type="button" class="cf-kv-del" data-act="kv-del" aria-label="Remove" data-i18n-aria="cmp.cf_kv_del">&times;</button>
                         </div>
                         {{end}}
                     </div>
@@ -185,15 +185,15 @@ contract is described in docs/campaign-flow.ru.md. */}}
                 <div class="cf-fields">
                     <div class="field">
                         <label class="checkbox-label">
-                            <input type="checkbox" name="track_opens" value="on"{{if and .Campaign.TrackOpens (not .NoPublicURL)}} checked{{end}}{{if .NoPublicURL}} disabled{{end}}>
+                            <input type="checkbox" id="track_opens" name="track_opens" value="on"{{if and .Campaign.TrackOpens (not .NoPublicURL)}} checked{{end}}{{if .NoPublicURL}} disabled{{end}}>
                             <span data-i18n="trk.track_opens">Track opens</span>
                         </label>
                         <label class="checkbox-label">
-                            <input type="checkbox" name="track_clicks" value="on"{{if and .Campaign.TrackClicks (not .NoPublicURL)}} checked{{end}}{{if .NoPublicURL}} disabled{{end}}>
+                            <input type="checkbox" id="track_clicks" name="track_clicks" value="on"{{if and .Campaign.TrackClicks (not .NoPublicURL)}} checked{{end}}{{if .NoPublicURL}} disabled{{end}}>
                             <span data-i18n="trk.track_clicks">Track clicks</span>
                         </label>
                         <label class="checkbox-label">
-                            <input type="checkbox" name="add_utm" value="on"{{if .Campaign.AddUTM}} checked{{end}}>
+                            <input type="checkbox" id="add_utm" name="add_utm" value="on"{{if .Campaign.AddUTM}} checked{{end}}>
                             <span data-i18n="trk.add_utm">Add UTM tags to links</span>
                         </label>
                         <small class="form-help" data-i18n="trk.campaign_help">Opens are counted by a pixel, clicks by links through the panel. Tags: utm_source, utm_medium, utm_campaign, sc, sr, sl (needed to tie orders to the campaign). Campaign emails get an unsubscribe link when the proxying domain is set.</small>
@@ -297,12 +297,12 @@ contract is described in docs/campaign-flow.ru.md. */}}
                     <div class="cf-panel">
                         <div class="cf-panel-head">
                             <h4 data-i18n="cmp.wz_preview">What the recipient will see</h4>
-                            <div class="cf-seg" id="cf-dev" role="group" aria-label="Device" data-i18n-label="cmp.cf_device">
+                            <div class="cf-seg" id="cf-dev" role="group" aria-label="Device" data-i18n-aria="cmp.cf_device">
                                 <button type="button" class="on" data-dev="pc" data-i18n="cmp.wz_desktop">Computer</button>
                                 <button type="button" data-dev="phone" data-i18n="cmp.wz_phone">Phone</button>
                             </div>
                         </div>
-                        <div class="cf-seg" id="cf-pv-ver" role="group" aria-label="Version" data-i18n-label="cmp.cf_versions" hidden>
+                        <div class="cf-seg" id="cf-pv-ver" role="group" aria-label="Version" data-i18n-aria="cmp.cf_versions" hidden>
                             <button type="button" class="on" data-ver="a">A</button>
                             <button type="button" data-ver="b">B</button>
                         </div>

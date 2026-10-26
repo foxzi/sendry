@@ -18,7 +18,6 @@ import (
 	"github.com/foxzi/sendry/internal/web/repository"
 	"github.com/foxzi/sendry/internal/web/sendry"
 	emailtpl "github.com/foxzi/sendry/internal/web/template"
-	"github.com/foxzi/sendry/internal/web/tracking"
 )
 
 // WizardTemplate is a template as the new campaign wizard lists it
@@ -36,7 +35,7 @@ type WizardDomain struct {
 	DKIMEnabled bool
 }
 
-// wizardLimit is the page size to load "all" templates and lists with
+// wizardLimit is the page size to load "all" recipient lists with
 const wizardLimit = 100000
 
 // VarPair is a campaign variable of the page
@@ -53,7 +52,7 @@ type CampaignContent struct {
 	BTemplateID string
 	BSubject    string
 	HasB        bool
-	SplitA      int // share of A in percent, 1-99; 100 without B
+	SplitA      int // share of A in percent, 1-99; 50 without B, the start for a new B
 	Extra       int // active variants beyond the first two
 }
 
@@ -71,7 +70,6 @@ func campaignContent(variants []models.CampaignVariant, templateSubjects map[str
 	content := CampaignContent{SplitA: 50}
 	if len(active) > 0 {
 		content.ATemplateID, content.ASubject = active[0].TemplateID, subject(active[0])
-		content.SplitA = 100
 	}
 	if len(active) > 1 {
 		content.HasB = true
@@ -106,20 +104,14 @@ func (h *Handlers) campaignFlowData(r *http.Request, mode string, c *models.Camp
 		c = &models.Campaign{}
 	}
 
-	templateList, _, err := h.templates.List(models.TemplateListFilter{Limit: wizardLimit})
+	templateList, err := h.templates.ListSummaries()
 	if err != nil {
 		return nil, fmt.Errorf("list templates: %w", err)
 	}
 	templates := make([]WizardTemplate, len(templateList))
 	subjects := make(map[string]string, len(templateList))
 	for i, t := range templateList {
-		templates[i] = WizardTemplate{
-			ID:             t.ID,
-			Name:           t.Name,
-			Folder:         t.Folder,
-			Subject:        t.Subject,
-			HasUnsubscribe: tracking.HasUnsubscribeVar(t.HTML) || tracking.HasUnsubscribeVar(t.Text),
-		}
+		templates[i] = WizardTemplate{ID: t.ID, Name: t.Name, Folder: t.Folder, Subject: t.Subject, HasUnsubscribe: t.HasUnsubscribe}
 		subjects[t.ID] = t.Subject
 	}
 
@@ -226,8 +218,8 @@ func (h *Handlers) CampaignCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Everything is validated before the first write
-	if c.FromEmail == "" {
-		h.error(w, http.StatusBadRequest, "From Email is required")
+	if serr := validateSender(c.FromEmail, c.ReplyTo); serr != nil {
+		h.error(w, serr.status, serr.message)
 		return
 	}
 	if c.Variables != "" {
@@ -293,31 +285,31 @@ func (h *Handlers) CampaignCreate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := h.campaigns.Create(c); err != nil {
+	// The campaign and its variants are stored together or not at all
+	stored := make([]models.CampaignVariant, 0, len(variants))
+	err := h.campaigns.InTx(func(repo *repository.CampaignRepository) error {
+		if err := repo.Create(c); err != nil {
+			return err
+		}
+		for _, wv := range variants {
+			v := &models.CampaignVariant{
+				CampaignID:      c.ID,
+				Name:            wv.name,
+				TemplateID:      wv.templateID,
+				SubjectOverride: wv.subject,
+				Weight:          wv.weight,
+			}
+			if err := repo.AddVariant(v); err != nil {
+				return err
+			}
+			stored = append(stored, *v)
+		}
+		return nil
+	})
+	if err != nil {
 		h.logger.Error("failed to create campaign", "error", err)
 		h.error(w, http.StatusInternalServerError, "Failed to create campaign")
 		return
-	}
-
-	stored := make([]models.CampaignVariant, 0, len(variants))
-	for _, wv := range variants {
-		v := &models.CampaignVariant{
-			CampaignID:      c.ID,
-			Name:            wv.name,
-			TemplateID:      wv.templateID,
-			SubjectOverride: wv.subject,
-			Weight:          wv.weight,
-		}
-		if err := h.campaigns.AddVariant(v); err != nil {
-			h.logger.Error("failed to add variant", "error", err)
-			// do not leave a campaign with a part of its variants behind
-			if derr := h.campaigns.Delete(c.ID); derr != nil {
-				h.logger.Error("failed to roll back campaign", "campaign_id", c.ID, "error", derr)
-			}
-			h.error(w, http.StatusInternalServerError, "Failed to add variant")
-			return
-		}
-		stored = append(stored, *v)
 	}
 
 	h.settings.LogAction(r, middleware.GetUserID(r), middleware.GetUserEmail(r),
@@ -442,8 +434,16 @@ func (h *Handlers) renderWizardHTML(t *models.Template, campaignVars map[string]
 	return stripDarkModeCSS(html)
 }
 
+// writeHTML serves template HTML. It is user content: sandboxed even when
+// opened directly, no scripts, forms or <base>, framed only by the panel.
 func (h *Handlers) writeHTML(w http.ResponseWriter, html string) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	hd := w.Header()
+	hd.Set("Content-Type", "text/html; charset=utf-8")
+	hd.Set("Content-Security-Policy", "sandbox; default-src 'none'; img-src * data:; style-src 'unsafe-inline' *; font-src *; "+
+		"form-action 'none'; base-uri 'none'; frame-ancestors 'self'")
+	hd.Set("X-Frame-Options", "SAMEORIGIN")
+	hd.Set("X-Content-Type-Options", "nosniff")
+	hd.Set("Cache-Control", "no-store")
 	w.Write([]byte(html))
 }
 
@@ -493,8 +493,8 @@ func (h *Handlers) CampaignWizardPreview(w http.ResponseWriter, r *http.Request)
 	h.writeHTML(w, h.renderWizardHTML(t, vars))
 }
 
-// CampaignWizardTest sends one test email of a template through the first
-// configured server.
+// CampaignWizardTest sends one test email of a template through the server
+// picked for the run, or the first configured one.
 func (h *Handlers) CampaignWizardTest(w http.ResponseWriter, r *http.Request) {
 	fail := func(status int, msg string) {
 		h.logger.Error("wizard test failed", "status", status, "message", msg)
@@ -508,6 +508,7 @@ func (h *Handlers) CampaignWizardTest(w http.ResponseWriter, r *http.Request) {
 		FromName   string `json:"from_name"`
 		ReplyTo    string `json:"reply_to"`
 		Variables  string `json:"variables"`
+		Server     string `json:"server"`
 		To         string `json:"to"`
 	}
 	raw, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
@@ -541,6 +542,9 @@ func (h *Handlers) CampaignWizardTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	serverName := h.cfg.Sendry.Servers[0].Name
+	if body.Server != "" {
+		serverName = body.Server
+	}
 	client, err := h.sendry.GetClient(serverName)
 	if err != nil {
 		fail(http.StatusInternalServerError, "Server not found: "+serverName)
@@ -575,7 +579,7 @@ func (h *Handlers) CampaignWizardTest(w http.ResponseWriter, r *http.Request) {
 	req := &sendry.SendRequest{
 		From:    from,
 		To:      []string{to},
-		Subject: "[Тест] " + subject,
+		Subject: "[TEST] " + subject,
 		HTML:    html,
 		Body:    text,
 	}
@@ -671,16 +675,24 @@ func (h *Handlers) saveFromSection(r *http.Request, c *models.Campaign) *statusE
 	c.FromEmail = strings.TrimSpace(r.FormValue("from_email"))
 	c.FromName = r.FormValue("from_name")
 	c.ReplyTo = strings.TrimSpace(r.FormValue("reply_to"))
-	if c.FromEmail == "" {
-		return &statusError{http.StatusBadRequest, "From Email is required"}
-	}
-	if !strings.Contains(c.FromEmail, "@") {
-		return &statusError{http.StatusBadRequest, "From Email is not an email address"}
-	}
-	if c.ReplyTo != "" && !strings.Contains(c.ReplyTo, "@") {
-		return &statusError{http.StatusBadRequest, "Reply-To is not an email address"}
+	if serr := validateSender(c.FromEmail, c.ReplyTo); serr != nil {
+		return serr
 	}
 	return h.updateCampaign(c)
+}
+
+// validateSender checks the From and Reply-To (optional) addresses of a campaign
+func validateSender(from, replyTo string) *statusError {
+	if from == "" {
+		return &statusError{http.StatusBadRequest, "From Email is required"}
+	}
+	if !strings.Contains(from, "@") {
+		return &statusError{http.StatusBadRequest, "From Email is not an email address"}
+	}
+	if replyTo != "" && !strings.Contains(replyTo, "@") {
+		return &statusError{http.StatusBadRequest, "Reply-To is not an email address"}
+	}
+	return nil
 }
 
 func (h *Handlers) saveVarsSection(r *http.Request, c *models.Campaign) *statusError {
@@ -695,40 +707,48 @@ func (h *Handlers) saveVarsSection(r *http.Request, c *models.Campaign) *statusE
 	return h.updateCampaign(c)
 }
 
-// saveContentSection writes the variants A and B of the content row. Variants
-// jobs have used are never changed or deleted (items point to them): they are
-// switched off with weight 0 and a new one takes their place.
+// saveContentSection writes the variants A and B of the content row in one
+// transaction (see replaceVariants).
 func (h *Handlers) saveContentSection(r *http.Request, c *models.Campaign) *statusError {
 	forms, serr := h.wizardVariants(r)
 	if serr != nil {
 		return serr
 	}
-	existing, err := h.campaigns.GetVariants(c.ID)
+	err := h.campaigns.InTx(func(repo *repository.CampaignRepository) error {
+		return replaceVariants(repo, c.ID, forms)
+	})
 	if err != nil {
-		h.logger.Error("failed to get variants", "error", err)
-		return &statusError{http.StatusInternalServerError, "Failed to load variants"}
+		h.logger.Error("failed to save variants", "campaign_id", c.ID, "error", err)
+		return &statusError{http.StatusInternalServerError, "Failed to save variants"}
+	}
+	return nil
+}
+
+// replaceVariants makes forms the active variants of a campaign. Variants
+// jobs have used are never changed or deleted (items point to them): they are
+// switched off with weight 0 and a new one takes their place.
+func replaceVariants(repo *repository.CampaignRepository, campaignID string, forms []wizardVariant) error {
+	existing, err := repo.GetVariants(campaignID)
+	if err != nil {
+		return fmt.Errorf("get variants: %w", err)
 	}
 	active := activeVariants(existing)
 
-	fail := func(what string, err error) *statusError {
-		h.logger.Error("failed to "+what, "campaign_id", c.ID, "error", err)
-		return &statusError{http.StatusInternalServerError, "Failed to save variants"}
-	}
 	// retire takes a variant out of the sending: deletes it, or switches it
 	// off if jobs used it
 	retire := func(v models.CampaignVariant) error {
-		used, err := h.campaigns.VariantInUse(v.ID)
+		used, err := repo.VariantInUse(v.ID)
 		if err != nil {
-			return err
+			return fmt.Errorf("check variant: %w", err)
 		}
 		if !used {
-			err = h.campaigns.DeleteVariant(v.ID)
+			err = repo.DeleteVariant(v.ID)
 			if !errors.Is(err, repository.ErrInUse) {
 				return err
 			}
 		}
 		v.Weight = 0
-		return h.campaigns.UpdateVariant(&v)
+		return repo.UpdateVariant(&v)
 	}
 
 	// A new variant is created after the existing ones, so once A is replaced
@@ -743,20 +763,20 @@ func (h *Handlers) saveContentSection(r *http.Request, c *models.Campaign) *stat
 		case old != nil && !forceNew && old.TemplateID == f.templateID && old.SubjectOverride == f.subject:
 			if old.Weight != f.weight {
 				old.Weight = f.weight
-				if err := h.campaigns.UpdateVariant(old); err != nil {
-					return fail("update variant", err)
+				if err := repo.UpdateVariant(old); err != nil {
+					return fmt.Errorf("update variant: %w", err)
 				}
 			}
 			continue
 		case old != nil && !forceNew:
-			used, err := h.campaigns.VariantInUse(old.ID)
+			used, err := repo.VariantInUse(old.ID)
 			if err != nil {
-				return fail("check variant", err)
+				return fmt.Errorf("check variant: %w", err)
 			}
 			if !used {
 				old.Name, old.TemplateID, old.SubjectOverride, old.Weight = f.name, f.templateID, f.subject, f.weight
-				if err := h.campaigns.UpdateVariant(old); err != nil {
-					return fail("update variant", err)
+				if err := repo.UpdateVariant(old); err != nil {
+					return fmt.Errorf("update variant: %w", err)
 				}
 				continue
 			}
@@ -764,19 +784,19 @@ func (h *Handlers) saveContentSection(r *http.Request, c *models.Campaign) *stat
 			fallthrough
 		case old != nil:
 			if err := retire(*old); err != nil {
-				return fail("retire variant", err)
+				return fmt.Errorf("retire variant: %w", err)
 			}
 		}
 		v := &models.CampaignVariant{
-			CampaignID:      c.ID,
+			CampaignID:      campaignID,
 			Name:            f.name,
 			TemplateID:      f.templateID,
 			SubjectOverride: f.subject,
 			Weight:          f.weight,
 		}
 		forceNew = true
-		if err := h.campaigns.AddVariant(v); err != nil {
-			return fail("add variant", err)
+		if err := repo.AddVariant(v); err != nil {
+			return fmt.Errorf("add variant: %w", err)
 		}
 	}
 
@@ -785,13 +805,13 @@ func (h *Handlers) saveContentSection(r *http.Request, c *models.Campaign) *stat
 		v := active[i]
 		if i == 1 {
 			if err := retire(v); err != nil {
-				return fail("retire variant", err)
+				return fmt.Errorf("retire variant: %w", err)
 			}
 			continue
 		}
 		v.Weight = 0
-		if err := h.campaigns.UpdateVariant(&v); err != nil {
-			return fail("switch off variant", err)
+		if err := repo.UpdateVariant(&v); err != nil {
+			return fmt.Errorf("switch off variant: %w", err)
 		}
 	}
 	return nil

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/foxzi/sendry/internal/web/models"
@@ -447,6 +448,43 @@ func (r *JobRepository) GetStats(jobID string) (models.JobStats, error) {
 	).Scan(&stats.Total, &stats.Pending, &stats.Queued, &stats.Sent, &stats.Failed, &stats.Skipped)
 
 	return stats, err
+}
+
+// GetStatsBatch returns the item stats of several jobs in one query, keyed by
+// job ID; jobs without items are absent (zero stats).
+func (r *JobRepository) GetStatsBatch(jobIDs []string) (map[string]models.JobStats, error) {
+	stats := make(map[string]models.JobStats, len(jobIDs))
+	if len(jobIDs) == 0 {
+		return stats, nil
+	}
+	args := make([]any, len(jobIDs))
+	for i, id := range jobIDs {
+		args[i] = id
+	}
+	rows, err := r.db.Query(`
+		SELECT job_id,
+			COUNT(*),
+			SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END),
+			SUM(CASE WHEN status = 'queued' THEN 1 ELSE 0 END),
+			SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END),
+			SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END),
+			SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END)
+		FROM send_job_items
+		WHERE job_id IN (?`+strings.Repeat(", ?", len(jobIDs)-1)+`)
+		GROUP BY job_id`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		var s models.JobStats
+		if err := rows.Scan(&id, &s.Total, &s.Pending, &s.Queued, &s.Sent, &s.Failed, &s.Skipped); err != nil {
+			return nil, err
+		}
+		stats[id] = s
+	}
+	return stats, rows.Err()
 }
 
 // GetRunningJobs returns all jobs with status 'running'

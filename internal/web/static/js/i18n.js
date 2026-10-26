@@ -468,6 +468,9 @@ var I18n = (function() {
             el.title = t(key);
             if (el.hasAttribute('aria-label')) el.setAttribute('aria-label', t(key));
         });
+        document.querySelectorAll('[data-i18n-aria]').forEach(function(el) {
+            el.setAttribute('aria-label', t(el.getAttribute('data-i18n-aria')));
+        });
         // data-label feeds CSS ::before labels in stacked (mobile) tables
         document.querySelectorAll('[data-i18n-label]').forEach(function(el) {
             var key = el.getAttribute('data-i18n-label');

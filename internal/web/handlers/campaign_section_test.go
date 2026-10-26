@@ -249,10 +249,10 @@ func TestCampaignContent(t *testing.T) {
 		want CampaignContent
 	}{
 		{"none", nil, CampaignContent{SplitA: 50}},
-		{"one", []models.CampaignVariant{v("t1", "", 100)}, CampaignContent{ATemplateID: "t1", ASubject: "S1", SplitA: 100}},
+		{"one", []models.CampaignVariant{v("t1", "", 100)}, CampaignContent{ATemplateID: "t1", ASubject: "S1", SplitA: 50}},
 		{"two", []models.CampaignVariant{v("t1", "Own", 70), v("t2", "", 30)},
 			CampaignContent{ATemplateID: "t1", ASubject: "Own", BTemplateID: "t2", BSubject: "S2", HasB: true, SplitA: 70}},
-		{"inactive skipped", []models.CampaignVariant{v("t1", "", 0), v("t2", "", 100)}, CampaignContent{ATemplateID: "t2", ASubject: "S2", SplitA: 100}},
+		{"inactive skipped", []models.CampaignVariant{v("t1", "", 0), v("t2", "", 100)}, CampaignContent{ATemplateID: "t2", ASubject: "S2", SplitA: 50}},
 		{"rounding", []models.CampaignVariant{v("t1", "", 1), v("t2", "", 2)},
 			CampaignContent{ATemplateID: "t1", ASubject: "S1", BTemplateID: "t2", BSubject: "S2", HasB: true, SplitA: 33}},
 		{"clamp", []models.CampaignVariant{v("t1", "", 1), v("t2", "", 1000)},
@@ -392,5 +392,24 @@ func TestCampaignRedirect(t *testing.T) {
 	h.CampaignRedirect(rec, req)
 	if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != "/campaigns/c1" {
 		t.Errorf("%d %s", rec.Code, rec.Header().Get("Location"))
+	}
+}
+
+func TestTemplateFrame_SandboxHeaders(t *testing.T) {
+	h, _ := newCampaignTestHandlers(t, "https://panel.example.com")
+	req := httptest.NewRequest(http.MethodGet, "/templates/t1/frame", nil)
+	req.SetPathValue("id", "t1")
+	rec := httptest.NewRecorder()
+	h.TemplateFrame(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("status %d", rec.Code)
+	}
+	csp := rec.Header().Get("Content-Security-Policy")
+	// template HTML is user content: it must not run scripts on the panel origin when opened directly
+	if !strings.HasPrefix(csp, "sandbox;") || !strings.Contains(csp, "default-src 'none'") {
+		t.Errorf("CSP = %q", csp)
+	}
+	if rec.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Error("no nosniff")
 	}
 }

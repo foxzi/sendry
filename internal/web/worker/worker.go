@@ -36,6 +36,9 @@ type Worker struct {
 	queuedCursor     int64
 	queuedSendCursor int64
 
+	// jobs already warned about sending without the public origin
+	noOriginWarned sync.Map
+
 	ctx    context.Context
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -328,8 +331,10 @@ func (w *Worker) processJob(job *models.SendJob) {
 		return
 	}
 	if env == nil {
-		w.logger.Debug("public URL is not configured (tracking base URL or server.public_url), "+
-			"sending without unsubscribe links and tracking", "job_id", job.ID)
+		if _, warned := w.noOriginWarned.LoadOrStore(job.ID, true); !warned {
+			w.logger.Warn("public URL is not configured (tracking base URL or server.public_url), "+
+				"campaign mail goes without unsubscribe links, List-Unsubscribe headers and tracking", "job_id", job.ID)
+		}
 	}
 
 	// Get campaign data for email sending

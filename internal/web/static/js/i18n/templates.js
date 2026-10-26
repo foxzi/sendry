@@ -286,7 +286,8 @@ I18n.register({
         'tpl.preview_only': 'preview only',
         'tpl.images_in_block': 'Images in block',
         'tpl.enter_value_for': 'Enter value for',
-        'tpl.uploading': 'Uploading...'
+        'tpl.uploading': 'Uploading...',
+        'tpl.upload_failed': 'Upload failed'
     },
     ru: {
         'tpl.import': 'Импорт',
@@ -573,6 +574,7 @@ I18n.register({
         'tpl.preview_only': 'только предпросмотр',
         'tpl.images_in_block': 'Изображения в блоке',
         'tpl.enter_value_for': 'Введите значение для',
-        'tpl.uploading': 'Загрузка...'
+        'tpl.uploading': 'Загрузка...',
+        'tpl.upload_failed': 'Не удалось загрузить'
     }
 });

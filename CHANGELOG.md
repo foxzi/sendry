@@ -32,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sendry-web: the open rate of a job uses the campaign's open tracking at job start, not the current setting
 - sendry-web: resubscribing removes the address from the unsubscribe statistics of past jobs
 - sendry-web: only success messages hide after 5 seconds; warnings and errors (`alert-danger` too) stay, and so does the one-time display of a new API key
+- **Upgrade note (breaking, API)**, sendry-web: the per-API-key `track_opens`/`track_clicks` flags and the global opens/clicks defaults of Settings → Tracking (v0.6.0) are removed, the migration drops them. `POST /api/v1/send` and `/api/v1/send/template` track opens or clicks only when the request has `"track_opens": true` / `"track_clicks": true`; clients that relied on the key defaults silently stop being tracked. Before upgrading, find such keys with `SELECT id, name FROM api_keys WHERE track_opens = 1 OR track_clicks = 1`
+- sendry-web: without a public address (`server.public_url` or Settings → Tracking) campaign jobs are no longer held: mail is sent without the unsubscribe link, `List-Unsubscribe` headers and open/click tracking (replaces the upgrade note above). The campaign, send and job pages warn about it, the worker logs a warning once per job. Gmail and Yahoo require one-click unsubscribe from bulk senders, so set the address before sending to large lists
+- sendry-web: campaigns are created, edited and sent on one page of rows (sender, content, variables, tracking, name); the old edit, variables and variants pages redirect to the campaign page, campaign tags are no longer shown or saved
 - MTA: the `path` label of `sendry_api_requests_total` / `sendry_api_request_duration_seconds` is `unmatched` for requests that match no route (scanners added a series per probed URL, kept forever since counters are persisted)
 
 ### Fixed
