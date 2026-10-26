@@ -1,5 +1,6 @@
-{{/* Shared rows of the campaign flow (create / edit / send). Both blocks take the
-page data map (Mode, Campaign, Content, Variables, Templates, ...). The DOM
+{{/* Shared rows of the campaign flow: the new campaign page (create) and the
+campaign page (edit), where the send steps sit in a dialog. Both blocks take
+the page data map (Mode, Campaign, Content, Variables, Templates, ...). The DOM
 contract is described in docs/campaign-flow.ru.md. */}}
 
 {{define "cf_letter"}}
@@ -243,7 +244,7 @@ contract is described in docs/campaign-flow.ru.md. */}}
 {{end}}
 
 {{define "cf_send"}}
-<h2 class="cf-title" data-i18n="cmp.cf_send">Sending</h2>
+{{if eq .Mode "create"}}<h2 class="cf-title" data-i18n="cmp.cf_send">Sending</h2>{{end}}
 <div class="cf-rows">
 
     <!-- to -->
@@ -274,58 +275,6 @@ contract is described in docs/campaign-flow.ru.md. */}}
                 </div>
                 {{end}}
                 <small class="cf-err" data-err="recipient_list_id" role="alert" hidden></small>
-            </div>
-            <p class="cf-error" role="alert" hidden></p>
-            <div class="cf-foot">
-                <button type="button" class="btn btn-primary" data-act="primary" data-i18n="cmp.cf_next">Next</button>
-            </div>
-        </div>
-    </section>
-
-    <!-- check -->
-    <section class="cf-row" data-row="check" data-kind="step">
-        <div class="cf-sum">
-            <span class="cf-dot" aria-hidden="true"></span>
-            <h3 class="cf-name" id="cf-check-h" data-i18n="cmp.cf_check">Check</h3>
-            <p class="cf-hint" data-i18n="cmp.cf_h_check">Look at the email and send a test to yourself.</p>
-            <div class="cf-val" data-out></div>
-            <button type="button" class="cf-edit-btn" data-act="open" aria-expanded="false" aria-controls="cf-check-body" data-i18n="cmp.cf_change">Change</button>
-        </div>
-        <div class="cf-body" id="cf-check-body" hidden>
-            <div class="cf-fields">
-                <div class="cf-check">
-                    <div class="cf-panel">
-                        <div class="cf-panel-head">
-                            <h4 data-i18n="cmp.wz_preview">What the recipient will see</h4>
-                            <div class="cf-seg" id="cf-dev" role="group" aria-label="Device" data-i18n-aria="cmp.cf_device">
-                                <button type="button" class="on" data-dev="pc" data-i18n="cmp.wz_desktop">Computer</button>
-                                <button type="button" data-dev="phone" data-i18n="cmp.wz_phone">Phone</button>
-                            </div>
-                        </div>
-                        <div class="cf-seg" id="cf-pv-ver" role="group" aria-label="Version" data-i18n-aria="cmp.cf_versions" hidden>
-                            <button type="button" class="on" data-ver="a">A</button>
-                            <button type="button" data-ver="b">B</button>
-                        </div>
-                        <p class="cf-pv-subject"><span class="text-muted" data-i18n="cmp.wz_subject_colon">Subject:</span> <span id="cf-pv-subject"></span></p>
-                        <div class="cf-stage" id="cf-stage">
-                            <iframe id="cf-preview" class="cf-preview" sandbox="" title="Preview" data-i18n-title="cmp.wz_preview_title"></iframe>
-                            <p class="cf-stage-msg" id="cf-preview-msg" hidden></p>
-                        </div>
-                    </div>
-                    <div class="cf-panel">
-                        <div class="cf-panel-head"><h4 data-i18n="cmp.wz_test">Test email</h4></div>
-                        <div class="field">
-                            <label for="cf-test-to" data-i18n="cmp.wz_test_to">Send the test to</label>
-                            <input type="email" id="cf-test-to" class="input" autocomplete="off" value="{{.UserEmail}}">
-                        </div>
-                        <button type="button" class="btn" id="cf-test-btn" data-i18n="cmp.wz_test_send">Send to me</button>
-                        <p class="cf-test-result" id="cf-test-result" role="status" hidden></p>
-                    </div>
-                    <div class="cf-panel">
-                        <div class="cf-panel-head"><h4 data-i18n="cmp.wz_ready">Readiness</h4></div>
-                        <div class="cf-ready" id="cf-ready"></div>
-                    </div>
-                </div>
             </div>
             <p class="cf-error" role="alert" hidden></p>
             <div class="cf-foot">
@@ -403,11 +352,69 @@ contract is described in docs/campaign-flow.ru.md. */}}
             </div>
         </div>
     </section>
+
+    <!-- check -->
+    <section class="cf-row" data-row="check" data-kind="step">
+        <div class="cf-sum">
+            <span class="cf-dot" aria-hidden="true"></span>
+            <h3 class="cf-name" id="cf-check-h" data-i18n="cmp.cf_check">Check</h3>
+            <p class="cf-hint" data-i18n="cmp.cf_h_check">Check the summary, look at the email and send a test to yourself.</p>
+            <div class="cf-val" data-out></div>
+            <button type="button" class="cf-edit-btn" data-act="open" aria-expanded="false" aria-controls="cf-check-body" data-i18n="cmp.cf_change">Change</button>
+        </div>
+        <div class="cf-body" id="cf-check-body" hidden>
+            <div class="cf-fields">
+                <div class="cf-check">
+                    <div class="cf-panel cf-wide">
+                        <div class="cf-panel-head"><h4 data-i18n="cmp.cf_recap">Summary</h4></div>
+                        <dl class="cf-recap" id="cf-recap"></dl>
+                    </div>
+                    <div class="cf-panel cf-wide">
+                        <div class="cf-panel-head">
+                            <h4 data-i18n="cmp.wz_preview">What the recipient will see</h4>
+                            <div class="cf-seg" id="cf-dev" role="group" aria-label="Device" data-i18n-aria="cmp.cf_device">
+                                <button type="button" class="on" data-dev="pc" data-i18n="cmp.wz_desktop">Computer</button>
+                                <button type="button" data-dev="phone" data-i18n="cmp.wz_phone">Phone</button>
+                            </div>
+                        </div>
+                        <div class="cf-seg" id="cf-pv-ver" role="group" aria-label="Version" data-i18n-aria="cmp.cf_versions" hidden>
+                            <button type="button" class="on" data-ver="a">A</button>
+                            <button type="button" data-ver="b">B</button>
+                        </div>
+                        <p class="cf-pv-subject"><span class="text-muted" data-i18n="cmp.wz_subject_colon">Subject:</span> <span id="cf-pv-subject"></span></p>
+                        <div class="cf-stage" id="cf-stage">
+                            <iframe id="cf-preview" class="cf-preview" sandbox="" title="Preview" data-i18n-title="cmp.wz_preview_title"></iframe>
+                            <p class="cf-stage-msg" id="cf-preview-msg" hidden></p>
+                        </div>
+                    </div>
+                    <div class="cf-panel">
+                        <div class="cf-panel-head"><h4 data-i18n="cmp.wz_test">Test email</h4></div>
+                        <div class="field">
+                            <label for="cf-test-to" data-i18n="cmp.wz_test_to">Send the test to</label>
+                            <input type="email" id="cf-test-to" class="input" autocomplete="off" value="{{.UserEmail}}">
+                        </div>
+                        <button type="button" class="btn" id="cf-test-btn" data-i18n="cmp.wz_test_send">Send to me</button>
+                        <p class="cf-test-result" id="cf-test-result" role="status" hidden></p>
+                    </div>
+                    <div class="cf-panel">
+                        <div class="cf-panel-head"><h4 data-i18n="cmp.wz_ready">Readiness</h4></div>
+                        <div class="cf-ready" id="cf-ready"></div>
+                    </div>
+                </div>
+            </div>
+            <p class="cf-error" role="alert" hidden></p>
+            <div class="cf-foot cf-foot-send">
+                <p class="cf-final-help" id="cf-send-help" hidden></p>
+                <button type="submit" id="cf-send" name="action" value="send" class="btn btn-primary">Send</button>
+            </div>
+        </div>
+    </section>
 </div>
 
+{{if eq .Mode "create"}}
 <div class="cf-final">
-    {{if eq .Mode "create"}}<button type="submit" id="cf-save" name="action" value="save" class="btn" data-i18n="cmp.wz_save">Save without sending</button>{{end}}
-    <button type="submit" id="cf-send" name="action" value="send" class="btn btn-primary">Send</button>
+    <button type="submit" id="cf-save" name="action" value="save" class="btn" data-i18n="cmp.wz_save">Save without sending</button>
     <p class="cf-final-help" id="cf-final-help"></p>
 </div>
+{{end}}
 {{end}}

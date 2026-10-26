@@ -206,7 +206,7 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("GET /campaigns/{id}/edit", h.CampaignRedirect)
 	protected.HandleFunc("GET /campaigns/{id}/variables", h.CampaignRedirect)
 	protected.HandleFunc("GET /campaigns/{id}/variants", h.CampaignRedirect)
-	protected.HandleFunc("GET /campaigns/{id}/send", h.CampaignSendPage)
+	protected.HandleFunc("GET /campaigns/{id}/send", h.CampaignSendRedirect)
 	protected.HandleFunc("POST /campaigns/{id}/send", h.CampaignSend)
 	protected.HandleFunc("GET /campaigns/{id}/jobs", h.CampaignJobs)
 

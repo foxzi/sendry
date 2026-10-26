@@ -269,8 +269,9 @@ func (r *TrackingRepository) SourceEvents(sourceType, sourceID string, limit int
 
 // stats aggregates engagement over the job items matched by jobWhere
 // (aliases i = send_job_items, j = send_jobs, c = campaigns). Everything is
-// counted over the same base, items accepted by the MTA (status queued or
-// sent), so rates never exceed 100%. Opens are counted only when the
+// counted over the same base, items the MTA handed over to the recipient's
+// server (status sent), so rates never exceed 100%. Items still queued at the
+// MTA (waiting for a retry) are not counted until they are sent. Opens are counted only when the
 // campaign tracked opens when the job was created (send_jobs.track_opens,
 // the current campaign setting for older jobs): a click implies an open, but without the pixel an
 // open rate would be made of clicks alone. Totals come from the per-item
@@ -289,7 +290,7 @@ func (r *TrackingRepository) stats(jobWhere string, arg string) (models.Tracking
 			COALESCE(SUM(CASE WHEN acc = 1 AND unsubscribed_at IS NOT NULL THEN 1 ELSE 0 END), 0),
 			COUNT(DISTINCT CASE WHEN status = 'skipped' AND error = ? THEN recipient_id END)
 		FROM (
-			SELECT CASE WHEN i.status IN ('queued', 'sent') THEN 1 ELSE 0 END AS acc,
+			SELECT CASE WHEN i.status = 'sent' THEN 1 ELSE 0 END AS acc,
 				COALESCE(j.track_opens, c.track_opens, 1) AS opens, i.status, i.error, i.recipient_id,
 				i.opened_at, i.open_count, i.clicked_at, i.click_count, i.unsubscribed_at
 			FROM send_job_items i
@@ -297,7 +298,7 @@ func (r *TrackingRepository) stats(jobWhere string, arg string) (models.Tracking
 			LEFT JOIN campaigns c ON c.id = j.campaign_id
 			WHERE `+jobWhere+`
 		)`, models.SkipReasonUnsubscribed, arg,
-	).Scan(&st.Total, &st.Delivered, &st.UniqueOpens, &st.TotalOpens, &st.UniqueClicks, &st.TotalClicks, &st.Unsubscribed, &st.SkippedUnsub)
+	).Scan(&st.Total, &st.Sent, &st.UniqueOpens, &st.TotalOpens, &st.UniqueClicks, &st.TotalClicks, &st.Unsubscribed, &st.SkippedUnsub)
 	if err != nil {
 		return st, err
 	}

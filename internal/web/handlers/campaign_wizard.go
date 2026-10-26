@@ -97,8 +97,9 @@ func campaignVarPairs(raw string) ([]VarPair, error) {
 	return pairs, nil
 }
 
-// campaignFlowData returns the data of the campaign pages: mode is create,
-// edit or send, c is the campaign (a blank one for create).
+// campaignFlowData returns the data of the campaign pages: mode is create
+// (new campaign) or edit (campaign page with the send dialog), c is the
+// campaign (a blank one for create).
 func (h *Handlers) campaignFlowData(r *http.Request, mode string, c *models.Campaign) (map[string]any, error) {
 	if c == nil {
 		c = &models.Campaign{}
@@ -147,9 +148,6 @@ func (h *Handlers) campaignFlowData(r *http.Request, mode string, c *models.Camp
 		}
 		content = campaignContent(variants, subjects)
 		title = c.Name
-		if mode == "send" {
-			title = "Send " + c.Name
-		}
 	}
 
 	variables, err := campaignVarPairs(c.Variables)
@@ -320,7 +318,7 @@ func (h *Handlers) CampaignCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// GetVariants orders them like the send page does, and fills the IDs
+	// GetVariants orders them like the send dialog does, and fills the IDs
 	if fresh, err := h.campaigns.GetVariants(c.ID); err == nil && len(fresh) > 0 {
 		stored = fresh
 	}

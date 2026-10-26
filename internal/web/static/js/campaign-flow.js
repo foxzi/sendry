@@ -1,4 +1,4 @@
-// Campaign rows: create (GET /campaigns/new), edit (GET /campaigns/{id}) and send (GET /campaigns/{id}/send).
+// Campaign rows: create (GET /campaigns/new) and edit (GET /campaigns/{id}, the send steps sit in a dialog there).
 // One generic row controller plus small per-row functions (summary, validation, fields).
 // Config (window.CF_CONFIG) comes from the view; templates, lists and servers are rendered into the DOM.
 // Loaded from the page body, before the layout scripts, so everything waits for DOMContentLoaded.
@@ -35,21 +35,20 @@
         var rowMap = {};
         rows.forEach(function (r) { rowMap[r.getAttribute('data-row')] = r; });
 
-        // Step rows are walked one by one; the rest of the rows in edit/send are saved on their own
-        var stepNames = mode === 'create' ? ['from', 'content', 'to', 'check', 'when']
-            : mode === 'send' ? ['to', 'check', 'when'] : [];
+        // Step rows are walked one by one, the check comes last and holds the final button;
+        // the letter rows in edit are saved on their own
+        var stepNames = mode === 'create' ? ['from', 'content', 'to', 'when', 'check'] : ['to', 'when', 'check'];
         var steps = stepNames.map(function (n) { return rowMap[n]; }).filter(Boolean);
         var cur = 0; // index of the current step; steps.length means all done
         var open = null; // row whose fields are open
         var built = {}; // rows whose summary has been built (rebuilt on language switch)
-        var testSentTo = ''; // set after a successful test email, shown in the "check" summary
         var submitting = false;
 
         function rowName(r) { return r.getAttribute('data-row'); }
         function isStep(r) { return steps.indexOf(r) !== -1; }
-        // Rows saved on their own through fetch (all of them in edit, the "Letter" card in send)
+        // Rows saved on their own through fetch: the "Letter" card in edit
         function isEditRow(r) {
-            return mode === 'edit' || (mode === 'send' && LETTER.indexOf(rowName(r)) !== -1);
+            return mode === 'edit' && LETTER.indexOf(rowName(r)) !== -1;
         }
         function val(name) {
             var e = root.querySelector('[name="' + name + '"]');
@@ -488,6 +487,14 @@
             if (lbl) lbl.textContent = tzLabel;
         })();
 
+        // "Right away" or the scheduled date in the browser's language, with the time zone if asked
+        function whenText(withTz) {
+            if (!isLater() || !schedEl || !schedEl.value) return t('cmp.wz_sum_now');
+            var lang = window.I18n ? I18n.getLang() : 'en';
+            var text = new Date(schedEl.value).toLocaleString(lang === 'ru' ? 'ru-RU' : undefined, { dateStyle: 'long', timeStyle: 'short' });
+            return withTz ? text + ' (' + tzLabel + ')' : text;
+        }
+
         function pilotCount() {
             if (!pilotEl || !pilotEl.checked) return null;
             var n = parseInt(limitEl.value, 10);
@@ -598,17 +605,8 @@
                 o.appendChild(document.createElement('br'));
                 o.appendChild(sub(t('cf.will_get', { n: list.active })));
             },
-            check: function (o) {
-                o.textContent = t('cf.reviewed') + (testSentTo ? t('cf.test_sent', { to: testSentTo }) : '');
-            },
             when: function (o) {
-                var text = t('cmp.wz_sum_now');
-                if (isLater() && schedEl && schedEl.value) {
-                    var lang = window.I18n ? I18n.getLang() : 'en';
-                    var d = new Date(schedEl.value);
-                    text = d.toLocaleString(lang === 'ru' ? 'ru-RU' : undefined, { dateStyle: 'long', timeStyle: 'short' }) + ' (' + tzLabel + ')';
-                }
-                o.appendChild(document.createTextNode(text));
+                o.appendChild(document.createTextNode(whenText(true)));
                 var pilot = pilotCount();
                 if (pilot !== null) {
                     o.appendChild(document.createElement('br'));
@@ -662,11 +660,12 @@
         if (nameEl && mode === 'create') nameEl.addEventListener('input', renderTitle);
         if (subA && mode === 'create') subA.addEventListener('input', renderTitle);
 
-        // After "about" is saved in edit/send mode
+        // After "about" is saved in edit mode
         function updatePageHeader() {
             var name = trimmed('name');
             var desc = trimmed('description');
             if (titleEl) titleEl.textContent = name;
+            if ($('cf-send-name')) $('cf-send-name').textContent = name;
             var d = $('cf-page-desc');
             if (d) { d.textContent = desc; d.hidden = !desc; }
             if (savedName && document.title.indexOf(savedName) !== -1) document.title = document.title.replace(savedName, name);
@@ -683,7 +682,7 @@
             if (isEditRow(row)) return t('cf.save');
             var i = steps.indexOf(row);
             if (i === -1) return t('cf.done'); // optional rows in create
-            return i < cur || i === steps.length - 1 ? t('cf.done') : t('cf.next');
+            return i < cur ? t('cf.done') : t('cf.next');
         }
 
         // Dots, state classes, buttons of every row
@@ -815,7 +814,7 @@
             }
         }
 
-        // After a row is done: the current step opens again (steps exist in create and send)
+        // After a row is done: the current step opens again
         function backToCurrent(focus) {
             if (steps.length && cur < steps.length) openRow(steps[cur], focus);
             else renderRows();
@@ -845,7 +844,6 @@
         function onCancel(row) {
             clearRowErrors(row);
             closeRow(row, true, true);
-            if (mode === 'send') backToCurrent(false);
         }
 
         // Edit rows: POST the row's fields, JSON answer
@@ -872,7 +870,6 @@
                     if (name === 'about') updatePageHeader();
                     closeRow(row, true, false);
                     flash(row);
-                    if (mode === 'send') backToCurrent(false);
                 } else {
                     showRowError(row, (res.data && res.data.error) || t('cf.save_failed'));
                 }
@@ -1097,8 +1094,30 @@
             }
         }
 
+        // Summary of the send on the check step: list, how many get it, when, pilot
+        function renderRecap() {
+            var dl = $('cf-recap');
+            if (!dl) return;
+            dl.textContent = '';
+            function item(label, value, note) {
+                dl.appendChild(el('dt', '', label));
+                var dd = el('dd', '', value);
+                if (note) {
+                    dd.appendChild(document.createElement('br'));
+                    dd.appendChild(sub(note));
+                }
+                dl.appendChild(dd);
+            }
+            var list = selectedList();
+            item(t('cmp.cf_to'), list ? list.name : '—', list ? t('cf.will_get', { n: recipientCount() }) : '');
+            item(t('cmp.cf_when'), whenText(true));
+            var pilot = pilotCount();
+            item(t('cf.recap_pilot'), pilot === null ? t('cf.recap_pilot_off') : t('cf.recap_pilot_on', { n: pilot }));
+        }
+
         // The check row has just been opened
         function enterReview() {
+            renderRecap();
             renderPvVer();
             renderDevice();
             loadPreview();
@@ -1140,7 +1159,7 @@
             }).then(function (r) {
                 return r.json().catch(function () { return {}; }).then(function (data) { return { ok: r.ok, data: data }; });
             }).then(function (r2) {
-                if (r2.ok && r2.data.ok) { testSentTo = to; show(t('cmp.wz_test_ok', { to: to }), true); }
+                if (r2.ok && r2.data.ok) show(t('cmp.wz_test_ok', { to: to }), true);
                 else show(r2.data.error || t('cmp.wz_test_failed'), false);
             }).catch(function () {
                 show(t('cmp.wz_test_failed'), false);
@@ -1149,35 +1168,165 @@
 
         // ---------- final buttons ----------
 
-        // Letter row left open with unsaved changes (send mode); null when none
-        function dirtyLetterRow() {
-            if (mode !== 'send' || !open || !isEditRow(open)) return null;
-            return serializeRow(open).toString() !== open._cfBase ? open : null;
+        // Text of the final button: the concrete action, known once the steps before the check are done
+        function sendLabel(ready) {
+            if (!ready) return t('cf.send');
+            if (isLater() && schedEl && schedEl.value) return t('cf.schedule_at', { when: whenText(false) });
+            var n = recipientCount();
+            return t(isOne(n) ? 'cmp.wz_send_one' : 'cmp.wz_send_many', { n: n });
+        }
+
+        function setHelp(id, text) {
+            var help = $(id);
+            if (help) { help.textContent = text; help.hidden = !text; }
         }
 
         function renderFinal() {
             var sendBtn = $('cf-send');
             var saveBtn = $('cf-save');
-            var help = $('cf-final-help');
+            var ready = cur >= steps.length - 1; // every step before the check is done
+            if (saveBtn) {
+                saveBtn.disabled = !contentDone();
+                setHelp('cf-final-help', ready ? '' : contentDone() ? t('cf.help_can_save') : t('cf.help_fill_first'));
+            }
             if (!sendBtn) return;
-            var allDone = cur >= steps.length;
-            var helpText = '';
-            if (mode === 'create') {
-                if (saveBtn) saveBtn.disabled = !contentDone();
-                sendBtn.disabled = !allDone;
-                helpText = allDone ? '' : contentDone() ? t('cf.help_can_save') : t('cf.help_fill_first');
+            var tpl = hasTemplate();
+            sendBtn.disabled = !ready || !tpl;
+            sendBtn.textContent = sendLabel(ready);
+            setHelp('cf-send-help', tpl ? '' : t('cf.help_no_template'));
+        }
+
+        // ---------- send dialog (edit) ----------
+
+        var modal = $('cf-send-modal');
+        var modalBox = modal ? modal.querySelector('.cf-modal-box') : null;
+        var opener = null; // focus goes back there when the dialog closes
+
+        function modalOpen() { return !!modal && !modal.hidden; }
+
+        // Something chosen in the dialog that closing would throw away
+        function modalPicked() {
+            return cur > 0 || !!selectedList() || isLater() || (!!pilotEl && pilotEl.checked);
+        }
+
+        // One line about the letter in the dialog head: it is edited on the page, not here
+        function renderLetterLine() {
+            var p = $('cf-send-letter');
+            if (!p) return;
+            p.textContent = '';
+            var parts = [];
+            var name = trimmed('from_name');
+            var email = trimmed('from_email');
+            parts.push(el('span', '', t('cmp.cf_from') + ': ' + (name ? name + ' <' + email + '>' : email)));
+            if (!hasTemplate()) {
+                parts.push(el('span', 'cf-warn-text', t('cf.no_template')));
+            } else if (abOn()) {
+                parts.push(el('span', '', 'A: «' + variantInfo('a').subject + '» / B: «' + variantInfo('b').subject + '»'));
             } else {
-                var tpl = hasTemplate();
-                sendBtn.disabled = !allDone || !tpl;
-                helpText = !tpl ? t('cf.help_no_template') : allDone ? '' : t('cf.help_finish_steps');
+                parts.push(el('span', '', '«' + variantInfo('a').subject + '»'));
             }
-            if (allDone) {
-                var n = recipientCount();
-                sendBtn.textContent = t(isOne(n) ? 'cmp.wz_send_one' : 'cmp.wz_send_many', { n: n });
-            } else {
-                sendBtn.textContent = t('cf.send');
+            var tr = rowMap.track ? out(rowMap.track) : null;
+            if (tr && tr.textContent) parts.push(el('span', '', tr.textContent));
+            parts.forEach(function (part, i) {
+                if (i) p.appendChild(document.createTextNode(' · '));
+                p.appendChild(part);
+            });
+        }
+
+        // Visible elements Tab can reach inside the dialog
+        function focusables() {
+            return all(modalBox, 'a[href], button, input, select, textarea, summary, iframe').filter(function (x) {
+                return !x.disabled && x.tabIndex !== -1 && x.type !== 'hidden' && x.offsetParent !== null;
+            });
+        }
+
+        function openModal() {
+            if (!modal || modalOpen()) return;
+            // The letter is sent as saved: an open letter row is closed first, unsaved changes are dropped after asking
+            if (open && isEditRow(open)) {
+                if (serializeRow(open).toString() !== open._cfBase) {
+                    var nm = open.querySelector('.cf-name');
+                    if (!confirm(t('cf.discard_row', { row: nm ? nm.textContent.replace(/\s*$/, '') : rowName(open) }))) return;
+                }
+                closeRow(open, false, true);
             }
-            if (help) { help.textContent = helpText; help.hidden = !helpText; }
+            opener = document.activeElement;
+            modal.hidden = false;
+            document.body.classList.add('cf-noscroll');
+            renderLetterLine();
+            backToCurrent(true);
+            if (!modalBox.contains(document.activeElement)) modalBox.focus();
+        }
+
+        // Close the dialog; with ask, choices made in it are dropped only after a confirm
+        function closeModal(ask) {
+            if (!modalOpen()) return;
+            if (ask && modalPicked() && !confirm(t('cf.close_confirm'))) return;
+            modal.hidden = true;
+            document.body.classList.remove('cf-noscroll');
+            resetSend();
+            if (location.hash === '#send') history.replaceState(null, '', location.pathname + location.search);
+            // Opened from #send there is no opener: the "Send…" button takes the focus
+            if (!opener || opener === document.body || !document.contains(opener)) opener = document.querySelector('[data-cf-send-open]');
+            if (opener && opener.focus) opener.focus();
+            opener = null;
+        }
+
+        // Back to the first step with the form's initial values
+        function resetSend() {
+            if (form) form.reset();
+            all(modal, 'details').forEach(function (d) { d.open = false; });
+            steps.forEach(function (r) {
+                clearRowErrors(r);
+                var o = out(r);
+                if (o) o.textContent = '';
+                delete built[rowName(r)];
+            });
+            var res = $('cf-test-result');
+            if (res) res.hidden = true;
+            cur = 0;
+            if (open && isStep(open)) open = null;
+            renderLists();
+            renderWhen();
+            renderPilot();
+            renderRows();
+        }
+
+        if (modal) {
+            document.addEventListener('click', function (e) {
+                var a = e.target.closest('[data-cf-send-open]');
+                if (!a) return;
+                e.preventDefault();
+                openModal();
+            });
+            window.addEventListener('hashchange', function () {
+                if (location.hash === '#send') openModal();
+            });
+            document.addEventListener('keydown', function (e) {
+                if (!modalOpen()) return;
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    closeModal(true);
+                    return;
+                }
+                if (e.key !== 'Tab') return;
+                // Keep Tab inside the dialog
+                var f = focusables();
+                if (!f.length) { e.preventDefault(); return; }
+                var first = f[0];
+                var last = f[f.length - 1];
+                if (e.shiftKey && (document.activeElement === first || document.activeElement === modalBox)) {
+                    e.preventDefault();
+                    last.focus();
+                } else if (!e.shiftKey && document.activeElement === last) {
+                    e.preventDefault();
+                    first.focus();
+                }
+            });
+            // Focus that got out somehow (a click on the backdrop, a script) comes back
+            document.addEventListener('focusin', function (e) {
+                if (modalOpen() && !modalBox.contains(e.target)) modalBox.focus();
+            });
         }
 
         // ---------- events ----------
@@ -1208,6 +1357,8 @@
                 toggleJson();
             } else if (act === 'ver-del') {
                 deleteVersion(btn.getAttribute('data-del'));
+            } else if (act === 'send-close') {
+                closeModal(true);
             }
         });
 
@@ -1227,7 +1378,8 @@
             e.preventDefault();
             if (tgt.type === 'search' || tgt.closest('.cf-kv-row') || tgt.type === 'radio') return;
             var row = tgt.closest('.cf-row');
-            if (row && row === open) onPrimary(row);
+            // the check step has no "Next": its only action is the final button
+            if (row && row === open && rowName(row) !== 'check') onPrimary(row);
         });
 
         root.addEventListener('change', function (e) {
@@ -1240,24 +1392,11 @@
             if (e.target.id === 'dry_run_limit' || e.target.id === 'scheduled_at') renderFinal();
         });
 
-        // ---------- submit (create and send) ----------
+        // ---------- submit (create, and the send dialog in edit) ----------
 
         if (form) form.addEventListener('submit', function (e) {
             var action = e.submitter && e.submitter.value ? e.submitter.value : 'send';
             if (submitting) { e.preventDefault(); return; }
-
-            // Send mode: an unsaved letter row would be sent as it was before the edit
-            var dirty = dirtyLetterRow();
-            if (dirty) {
-                e.preventDefault();
-                var nameEl2 = dirty.querySelector('.cf-name');
-                var help = $('cf-final-help');
-                if (help) {
-                    help.textContent = t('cf.help_unsaved', { row: nameEl2 ? nameEl2.textContent.replace(/\s*$/, '') : rowName(dirty) });
-                    help.hidden = false;
-                }
-                return;
-            }
 
             // Re-check every row: the user may have gone back and broken something
             var need = mode === 'create'
@@ -1273,7 +1412,7 @@
                     return;
                 }
             }
-            if (mode === 'create' && !hasTemplate()) { e.preventDefault(); return; }
+            if (!hasTemplate()) { e.preventDefault(); return; }
 
             serializeVars();
             // The offset at the scheduled date, in case daylight saving time changes before it
@@ -1286,13 +1425,12 @@
             submitting = true;
             setTimeout(function () {
                 all(form, 'button[type="submit"]').forEach(function (b) { b.disabled = true; });
-                if (document.getElementById('cf-send') && !form.contains($('cf-send'))) $('cf-send').disabled = true;
-                if ($('cf-save')) $('cf-save').disabled = true;
             }, 0);
         });
 
         // Leaving with unsaved input asks first: a new campaign is stored only
-        // on submit, and an open row of an existing one only on its Save
+        // on submit, an open row of an existing one only on its Save, and the
+        // choices of the send dialog only on the final button
         var touched = false;
         if (form && mode === 'create') {
             form.addEventListener('input', function () { touched = true; });
@@ -1301,7 +1439,7 @@
         window.addEventListener('beforeunload', function (e) {
             if (submitting) return;
             var unsaved = mode === 'create' ? touched
-                : !!(open && isEditRow(open) && serializeRow(open).toString() !== open._cfBase);
+                : (modalOpen() && modalPicked()) || !!(open && isEditRow(open) && serializeRow(open).toString() !== open._cfBase);
             if (!unsaved) return;
             e.preventDefault();
             e.returnValue = '';
@@ -1313,8 +1451,6 @@
             if (!e.persisted || !submitting) return;
             submitting = false;
             all(form, 'button[type="submit"]').forEach(function (b) { b.disabled = false; });
-            if ($('cf-send')) $('cf-send').disabled = false;
-            if ($('cf-save')) $('cf-save').disabled = false;
             renderFinal();
         });
 
@@ -1328,7 +1464,8 @@
                     renderTitle();
                     setJsonMode(jsonMode);
                     renderRows();
-                    if (open && rowName(open) === 'check') renderReadiness();
+                    if (open && rowName(open) === 'check') { renderRecap(); renderReadiness(); }
+                    if (modalOpen()) renderLetterLine();
                 }, 0);
             });
         });
@@ -1340,15 +1477,17 @@
         renderPilot();
         renderTitle();
         if (kv && !kv.querySelector('.cf-kv-row')) setKv([]);
-        // Summaries: every row in edit/send, optional rows in create (they are shown filled with defaults)
+        // Summaries: the letter rows in edit, optional rows in create (they are shown filled with defaults)
         rows.forEach(function (r) {
             var name = rowName(r);
             var isOptCreate = mode === 'create' && OPTIONAL.indexOf(name) !== -1;
             if (isEditRow(r) || isOptCreate) fill(r);
         });
         if (mode === 'create' && rowMap.about) fill(rowMap.about);
-        if (steps.length) openRow(steps[0], false);
+        // In edit the steps wait for the send dialog; old /send links come with #send
+        if (mode === 'create') openRow(steps[0], false);
         else renderRows();
+        if (modal && location.hash === '#send') openModal();
         updateScale();
         // The thumbnail width is known only after layout and i18n have run
         setTimeout(updateScale, 0);

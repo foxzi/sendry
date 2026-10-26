@@ -5,7 +5,7 @@
         <p class="text-muted" id="cf-page-desc"{{if not .Campaign.Description}} hidden{{end}}>{{.Campaign.Description}}</p>
     </div>
     <div class="header-actions">
-        <a href="/campaigns/{{.Campaign.ID}}/send" class="btn btn-primary" data-i18n="cmp.cf_send_btn">Send&hellip;</a>
+        <a href="#send" class="btn btn-primary" data-cf-send-open aria-haspopup="dialog" data-i18n="cmp.cf_send_btn">Send&hellip;</a>
     </div>
 </div>
 
@@ -13,6 +13,20 @@
 
 <div class="cf" id="cf" data-mode="edit" data-campaign-id="{{.Campaign.ID}}">
     {{template "cf_letter" .}}
+
+    <!-- send dialog: opened by [data-cf-send-open] and by #send in the address (old /send links redirect there) -->
+    <div class="cf-modal" id="cf-send-modal" hidden>
+        <div class="cf-modal-box" role="dialog" aria-modal="true" aria-labelledby="cf-send-title" tabindex="-1">
+            <div class="cf-modal-head">
+                <h2 id="cf-send-title"><span data-i18n="cmp.cf_send_title">Sending:</span> <span id="cf-send-name">{{.Campaign.Name}}</span></h2>
+                <button type="button" class="cf-modal-x" data-act="send-close" aria-label="Close" data-i18n-aria="cmp.cf_close">&times;</button>
+                <p class="cf-modal-letter" id="cf-send-letter"></p>
+            </div>
+            <form method="post" action="/campaigns/{{.Campaign.ID}}/send" id="cf-form" class="cf-modal-body" novalidate>
+                {{template "cf_send" .}}
+            </form>
+        </div>
+    </div>
 </div>
 
 {{if .Tracking}}
@@ -61,7 +75,7 @@
         {{else}}
         <div class="empty-state">
             <p data-i18n="cmp.no_runs">No runs yet</p>
-            <a href="/campaigns/{{.Campaign.ID}}/send" class="btn btn-sm btn-primary" data-i18n="cmp.send_campaign">Send campaign</a>
+            <a href="#send" class="btn btn-sm btn-primary" data-cf-send-open aria-haspopup="dialog" data-i18n="cmp.send_campaign">Send campaign</a>
         </div>
         {{end}}
     </div>

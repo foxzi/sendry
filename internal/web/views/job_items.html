@@ -68,7 +68,7 @@
                         <td>{{.Email}}{{if .UnsubscribedAt}} <span class="badge badge-secondary" data-i18n="trk.unsub_badge">unsubscribed</span>{{end}}</td>
                         <td>{{if .VariantName}}{{.VariantName}}{{else}}<span class="text-muted">-</span>{{end}}</td>
                         <td>{{.ServerName}}</td>
-                        <td><span class="badge badge-{{.Status}}" data-i18n="status.{{.Status}}">{{.Status}}</span></td>
+                        <td><span class="badge badge-{{.Status}}" data-i18n="status.{{.Status}}"{{if eq .Status "queued"}} data-i18n-title="cmp.queued_hint"{{end}}>{{.Status}}</span></td>
                         <td>{{if .SendryMsgID}}<code>{{.SendryMsgID}}</code>{{else}}<span class="text-muted">-</span>{{end}}</td>
                         <td class="nowrap">{{if .OpenedAt}}{{.OpenedAt.Format "2006-01-02 15:04"}}{{if gt .OpenCount 0}} <span class="text-muted">&times;{{.OpenCount}}</span>{{end}}{{else}}<span class="text-muted">-</span>{{end}}</td>
                         <td>{{if .ClickCount}}{{.ClickCount}}{{else}}<span class="text-muted">-</span>{{end}}</td>

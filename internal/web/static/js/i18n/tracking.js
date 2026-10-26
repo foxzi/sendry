@@ -1,9 +1,9 @@
 // Translations for open/click tracking and unsubscribe. Loaded after i18n.js; keys merge into the shared dictionary.
 I18n.register({
     en: {
-        'trk.delivered': 'Delivered',
+        'trk.sent': 'Sent',
         'trk.engagement': 'Engagement',
-        'trk.share_of_delivered': 'Percent of delivered',
+        'trk.share_of_sent': 'Percent of sent',
         'trk.of_total': 'of',
         'trk.opens_total_lc': 'opens in total',
         'trk.clicks_total_lc': 'clicks in total',
@@ -75,9 +75,9 @@ I18n.register({
         'trk.no_unsub_link_text': 'Mail services will show their own unsubscribe button, but add the link to the email footer.'
     },
     ru: {
-        'trk.delivered': 'Доставлено',
+        'trk.sent': 'Отправлено',
         'trk.engagement': 'Вовлечённость',
-        'trk.share_of_delivered': 'Проценты от доставленных',
+        'trk.share_of_sent': 'Проценты от отправленных',
         'trk.of_total': 'из',
         'trk.opens_total_lc': 'открытий всего',
         'trk.clicks_total_lc': 'кликов всего',

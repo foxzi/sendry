@@ -164,18 +164,18 @@ Links hidden by a condition and not visible in the preview appear only in the ta
 
 | Metric | Formula |
 |---|---|
-| Delivered | Messages accepted by the MTA: status "queued" or "sent". Failed, skipped and not yet sent messages are not counted |
-| Unique opens | Delivered messages opened at least once |
-| Total opens | Sum of open counters of delivered messages |
-| Open Rate | unique opens / delivered |
-| Unique clicks | Delivered messages clicked at least once |
-| Total clicks | Sum of click counters of delivered messages |
-| CTR | unique clicks / delivered |
+| Sent | Messages the MTA handed over to the recipient's server: status "sent". Messages still in the MTA queue (waiting for a retry), failed and skipped ones are not counted |
+| Unique opens | Sent messages opened at least once |
+| Total opens | Sum of open counters of sent messages |
+| Open Rate | unique opens / sent |
+| Unique clicks | Sent messages clicked at least once |
+| Total clicks | Sum of click counters of sent messages |
+| CTR | unique clicks / sent |
 | CTOR | unique clicks / unique opens |
-| Unsubscribes | Delivered messages that led to an unsubscribe. If the reader resubscribed, the message no longer counts |
-| Unsubscribe % | unsubscribes / delivered |
+| Unsubscribes | Sent messages that led to an unsubscribe. If the reader resubscribed, the message no longer counts |
+| Unsubscribe % | unsubscribes / sent |
 
-All counts use the same base (delivered messages), so no rate exceeds 100%.
+All counts use the same base (sent messages), so no rate exceeds 100%.
 
 A click implies an open: a message clicked with images blocked counts as opened. If the campaign did not track opens when the job was started, the job's open metrics are 0 (otherwise Open Rate would consist of clicks only) and CTOR is not computed. Changing the campaign setting later does not change the statistics of jobs already started.
 

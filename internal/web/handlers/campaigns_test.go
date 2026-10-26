@@ -73,12 +73,12 @@ func TestCampaignSend_WithoutPublicURL(t *testing.T) {
 	}
 
 	// the page data tells there is no public origin
-	req := httptest.NewRequest(http.MethodGet, "/campaigns/c1/send", nil)
-	data, err := h.campaignFlowData(req, "send", &models.Campaign{ID: "c1"})
+	req := httptest.NewRequest(http.MethodGet, "/campaigns/c1", nil)
+	data, err := h.campaignFlowData(req, "edit", &models.Campaign{ID: "c1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if data["NoPublicURL"] != true || data["Mode"] != "send" {
+	if data["NoPublicURL"] != true || data["Mode"] != "edit" {
 		t.Errorf("NoPublicURL=%v Mode=%v", data["NoPublicURL"], data["Mode"])
 	}
 

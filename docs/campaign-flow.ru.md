@@ -6,26 +6,26 @@
 ## Идея
 
 Рассылка — это список строк. Строка в свёрнутом виде показывает сводку (что настроено),
-в развёрнутом — поля. Одни и те же строки на трёх страницах:
+в развёрнутом — поля. Одни и те же строки на двух страницах:
 
 | Страница | Режим (`Mode`) | Карточка «Письмо» | Карточка «Отправка» |
 |---|---|---|---|
-| `GET /campaigns/new` | `create` | шаги + необязательные строки | шаги, в конце «Отправить» / «Сохранить без отправки» |
-| `GET /campaigns/{id}` | `edit` | каждая строка правится и сохраняется отдельно | нет |
-| `GET /campaigns/{id}/send` | `send` | как в `edit` | шаги, в конце «Отправить N получателям» |
+| `GET /campaigns/new` | `create` | шаги + необязательные строки | шаги, в «Проверке» кнопка «Отправить N получателям»; под шагами «Сохранить без отправки» |
+| `GET /campaigns/{id}` | `edit` | каждая строка правится и сохраняется отдельно | в диалоге «Отправить…»: шаги, в «Проверке» кнопка «Отправить N получателям» |
 
 Строки «Письма»: `from` (От кого), `content` (Содержание), и в одной карточке-группе
 необязательные `vars` (Переменные), `track` (Трекинг), `about` (Название и описание).
-Строки «Отправки»: `to` (Кому), `check` (Проверка), `when` (Когда).
+Строки «Отправки»: `to` (Кому), `when` (Когда), `check` (Проверка) — в этом порядке.
 
 ### Режим `create`
-- Шаги по порядку: `from` → `content` → `to` → `check` → `when`. Открыт один шаг. «Далее» проверяет
+- Шаги по порядку: `from` → `content` → `to` → `when` → `check`. Открыт один шаг. «Далее» проверяет
   поля, сворачивает строку в сводку и открывает следующий шаг.
 - Строки ниже текущего шага заблокированы (пунктир, «Изменить» не показан).
 - `vars`, `track`, `about` заполнены по умолчанию, «Далее» их пропускает. Открываются после `content`.
   У группы подпись «Можно не менять».
 - Пройденную строку можно открыть снова: кнопка «Готово», после неё снова открывается текущий шаг.
-- «Сохранить без отправки» доступна после `content`; «Отправить N получателям» — после всех шагов.
+- «Сохранить без отправки» доступна после `content`. `check` — последний шаг, у него нет «Далее»:
+  внизу одна кнопка с конкретным действием — «Отправить N получателям» или «Запланировать на <дата время>».
 - На сервер до финальной кнопки ничего не пишется: всё внутри одной `<form action="/campaigns">`.
 - Название: если поле `name` пустое — тема версии A без `{{переменных}}` + `, ` + дата `ДД.ММ.ГГГГ`.
   JS показывает это название в заголовке страницы, сервер вычисляет его сам при сохранении.
@@ -38,20 +38,29 @@
 - «Отмена» возвращает поля к значениям на момент открытия.
 - Сверху карточки «Письмо» подсказка: «Изменения коснутся следующих отправок. Уже отправленные письма не меняются.»
 
-### Режим `send`
-- «Письмо» как в `edit`. «Отправка» — шаги `to` → `check` → `when`, как в `create`, `to` открыт сразу.
-- `<form action="/campaigns/{id}/send">` охватывает только карточку «Отправка».
-- Если строка «Письма» открыта и не сохранена, отправка не проходит: «Сохраните или отмените изменения в строке «…»».
-- Если у рассылки нет версий (нет шаблона), строка `content` помечена предупреждением, отправка недоступна.
+### Диалог отправки (в `edit`)
+- Кнопка «Отправить…» (`[data-cf-send-open]`) открывает диалог на той же странице; `#send` в адресе открывает его
+  при загрузке (туда ведёт старый `GET /campaigns/{id}/send`). Письмо в диалоге не правится: в шапке одна строка
+  (от кого, темы версий, трекинг), правка — в строках страницы.
+- Шаги `to` → `when` → `check`, как в `create`. В `check`: итог (список, сколько получат, когда, пилот),
+  превью A/B, пробное письмо, готовность и одна кнопка «Отправить N получателям» / «Запланировать на …».
+- `<form action="/campaigns/{id}/send">` охватывает только содержимое диалога.
+- Если при открытии диалога строка «Письма» открыта с несохранёнными изменениями — спрашивает, отменить ли их;
+  без согласия диалог не открывается. Письмо уходит в сохранённом виде.
+- Закрытие: крестик или Esc; если что-то уже выбрано — сначала спрашивает. После закрытия шаги начинаются заново.
+- `aria-modal`, фокус переходит внутрь и не выходит из диалога, прокрутка страницы под ним заблокирована,
+  на ширине телефона диалог во весь экран.
+- Если у рассылки нет версий (нет шаблона), строка `content` помечена предупреждением, кнопка отправки
+  выключена с пояснением.
 
 ## Сервер
 
-### Данные страницы (все три режима)
+### Данные страницы (оба режима)
 
 | Ключ | Тип | Что |
 |---|---|---|
 | `Title`, `Active`, `User` | как везде | `Active` = `campaigns` |
-| `Mode` | string | `create` / `edit` / `send` |
+| `Mode` | string | `create` / `edit` |
 | `Campaign` | `*models.Campaign` | никогда не nil; для `create` — пустая, `TrackOpens`/`TrackClicks` = есть проксирующий домен |
 | `Content` | `CampaignContent` | см. ниже; для `create` нулевая, `SplitA` = 50 |
 | `Variables` | `[]VarPair` | `{Key, Value string}`, из `Campaign.Variables`, по ключу |
@@ -80,7 +89,7 @@
 | `POST /campaigns` | создание (контракт мастера без `tags`; `name` необязателен) |
 | `GET /campaigns/{id}` | view `campaign_view` (`Mode=edit`) |
 | `POST /campaigns/{id}/section/{row}` | сохранить строку `from`/`content`/`vars`/`track`/`about` |
-| `GET /campaigns/{id}/send` | view `campaign_send` (`Mode=send`) |
+| `GET /campaigns/{id}/send` | 301 на `/campaigns/{id}#send` (открывает диалог отправки) |
 | `POST /campaigns/{id}/send` | как сейчас; берёт только активные версии |
 | `POST /campaigns/wizard/preview`, `/campaigns/wizard/test`, `GET /templates/{id}/frame` | без изменений |
 | `GET /campaigns/{id}/edit`, `/variables`, `/variants` | 301 на `/campaigns/{id}` |
@@ -124,14 +133,14 @@
 Общие куски — в `views/_campaign_flow.html` (`views.go` подключает файлы с `_` в начале к layout как
 общие шаблоны и не делает из них страниц): `{{define "cf_letter"}}` и `{{define "cf_send"}}`.
 Скрипты: `/static/js/i18n/campaign-flow.js` подключается в `layout.html` после `i18n/campaigns.js`;
-`/static/js/campaign-flow.js` — в конце content каждой из трёх страниц, перед ним
+`/static/js/campaign-flow.js` — в конце content обеих страниц, перед ним
 `window.CF_CONFIG = {mode, campaignId, noPublicURL, isAdmin, userEmail, senderDomains}`.
 
 ```
-div.cf#cf [data-mode=create|edit|send] [data-campaign-id]
+div.cf#cf [data-mode=create|edit] [data-campaign-id]
   (create) form#cf-form method=post action=/campaigns novalidate   — обёртка обеих карточек
   h2.cf-title                       «Письмо» / «Отправка»
-  p.cf-note                         (edit, send) подсказка про следующие отправки
+  p.cf-note                         (edit) подсказка про следующие отправки
   div.cf-rows                       ряд карточек
     section.cf-row [data-row] [data-kind=step|opt]
       div.cf-sum
@@ -144,15 +153,20 @@ div.cf#cf [data-mode=create|edit|send] [data-campaign-id]
         div.cf-fields               поля
         p.cf-error role=alert hidden
         div.cf-foot
-          button.btn [data-act=cancel]           «Отмена» (видна в edit/send-«Письмо»)
+          button.btn [data-act=cancel]           «Отмена» (видна в edit-«Письмо»)
           button.btn.btn-primary [data-act=primary]  текст ставит JS: Далее / Готово / Сохранить
     div.cf-group                    карточка необязательных строк
       p.cf-group-h                  (create) «Можно не менять»
       section.cf-row …
-  (send) form#cf-form method=post action=/campaigns/{id}/send novalidate — только вокруг «Отправки»
-  div.cf-final                      (create, send)
-    (create) button#cf-save type=submit name=action value=save  «Сохранить без отправки»
+  (edit) div.cf-modal#cf-send-modal [hidden]                    — диалог отправки
+    div.cf-modal-box [role=dialog][aria-modal=true][aria-labelledby=cf-send-title][tabindex=-1]
+      div.cf-modal-head: h2#cf-send-title, button.cf-modal-x [data-act=send-close], p.cf-modal-letter#cf-send-letter
+      form#cf-form.cf-modal-body method=post action=/campaigns/{id}/send novalidate — шаги «Отправки»
+  (шаг check) div.cf-foot.cf-foot-send
+    p.cf-final-help#cf-send-help    почему кнопка выключена
     button#cf-send type=submit name=action value=send           текст ставит JS
+  div.cf-final                      (create) под шагами
+    button#cf-save type=submit name=action value=save  «Сохранить без отправки»
     p.cf-final-help#cf-final-help
 ```
 
@@ -160,7 +174,7 @@ div.cf#cf [data-mode=create|edit|send] [data-campaign-id]
 
 Состояния строки (ставит JS): `.is-open`, `.is-locked`, `.is-done`; у точки `.cf-dot` классы
 `ok` (✓), `cur` (номер, синяя), `todo` (номер, серая), `opt` (пустой кружок), `warn` (!).
-Номера шагов JS проставляет сам; в `send` шаги «Отправки» нумеруются с 1.
+Номера шагов JS проставляет сам; в диалоге шаги «Отправки» нумеруются с 1.
 
 Поля по строкам (имена — как у `POST /campaigns` и `/section`):
 
@@ -182,7 +196,7 @@ div.cf#cf [data-mode=create|edit|send] [data-campaign-id]
     `div.field[data-ver-field=b][hidden]` с `label[for=subject_b]#cf-subject-b-label` + `input#subject_b[name=subject_b]`;
   - `div.cf-split[hidden]`: `label[for=split_a]`, `input[type=range]#split_a[name=split_a][min=1][max=99]`, `span.cf-split-label#cf-split-label`;
   - `button.cf-link[data-act=ab]` «+ Добавить версию B (A/B-тест)», скрыта, когда B есть;
-  - (edit/send, `Content.Extra > 0`) `p.cf-note` «У рассылки ещё N версий. При сохранении они отключатся.»
+  - (edit, `Content.Extra > 0`) `p.cf-note` «У рассылки ещё N версий. При сохранении они отключатся.»
   - Сводка (JS): одна версия — `div.cf-ver` (мини-миниатюра `span.cf-mini > iframe` того же frame, название шаблона,
     `span.cf-sub` «тема»); две — `div.cf-vers` с двумя `div.cf-ver`, у каждой `b` «Версия A», `span.cf-pct` «50% получателей».
 - `vars`: `input[type=hidden]#variables[name=variables]`; `div.cf-kv#cf-kv` с `div.cf-kv-row` →
@@ -197,7 +211,8 @@ div.cf#cf [data-mode=create|edit|send] [data-campaign-id]
 - `to`: `div.cf-lists#cf-lists[role=radiogroup]` с `label.cf-list[data-name][data-active][data-total]` →
   `input[type=radio][name=recipient_list_id][value]`, `span.cf-list-name`, `span.cf-list-num` (`b` число + `small[data-role=inactive]`).
   Без списков — `alert-warning` со ссылкой «Создать список».
-- `check`: `div.cf-check` → `div.cf-panel` (превью): `div.cf-seg#cf-dev` (`button[data-dev=pc|phone]`),
+- `check`: `div.cf-check` → `div.cf-panel.cf-wide` (итог): `dl.cf-recap#cf-recap` (заполняет JS);
+  `div.cf-panel.cf-wide` (превью): `div.cf-seg#cf-dev` (`button[data-dev=pc|phone]`),
   `div.cf-seg#cf-pv-ver[hidden]` (`button[data-ver=a|b]`), `p.cf-pv-subject` → `span#cf-pv-subject`,
   `div.cf-stage#cf-stage` → `iframe.cf-preview#cf-preview[sandbox=""]` + `p.cf-stage-msg#cf-preview-msg[hidden]`;
   `div.cf-panel` (пробное письмо): `input#cf-test-to[type=email][value=UserEmail]`, `button.btn#cf-test-btn`,

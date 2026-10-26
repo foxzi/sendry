@@ -14,7 +14,7 @@
     </div>
     <div class="stat-card">
         <div class="stat-value" style="color: var(--primary)">{{.Stats.Queued}}</div>
-        <div class="stat-label" data-i18n="cmp.queued">Queued</div>
+        <div class="stat-label" data-i18n="cmp.queued" data-i18n-title="cmp.queued_hint">Queued</div>
     </div>
     <div class="stat-card">
         <div class="stat-value" style="color: var(--success)">{{.Stats.Sent}}</div>
@@ -131,6 +131,8 @@
                             <span class="badge badge-completed" data-i18n="status.sent">sent</span>
                             {{else if eq .Status "failed"}}
                             <span class="badge badge-failed" data-i18n="status.failed">failed</span>
+                            {{else if eq .Status "queued"}}
+                            <span class="badge badge-scheduled" data-i18n="status.queued" data-i18n-title="cmp.queued_hint">queued</span>
                             {{else}}
                             <span class="badge badge-scheduled" data-i18n="status.{{.Status}}">{{.Status}}</span>
                             {{end}}

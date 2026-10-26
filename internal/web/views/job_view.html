@@ -62,7 +62,7 @@
         <ul class="dl-legend">
             <li class="dl-item{{if eq .Stats.Sent 0}} is-zero{{end}}">
                 <span class="dl-swatch dl-sent"></span>
-                <a href="/jobs/{{.Job.ID}}/items?status=sent#results" data-i18n="cmp.sent">Sent</a>
+                <a href="/jobs/{{.Job.ID}}/items?status=sent#results" data-i18n="cmp.sent" data-i18n-title="cmp.sent_hint">Sent</a>
                 <span class="dl-count">{{.Stats.Sent}}</span>
                 <span class="dl-share">{{printf "%.0f" (pct .Stats.Sent .Stats.Total)}}%</span>
             </li>
@@ -80,7 +80,7 @@
             </li>
             <li class="dl-item{{if eq .Stats.Queued 0}} is-zero{{end}}">
                 <span class="dl-swatch dl-queued"></span>
-                <a href="/jobs/{{.Job.ID}}/items?status=queued#results" data-i18n="cmp.queued">Queued</a>
+                <a href="/jobs/{{.Job.ID}}/items?status=queued#results" data-i18n="cmp.queued" data-i18n-title="cmp.queued_hint">Queued</a>
                 <span class="dl-count">{{.Stats.Queued}}</span>
                 <span class="dl-share">{{printf "%.0f" (pct .Stats.Queued .Stats.Total)}}%</span>
             </li>
@@ -202,7 +202,7 @@
                     {{range .Items}}
                     <tr>
                         <td>{{.Email}}{{if .UnsubscribedAt}} <span class="badge badge-secondary" data-i18n="trk.unsub_badge">unsubscribed</span>{{end}}</td>
-                        <td><span class="badge badge-{{.Status}}" data-i18n="status.{{.Status}}">{{.Status}}</span></td>
+                        <td><span class="badge badge-{{.Status}}" data-i18n="status.{{.Status}}"{{if eq .Status "queued"}} data-i18n-title="cmp.queued_hint"{{end}}>{{.Status}}</span></td>
                         <td>{{.ServerName}}</td>
                     </tr>
                     {{end}}

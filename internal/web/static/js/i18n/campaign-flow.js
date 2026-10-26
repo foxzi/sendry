@@ -22,8 +22,6 @@ I18n.register({
         'cf.utm_on': ', UTM tags are added',
         'cf.utm_off': ', no UTM tags',
         'cf.will_get': '{n} will get it',
-        'cf.reviewed': 'Email reviewed',
-        'cf.test_sent': ', test sent to {to}',
         'cf.pilot_first': 'Pilot first: {n} recipients',
         'cf.next': 'Next',
         'cf.done': 'Done',
@@ -32,11 +30,15 @@ I18n.register({
         'cf.saved': 'Saved',
         'cf.save_failed': 'Could not save. Try again.',
         'cf.send': 'Send',
+        'cf.schedule_at': 'Schedule for {when}',
+        'cf.recap_pilot': 'Pilot',
+        'cf.recap_pilot_on': 'Yes: only the first {n} recipients of the list',
+        'cf.recap_pilot_off': 'No, everyone in the list',
+        'cf.close_confirm': 'Close the sending? The choices you made will be lost.',
+        'cf.discard_row': 'The row "{row}" has unsaved changes. Discard them and go on to sending?',
         'cf.help_can_save': 'You can save now and send later from the campaign page.',
         'cf.help_fill_first': 'Fill in "From" and "Content" to save the campaign.',
-        'cf.help_finish_steps': 'Go through all the steps to send.',
-        'cf.help_no_template': 'The campaign has no template. Choose one in "Content" and save.',
-        'cf.help_unsaved': 'Save or cancel the changes in the row "{row}".'
+        'cf.help_no_template': 'The campaign has no template. Choose one in "Content" on the campaign page and save.'
     },
     ru: {
         'cf.subject': 'Тема письма',
@@ -60,8 +62,6 @@ I18n.register({
         'cf.utm_on': ', UTM-метки добавляются',
         'cf.utm_off': ', без UTM-меток',
         'cf.will_get': '{n} получат',
-        'cf.reviewed': 'Письмо просмотрено',
-        'cf.test_sent': ', пробное отправлено на {to}',
         'cf.pilot_first': 'Сначала пилот на {n} получателей',
         'cf.next': 'Далее',
         'cf.done': 'Готово',
@@ -70,10 +70,14 @@ I18n.register({
         'cf.saved': 'Сохранено',
         'cf.save_failed': 'Не удалось сохранить. Попробуйте ещё раз.',
         'cf.send': 'Отправить',
+        'cf.schedule_at': 'Запланировать на {when}',
+        'cf.recap_pilot': 'Пилот',
+        'cf.recap_pilot_on': 'Да: только первые {n} получателей списка',
+        'cf.recap_pilot_off': 'Нет, всем из списка',
+        'cf.close_confirm': 'Закрыть отправку? Выбранное пропадёт.',
+        'cf.discard_row': 'В строке «{row}» есть несохранённые изменения. Отменить их и перейти к отправке?',
         'cf.help_can_save': 'Можно сохранить сейчас и отправить позже со страницы рассылки.',
         'cf.help_fill_first': 'Заполните «От кого» и «Содержание», чтобы сохранить рассылку.',
-        'cf.help_finish_steps': 'Пройдите все шаги, чтобы отправить.',
-        'cf.help_no_template': 'У рассылки нет шаблона. Выберите его в «Содержании» и сохраните.',
-        'cf.help_unsaved': 'Сохраните или отмените изменения в строке «{row}».'
+        'cf.help_no_template': 'У рассылки нет шаблона. Выберите его в «Содержании» на странице рассылки и сохраните.'
     }
 });

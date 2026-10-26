@@ -106,11 +106,11 @@ type JobVariantSnapshot struct {
 }
 
 // TrackingStats aggregates engagement for a job or a campaign. Unique and
-// total counts are taken over the Delivered items only, so every rate is at
+// total counts are taken over the Sent items only, so every rate is at
 // most 100%.
 type TrackingStats struct {
 	Total        int `json:"total"`         // messages in scope (skipped items excluded)
-	Delivered    int `json:"delivered"`     // accepted by the MTA: status queued or sent
+	Sent         int `json:"sent"`          // handed over to the recipient's server: status sent
 	UniqueOpens  int `json:"unique_opens"`  // messages opened at least once (0 if opens are not tracked)
 	TotalOpens   int `json:"total_opens"`   // sum of per-message human open counters
 	UniqueClicks int `json:"unique_clicks"` // messages clicked at least once
@@ -128,16 +128,16 @@ func pct(a, b int) float64 {
 }
 
 // OpenRate = unique opens / delivered, percent
-func (s TrackingStats) OpenRate() float64 { return pct(s.UniqueOpens, s.Delivered) }
+func (s TrackingStats) OpenRate() float64 { return pct(s.UniqueOpens, s.Sent) }
 
 // CTR = unique clicks / delivered, percent
-func (s TrackingStats) CTR() float64 { return pct(s.UniqueClicks, s.Delivered) }
+func (s TrackingStats) CTR() float64 { return pct(s.UniqueClicks, s.Sent) }
 
 // CTOR = unique clicks / unique opens, percent
 func (s TrackingStats) CTOR() float64 { return pct(s.UniqueClicks, s.UniqueOpens) }
 
 // UnsubRate = unsubscribed / delivered, percent
-func (s TrackingStats) UnsubRate() float64 { return pct(s.Unsubscribed, s.Delivered) }
+func (s TrackingStats) UnsubRate() float64 { return pct(s.Unsubscribed, s.Sent) }
 
 // LinkStat is the click count of one numbered link
 type LinkStat struct {

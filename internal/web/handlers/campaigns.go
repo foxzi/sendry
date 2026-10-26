@@ -127,22 +127,10 @@ func (h *Handlers) hasPublicOrigin() bool {
 	return origin != ""
 }
 
-func (h *Handlers) CampaignSendPage(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-
-	c, err := h.campaigns.GetByID(id)
-	if err != nil || c == nil {
-		h.error(w, http.StatusNotFound, "Campaign not found")
-		return
-	}
-
-	data, err := h.campaignFlowData(r, "send", c)
-	if err != nil {
-		h.logger.Error("failed to build campaign send page", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load campaign")
-		return
-	}
-	h.render(w, "campaign_send", data)
+// CampaignSendRedirect sends the old send page to the campaign page with the
+// send dialog open (#send); the dialog posts to CampaignSend.
+func (h *Handlers) CampaignSendRedirect(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, "/campaigns/"+r.PathValue("id")+"#send", http.StatusMovedPermanently)
 }
 
 // activeVariants returns the variants that are sent (weight > 0), in order

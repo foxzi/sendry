@@ -174,20 +174,20 @@
 </html>
 
 {{/* Engagement funnel. Dot is *models.TrackingStats. Bars and rates are
-     over Delivered = messages accepted by the MTA (queued or sent). */}}
+     over Sent = messages handed over to the recipient's server. */}}
 {{define "tracking_cards"}}
 <div class="card eng-card">
     <div class="card-header">
         <h2 data-i18n="trk.engagement">Engagement</h2>
-        <span class="eng-note" data-i18n="trk.share_of_delivered">Percent of delivered</span>
+        <span class="eng-note" data-i18n="trk.share_of_sent">Percent of sent</span>
     </div>
     <div class="card-body">
         <ul class="eng-funnel">
             <li class="eng-row">
-                <div class="eng-label"><span data-i18n="trk.delivered">Delivered</span></div>
-                <div class="eng-track">{{if gt .Delivered 0}}<div class="eng-bar" style="width: 100%"></div>{{end}}</div>
-                <div class="eng-count">{{.Delivered}}</div>
-                <div class="eng-pct">{{if gt .Total .Delivered}}<span data-i18n="trk.of_total">of</span> {{.Total}}{{end}}</div>
+                <div class="eng-label"><span data-i18n="trk.sent">Sent</span></div>
+                <div class="eng-track">{{if gt .Sent 0}}<div class="eng-bar" style="width: 100%"></div>{{end}}</div>
+                <div class="eng-count">{{.Sent}}</div>
+                <div class="eng-pct">{{if gt .Total .Sent}}<span data-i18n="trk.of_total">of</span> {{.Total}}{{end}}</div>
             </li>
             <li class="eng-row">
                 <div class="eng-label">

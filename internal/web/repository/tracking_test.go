@@ -178,7 +178,7 @@ func TestTracking_JobAndCampaignStats(t *testing.T) {
 	mustExec(t, db, `INSERT INTO send_job_items (id, job_id, recipient_id, variant_id, server_name, status, error) VALUES ('sk-2', 'job-1', 'r3', 'v1', 'mx1', 'skipped', ?)`,
 		models.SkipReasonDeleted)
 
-	want := models.TrackingStats{Total: 4, Delivered: 3, UniqueOpens: 2, TotalOpens: 2,
+	want := models.TrackingStats{Total: 4, Sent: 3, UniqueOpens: 2, TotalOpens: 2,
 		UniqueClicks: 2, TotalClicks: 3, Unsubscribed: 1, SkippedUnsub: 1, Jobs: 1}
 	got, err := repo.JobStats("job-1")
 	if err != nil || got != want {
@@ -334,10 +334,11 @@ func TestTracking_StatsBase(t *testing.T) {
 	for _, it := range items {
 		byRecipient[it.RecipientID] = it.ID
 	}
-	queued, failed, pending := byRecipient["r0"], byRecipient["r2"], byRecipient["r3"]
+	queued, sent, failed, pending := byRecipient["r0"], byRecipient["r1"], byRecipient["r2"], byRecipient["r3"]
 
-	// Opens on items the MTA has not accepted are outside the base
-	for _, id := range []string{queued, failed, pending} {
+	// Only sent items are the base: opens on items still queued at the MTA,
+	// failed or not handed over yet are left out
+	for _, id := range []string{queued, sent, failed, pending} {
 		if err := repo.RecordEvent(jobEvent(models.EventOpen, id, nil, false)); err != nil {
 			t.Fatal(err)
 		}
@@ -346,12 +347,12 @@ func TestTracking_StatsBase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.Total != 4 || st.Delivered != 2 || st.UniqueOpens != 1 || st.TotalOpens != 1 || st.OpenRate() > 100 {
+	if st.Total != 4 || st.Sent != 1 || st.UniqueOpens != 1 || st.TotalOpens != 1 || st.OpenRate() > 100 {
 		t.Errorf("stats = %+v, open rate %v", st, st.OpenRate())
 	}
 
 	// A campaign without the pixel has no opens, even though clicks imply them
-	if err := repo.RecordEvent(jobEvent(models.EventClick, queued, intp(1), false)); err != nil {
+	if err := repo.RecordEvent(jobEvent(models.EventClick, sent, intp(1), false)); err != nil {
 		t.Fatal(err)
 	}
 	mustExec(t, db, `UPDATE campaigns SET track_opens = 0 WHERE id = 'c1'`)
@@ -383,10 +384,10 @@ func TestTracking_StatsBase(t *testing.T) {
 	mustExec(t, db, `INSERT INTO send_job_items (id, job_id, recipient_id, variant_id, server_name, status, error) VALUES ('s2', 'job-2', 'r4', 'v1', 'mx1', 'skipped', ?)`, skip)
 	mustExec(t, db, `INSERT INTO send_job_items (id, job_id, recipient_id, variant_id, server_name, status, error) VALUES ('s3', 'job-2', 'r5', 'v1', 'mx1', 'skipped', ?)`, skip)
 	cs, err := repo.CampaignStats("c1")
-	if err != nil || cs.Total != 4 || cs.Delivered != 2 || cs.Jobs != 2 || cs.SkippedUnsub != 2 {
+	if err != nil || cs.Total != 4 || cs.Sent != 1 || cs.Jobs != 2 || cs.SkippedUnsub != 2 {
 		t.Errorf("campaign stats = %+v, %v", cs, err)
 	}
-	if ds, _ := repo.JobStats("job-dry"); ds.Total != 1 || ds.Delivered != 1 {
+	if ds, _ := repo.JobStats("job-dry"); ds.Total != 1 || ds.Sent != 1 {
 		t.Errorf("dry-run job stats = %+v", ds)
 	}
 }

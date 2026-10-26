@@ -2,7 +2,7 @@
 <div class="page-header">
     <h1>{{.Campaign.Name}} - <span data-i18n="cmp.runs">Runs</span></h1>
     <div class="header-actions">
-        <a href="/campaigns/{{.Campaign.ID}}/send" class="btn btn-primary" data-i18n="cmp.send_campaign">Send campaign</a>
+        <a href="/campaigns/{{.Campaign.ID}}#send" class="btn btn-primary" data-i18n="cmp.send_campaign">Send campaign</a>
         <a href="/campaigns/{{.Campaign.ID}}" class="btn btn-secondary" data-i18n="cmp.back_to_campaign">Back to campaign</a>
     </div>
 </div>
@@ -45,7 +45,7 @@
         {{else}}
         <div class="empty-state">
             <p data-i18n="cmp.no_runs_campaign">No runs for this campaign yet</p>
-            <a href="/campaigns/{{.Campaign.ID}}/send" class="btn btn-primary" data-i18n="cmp.send_campaign">Send campaign</a>
+            <a href="/campaigns/{{.Campaign.ID}}#send" class="btn btn-primary" data-i18n="cmp.send_campaign">Send campaign</a>
         </div>
         {{end}}
     </div>

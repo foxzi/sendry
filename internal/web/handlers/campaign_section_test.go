@@ -395,6 +395,81 @@ func TestCampaignRedirect(t *testing.T) {
 	}
 }
 
+func TestCampaignSendRedirect(t *testing.T) {
+	h, _ := newCampaignTestHandlers(t, "")
+	req := httptest.NewRequest(http.MethodGet, "/campaigns/c1/send", nil)
+	req.SetPathValue("id", "c1")
+	rec := httptest.NewRecorder()
+	h.CampaignSendRedirect(rec, req)
+	if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != "/campaigns/c1#send" {
+		t.Errorf("%d %s", rec.Code, rec.Header().Get("Location"))
+	}
+}
+
+// assertInOrder fails unless every part is in body, each after the previous one
+func assertInOrder(t *testing.T, body string, parts ...string) {
+	t.Helper()
+	at := 0
+	for _, p := range parts {
+		i := strings.Index(body[at:], p)
+		if i < 0 {
+			t.Errorf("%q missing or out of order", p)
+			return
+		}
+		at += i + len(p)
+	}
+}
+
+func TestCampaignView_SendDialog(t *testing.T) {
+	h, _ := newCampaignTestHandlers(t, "https://panel.example.com")
+	req := httptest.NewRequest(http.MethodGet, "/campaigns/c1", nil)
+	req.SetPathValue("id", "c1")
+	rec := httptest.NewRecorder()
+	h.CampaignView(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+
+	// the letter rows on the page, then the dialog: To, When, Check, and the
+	// one final button in the check step, posting to the send handler
+	assertInOrder(t, body,
+		`data-row="from"`, `data-row="about"`,
+		`id="cf-send-modal" hidden`, `role="dialog" aria-modal="true"`, `data-act="send-close"`,
+		`action="/campaigns/c1/send"`,
+		`data-row="to"`, `data-row="when"`, `data-row="check"`, `id="cf-recap"`, `sandbox=""`, `id="cf-send"`,
+		`</form>`)
+	if n := strings.Count(body, `name="action" value=`); n != 1 {
+		t.Errorf("%d final buttons, want 1", n)
+	}
+	if strings.Contains(body, `href="/campaigns/c1/send"`) {
+		t.Error("link to the old send page")
+	}
+	if !strings.Contains(body, `data-cf-send-open`) {
+		t.Error("no button that opens the send dialog")
+	}
+}
+
+func TestCampaignNew_StepOrder(t *testing.T) {
+	h, _ := newCampaignTestHandlers(t, "https://panel.example.com")
+	rec := httptest.NewRecorder()
+	h.CampaignNew(rec, httptest.NewRequest(http.MethodGet, "/campaigns/new", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+
+	// From, Content, optional rows, To, When, Check with the send button,
+	// "Save without sending" under the steps; no dialog
+	assertInOrder(t, body,
+		`action="/campaigns"`,
+		`data-row="from"`, `data-row="content"`, `data-row="vars"`, `data-row="track"`, `data-row="about"`,
+		`data-row="to"`, `data-row="when"`, `data-row="check"`, `id="cf-send"`, `id="cf-save"`, `</form>`)
+	if strings.Contains(body, `cf-send-modal`) {
+		t.Error("the new campaign page has the send dialog")
+	}
+}
+
 func TestTemplateFrame_SandboxHeaders(t *testing.T) {
 	h, _ := newCampaignTestHandlers(t, "https://panel.example.com")
 	req := httptest.NewRequest(http.MethodGet, "/templates/t1/frame", nil)
