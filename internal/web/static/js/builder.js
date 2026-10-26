@@ -229,7 +229,7 @@
             preview.className = 'builder-block-preview';
             var previewHtml = '<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff; margin:0 auto;">' +
                 previewHTML(item.html) + '</table>';
-            preview.innerHTML = previewHtml;
+            preview.appendChild(safeFragment(previewHtml));
             enableInlineEdit(preview, item);
             el.appendChild(preview);
 
@@ -241,9 +241,9 @@
                 gap.style.cssText = 'display:flex; align-items:center; gap:0.5rem; padding:0.5rem 0.75rem; border-top:1px dashed var(--border); font-size:0.8rem; color:var(--text-muted);';
                 gap.innerHTML =
                     '<span>' + tr('tpl.b_gap_below', 'Gap below:') + '</span>' +
-                    '<input type="number" min="0" max="200" step="2" value="' + (item.gapHeight || 0) + '" style="width:70px; padding:0.2rem 0.4rem;"> px' +
+                    '<input type="number" min="0" max="200" step="2" value="' + (parseInt(item.gapHeight, 10) || 0) + '" style="width:70px; padding:0.2rem 0.4rem;"> px' +
                     '<span style="margin-left:0.5rem;">' + tr('tpl.b_color', 'Color:') + '</span>' +
-                    '<input type="color" value="' + (item.gapColor || '#ffffff') + '" style="width:30px; height:24px; padding:0;">' +
+                    '<input type="color" value="' + (/^#[0-9a-f]{6}$/i.test(item.gapColor || '') ? item.gapColor : '#ffffff') + '" style="width:30px; height:24px; padding:0;">' +
                     '<label style="display:flex; align-items:center; gap:0.25rem;"><input type="checkbox"' + (item.gapColor ? ' checked' : '') + '> ' + tr('tpl.b_filled', 'filled') + '</label>';
 
                 var heightInput = gap.querySelector('input[type="number"]');
@@ -293,7 +293,7 @@
             var condInputId = 'block-cond-' + item.uid;
             condBar.innerHTML =
                 '<label for="' + condInputId + '">' + tr('tpl.b_show_if', 'Show if:') + '</label>' +
-                '<input id="' + condInputId + '" type="text" value="' + (item.condition || '').replace(/"/g, '&quot;') + '"' +
+                '<input id="' + condInputId + '" type="text" value="' + (item.condition || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;') + '"' +
                 ' placeholder="' + tr('tpl.b_show_if_ph', 'VariableName (empty = always)') + '" style="flex:1; padding:0.2rem 0.4rem; font-family:monospace;">' +
                 '<span class="text-muted" style="font-size:0.75rem;">' + tr('tpl.b_show_if_hint', 'renders if {{.X}} is truthy') + '</span>';
             var condInput = condBar.querySelector('input');
@@ -432,6 +432,29 @@
             }
         }
         return html;
+    }
+
+    // safeFragment parses block HTML for the canvas, which lives in the panel
+    // page itself (inline editing needs it there), and drops everything that
+    // can run code: script-like elements, on* handlers, javascript: URLs.
+    var UNSAFE_TAGS = 'script,iframe,frame,frameset,object,embed,applet,base,link,meta,form,noscript,template';
+    var URL_ATTRS = {href: 1, src: 1, action: 1, formaction: 1, xlink_href: 1, background: 1, poster: 1};
+    function safeFragment(html) {
+        var t = document.createElement('template');
+        t.innerHTML = html;
+        t.content.querySelectorAll(UNSAFE_TAGS).forEach(function(n) { n.remove(); });
+        t.content.querySelectorAll('*').forEach(function(n) {
+            Array.prototype.slice.call(n.attributes).forEach(function(a) {
+                var name = a.name.toLowerCase();
+                var val = a.value.replace(/[\s\u0000-\u001f]+/g, '').toLowerCase();
+                if (name.indexOf('on') === 0 ||
+                    (URL_ATTRS[name.replace(':', '_')] && /^(javascript|vbscript|data:text\/html)/.test(val)) ||
+                    name === 'srcdoc') {
+                    n.removeAttribute(a.name);
+                }
+            });
+        });
+        return t.content;
     }
 
     function previewHTML(html) {
@@ -873,23 +896,25 @@
             iframe.style.minHeight = '400px';
             iframe.style.display = 'block';
             iframe.style.margin = '0 auto';
-            previewFrame.appendChild(iframe);
-
-            var doc = iframe.contentDocument || iframe.contentWindow.document;
-            doc.open();
-            doc.write(rendered);
-            doc.close();
-
-            setTimeout(function() {
-                try { iframe.style.height = doc.documentElement.scrollHeight + 'px'; }
+            // No allow-scripts: template HTML must not run on the panel origin.
+            // allow-same-origin only lets us read the height of the document.
+            iframe.setAttribute('sandbox', 'allow-same-origin');
+            iframe.addEventListener('load', function() {
+                try { iframe.style.height = iframe.contentDocument.documentElement.scrollHeight + 'px'; }
                 catch(e) {}
-            }, 100);
+            });
+            iframe.srcdoc = rendered;
+            previewFrame.appendChild(iframe);
             if (statusEl) {
                 statusEl.textContent = tr('tpl.b_rendered', 'Rendered');
                 statusEl.style.color = 'var(--text-muted)';
             }
         }).catch(function(err) {
-            previewFrame.innerHTML = '<pre style="padding:1rem; color:crimson; white-space:pre-wrap;">' + err.message + '</pre>';
+            var pre = document.createElement('pre');
+            pre.style.cssText = 'padding:1rem; color:crimson; white-space:pre-wrap;';
+            pre.textContent = err.message;
+            previewFrame.innerHTML = '';
+            previewFrame.appendChild(pre);
             if (statusEl) {
                 statusEl.textContent = tr('common.error', 'Error');
                 statusEl.style.color = 'crimson';

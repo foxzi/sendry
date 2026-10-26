@@ -430,7 +430,10 @@
                 var total = parseInt(card.getAttribute('data-total'), 10) || 0;
                 var small = card.querySelector('[data-role="inactive"]');
                 var inactive = Math.max(total - active, 0);
-                if (small) small.textContent = t('cmp.wz_will_get') + (inactive ? ' · ' + t('cmp.wz_inactive', { n: inactive }) : '');
+                if (small) {
+                    small.textContent = !active ? t('cmp.wz_list_empty')
+                        : t('cmp.wz_will_get') + (inactive ? ' · ' + t('cmp.wz_inactive', { n: inactive }) : '');
+                }
                 var inp = card.querySelector('input');
                 card.classList.toggle('sel', !!inp && inp.checked);
             });
@@ -452,6 +455,12 @@
             var box = $('cf-when-later');
             if (box) box.hidden = !later;
             schedEl.disabled = !later; // a disabled field is not submitted, so the server sees "now"
+            if (later) {
+                // The picker greys out the past; validation still checks the exact time
+                var now = new Date();
+                now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+                schedEl.min = now.toISOString().slice(0, 16);
+            }
             if (!later) setErr('scheduled_at', '');
         }
 
@@ -897,7 +906,9 @@
                 if (mode !== 'create' && !trimmed('name')) fail('name', 'cmp.wz_err_name');
                 break;
             case 'to':
-                if (!selectedList()) fail('recipient_list_id', 'cmp.wz_err_list');
+                var sel = selectedList();
+                if (!sel) fail('recipient_list_id', 'cmp.wz_err_list');
+                else if (!sel.active) fail('recipient_list_id', 'cmp.wz_err_list_empty');
                 break;
             case 'when':
                 if (isLater()) {
@@ -1057,8 +1068,11 @@
             var versions = [variantInfo('a')];
             if (abOn()) versions.push(variantInfo('b'));
             var allUnsub = versions.every(function (v) { return v.unsub; });
-            if (allUnsub) box.appendChild(readyRow('ok', t('cmp.wz_rdy_unsub_ok')));
-            else box.appendChild(readyRow('warn', t('cmp.wz_rdy_unsub_no'), t('cmp.wz_rdy_unsub_no_d')));
+            // Without the public address the worker cuts the unsubscribe links
+            // out, so a link in the template does not reach the email
+            if (!allUnsub) box.appendChild(readyRow('warn', t('cmp.wz_rdy_unsub_no'), t('cmp.wz_rdy_unsub_no_d')));
+            else if (cfg.noPublicURL) box.appendChild(readyRow('warn', t('cmp.wz_rdy_unsub_cut'), t('cmp.wz_rdy_unsub_cut_d')));
+            else box.appendChild(readyRow('ok', t('cmp.wz_rdy_unsub_ok')));
 
             // Proxying domain
             if (!cfg.noPublicURL) box.appendChild(readyRow('ok', t('cmp.wz_rdy_proxy_ok')));
@@ -1275,6 +1289,22 @@
                 if (document.getElementById('cf-send') && !form.contains($('cf-send'))) $('cf-send').disabled = true;
                 if ($('cf-save')) $('cf-save').disabled = true;
             }, 0);
+        });
+
+        // Leaving with unsaved input asks first: a new campaign is stored only
+        // on submit, and an open row of an existing one only on its Save
+        var touched = false;
+        if (form && mode === 'create') {
+            form.addEventListener('input', function () { touched = true; });
+            form.addEventListener('change', function () { touched = true; });
+        }
+        window.addEventListener('beforeunload', function (e) {
+            if (submitting) return;
+            var unsaved = mode === 'create' ? touched
+                : !!(open && isEditRow(open) && serializeRow(open).toString() !== open._cfBase);
+            if (!unsaved) return;
+            e.preventDefault();
+            e.returnValue = '';
         });
 
         // Back from the result page restores this one from the bfcache with the

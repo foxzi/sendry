@@ -97,8 +97,8 @@ func (r *TemplateRepository) List(filter models.TemplateListFilter) ([]models.Te
 	args := []any{}
 
 	if filter.Search != "" {
-		countQuery += " AND (name LIKE ? OR description LIKE ?)"
-		args = append(args, "%"+filter.Search+"%", "%"+filter.Search+"%")
+		countQuery += " AND (ulower(name) LIKE ? ESCAPE '\\' OR ulower(description) LIKE ? ESCAPE '\\')"
+		args = append(args, searchPattern(filter.Search), searchPattern(filter.Search))
 	}
 	if filter.Folder != "" {
 		countQuery += " AND folder = ?"
@@ -127,8 +127,8 @@ func (r *TemplateRepository) List(filter models.TemplateListFilter) ([]models.Te
 
 	args = []any{}
 	if filter.Search != "" {
-		query += " AND (t.name LIKE ? OR t.description LIKE ?)"
-		args = append(args, "%"+filter.Search+"%", "%"+filter.Search+"%")
+		query += " AND (ulower(t.name) LIKE ? ESCAPE '\\' OR ulower(t.description) LIKE ? ESCAPE '\\')"
+		args = append(args, searchPattern(filter.Search), searchPattern(filter.Search))
 	}
 	if filter.Folder != "" {
 		query += " AND t.folder = ?"

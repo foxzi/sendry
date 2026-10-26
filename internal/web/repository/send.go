@@ -119,8 +119,8 @@ func (r *SendRepository) List(filter models.SendFilter) ([]models.SendWithDetail
 		args = append(args, *filter.ToDate)
 	}
 	if filter.Search != "" {
-		countQuery += " AND (from_address LIKE ? OR to_addresses LIKE ? OR subject LIKE ?)"
-		args = append(args, "%"+filter.Search+"%", "%"+filter.Search+"%", "%"+filter.Search+"%")
+		countQuery += " AND (ulower(from_address) LIKE ? ESCAPE '\\' OR ulower(to_addresses) LIKE ? ESCAPE '\\' OR ulower(subject) LIKE ? ESCAPE '\\')"
+		args = append(args, searchPattern(filter.Search), searchPattern(filter.Search), searchPattern(filter.Search))
 	}
 	if filter.ErrorType != "" {
 		countQuery += " AND COALESCE(error_message, '') != ''"
@@ -186,8 +186,8 @@ func (r *SendRepository) List(filter models.SendFilter) ([]models.SendWithDetail
 		queryArgs = append(queryArgs, *filter.ToDate)
 	}
 	if filter.Search != "" {
-		query += " AND (s.from_address LIKE ? OR s.to_addresses LIKE ? OR s.subject LIKE ?)"
-		queryArgs = append(queryArgs, "%"+filter.Search+"%", "%"+filter.Search+"%", "%"+filter.Search+"%")
+		query += " AND (ulower(s.from_address) LIKE ? ESCAPE '\\' OR ulower(s.to_addresses) LIKE ? ESCAPE '\\' OR ulower(s.subject) LIKE ? ESCAPE '\\')"
+		queryArgs = append(queryArgs, searchPattern(filter.Search), searchPattern(filter.Search), searchPattern(filter.Search))
 	}
 	if filter.ErrorType != "" {
 		query += " AND COALESCE(s.error_message, '') != ''"

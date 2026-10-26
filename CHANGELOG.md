@@ -37,7 +37,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sendry-web: campaigns are created, edited and sent on one page of rows (sender, content, variables, tracking, name); the old edit, variables and variants pages redirect to the campaign page, campaign tags are no longer shown or saved
 - MTA: the `path` label of `sendry_api_requests_total` / `sendry_api_request_duration_seconds` is `unmatched` for requests that match no route (scanners added a series per probed URL, kept forever since counters are persisted)
 
+### Security
+- sendry-web: template, block and builder previews render in sandboxed iframes, and block HTML on the builder canvas is stripped of scripts, event handlers and `javascript:` links: a template or block saved by any user ran its scripts in the panel of whoever opened it (an admin included)
+- sendry-web: `/uploads/` is served with a sandbox CSP (an uploaded SVG could run scripts on the panel origin) and without directory listings
+- sendry-web: state-changing requests of the panel are rejected unless the browser marks them same-origin (`Sec-Fetch-Site`, or `Origin` for older browsers); the `SameSite=Lax` session cookie alone let sibling subdomains post on behalf of a signed-in user
+- sendry-web: every response carries `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff` and `Referrer-Policy: same-origin`
+- sendry-web: test emails sent from the campaign page are written to the audit log
+
 ### Fixed
+- sendry-web: a campaign can no longer be sent to a list with no active recipients (the empty run showed up as completed); such lists cannot be picked on the send step
+- sendry-web: searches ignore letter case in any alphabet ("демо" finds "Демо") and match `%` and `_` literally
+- sendry-web: a search with no results says so instead of "no campaigns yet"; the campaign wizard and an open campaign row ask before leaving with unsaved input
+- sendry-web: a completed run with failed emails is marked "completed with errors"; the readiness check, the tracking settings and the campaign banner agree on what happens without a proxying domain
 - Security: sendry-web `server.allowed_ips` could be bypassed by sending a forged `X-Forwarded-For` / `X-Real-IP` header; the panel IP filter and the audit log IP now honour these headers only from `server.trusted_proxies`. The right-most untrusted `X-Forwarded-For` address wins and `X-Real-IP` is used only without `X-Forwarded-For`, since Caddy passes a client-supplied `X-Real-IP` through; the ansible Caddyfile and `docs/caddy-sendry-web.md` also overwrite `X-Real-IP`
 - Security: MTA `api.allowed_ips` and `metrics.allowed_ips` could be bypassed with a forged `X-Forwarded-For` / `X-Real-IP` header from any address; these headers now count only from loopback (a reverse proxy on the same host)
 - sendry-web: tracking events were lost under concurrent requests (`database is locked`): transactions now take the SQLite write lock at start (`_txlock=immediate`)

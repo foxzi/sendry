@@ -84,8 +84,8 @@ func (r *CampaignRepository) List(filter models.CampaignListFilter) ([]models.Ca
 	args := []any{}
 
 	if filter.Search != "" {
-		countQuery += " AND (name LIKE ? OR description LIKE ?)"
-		args = append(args, "%"+filter.Search+"%", "%"+filter.Search+"%")
+		countQuery += " AND (ulower(name) LIKE ? ESCAPE '\\' OR ulower(description) LIKE ? ESCAPE '\\')"
+		args = append(args, searchPattern(filter.Search), searchPattern(filter.Search))
 	}
 
 	var total int
@@ -103,8 +103,8 @@ func (r *CampaignRepository) List(filter models.CampaignListFilter) ([]models.Ca
 
 	args = []any{}
 	if filter.Search != "" {
-		query += " AND (c.name LIKE ? OR c.description LIKE ?)"
-		args = append(args, "%"+filter.Search+"%", "%"+filter.Search+"%")
+		query += " AND (ulower(c.name) LIKE ? ESCAPE '\\' OR ulower(c.description) LIKE ? ESCAPE '\\')"
+		args = append(args, searchPattern(filter.Search), searchPattern(filter.Search))
 	}
 
 	query += " ORDER BY c.updated_at DESC"

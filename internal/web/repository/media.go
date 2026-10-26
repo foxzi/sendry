@@ -53,8 +53,8 @@ func (r *MediaRepository) List(filter models.MediaListFilter) ([]models.MediaFil
 	args := []any{}
 
 	if filter.Search != "" {
-		countQuery += " AND (orig_name LIKE ? OR name LIKE ?)"
-		args = append(args, "%"+filter.Search+"%", "%"+filter.Search+"%")
+		countQuery += " AND (ulower(orig_name) LIKE ? ESCAPE '\\' OR ulower(name) LIKE ? ESCAPE '\\')"
+		args = append(args, searchPattern(filter.Search), searchPattern(filter.Search))
 	}
 
 	var total int
@@ -67,8 +67,8 @@ func (r *MediaRepository) List(filter models.MediaListFilter) ([]models.MediaFil
 
 	queryArgs := []any{}
 	if filter.Search != "" {
-		query += " AND (orig_name LIKE ? OR name LIKE ?)"
-		queryArgs = append(queryArgs, "%"+filter.Search+"%", "%"+filter.Search+"%")
+		query += " AND (ulower(orig_name) LIKE ? ESCAPE '\\' OR ulower(name) LIKE ? ESCAPE '\\')"
+		queryArgs = append(queryArgs, searchPattern(filter.Search), searchPattern(filter.Search))
 	}
 
 	query += " ORDER BY created_at DESC"

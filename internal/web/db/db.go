@@ -9,8 +9,22 @@ import (
 	"regexp"
 	"strings"
 
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/mattn/go-sqlite3"
 )
+
+// driverName is the sqlite3 driver with the functions the queries rely on.
+// SQLite's own lower() and LIKE fold the case of ASCII letters only, so a
+// search for "демо" does not find "Демо". ulower() lowercases any Unicode
+// text; searches compare ulower(column) LIKE ulower(?).
+const driverName = "sqlite3_sendry"
+
+func init() {
+	sql.Register(driverName, &sqlite3.SQLiteDriver{
+		ConnectHook: func(conn *sqlite3.SQLiteConn) error {
+			return conn.RegisterFunc("ulower", strings.ToLower, true)
+		},
+	})
+}
 
 type DB struct {
 	*sql.DB
@@ -29,7 +43,7 @@ func New(path string) (*DB, error) {
 	// for it (busy_timeout). A deferred transaction that reads and then writes
 	// fails at once with "database is locked" when another connection
 	// committed in between, and busy_timeout does not help there.
-	db, err := sql.Open("sqlite3", path+"?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on&_txlock=immediate")
+	db, err := sql.Open(driverName, path+"?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on&_txlock=immediate")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}

@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -154,5 +156,76 @@ func TestIPFilter_TrustedProxies(t *testing.T) {
 				t.Errorf("status = %d, want %d", rec.Code, tt.want)
 			}
 		})
+	}
+}
+
+func TestSameOrigin(t *testing.T) {
+	ok := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	h := SameOrigin(ok)
+
+	tests := []struct {
+		name    string
+		method  string
+		headers map[string]string
+		want    int
+	}{
+		{"GET from another site passes", "GET", map[string]string{"Sec-Fetch-Site": "cross-site"}, http.StatusNoContent},
+		{"same-origin POST", "POST", map[string]string{"Sec-Fetch-Site": "same-origin"}, http.StatusNoContent},
+		{"typed URL POST", "POST", map[string]string{"Sec-Fetch-Site": "none"}, http.StatusNoContent},
+		{"cross-site POST", "POST", map[string]string{"Sec-Fetch-Site": "cross-site"}, http.StatusForbidden},
+		{"sibling subdomain POST", "POST", map[string]string{"Sec-Fetch-Site": "same-site", "Origin": "https://evil.example.com"}, http.StatusForbidden},
+		{"Sec-Fetch-Site wins over a rewritten Host", "POST", map[string]string{"Sec-Fetch-Site": "same-origin", "Origin": "https://panel.example.com"}, http.StatusNoContent},
+		{"old browser, same Origin", "POST", map[string]string{"Origin": "http://panel.local"}, http.StatusNoContent},
+		{"old browser, foreign Origin", "DELETE", map[string]string{"Origin": "https://evil.example"}, http.StatusForbidden},
+		{"no browser headers", "POST", nil, http.StatusNoContent},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := httptest.NewRequest(tt.method, "http://panel.local/campaigns/x/section/from", nil)
+			for k, v := range tt.headers {
+				r.Header.Set(k, v)
+			}
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, r)
+			if rec.Code != tt.want {
+				t.Errorf("status = %d, want %d", rec.Code, tt.want)
+			}
+		})
+	}
+}
+
+func TestSecurityHeaders(t *testing.T) {
+	h := SecurityHeaders(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/campaigns", nil))
+	if got := rec.Header().Get("X-Frame-Options"); got != "SAMEORIGIN" {
+		t.Errorf("X-Frame-Options = %q", got)
+	}
+	if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Errorf("X-Content-Type-Options = %q", got)
+	}
+}
+
+func TestUploads(t *testing.T) {
+	dir := t.TempDir()
+	svg := `<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`
+	if err := os.WriteFile(filepath.Join(dir, "x.svg"), []byte(svg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	h := http.StripPrefix("/uploads/", Uploads(dir))
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/uploads/x.svg", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if csp := rec.Header().Get("Content-Security-Policy"); !strings.HasPrefix(csp, "sandbox") {
+		t.Errorf("Content-Security-Policy = %q, want a sandbox policy", csp)
+	}
+
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/uploads/", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("directory listing status = %d, want 404", rec.Code)
 	}
 }

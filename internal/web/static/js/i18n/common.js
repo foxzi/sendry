@@ -4,6 +4,8 @@ I18n.register({
     en: {
         'common.back': 'Back',
         'common.clear': 'Clear',
+        'common.nothing_found': 'Nothing found',
+        'common.nothing_found_hint': 'Try another query or clear the filter.',
         'common.close': 'Close',
         'common.confirm': 'Confirm',
         'common.copy': 'Copy',
@@ -49,6 +51,7 @@ I18n.register({
         'status.running': 'running',
         'status.paused': 'paused',
         'status.completed': 'completed',
+        'status.completed_errors': 'completed with errors',
         'status.failed': 'failed',
         'status.cancelled': 'cancelled',
         'status.pending': 'pending',
@@ -79,6 +82,8 @@ I18n.register({
     ru: {
         'common.back': 'Назад',
         'common.clear': 'Сбросить',
+        'common.nothing_found': 'Ничего не найдено',
+        'common.nothing_found_hint': 'Попробуйте изменить запрос или сбросить фильтр.',
         'common.close': 'Закрыть',
         'common.confirm': 'Подтвердить',
         'common.copy': 'Копировать',
@@ -124,6 +129,7 @@ I18n.register({
         'status.running': 'выполняется',
         'status.paused': 'на паузе',
         'status.completed': 'завершён',
+        'status.completed_errors': 'завершён с ошибками',
         'status.failed': 'ошибка',
         'status.cancelled': 'отменён',
         'status.pending': 'ожидает',

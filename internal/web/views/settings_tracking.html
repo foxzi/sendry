@@ -2,14 +2,16 @@
 <div class="page-header">
     <div>
         <h1 data-i18n="trk.settings_title">Tracking</h1>
-        <p class="text-muted" data-i18n="trk.settings_desc">Opens, clicks and unsubscribe links: proxying domain and defaults</p>
+        <p class="text-muted" data-i18n="trk.settings_desc">Opens, clicks and unsubscribe links: proxying domain and signing secret</p>
     </div>
 </div>
 
 {{if .Error}}<div class="alert alert-error">{{.Error}}</div>{{end}}
 {{if .Success}}<div class="alert alert-success" data-i18n="trk.saved">{{.Success}}</div>{{end}}
 
-{{if not .Settings.BaseURL}}
+{{if not .Origin}}
+<div class="alert alert-warning" data-i18n="trk.no_origin_warn">No proxying domain is set, and there is no panel address to fall back to (server.public_url). Campaign emails go out without an unsubscribe link, opens and clicks are not counted. Set a domain below.</div>
+{{else if not .Settings.BaseURL}}
 <div class="alert alert-warning" data-i18n="trk.no_base_url_warn">No proxying domain is set: tracking links and redirects go through the panel address. Use a separate domain (e.g. lnk.example.com) that proxies only /t/ and /u/ to the panel, so the panel address is not exposed in mail and a blocked link domain does not block the panel.</div>
 {{end}}
 
@@ -45,7 +47,7 @@
             <dd><code>{{.Origin}}/u/&lt;token&gt;</code></dd>
         </dl>
         {{else}}
-        <p class="text-muted" data-i18n="trk.no_origin">Neither a proxying domain nor server.public_url is set: campaigns cannot be sent (every campaign email needs an unsubscribe link), API emails go out without pixel and tracked links.</p>
+        <p class="text-muted" data-i18n="trk.no_origin">Neither a proxying domain nor server.public_url is set: tracking links have nowhere to lead. Campaign emails go out without an unsubscribe link, opens and clicks are not counted, API emails go out without pixel and tracked links.</p>
         {{end}}
     </div>
 </div>

@@ -142,8 +142,8 @@ func (r *DomainRepository) List(filter models.DomainFilter) ([]models.DomainList
 	args := []interface{}{}
 
 	if filter.Search != "" {
-		query += " AND d.domain LIKE ?"
-		args = append(args, "%"+filter.Search+"%")
+		query += " AND ulower(d.domain) LIKE ? ESCAPE '\\'"
+		args = append(args, searchPattern(filter.Search))
 	}
 	if filter.Mode != "" {
 		query += " AND d.mode = ?"

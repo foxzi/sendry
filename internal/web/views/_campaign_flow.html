@@ -31,7 +31,7 @@ contract is described in docs/campaign-flow.ru.md. */}}
                 <div class="field">
                     <label for="reply_to" data-i18n="cmp.cf_reply_to">Reply-To</label>
                     <input type="email" id="reply_to" name="reply_to" class="input" autocomplete="off" placeholder="support@example.com" value="{{.Campaign.ReplyTo}}">
-                    <small class="form-help" data-i18n="cmp.cf_reply_to_help">Where replies from recipients will go.</small>
+                    <small class="form-help" data-i18n="cmp.cf_reply_to_help">Where replies from recipients will go. Empty: to the sender address.</small>
                     <small class="cf-err" data-err="reply_to" role="alert" hidden></small>
                 </div>
             </div>
@@ -197,7 +197,7 @@ contract is described in docs/campaign-flow.ru.md. */}}
                             <span data-i18n="trk.add_utm">Add UTM tags to links</span>
                         </label>
                         <small class="form-help" data-i18n="trk.campaign_help">Opens are counted by a pixel, clicks by links through the panel. Tags: utm_source, utm_medium, utm_campaign, sc, sr, sl (needed to tie orders to the campaign). Campaign emails get an unsubscribe link when the proxying domain is set.</small>
-                        {{if .NoPublicURL}}<small class="form-help"><span data-i18n="trk.no_domain_fields">Opens and clicks tracking needs the proxying domain.</span> {{if .User.IsAdmin}}<a href="/settings/tracking" data-i18n="trk.settings_link">Settings &gt; Tracking</a>{{else}}<span data-i18n="trk.ask_admin">Ask an administrator to set it in the tracking settings.</span>{{end}}</small>{{end}}
+                        {{if .NoPublicURL}}<small class="form-help"><span data-i18n="trk.no_domain_fields">Opens and clicks tracking needs the proxying domain.</span> {{if .User.IsAdmin}}<a href="/settings/tracking" data-i18n="trk.settings_link">Administration &gt; Tracking</a>{{else}}<span data-i18n="trk.ask_admin">Ask an administrator to set it in the tracking settings.</span>{{end}}</small>{{end}}
                     </div>
                 </div>
                 <p class="cf-error" role="alert" hidden></p>
@@ -260,8 +260,8 @@ contract is described in docs/campaign-flow.ru.md. */}}
                 {{if .RecipientLists}}
                 <div class="cf-lists" id="cf-lists" role="radiogroup" aria-labelledby="cf-to-h">
                     {{range .RecipientLists}}
-                    <label class="cf-list" data-active="{{.ActiveCount}}" data-total="{{.TotalCount}}" data-name="{{.Name}}">
-                        <input type="radio" name="recipient_list_id" value="{{.ID}}">
+                    <label class="cf-list{{if not .ActiveCount}} cf-list-empty{{end}}" data-active="{{.ActiveCount}}" data-total="{{.TotalCount}}" data-name="{{.Name}}">
+                        <input type="radio" name="recipient_list_id" value="{{.ID}}"{{if not .ActiveCount}} disabled{{end}}>
                         <span class="cf-list-name">{{.Name}}</span>
                         <span class="cf-list-num"><b>{{.ActiveCount}}</b><small data-role="inactive"></small></span>
                     </label>

@@ -255,6 +255,17 @@ func parseJobParams(r *http.Request) (jobParams, *statusError) {
 // startJob creates the send job of a campaign with an item per recipient of
 // the list, and starts it unless it is scheduled. variants must not be empty.
 func (h *Handlers) startJob(r *http.Request, c *models.Campaign, variants []models.CampaignVariant, p jobParams) (*models.SendJob, *statusError) {
+	// Get recipients: active ones up to the dry-run limit (all without it)
+	recipients, unsubscribed, err := h.jobRecipients(p.RecipientListID, p.DryRunLimit)
+	if err != nil {
+		h.logger.Error("failed to get recipients", "error", err)
+		return nil, &statusError{http.StatusInternalServerError, "Failed to get recipients"}
+	}
+	if len(recipients) == 0 {
+		// Nobody to send to: an empty run would only show up as "completed"
+		return nil, &statusError{http.StatusBadRequest, "The recipient list has no active recipients"}
+	}
+
 	// Create servers JSON
 	serversJSON, _ := json.Marshal(p.Servers)
 
@@ -276,13 +287,6 @@ func (h *Handlers) startJob(r *http.Request, c *models.Campaign, variants []mode
 	if err := h.jobs.Create(job); err != nil {
 		h.logger.Error("failed to create job", "error", err)
 		return nil, &statusError{http.StatusInternalServerError, "Failed to create job"}
-	}
-
-	// Get recipients: active ones up to the dry-run limit (all without it)
-	recipients, unsubscribed, err := h.jobRecipients(p.RecipientListID, p.DryRunLimit)
-	if err != nil {
-		h.logger.Error("failed to get recipients", "error", err)
-		return nil, &statusError{http.StatusInternalServerError, "Failed to get recipients"}
 	}
 
 	// Create job items

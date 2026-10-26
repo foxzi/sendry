@@ -96,6 +96,25 @@ func TestCampaignSend_WithoutPublicURL(t *testing.T) {
 	}
 }
 
+func TestCampaignSend_NoActiveRecipients(t *testing.T) {
+	h, d := newCampaignTestHandlers(t, "https://panel.example.com")
+	if _, err := d.Exec(`UPDATE recipients SET status = 'unsubscribed'`); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := postCampaignSend(h, url.Values{"recipient_list_id": {"l1"}, "servers": {"mx1"}})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status %d, want 400: %s", rec.Code, rec.Body.String())
+	}
+	var jobs int
+	if err := d.QueryRow(`SELECT COUNT(*) FROM send_jobs`).Scan(&jobs); err != nil {
+		t.Fatal(err)
+	}
+	if jobs != 0 {
+		t.Errorf("%d jobs created for a list with nobody to send to", jobs)
+	}
+}
+
 func TestCampaignCreate_TrackingDisabledWithoutPublicURL(t *testing.T) {
 	h, d := newCampaignTestHandlers(t, "")
 

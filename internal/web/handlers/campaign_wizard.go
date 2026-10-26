@@ -597,6 +597,8 @@ func (h *Handlers) CampaignWizardTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.logger.Info("wizard test email sent", "template_id", t.ID, "server", serverName, "to", to, "message_id", resp.ID, "user", middleware.GetUserEmail(r))
+	h.settings.LogAction(r, middleware.GetUserID(r), middleware.GetUserEmail(r), "test_send", "template", t.ID,
+		auditJSON(map[string]any{"to": to, "from": from, "server": serverName}))
 	h.json(w, http.StatusOK, map[string]bool{"ok": true})
 }
 

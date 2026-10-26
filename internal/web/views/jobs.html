@@ -45,7 +45,7 @@
                 <tr>
                     <td><a href="/jobs/{{.Job.ID}}">{{slice .Job.ID 0 8}}...</a></td>
                     <td><a href="/campaigns/{{.Job.CampaignID}}">{{.Job.CampaignName}}</a></td>
-                    <td><span class="badge badge-{{.Job.Status}}" data-i18n="status.{{.Job.Status}}">{{.Job.Status}}</span></td>
+                    <td>{{template "job_status" .}}</td>
                     <td>
                         <div class="progress" style="width: 100px">
                             <div class="progress-bar" style="width: {{.Progress}}%"></div>

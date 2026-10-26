@@ -41,7 +41,7 @@
         <h2 data-i18n="common.progress">Progress</h2>
         <div>
             {{if .Job.DryRun}}<span class="badge badge-warning"><span data-i18n="cmp.dry_run_caps">DRY-RUN</span> ({{.Job.DryRunLimit}})</span>{{end}}
-            <span class="badge badge-{{.Job.Status}}" data-i18n="status.{{.Job.Status}}">{{.Job.Status}}</span>
+            {{template "job_status" .}}
         </div>
     </div>
     <div class="card-body">

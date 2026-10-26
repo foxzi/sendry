@@ -217,7 +217,7 @@ var I18n = (function() {
             'nav.collapse': 'Свернуть меню',
             'nav.expand': 'Развернуть меню',
             'nav.queue_badge': 'Писем ждёт отправки в очереди',
-            'sub.campaigns': 'Кампании',
+            'sub.campaigns': 'Рассылки',
             'sub.runs': 'Запуски',
             'sub.templates': 'Шаблоны',
             'sub.blocks': 'Блоки',
@@ -253,7 +253,7 @@ var I18n = (function() {
             // Dashboard
             'dashboard': 'Панель управления',
             'templates_count': 'Шаблоны',
-            'campaigns_count': 'Кампании',
+            'campaigns_count': 'Рассылки',
             'recipients_count': 'Получатели',
             'active_jobs': 'Активные рассылки',
             'servers_status': 'Статус серверов',
@@ -290,7 +290,7 @@ var I18n = (function() {
             'status_bounced': 'Отклонён',
 
             // Campaigns
-            'campaigns': 'Кампании',
+            'campaigns': 'Рассылки',
             'new_campaign': 'Новая кампания',
             'campaign_name': 'Название кампании',
             'from_email': 'Email отправителя',

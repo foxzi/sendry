@@ -14,14 +14,14 @@
             <div class="server-card">
                 <div class="server-header">
                     <h3>{{.Name}}</h3>
-                    <span class="badge badge-{{if .Online}}running{{else}}failed{{end}}" data-i18n="{{if .Online}}online{{else}}offline{{end}}">
+                    <span class="badge badge-{{if .Online}}completed{{else}}failed{{end}}" data-i18n="{{if .Online}}online{{else}}offline{{end}}">
                         {{if .Online}}Online{{else}}Offline{{end}}
                     </span>
                 </div>
                 <div class="server-info">
                     <p class="text-muted">{{.BaseURL}}</p>
                     <span class="badge badge-{{.Env}}">{{.Env}}</span>
-                    {{if .Version}}<span class="text-muted">v{{.Version}}</span>{{end}}
+                    {{if .Version}}<span class="text-muted">{{.Version}}</span>{{end}}
                     <p class="text-muted"><span data-i18n="queue.title">Queue</span>: {{.QueueSize}}</p>
                 </div>
                 <div class="server-actions">

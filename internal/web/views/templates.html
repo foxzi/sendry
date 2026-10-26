@@ -85,6 +85,11 @@
             {{end}}
         </div>
         {{end}}
+        {{else if or .Search .Folder}}
+        <div class="empty-state">
+            <p data-i18n="common.nothing_found">Nothing found</p>
+            <p class="text-muted" data-i18n="common.nothing_found_hint">Try another query or clear the filter.</p>
+        </div>
         {{else}}
         <div class="empty-state">
             <p data-i18n="tpl.none_found">No templates found</p>

@@ -586,7 +586,7 @@ I18n.register({
         'admin.all_types': 'Все типы',
         'admin.template': 'Шаблон',
         'admin.recipient_list': 'Список получателей',
-        'admin.campaign': 'Кампания',
+        'admin.campaign': 'Рассылка',
         'admin.job': 'Задача',
         'admin.variable': 'Переменная',
         'admin.user_2': 'Пользователь',

@@ -182,8 +182,8 @@ func (r *APIKeyRepository) List(filter models.APIKeyFilter) ([]models.APIKeyWith
 	args := []any{}
 
 	if filter.Search != "" {
-		countQuery += " AND name LIKE ?"
-		args = append(args, "%"+filter.Search+"%")
+		countQuery += " AND ulower(name) LIKE ? ESCAPE '\\'"
+		args = append(args, searchPattern(filter.Search))
 	}
 
 	var total int
@@ -205,7 +205,7 @@ func (r *APIKeyRepository) List(filter models.APIKeyFilter) ([]models.APIKeyWith
 		WHERE 1=1`
 
 	if filter.Search != "" {
-		query += " AND k.name LIKE ?"
+		query += " AND ulower(k.name) LIKE ? ESCAPE '\\'"
 	}
 
 	query += " ORDER BY k.created_at DESC"

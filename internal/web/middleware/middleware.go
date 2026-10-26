@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -220,6 +221,68 @@ func AdminOnly(next http.Handler) http.Handler {
 			return
 		}
 		next.ServeHTTP(w, r)
+	})
+}
+
+// SameOrigin rejects state-changing requests sent from another site (CSRF).
+// The session cookie is SameSite=Lax, which does not cover sibling subdomains
+// of the same site, so the browser's Sec-Fetch-Site is checked: only
+// same-origin and user-initiated ("none") requests pass. Browsers without
+// Sec-Fetch-Site are checked by Origin against Host. Requests with neither
+// header do not come from a browser form or fetch and are let through.
+func SameOrigin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet, http.MethodHead, http.MethodOptions:
+			next.ServeHTTP(w, r)
+			return
+		}
+		if !isSameOriginRequest(r) {
+			http.Error(w, "Cross-site request rejected", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func isSameOriginRequest(r *http.Request) bool {
+	if site := r.Header.Get("Sec-Fetch-Site"); site != "" {
+		return site == "same-origin" || site == "none"
+	}
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	u, err := url.Parse(origin)
+	return err == nil && strings.EqualFold(u.Host, r.Host)
+}
+
+// SecurityHeaders sets headers every panel response should carry: the panel
+// must not be framed by other sites (clickjacking) and the browser must not
+// guess content types. Handlers may still set stricter values themselves.
+func SecurityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Frame-Options", "SAMEORIGIN")
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("Referrer-Policy", "same-origin")
+		next.ServeHTTP(w, r)
+	})
+}
+
+// Uploads serves user-uploaded media. Files are shown inline (they are images
+// embedded in emails), but an SVG may carry scripts: a sandbox CSP keeps it
+// from running on the panel origin when opened directly. Directory listings
+// are not served, so the uploaded files cannot be enumerated.
+func Uploads(dir string) http.Handler {
+	fs := http.FileServer(http.Dir(dir))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "" || strings.HasSuffix(r.URL.Path, "/") {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'")
+		fs.ServeHTTP(w, r)
 	})
 }
 

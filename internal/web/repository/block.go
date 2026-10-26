@@ -54,8 +54,8 @@ func (r *BlockRepository) List(filter models.BlockListFilter) ([]models.EmailBlo
 	args := []any{}
 
 	if filter.Search != "" {
-		countQuery += " AND (name LIKE ? OR preview_text LIKE ?)"
-		args = append(args, "%"+filter.Search+"%", "%"+filter.Search+"%")
+		countQuery += " AND (ulower(name) LIKE ? ESCAPE '\\' OR ulower(preview_text) LIKE ? ESCAPE '\\')"
+		args = append(args, searchPattern(filter.Search), searchPattern(filter.Search))
 	}
 	if filter.Category != "" {
 		countQuery += " AND category = ?"
@@ -72,8 +72,8 @@ func (r *BlockRepository) List(filter models.BlockListFilter) ([]models.EmailBlo
 
 	queryArgs := []any{}
 	if filter.Search != "" {
-		query += " AND (name LIKE ? OR preview_text LIKE ?)"
-		queryArgs = append(queryArgs, "%"+filter.Search+"%", "%"+filter.Search+"%")
+		query += " AND (ulower(name) LIKE ? ESCAPE '\\' OR ulower(preview_text) LIKE ? ESCAPE '\\')"
+		queryArgs = append(queryArgs, searchPattern(filter.Search), searchPattern(filter.Search))
 	}
 	if filter.Category != "" {
 		query += " AND category = ?"

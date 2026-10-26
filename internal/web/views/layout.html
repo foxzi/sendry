@@ -224,10 +224,14 @@
 {{/* Warning for pages of a campaign or its runs when no proxying domain (public
 origin) is set: mail goes without unsubscribe links and tracking. Takes the
 page data (.User). */}}
+{{/* job_status is the status badge of a send job: a completed job with
+failed emails is marked so, it is not a plain success. Takes .Job and .Stats. */}}
+{{define "job_status"}}{{if and (eq .Job.Status "completed") (gt .Stats.Failed 0)}}<span class="badge badge-completed-errors" data-i18n="status.completed_errors">completed with errors</span>{{else}}<span class="badge badge-{{.Job.Status}}" data-i18n="status.{{.Job.Status}}">{{.Job.Status}}</span>{{end}}{{end}}
+
 {{define "no_public_url"}}
 <div class="alert alert-warning">
     <strong data-i18n="trk.no_domain">The proxying domain is not set.</strong>
     <span data-i18n="trk.no_domain_text">Emails are sent without an unsubscribe link, opens and clicks are not tracked.</span>
-    {{if .User.IsAdmin}}<span data-i18n="trk.set_domain_in">Set the domain in</span> <a href="/settings/tracking" data-i18n="trk.settings_link">Settings &gt; Tracking</a>.{{else}}<span data-i18n="trk.ask_admin">Ask an administrator to set it in the tracking settings.</span>{{end}}
+    {{if .User.IsAdmin}}<span data-i18n="trk.set_domain_in">Set the domain in</span> <a href="/settings/tracking" data-i18n="trk.settings_link">Administration &gt; Tracking</a>.{{else}}<span data-i18n="trk.ask_admin">Ask an administrator to set it in the tracking settings.</span>{{end}}
 </div>
 {{end}}

@@ -83,3 +83,21 @@ func TestCampaignInTx(t *testing.T) {
 		t.Error("committed campaign not found")
 	}
 }
+
+func TestCampaignListSearchIgnoresCase(t *testing.T) {
+	repo := NewCampaignRepository(setupTestDB(t))
+	for _, name := range []string{"Демо: летняя распродажа", "Осень", "100% скидка"} {
+		if err := repo.Create(&models.Campaign{Name: name, FromEmail: "a@example.com"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for search, want := range map[string]int{"демо": 1, "ДЕМО": 1, "осень": 1, "%": 1, "_": 0} {
+		_, total, err := repo.List(models.CampaignListFilter{Search: search, Limit: 10})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if total != want {
+			t.Errorf("search %q: total = %d, want %d", search, total, want)
+		}
+	}
+}

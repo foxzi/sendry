@@ -100,7 +100,7 @@ func (s *Server) setupRoutes() http.Handler {
 	// Static files (embedded)
 	mux.Handle("GET /static/", http.StripPrefix("/static/", static.Handler()))
 
-	mux.Handle("GET /uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(s.cfg.Server.UploadPath))))
+	mux.Handle("GET /uploads/", http.StripPrefix("/uploads/", middleware.Uploads(s.cfg.Server.UploadPath)))
 
 	// Auth routes (public)
 	// Public tracking endpoints (signed tokens, no auth, not IP-filtered)
@@ -321,11 +321,12 @@ func (s *Server) setupRoutes() http.Handler {
 
 	// Wrap protected routes with auth middleware
 	authMiddleware := middleware.Auth(s.cfg, s.db, s.logger)
-	mux.Handle("/", authMiddleware(protected))
+	mux.Handle("/", authMiddleware(middleware.SameOrigin(protected)))
 
 	// Apply global middleware
 	handler := middleware.MethodOverride(mux)
 	handler = middleware.Logger(s.logger)(handler)
+	handler = middleware.SecurityHeaders(handler)
 	handler = middleware.Recovery(s.logger)(handler)
 
 	// Apply IP filter if configured. Public tracking paths (/t/, /u/) are
