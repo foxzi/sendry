@@ -173,6 +173,11 @@ func TestSendEndpointValidation(t *testing.T) {
 		{"empty to", `{"from":"a@b.com","to":[],"subject":"Test"}`, http.StatusBadRequest},
 		{"missing content", `{"from":"a@b.com","to":["b@c.com"]}`, http.StatusBadRequest},
 		{"invalid json", `{invalid}`, http.StatusBadRequest},
+		{"rcpt param smuggling", `{"from":"a@b.com","to":["\"x> NOTIFY=SUCCESS\"@c.com"],"subject":"Test"}`, http.StatusBadRequest},
+		{"quoted extra at", `{"from":"a@b.com","to":["\"evil@x.com>\"@c.com"],"subject":"Test"}`, http.StatusBadRequest},
+		{"quoted from", `{"from":"\"a> SIZE=1\"@b.com","to":["b@c.com"],"subject":"Test"}`, http.StatusBadRequest},
+		{"quoted cc", `{"from":"a@b.com","to":["b@c.com"],"cc":["\"a b\"@c.com"],"subject":"Test"}`, http.StatusBadRequest},
+		{"display name allowed", `{"from":"Shop <a@b.com>","to":["\"Doe, John\" <b@c.com>"],"subject":"Test"}`, http.StatusAccepted},
 	}
 
 	for _, tt := range tests {
@@ -533,6 +538,27 @@ func TestSendPlainFromUnchanged(t *testing.T) {
 		}
 		if !strings.Contains(data, "Subject: Plain\r\n") {
 			t.Error("ASCII Subject header should stay unchanged")
+		}
+	}
+}
+
+func TestParseAddress(t *testing.T) {
+	ok := []string{"user@example.com", "first.last+tag@sub.example.com", "Name <user@example.com>", "\"Doe, John\" <j@example.com>"}
+	bad := []string{
+		`"x> NOTIFY=SUCCESS ORCPT=rfc822;a@evil.com"@site.com`,
+		`"attacker@evil.com>"@company.com`,
+		`"a b"@example.com`,
+		`user@[127.0.0.1]`,
+		"a@x.com, b@y.com",
+	}
+	for _, s := range ok {
+		if _, err := parseAddress(s); err != nil {
+			t.Errorf("parseAddress(%q) unexpected error: %v", s, err)
+		}
+	}
+	for _, s := range bad {
+		if _, err := parseAddress(s); err == nil {
+			t.Errorf("parseAddress(%q) expected error", s)
 		}
 	}
 }
