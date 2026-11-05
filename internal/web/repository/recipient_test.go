@@ -52,3 +52,55 @@ func TestNormalizeEmailMatchesSQLiteLower(t *testing.T) {
 		}
 	}
 }
+
+func TestRecipientRepository_UpsertAndCounts(t *testing.T) {
+	db := setupTestDB(t)
+	mustExec(t, db, `INSERT INTO recipient_lists (id, name, source_type) VALUES ('l1', 'list', 'manual')`)
+	repo := NewRecipientRepository(db)
+	repo.AddRecipient(&models.Recipient{ListID: "l1", Email: "u@x.com", Name: "U", Variables: `{"a":"1"}`})
+	repo.AddRecipient(&models.Recipient{ListID: "l1", Email: "gone@x.com", Status: "unsubscribed"})
+
+	res, err := repo.UpsertRecipients("l1", []RecipientUpsert{
+		{Email: "u@x.com", Name: "", Variables: map[string]any{"b": "2"}},
+		{Email: "gone@x.com", Name: "N"},
+		{Email: "new@x.com", Name: "New"},
+	}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *res != (UpsertResult{Added: 1, Updated: 1, Unsubscribed: 1}) {
+		t.Errorf("res = %+v", res)
+	}
+	var name, vars, status string
+	db.QueryRow(`SELECT name, variables, status FROM recipients WHERE email='u@x.com'`).Scan(&name, &vars, &status)
+	if name != "U" || !strings.Contains(vars, `"a":"1"`) || !strings.Contains(vars, `"b":"2"`) {
+		t.Errorf("merge: %q %q", name, vars)
+	}
+	db.QueryRow(`SELECT status FROM recipients WHERE email='gone@x.com'`).Scan(&status)
+	if status != "unsubscribed" {
+		t.Errorf("reactivated: %s", status)
+	}
+
+	counts, err := repo.ListCountsByList()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if counts["l1"] != (ListCounts{Total: 3, Active: 2, Unsubscribed: 1}) {
+		t.Errorf("counts = %+v", counts)
+	}
+
+	if err := repo.DeleteRecipientByEmail("l1", "NEW@x.com"); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.DeleteRecipientByEmail("l1", "new@x.com"); err != ErrRecipientNotInList {
+		t.Errorf("err = %v", err)
+	}
+	if err := repo.DeleteRecipientByEmail("l1", "gone@x.com"); err != ErrRecipientUnsubscribed {
+		t.Errorf("err = %v", err)
+	}
+	var total int
+	db.QueryRow(`SELECT total_count FROM recipient_lists WHERE id='l1'`).Scan(&total)
+	if total != 2 {
+		t.Errorf("total_count = %d", total)
+	}
+}
