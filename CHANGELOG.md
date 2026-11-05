@@ -8,37 +8,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- sendry-web: a scheduled launch can be changed: `POST /jobs/{id}/schedule` (same form as the send, only in status `scheduled`) updates the list, servers, strategy and time and rebuilds the items in one transaction; an empty time starts it now. The campaign page shows a card per scheduled launch (time in the browser's time zone) with Change and Cancel; `POST /jobs/{id}/cancel` accepts a `return` path under `/campaigns/`; the worker starts a scheduled job only if it is still scheduled and due
-- sendry-web: open, click and unsubscribe tracking (the MTA is unchanged). Public endpoints `GET /t/o/{token}.gif`, `GET /t/c/{token}`, `GET /u/{token}`, `POST /u/{token}` (button and RFC 8058 one-click) with HMAC-signed tokens, no auth, bypassing `server.allowed_ips`
-- sendry-web: Settings → Tracking (proxying domain, opens/clicks defaults), stored in the DB
-- sendry-web: campaign options track opens, track clicks, add UTM tags; API key flags `track_opens`/`track_clicks` and the same request fields on `POST /api/v1/send` and `/api/v1/send/template`
-- sendry-web: `List-Unsubscribe` / `List-Unsubscribe-Post` headers and `{{unsubscribe_url}}` variable for campaign mail, per-address-book unsubscribe (recipient status `unsubscribed` in the job's book only; `unsubscribes` is a per-(list, email) journal), unsubscribed addresses are visible in the address book with the status filter "Unsubscribed", unsubscribed recipients of the book skipped at job start and counted on the job
-- sendry-web: job and campaign statistics (Open Rate, CTR, CTOR, unsubscribes), per-recipient open/click columns, click map with per-variant snapshots, machine event filtering (`is_machine`)
-- Docs `docs/tracking.md` / `docs/tracking.ru.md` including an nginx example for a separate tracking domain
-- GitHub Actions workflow `Release (button)`: computes the next semver from the latest tag and tags HEAD of main (patch/minor/major)
-- GitHub Actions workflow `Deploy`: rolls out a released version to production servers over SSH with Ansible (all/mta/panel)
-- Ansible playbook `playbooks/upgrade.yml`: upgrades the deb package only, backs up the panel SQLite database, restarts active services and checks `/health`
-- Production inventory `ansible/inventory/prod.yml` and docs `docs/deploy.md` / `docs/deploy.ru.md`
+- sendry-web: recipient list API with the existing API keys: `GET /api/v1/lists` (lists with live counts), `POST /api/v1/lists/{id}/recipients` (up to 1000 addresses in one transaction; invalid ones reported, duplicates collapsed, existing active ones updated only with `update_existing`, unsubscribed addresses never reactivated), `DELETE /api/v1/lists/{id}/recipients/{email}` (not for unsubscribed ones); every change goes to the audit log
+- sendry-web: template preheader (the preview line after the subject): supports variables, kept in versions, export/import and deployed templates, frozen with the subject at job start, inserted as a hidden block after `<body>`
+- sendry-web: Copy button on the campaign page creates a campaign with the same settings and variants, named with a "(copy)" suffix; launches, schedule and stats are not copied
+- sendry-web: "Add to panel" on a server domain page and list creates the panel domain from the server settings and records it as deployed there; without a matching DKIM key (same domain and selector) the domain is added with DKIM on and no key, and its card warns to link one
 
 ### Changed
-- `release.yml` can be started on an existing tag via `workflow_dispatch` (used by `Release (button)`, since tags pushed with `GITHUB_TOKEN` do not trigger it)
-- sendry-web: `server.trusted_proxies` defaults to loopback and private networks (`127.0.0.0/8`, `::1/128`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7`) so a proxy in front of a Docker container keeps working; set the list explicitly if untrusted hosts of a private network can reach the panel directly
-- sendry-web: `sendry.multi_send.strategy` is validated at startup: `round_robin`, `weighted`, `first_healthy`; `weighted_round_robin` (the name the docs used) is accepted as a deprecated alias of `weighted` and now really uses `weights` (before it silently fell back to `round_robin`); `domain_affinity` is accepted but not implemented yet and falls back to `round_robin` with a warning; any other value is a config error
-- `make build-web-linux` / `build-web-linux-arm64` build a static binary on `golang:1.24-alpine` (musl), the same way as the release workflow
-- go.mod: `go-oidc`, `oauth2`, `go-sqlite3`, `x/term`, `client_model` listed as direct dependencies (`go mod tidy`)
-- **Upgrade note**, sendry-web: campaign mail needs a public address for the unsubscribe link (`server.public_url` or Settings → Tracking → proxying domain). Without it new campaigns cannot be started, and jobs already running or scheduled hold their emails until it is set (the job page says so). Check `server.public_url` before upgrading
-- **Upgrade note**, sendry-web: the database migration lower-cases recipient emails (ASCII letters) and merges addresses that differ only in case within one list into one recipient (an unsubscribed duplicate wins; name and variables of the removed duplicate are lost). Back up the database before upgrading
-- sendry-web: foreign keys are enforced on every database connection. A recipient list, recipient, campaign variant or template that a campaign job used cannot be deleted any more (409 with an explanation); delete the campaign first, or set a recipient to unsubscribed
-- sendry-web: retrying failed job items re-reads the template of a variant that has not sent anything yet, so a fixed template is used; variants that sent mail keep the template frozen at job start
-- sendry-web: the open rate of a job uses the campaign's open tracking at job start, not the current setting
-- sendry-web: resubscribing removes the address from the unsubscribe statistics of past jobs
-- sendry-web: only success messages hide after 5 seconds; warnings and errors (`alert-danger` too) stay, and so does the one-time display of a new API key
+- sendry-web: domain deployment state is checked against the servers: each server domain list is fetched in one API call and cached for a minute; per server a domain is in sync, outdated, not on server, differing (with the differing settings), failed or not checked. Sync redeploys outdated, missing and differing domains. The domain list shows one icon with the number of servers, the domain card shows the state per server with "Check now"
+- sendry-web: server domain pages are titled with the server name, use the same layout as the panel domain card and show whether the panel manages the domain
+- sendry-web: static files are served with a content ETag and `Cache-Control: no-cache` (repeat loads get 304); the page is hidden until translation is applied, so non-English users no longer see an English flash; the UI language is remembered in a cookie
+
+### Security
+- MTA API: addresses in send and template-send requests must have one `@` and no spaces, brackets or quotes; a quoted local part like `"x> NOTIFY=SUCCESS"@example.com` was unquoted by `net/mail` and smuggled SMTP parameters into MAIL FROM / RCPT TO
+
+### Fixed
+- Domain rate limits deployed from the panel never reached the MTA: the MTA expected `MessagesPerHour` instead of the documented `rate_limit.messages_per_hour`. **Upgrade note**: until every MTA is upgraded the panel writes and reads both spellings, so it keeps working with 0.4.x–0.7.x MTAs
+
+## [0.7.0] - 2026-10-26
+
+### Added
+- sendry-web: a scheduled launch can be changed: `POST /jobs/{id}/schedule` (same form as the send, only in status `scheduled`) updates the list, servers, strategy and time and rebuilds the items in one transaction; an empty time starts it now. The campaign page shows a card per scheduled launch (time in the browser's time zone) with Change and Cancel; `POST /jobs/{id}/cancel` accepts a `return` path under `/campaigns/`; the worker starts a scheduled job only if it is still scheduled and due
+
+### Changed
 - **Upgrade note (breaking, API)**, sendry-web: the per-API-key `track_opens`/`track_clicks` flags and the global opens/clicks defaults of Settings → Tracking (v0.6.0) are removed, the migration drops them. `POST /api/v1/send` and `/api/v1/send/template` track opens or clicks only when the request has `"track_opens": true` / `"track_clicks": true`; clients that relied on the key defaults silently stop being tracked. Before upgrading, find such keys with `SELECT id, name FROM api_keys WHERE track_opens = 1 OR track_clicks = 1`
 - sendry-web: without a public address (`server.public_url` or Settings → Tracking) campaign jobs are no longer held: mail is sent without the unsubscribe link, `List-Unsubscribe` headers and open/click tracking (replaces the upgrade note above). The campaign, send and job pages warn about it, the worker logs a warning once per job. Gmail and Yahoo require one-click unsubscribe from bulk senders, so set the address before sending to large lists
 - sendry-web: engagement rates (Open Rate, CTR, unsubscribe %) are counted over sent messages, handed over to the recipient's server; the "Delivered" row, which also counted messages still waiting in the MTA queue, is replaced by "Sent" and matches the run progress. The "Queued" and "Sent" statuses of a run have hints on what they mean
 - sendry-web: campaigns are created, edited and sent on one page of rows (sender, content, variables, tracking, name); the old edit, variables and variants pages redirect to the campaign page, campaign tags are no longer shown or saved
 - sendry-web: a campaign is sent from its own launch page `GET /campaigns/{id}/launch` instead of a separate send page or a dialog (`GET /campaigns/{id}/send` redirects there). The steps go To → When → Check, and the check step ends with one button naming the action ("Send to N recipients" / "Schedule for <date>"); after it you land on the campaign page, where the launch is listed. The new campaign page only builds the letter and ends with "Save" and "Save and send…" (the latter opens the launch page); `POST /campaigns` no longer starts a send. `GET /campaigns/{id}/launch?job={id}` opens a scheduled launch of the campaign with its list, servers and time filled in and posts to `POST /jobs/{id}/schedule`
-- MTA: the `path` label of `sendry_api_requests_total` / `sendry_api_request_duration_seconds` is `unmatched` for requests that match no route (scanners added a series per probed URL, kept forever since counters are persisted)
+- sendry-web: a sidebar replaces the top menu; pages are grouped by task (campaigns, templates, infrastructure, settings) with queue counters inline, the dashboard is an overview with recent launches, badges are soft tinted pills and data tables scroll inside their card
+- sendry-web: filters, Clear and pagination on list pages reload only the list (`[data-partial]` region) and keep the URL in history, instead of reloading the page and jumping to the top
 
 ### Security
 - sendry-web: template, block and builder previews render in sandboxed iframes, and block HTML on the builder canvas is stripped of scripts, event handlers and `javascript:` links: a template or block saved by any user ran its scripts in the panel of whoever opened it (an admin included)
@@ -55,6 +53,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sendry-web: searches ignore letter case in any alphabet ("демо" finds "Демо") and match `%` and `_` literally
 - sendry-web: a search with no results says so instead of "no campaigns yet"; the campaign wizard and an open campaign row ask before leaving with unsaved input
 - sendry-web: a completed run with failed emails is marked "completed with errors"; the readiness check, the tracking settings and the campaign banner agree on what happens without a proxying domain
+
+## [0.6.0] - 2026-10-23
+
+### Added
+- sendry-web: open, click and unsubscribe tracking (the MTA is unchanged). Public endpoints `GET /t/o/{token}.gif`, `GET /t/c/{token}`, `GET /u/{token}`, `POST /u/{token}` (button and RFC 8058 one-click) with HMAC-signed tokens, no auth, bypassing `server.allowed_ips`
+- sendry-web: Settings → Tracking (proxying domain, opens/clicks defaults), stored in the DB
+- sendry-web: campaign options track opens, track clicks, add UTM tags; API key flags `track_opens`/`track_clicks` and the same request fields on `POST /api/v1/send` and `/api/v1/send/template`
+- sendry-web: `List-Unsubscribe` / `List-Unsubscribe-Post` headers and `{{unsubscribe_url}}` variable for campaign mail, per-address-book unsubscribe (recipient status `unsubscribed` in the job's book only; `unsubscribes` is a per-(list, email) journal), unsubscribed addresses are visible in the address book with the status filter "Unsubscribed", unsubscribed recipients of the book skipped at job start and counted on the job
+- sendry-web: job and campaign statistics (Open Rate, CTR, CTOR, unsubscribes), per-recipient open/click columns, click map with per-variant snapshots, machine event filtering (`is_machine`)
+- Docs `docs/tracking.md` / `docs/tracking.ru.md` including an nginx example for a separate tracking domain
+
+### Changed
+- sendry-web: `server.trusted_proxies` defaults to loopback and private networks (`127.0.0.0/8`, `::1/128`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7`) so a proxy in front of a Docker container keeps working; set the list explicitly if untrusted hosts of a private network can reach the panel directly
+- sendry-web: `sendry.multi_send.strategy` is validated at startup: `round_robin`, `weighted`, `first_healthy`; `weighted_round_robin` (the name the docs used) is accepted as a deprecated alias of `weighted` and now really uses `weights` (before it silently fell back to `round_robin`); `domain_affinity` is accepted but not implemented yet and falls back to `round_robin` with a warning; any other value is a config error
+- `make build-web-linux` / `build-web-linux-arm64` build a static binary on `golang:1.24-alpine` (musl), the same way as the release workflow
+- go.mod: `go-oidc`, `oauth2`, `go-sqlite3`, `x/term`, `client_model` listed as direct dependencies (`go mod tidy`)
+- **Upgrade note**, sendry-web: campaign mail needs a public address for the unsubscribe link (`server.public_url` or Settings → Tracking → proxying domain). Without it new campaigns cannot be started, and jobs already running or scheduled hold their emails until it is set (the job page says so). Check `server.public_url` before upgrading
+- **Upgrade note**, sendry-web: the database migration lower-cases recipient emails (ASCII letters) and merges addresses that differ only in case within one list into one recipient (an unsubscribed duplicate wins; name and variables of the removed duplicate are lost). Back up the database before upgrading
+- sendry-web: foreign keys are enforced on every database connection. A recipient list, recipient, campaign variant or template that a campaign job used cannot be deleted any more (409 with an explanation); delete the campaign first, or set a recipient to unsubscribed
+- sendry-web: retrying failed job items re-reads the template of a variant that has not sent anything yet, so a fixed template is used; variants that sent mail keep the template frozen at job start
+- sendry-web: the open rate of a job uses the campaign's open tracking at job start, not the current setting
+- sendry-web: resubscribing removes the address from the unsubscribe statistics of past jobs
+- sendry-web: only success messages hide after 5 seconds; warnings and errors (`alert-danger` too) stay, and so does the one-time display of a new API key
+- MTA: the `path` label of `sendry_api_requests_total` / `sendry_api_request_duration_seconds` is `unmatched` for requests that match no route (scanners added a series per probed URL, kept forever since counters are persisted)
+
+### Fixed
 - Security: sendry-web `server.allowed_ips` could be bypassed by sending a forged `X-Forwarded-For` / `X-Real-IP` header; the panel IP filter and the audit log IP now honour these headers only from `server.trusted_proxies`. The right-most untrusted `X-Forwarded-For` address wins and `X-Real-IP` is used only without `X-Forwarded-For`, since Caddy passes a client-supplied `X-Real-IP` through; the ansible Caddyfile and `docs/caddy-sendry-web.md` also overwrite `X-Real-IP`
 - Security: MTA `api.allowed_ips` and `metrics.allowed_ips` could be bypassed with a forged `X-Forwarded-For` / `X-Real-IP` header from any address; these headers now count only from loopback (a reverse proxy on the same host)
 - sendry-web: tracking events were lost under concurrent requests (`database is locked`): transactions now take the SQLite write lock at start (`_txlock=immediate`)
@@ -75,6 +99,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - sendry-web: unused htmx script (loaded from unpkg on every page), the timezone selector in Settings (it only affected elements that no page renders), unused route `POST /domains/import`, the unrouted `ServerDomains` handler with its `server_domains.html` template, dead builder JS and CSS
 - Unused Go code: unreachable functions and types reported by `deadcode`/`staticcheck` (sendry-web MTA client methods for templates, sandbox, DKIM generate/verify and DNSBL list; `queue.DeliveryAttempt`; `api.NewServer`, `smtp.NewServer`, `metrics.NewServer`, etc.)
+
+## [0.5.0] - 2026-10-21
+
+### Added
+- sendry-web: delivery error types (address not found, mailbox full, temporarily unavailable, domain unreachable, rejected, spam, blocked, technical, unknown) on the job page and Send History, each count links to the filtered item list (`?error_type=`)
+- sendry-web: API sends are tracked until delivery: an accepted send is `queued`, the worker polls the MTA and moves it to sent or failed, keeping the last error while the MTA retries; Send History has a Queued card and an error type filter
+
+### Fixed
+- MTA: when the STARTTLS handshake fails (e.g. an MX with an expired certificate), the client reconnects to the same MX and delivers without TLS instead of deferring the message until the DLQ
+- sendry-web: deferred/sending MTA statuses map to queued and keep the last error; queued items are polled round-robin instead of always the oldest 20, which stalled status updates behind deferred messages
+- sendry-web: the footer shows the current year
+
+## [0.4.22] - 2026-10-20
+
+### Fixed
+- MTA API: the SMTP envelope (MAIL FROM / RCPT TO) carries bare addresses only; `"Name <addr>"` from the panel campaigns was rejected by remote servers (555/501) and every campaign item failed. Display names in From/To/Cc and Subject are RFC 2047 encoded, `/api/v1/send/template` validates the from address
+
+## [0.4.21] - 2026-10-20
+
+### Added
+- GitHub Actions workflow `Release (button)`: computes the next semver from the latest tag and tags HEAD of main (patch/minor/major)
+- GitHub Actions workflow `Deploy`: rolls out a released version to production servers over SSH with Ansible (all/mta/panel)
+- Ansible playbook `playbooks/upgrade.yml`: upgrades the deb package only, backs up the panel SQLite database, restarts active services and checks `/health`
+- Production inventory `ansible/inventory/prod.yml` and docs `docs/deploy.md` / `docs/deploy.ru.md`
+
+### Changed
+- `release.yml` can be started on an existing tag via `workflow_dispatch` (used by `Release (button)`, since tags pushed with `GITHUB_TOKEN` do not trigger it)
+
+### Fixed
+- Package upgrades no longer leave `sendry` disabled at boot (the prerm script stopped and disabled the service on upgrade); `upgrade.yml` re-enables services that were enabled before
+- MTA `/health` reports the real build version instead of the hardcoded `0.3.2`; the panel server page shows real status, version and uptime, the server list shows the version
+- sendry-web: list tables stay inside their cards (API keys, templates), filter inputs no longer stretch to full width
 
 ## [0.4.20] - 2026-09-09
 
@@ -502,6 +558,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DEB/RPM/APK packaging
 - Docker images
 
+[Unreleased]: https://github.com/foxzi/sendry/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/foxzi/sendry/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/foxzi/sendry/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/foxzi/sendry/compare/v0.4.22...v0.5.0
+[0.4.22]: https://github.com/foxzi/sendry/compare/v0.4.21...v0.4.22
+[0.4.21]: https://github.com/foxzi/sendry/compare/v0.4.20...v0.4.21
 [0.4.15]: https://github.com/foxzi/sendry/compare/v0.4.14...v0.4.15
 [0.4.14]: https://github.com/foxzi/sendry/compare/v0.4.13...v0.4.14
 [0.4.4]: https://github.com/foxzi/sendry/compare/v0.4.3...v0.4.4
