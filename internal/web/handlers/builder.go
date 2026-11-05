@@ -21,14 +21,14 @@ func (h *Handlers) BuilderPage(w http.ResponseWriter, r *http.Request) {
 	wrapper, err := blocks.GetWrapper()
 	if err != nil {
 		h.logger.Error("failed to load wrapper", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load email wrapper")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load email wrapper")
 		return
 	}
 
 	categories, err := h.blocks.ListGroupedByCategory()
 	if err != nil {
 		h.logger.Error("failed to load blocks", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load blocks")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load blocks")
 		return
 	}
 
@@ -44,7 +44,7 @@ func (h *Handlers) BuilderPage(w http.ResponseWriter, r *http.Request) {
 	if id := r.PathValue("id"); id != "" {
 		t, err := h.templates.GetByID(id)
 		if err != nil || t == nil {
-			h.error(w, http.StatusNotFound, "Template not found")
+			h.error(w, r, http.StatusNotFound, "Template not found")
 			return
 		}
 		refs, _ := h.templates.GetBlockRefs(id)
@@ -78,13 +78,13 @@ func (h *Handlers) BuilderPage(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) BuilderUpdate(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
 	t, err := h.templates.GetByID(id)
 	if err != nil || t == nil {
-		h.error(w, http.StatusNotFound, "Template not found")
+		h.error(w, r, http.StatusNotFound, "Template not found")
 		return
 	}
 
@@ -96,11 +96,11 @@ func (h *Handlers) BuilderUpdate(w http.ResponseWriter, r *http.Request) {
 	html := r.FormValue("html")
 	variables := r.FormValue("variables")
 	if name == "" || subject == "" {
-		h.error(w, http.StatusBadRequest, "Name and subject are required")
+		h.error(w, r, http.StatusBadRequest, "Name and subject are required")
 		return
 	}
 	if html == "" {
-		h.error(w, http.StatusBadRequest, "Please add at least one block to the email")
+		h.error(w, r, http.StatusBadRequest, "Please add at least one block to the email")
 		return
 	}
 	cs := parseContainerSettings(r)
@@ -145,7 +145,7 @@ func (h *Handlers) BuilderUpdate(w http.ResponseWriter, r *http.Request) {
 	user := h.getUserFromContext(r)
 	if err := h.templates.Update(t, "Edited via builder", user["Email"].(string)); err != nil {
 		h.logger.Error("failed to update template via builder", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to save template")
+		h.error(w, r, http.StatusInternalServerError, "Failed to save template")
 		return
 	}
 	if err := h.templates.SetBlockRefs(t.ID, blockRefs); err != nil {
@@ -159,7 +159,7 @@ func (h *Handlers) BuilderUpdate(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) BuilderCreate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
@@ -172,12 +172,12 @@ func (h *Handlers) BuilderCreate(w http.ResponseWriter, r *http.Request) {
 	variables := r.FormValue("variables")
 
 	if name == "" || subject == "" {
-		h.error(w, http.StatusBadRequest, "Name and subject are required")
+		h.error(w, r, http.StatusBadRequest, "Name and subject are required")
 		return
 	}
 
 	if html == "" {
-		h.error(w, http.StatusBadRequest, "Please add at least one block to the email")
+		h.error(w, r, http.StatusBadRequest, "Please add at least one block to the email")
 		return
 	}
 
@@ -209,7 +209,7 @@ func (h *Handlers) BuilderCreate(w http.ResponseWriter, r *http.Request) {
 	user := h.getUserFromContext(r)
 	if err := h.templates.Create(t, user["Email"].(string)); err != nil {
 		h.logger.Error("failed to create template from builder", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to create template")
+		h.error(w, r, http.StatusInternalServerError, "Failed to create template")
 		return
 	}
 

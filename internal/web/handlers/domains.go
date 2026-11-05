@@ -48,14 +48,14 @@ func (h *Handlers) DomainsList(w http.ResponseWriter, r *http.Request) {
 
 	client, err := h.sendry.GetClient(serverName)
 	if err != nil {
-		h.error(w, http.StatusNotFound, "Server not found")
+		h.error(w, r, http.StatusNotFound, "Server not found")
 		return
 	}
 
 	domains, err := client.ListDomains(r.Context())
 	if err != nil {
 		h.logger.Error("failed to list domains", "error", err, "server", serverName)
-		h.error(w, http.StatusInternalServerError, "Failed to load domains")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load domains")
 		return
 	}
 
@@ -105,19 +105,19 @@ func (h *Handlers) DomainsCreate(w http.ResponseWriter, r *http.Request) {
 	serverName := r.PathValue("server")
 
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
 	client, err := h.sendry.GetClient(serverName)
 	if err != nil {
-		h.error(w, http.StatusNotFound, "Server not found")
+		h.error(w, r, http.StatusNotFound, "Server not found")
 		return
 	}
 
 	domain := strings.TrimSpace(r.FormValue("domain"))
 	if domain == "" {
-		h.error(w, http.StatusBadRequest, "Domain name is required")
+		h.error(w, r, http.StatusBadRequest, "Domain name is required")
 		return
 	}
 
@@ -188,7 +188,7 @@ func (h *Handlers) DomainsCreate(w http.ResponseWriter, r *http.Request) {
 	_, err = client.CreateDomain(r.Context(), req)
 	if err != nil {
 		h.logger.Error("failed to create domain", "error", err)
-		h.error(w, http.StatusInternalServerError, fmt.Sprintf("Failed to create domain: %v", err))
+		h.error(w, r, http.StatusInternalServerError, fmt.Sprintf("Failed to create domain: %v", err))
 		return
 	}
 
@@ -203,14 +203,14 @@ func (h *Handlers) DomainsView(w http.ResponseWriter, r *http.Request) {
 
 	client, err := h.sendry.GetClient(serverName)
 	if err != nil {
-		h.error(w, http.StatusNotFound, "Server not found")
+		h.error(w, r, http.StatusNotFound, "Server not found")
 		return
 	}
 
 	domain, err := client.GetDomain(r.Context(), domainName)
 	if err != nil {
 		h.logger.Error("failed to get domain", "error", err)
-		h.error(w, http.StatusNotFound, "Domain not found")
+		h.error(w, r, http.StatusNotFound, "Domain not found")
 		return
 	}
 
@@ -238,14 +238,14 @@ func (h *Handlers) DomainsEdit(w http.ResponseWriter, r *http.Request) {
 
 	client, err := h.sendry.GetClient(serverName)
 	if err != nil {
-		h.error(w, http.StatusNotFound, "Server not found")
+		h.error(w, r, http.StatusNotFound, "Server not found")
 		return
 	}
 
 	domain, err := client.GetDomain(r.Context(), domainName)
 	if err != nil {
 		h.logger.Error("failed to get domain", "error", err)
-		h.error(w, http.StatusNotFound, "Domain not found")
+		h.error(w, r, http.StatusNotFound, "Domain not found")
 		return
 	}
 
@@ -271,13 +271,13 @@ func (h *Handlers) DomainsUpdate(w http.ResponseWriter, r *http.Request) {
 	domainName := r.PathValue("domain")
 
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
 	client, err := h.sendry.GetClient(serverName)
 	if err != nil {
-		h.error(w, http.StatusNotFound, "Server not found")
+		h.error(w, r, http.StatusNotFound, "Server not found")
 		return
 	}
 
@@ -349,7 +349,7 @@ func (h *Handlers) DomainsUpdate(w http.ResponseWriter, r *http.Request) {
 	_, err = client.UpdateDomain(r.Context(), domainName, req)
 	if err != nil {
 		h.logger.Error("failed to update domain", "error", err)
-		h.error(w, http.StatusInternalServerError, fmt.Sprintf("Failed to update domain: %v", err))
+		h.error(w, r, http.StatusInternalServerError, fmt.Sprintf("Failed to update domain: %v", err))
 		return
 	}
 
@@ -364,14 +364,14 @@ func (h *Handlers) DomainsDelete(w http.ResponseWriter, r *http.Request) {
 
 	client, err := h.sendry.GetClient(serverName)
 	if err != nil {
-		h.error(w, http.StatusNotFound, "Server not found")
+		h.error(w, r, http.StatusNotFound, "Server not found")
 		return
 	}
 
 	err = client.DeleteDomain(r.Context(), domainName)
 	if err != nil {
 		h.logger.Error("failed to delete domain", "error", err)
-		h.error(w, http.StatusInternalServerError, fmt.Sprintf("Failed to delete domain: %v", err))
+		h.error(w, r, http.StatusInternalServerError, fmt.Sprintf("Failed to delete domain: %v", err))
 		return
 	}
 
@@ -394,7 +394,7 @@ func (h *Handlers) DomainsImport(w http.ResponseWriter, r *http.Request) {
 
 	if existing, err := h.domains.GetByDomain(domainName); err != nil {
 		h.logger.Error("failed to look up panel domain", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to import domain")
+		h.error(w, r, http.StatusInternalServerError, "Failed to import domain")
 		return
 	} else if existing != nil {
 		http.Redirect(w, r, "/domains/"+existing.ID, http.StatusSeeOther)
@@ -403,13 +403,13 @@ func (h *Handlers) DomainsImport(w http.ResponseWriter, r *http.Request) {
 
 	client, err := h.sendry.GetClient(serverName)
 	if err != nil {
-		h.error(w, http.StatusNotFound, "Server not found")
+		h.error(w, r, http.StatusNotFound, "Server not found")
 		return
 	}
 	sd, err := client.GetDomain(r.Context(), domainName)
 	if err != nil {
 		h.logger.Error("failed to get domain", "error", err, "server", serverName)
-		h.error(w, http.StatusNotFound, "Domain not found")
+		h.error(w, r, http.StatusNotFound, "Domain not found")
 		return
 	}
 
@@ -442,7 +442,7 @@ func (h *Handlers) DomainsImport(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.domains.Create(d); err != nil {
 		h.logger.Error("failed to create domain", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to import domain")
+		h.error(w, r, http.StatusInternalServerError, "Failed to import domain")
 		return
 	}
 	if err := h.domains.CreateDeployment(d.ID, serverName, "deployed", d.ConfigHash(), ""); err != nil {
@@ -467,7 +467,7 @@ func (h *Handlers) CentralDomainsList(w http.ResponseWriter, r *http.Request) {
 	domains, err := h.domains.List(models.DomainFilter{})
 	if err != nil {
 		h.logger.Error("failed to list domains", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load domains")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load domains")
 		return
 	}
 
@@ -525,20 +525,20 @@ func (h *Handlers) CentralDomainsNew(w http.ResponseWriter, r *http.Request) {
 // CentralDomainsCreate creates a new domain locally
 func (h *Handlers) CentralDomainsCreate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
 	domainName := strings.TrimSpace(r.FormValue("domain"))
 	if domainName == "" {
-		h.error(w, http.StatusBadRequest, "Domain name is required")
+		h.error(w, r, http.StatusBadRequest, "Domain name is required")
 		return
 	}
 
 	// Check if domain already exists
 	existing, _ := h.domains.GetByDomain(domainName)
 	if existing != nil {
-		h.error(w, http.StatusConflict, "Domain already exists")
+		h.error(w, r, http.StatusConflict, "Domain already exists")
 		return
 	}
 
@@ -579,7 +579,7 @@ func (h *Handlers) CentralDomainsCreate(w http.ResponseWriter, r *http.Request) 
 
 	if err := h.domains.Create(domain); err != nil {
 		h.logger.Error("failed to create domain", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to create domain")
+		h.error(w, r, http.StatusInternalServerError, "Failed to create domain")
 		return
 	}
 
@@ -599,11 +599,11 @@ func (h *Handlers) CentralDomainsView(w http.ResponseWriter, r *http.Request) {
 	domain, err := h.domains.GetByID(id)
 	if err != nil {
 		h.logger.Error("failed to get domain", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load domain")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load domain")
 		return
 	}
 	if domain == nil {
-		h.error(w, http.StatusNotFound, "Domain not found")
+		h.error(w, r, http.StatusNotFound, "Domain not found")
 		return
 	}
 
@@ -692,7 +692,7 @@ func (h *Handlers) CentralDomainsEdit(w http.ResponseWriter, r *http.Request) {
 
 	domain, err := h.domains.GetByID(id)
 	if err != nil || domain == nil {
-		h.error(w, http.StatusNotFound, "Domain not found")
+		h.error(w, r, http.StatusNotFound, "Domain not found")
 		return
 	}
 
@@ -715,13 +715,13 @@ func (h *Handlers) CentralDomainsUpdate(w http.ResponseWriter, r *http.Request) 
 	id := r.PathValue("id")
 
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
 	domain, err := h.domains.GetByID(id)
 	if err != nil || domain == nil {
-		h.error(w, http.StatusNotFound, "Domain not found")
+		h.error(w, r, http.StatusNotFound, "Domain not found")
 		return
 	}
 
@@ -765,7 +765,7 @@ func (h *Handlers) CentralDomainsUpdate(w http.ResponseWriter, r *http.Request) 
 
 	if err := h.domains.Update(id, domain); err != nil {
 		h.logger.Error("failed to update domain", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to update domain")
+		h.error(w, r, http.StatusInternalServerError, "Failed to update domain")
 		return
 	}
 
@@ -778,7 +778,7 @@ func (h *Handlers) CentralDomainsDelete(w http.ResponseWriter, r *http.Request) 
 
 	domain, err := h.domains.GetByID(id)
 	if err != nil || domain == nil {
-		h.error(w, http.StatusNotFound, "Domain not found")
+		h.error(w, r, http.StatusNotFound, "Domain not found")
 		return
 	}
 
@@ -793,7 +793,7 @@ func (h *Handlers) CentralDomainsDelete(w http.ResponseWriter, r *http.Request) 
 
 	if err := h.domains.Delete(id); err != nil {
 		h.logger.Error("failed to delete domain", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to delete domain")
+		h.error(w, r, http.StatusInternalServerError, "Failed to delete domain")
 		return
 	}
 
@@ -805,19 +805,19 @@ func (h *Handlers) CentralDomainsDeploy(w http.ResponseWriter, r *http.Request) 
 	id := r.PathValue("id")
 
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
 	domain, err := h.domains.GetByID(id)
 	if err != nil || domain == nil {
-		h.error(w, http.StatusNotFound, "Domain not found")
+		h.error(w, r, http.StatusNotFound, "Domain not found")
 		return
 	}
 
 	servers := r.Form["servers"]
 	if len(servers) == 0 {
-		h.error(w, http.StatusBadRequest, "No servers selected")
+		h.error(w, r, http.StatusBadRequest, "No servers selected")
 		return
 	}
 
@@ -834,7 +834,7 @@ func (h *Handlers) CentralDomainsSync(w http.ResponseWriter, r *http.Request) {
 
 	domain, err := h.domains.GetByID(id)
 	if err != nil || domain == nil {
-		h.error(w, http.StatusNotFound, "Domain not found")
+		h.error(w, r, http.StatusNotFound, "Domain not found")
 		return
 	}
 

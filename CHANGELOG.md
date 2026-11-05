@@ -18,10 +18,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sendry-web: server domain pages are titled with the server name, use the same layout as the panel domain card and show whether the panel manages the domain
 - sendry-web: static files are served with a content ETag and `Cache-Control: no-cache` (repeat loads get 304); the page is hidden until translation is applied, so non-English users no longer see an English flash; the UI language is remembered in a cookie
 
+- sendry-web: errors on a page load (not found, admin only, failed action) show the panel's error page with the menu, a short explanation, Back and Go to overview; requests from scripts still get the plain text message
+- sendry-web: the Russian UI says «Недоставленные (DLQ)» instead of «DLQ»
+- sendry-web: a DKIM key opened from a server page goes to the panel's key page, which lists every server with its deployment state; the separate per-server key page is removed (`/servers/{server}/dkim/{id}` redirects to `/dkim/{id}`)
+
 ### Security
 - MTA API: addresses in send and template-send requests must have one `@` and no spaces, brackets or quotes; a quoted local part like `"x> NOTIFY=SUCCESS"@example.com` was unquoted by `net/mail` and smuggled SMTP parameters into MAIL FROM / RCPT TO
 
 ### Fixed
+- sendry-web: the server key page offered to deploy a DKIM key to servers that already had it and did not list the current server
+- sendry-web: DELETE `/api/v1/lists/{id}/recipients/{email}` missed an address with a literal `%` in the local part (the path was unescaped twice)
+- sendry-web: the campaign test send rendered without the preheader; sample variables of the template page and test page include variables used only in the preheader
+- sendry-web: syncing a domain added with "Add to panel" whose DKIM key the panel does not have no longer deploys it without DKIM (the MTA would stop signing); the deployment is marked failed until a key is linked
 - Domain rate limits deployed from the panel never reached the MTA: the MTA expected `MessagesPerHour` instead of the documented `rate_limit.messages_per_hour`. **Upgrade note**: until every MTA is upgraded the panel writes and reads both spellings, so it keeps working with 0.4.x–0.7.x MTAs
 
 ## [0.7.0] - 2026-10-26

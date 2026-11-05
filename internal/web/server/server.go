@@ -285,7 +285,7 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("GET /monitoring/api/servers", h.MonitoringAPIServers)
 
 	// Settings — admin only
-	adminOnly := middleware.AdminOnly
+	adminOnly := middleware.AdminOnly(h.Forbidden)
 	protected.HandleFunc("GET /settings", adminOnly(http.HandlerFunc(h.Settings)).ServeHTTP)
 	protected.HandleFunc("GET /settings/variables", adminOnly(http.HandlerFunc(h.GlobalVariables)).ServeHTTP)
 	protected.HandleFunc("PUT /settings/variables", adminOnly(http.HandlerFunc(h.GlobalVariablesUpdate)).ServeHTTP)
@@ -311,9 +311,6 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("GET /servers/{server}/dkim/new", h.DKIMNew)
 	protected.HandleFunc("POST /servers/{server}/dkim", h.DKIMCreate)
 	protected.HandleFunc("GET /servers/{server}/dkim/{id}", h.DKIMView)
-	protected.HandleFunc("DELETE /servers/{server}/dkim/{id}", h.DKIMDelete)
-	protected.HandleFunc("POST /servers/{server}/dkim/{id}/deploy", h.DKIMDeploy)
-	protected.HandleFunc("DELETE /servers/{server}/dkim/{id}/deployments", h.DKIMDeploymentDelete)
 
 	// DNS/IP Checks (per server)
 	protected.HandleFunc("GET /servers/{server}/dns-check", h.DNSCheck)

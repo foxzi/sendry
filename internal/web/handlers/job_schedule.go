@@ -21,32 +21,32 @@ func (h *Handlers) JobSchedule(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
 	job, err := h.jobs.GetByID(id)
 	if err != nil {
 		h.logger.Error("failed to get job", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load job")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load job")
 		return
 	}
 	if job == nil {
-		h.error(w, http.StatusNotFound, "Job not found")
+		h.error(w, r, http.StatusNotFound, "Job not found")
 		return
 	}
 	if job.Status != "scheduled" {
-		h.error(w, http.StatusBadRequest, "Only a scheduled job can be changed, status: "+job.Status)
+		h.error(w, r, http.StatusBadRequest, "Only a scheduled job can be changed, status: "+job.Status)
 		return
 	}
 	c, err := h.campaigns.GetByID(job.CampaignID)
 	if err != nil {
 		h.logger.Error("failed to get campaign", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load campaign")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load campaign")
 		return
 	}
 	if c == nil {
-		h.error(w, http.StatusNotFound, "Campaign not found")
+		h.error(w, r, http.StatusNotFound, "Campaign not found")
 		return
 	}
 
@@ -79,12 +79,12 @@ func (h *Handlers) JobSchedule(w http.ResponseWriter, r *http.Request) {
 	trackOpens := c.TrackOpens && h.hasPublicOrigin() // no pixel without the public origin
 	err = h.jobs.RescheduleJob(id, params.RecipientListID, string(serversJSON), params.Strategy, params.ScheduledAt, trackOpens, items, unsubscribed)
 	if errors.Is(err, repository.ErrJobNotScheduled) {
-		h.error(w, http.StatusBadRequest, "The launch has already started or was cancelled")
+		h.error(w, r, http.StatusBadRequest, "The launch has already started or was cancelled")
 		return
 	}
 	if err != nil {
 		h.logger.Error("failed to reschedule job", "job_id", id, "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to update job")
+		h.error(w, r, http.StatusInternalServerError, "Failed to update job")
 		return
 	}
 

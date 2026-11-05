@@ -11,7 +11,7 @@ func (h *Handlers) DNSCheck(w http.ResponseWriter, r *http.Request) {
 
 	client, err := h.sendry.GetClient(serverName)
 	if err != nil {
-		h.error(w, http.StatusNotFound, "Server not found")
+		h.error(w, r, http.StatusNotFound, "Server not found")
 		return
 	}
 
@@ -50,7 +50,7 @@ func (h *Handlers) IPCheck(w http.ResponseWriter, r *http.Request) {
 
 	client, err := h.sendry.GetClient(serverName)
 	if err != nil {
-		h.error(w, http.StatusNotFound, "Server not found")
+		h.error(w, r, http.StatusNotFound, "Server not found")
 		return
 	}
 

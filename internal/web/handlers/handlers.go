@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -168,10 +169,57 @@ func (h *Handlers) json(w http.ResponseWriter, status int, data any) {
 	}
 }
 
-// Helper for errors
-func (h *Handlers) error(w http.ResponseWriter, status int, message string) {
+// Helper for errors. A page the browser navigates to gets the panel's error
+// page; fetch() calls keep the plain text body, which scripts show as is.
+func (h *Handlers) error(w http.ResponseWriter, r *http.Request, status int, message string) {
 	h.logger.Error("request error", "status", status, "message", message)
-	http.Error(w, message, status)
+	if !wantsHTMLPage(r) {
+		http.Error(w, message, status)
+		return
+	}
+	h.errorPage(w, r, status, message)
+}
+
+// Forbidden answers a non-admin who opened an admin-only page.
+func (h *Handlers) Forbidden(w http.ResponseWriter, r *http.Request) {
+	if !wantsHTMLPage(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	h.errorPage(w, r, http.StatusForbidden, "")
+}
+
+func (h *Handlers) errorPage(w http.ResponseWriter, r *http.Request, status int, message string) {
+	data := map[string]any{
+		"Title":   http.StatusText(status),
+		"Status":  status,
+		"Message": message,
+	}
+	if middleware.GetUserEmail(r) != "" {
+		data["User"] = h.getUserFromContext(r)
+	}
+	var buf bytes.Buffer
+	if err := h.views.Render(&buf, "error", data); err != nil {
+		h.logger.Error("failed to render error page", "error", err)
+		http.Error(w, message, status)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(status)
+	_, _ = w.Write(buf.Bytes())
+}
+
+// wantsHTMLPage reports whether the request is a page load (link, address
+// bar, form submit) rather than a fetch() from a script.
+func wantsHTMLPage(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	if mode := r.Header.Get("Sec-Fetch-Mode"); mode != "" {
+		return mode == "navigate"
+	}
+	return strings.Contains(r.Header.Get("Accept"), "text/html")
 }
 
 // Get user from request context

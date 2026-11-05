@@ -30,7 +30,7 @@ func (h *Handlers) APIKeysList(w http.ResponseWriter, r *http.Request) {
 	keys, total, err := h.apiKeys.List(filter)
 	if err != nil {
 		h.logger.Error("failed to list API keys", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load API keys")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load API keys")
 		return
 	}
 
@@ -61,13 +61,13 @@ func (h *Handlers) APIKeysList(w http.ResponseWriter, r *http.Request) {
 // APIKeyCreate creates a new API key
 func (h *Handlers) APIKeyCreate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
 	name := r.FormValue("name")
 	if name == "" {
-		h.error(w, http.StatusBadRequest, "Name is required")
+		h.error(w, r, http.StatusBadRequest, "Name is required")
 		return
 	}
 
@@ -109,7 +109,7 @@ func (h *Handlers) APIKeyCreate(w http.ResponseWriter, r *http.Request) {
 	result, err := h.apiKeys.Create(opts)
 	if err != nil {
 		h.logger.Error("failed to create API key", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to create API key")
+		h.error(w, r, http.StatusInternalServerError, "Failed to create API key")
 		return
 	}
 
@@ -123,13 +123,13 @@ func (h *Handlers) APIKeyCreate(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) APIKeyDelete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == "" {
-		h.error(w, http.StatusBadRequest, "API key ID is required")
+		h.error(w, r, http.StatusBadRequest, "API key ID is required")
 		return
 	}
 
 	if err := h.apiKeys.Delete(id); err != nil {
 		h.logger.Error("failed to delete API key", "id", id, "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to delete API key")
+		h.error(w, r, http.StatusInternalServerError, "Failed to delete API key")
 		return
 	}
 
@@ -143,14 +143,14 @@ func (h *Handlers) APIKeyDelete(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) APIKeyToggle(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == "" {
-		h.error(w, http.StatusBadRequest, "API key ID is required")
+		h.error(w, r, http.StatusBadRequest, "API key ID is required")
 		return
 	}
 
 	newActive, err := h.apiKeys.ToggleActive(id)
 	if err != nil {
 		h.logger.Error("failed to toggle API key", "id", id, "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to toggle API key")
+		h.error(w, r, http.StatusInternalServerError, "Failed to toggle API key")
 		return
 	}
 
@@ -168,18 +168,18 @@ func (h *Handlers) APIKeyToggle(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) APIKeyEdit(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == "" {
-		h.error(w, http.StatusBadRequest, "API key ID is required")
+		h.error(w, r, http.StatusBadRequest, "API key ID is required")
 		return
 	}
 
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
 	name := r.FormValue("name")
 	if name == "" {
-		h.error(w, http.StatusBadRequest, "Name is required")
+		h.error(w, r, http.StatusBadRequest, "Name is required")
 		return
 	}
 
@@ -200,7 +200,7 @@ func (h *Handlers) APIKeyEdit(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.apiKeys.Update(id, name, allowedDomains, rateLimitMinute, rateLimitHour); err != nil {
 		h.logger.Error("failed to update API key", "id", id, "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to update API key")
+		h.error(w, r, http.StatusInternalServerError, "Failed to update API key")
 		return
 	}
 

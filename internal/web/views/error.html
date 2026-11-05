@@ -1,0 +1,24 @@
+{{define "content"}}
+<div class="card">
+    <div class="empty-state">
+        {{if eq .Status 403}}
+        <h1 data-i18n="err.forbidden_title">Access denied</h1>
+        <p data-i18n="err.forbidden_text">This page needs administrator rights. Ask an administrator if you need it.</p>
+        {{else if eq .Status 404}}
+        <h1 data-i18n="err.not_found_title">Not found</h1>
+        <p data-i18n="err.not_found_text">The page or record does not exist or was deleted.</p>
+        {{else if lt .Status 500}}
+        <h1 data-i18n="err.bad_request_title">The request could not be completed</h1>
+        <p data-i18n="err.bad_request_text">Check the entered data and try again.</p>
+        {{else}}
+        <h1 data-i18n="err.server_title">Something went wrong</h1>
+        <p data-i18n="err.server_text">The panel could not complete the action. Try again later; if it repeats, tell the administrator.</p>
+        {{end}}
+        {{if .Message}}<p class="text-muted">{{.Status}}: {{.Message}}</p>{{end}}
+        <p>
+            <button type="button" class="btn" onclick="history.back()" data-i18n="err.back">&larr; Back</button>
+            <a href="/" class="btn btn-primary" data-i18n="err.home">Go to overview</a>
+        </p>
+    </div>
+</div>
+{{end}}

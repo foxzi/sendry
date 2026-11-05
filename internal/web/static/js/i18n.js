@@ -325,7 +325,7 @@ var I18n = (function() {
             'server_name': 'Сервер',
             'server_status': 'Статус',
             'server_queue': 'Очередь',
-            'server_dlq': 'DLQ',
+            'server_dlq': 'Недоставленные (DLQ)',
             'server_domains': 'Домены',
             'server_sandbox': 'Песочница',
             'online': 'Онлайн',
@@ -379,7 +379,7 @@ var I18n = (function() {
             'monitoring.stats.sent': 'Отправлено',
             'monitoring.stats.failed': 'Ошибки',
             'monitoring.stats.queue': 'В очереди',
-            'monitoring.stats.dlq': 'DLQ',
+            'monitoring.stats.dlq': 'Недоставленные (DLQ)',
             'monitoring.chart.activity': 'Активность отправок',
             'monitoring.chart.domains': 'По доменам',
             'monitoring.servers.title': 'Статус серверов',
@@ -387,20 +387,20 @@ var I18n = (function() {
             'monitoring.servers.env': 'Окружение',
             'monitoring.servers.status': 'Статус',
             'monitoring.servers.queue': 'Очередь',
-            'monitoring.servers.dlq': 'DLQ',
+            'monitoring.servers.dlq': 'Недоставленные (DLQ)',
             'monitoring.servers.empty': 'Серверы не настроены',
 
             // Queue overview
             'queue.title': 'Очередь',
             'queue.total': 'Всего',
-            'queue.queue_dlq_hint': '(очередь / DLQ)',
+            'queue.queue_dlq_hint': '(очередь / недоставленные)',
             'queue.tab_queue': 'Очередь',
-            'queue.tab_dlq': 'DLQ',
+            'queue.tab_dlq': 'Недоставленные (DLQ)',
             'queue.messages_in_queue': 'сообщений в очереди',
-            'queue.messages_in_dlq': 'сообщений в DLQ',
+            'queue.messages_in_dlq': 'недоставленных сообщений',
             'queue.empty': 'Очередь пуста',
             'queue.empty_hint': 'Сообщения, ожидающие отправки, появятся здесь',
-            'queue.dlq_empty': 'DLQ пуст',
+            'queue.dlq_empty': 'Недоставленных сообщений нет',
             'queue.dlq_empty_hint': 'Неотправленные сообщения появятся здесь'
         }
     };
