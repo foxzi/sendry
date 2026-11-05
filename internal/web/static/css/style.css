@@ -1014,6 +1014,50 @@ body {
     gap: 1rem;
 }
 
+/* Label / value table on detail pages (block view) */
+.detail-table {
+    border-collapse: collapse;
+}
+
+.detail-table th,
+.detail-table td {
+    padding: 0.35rem 0;
+    text-align: left;
+    vertical-align: top;
+}
+
+.detail-table th {
+    padding-right: 1.5rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+/* Block appearance: inputs line up even when a label wraps */
+.appearance-row {
+    align-items: end;
+}
+
+.appearance-bg {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.appearance-bg input[type="color"] {
+    width: 4rem;
+    height: 2.3125rem; /* same as the number inputs next to it */
+    padding: 3px;
+    cursor: pointer;
+}
+
+.appearance-bg .appearance-bg-none {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0;
+    font-weight: normal;
+}
+
 /* Input class */
 .input {
     width: 100%;

@@ -63,28 +63,28 @@
         <h2 class="card-title" data-i18n="tpl.appearance">Appearance</h2>
     </div>
     <div class="card-body">
-        <div class="form-row">
+        <div class="form-row appearance-row">
             <div class="form-group">
                 <label for="appearance-radius" data-i18n="tpl.border_radius">Border radius (px)</label>
                 <input type="number" id="appearance-radius" min="0" max="64" step="1" class="input"
                     value="{{.Block.BorderRadius}}">
             </div>
             <div class="form-group">
-                <label for="appearance-pad-v" data-i18n="tpl.content_pad_v">Content padding — vertical (px)</label>
+                <label for="appearance-pad-v" data-i18n="tpl.content_pad_v">Padding top / bottom (px)</label>
                 <input type="number" id="appearance-pad-v" min="0" max="200" step="2" class="input"
                     value="{{.Block.PaddingV}}">
             </div>
             <div class="form-group">
-                <label for="appearance-pad-h" data-i18n="tpl.content_pad_h">Content padding — horizontal (px)</label>
+                <label for="appearance-pad-h" data-i18n="tpl.content_pad_h">Padding left / right (px)</label>
                 <input type="number" id="appearance-pad-h" min="0" max="200" step="2" class="input"
                     value="{{.Block.PaddingH}}">
             </div>
             <div class="form-group">
                 <label for="appearance-bg" data-i18n="tpl.background">Background</label>
-                <div style="display:flex; align-items:center; gap:0.5rem;">
-                    <input type="color" id="appearance-bg" class="input" style="height:38px; padding:2px; max-width:100px;"
+                <div class="appearance-bg">
+                    <input type="color" id="appearance-bg" class="input"
                         value="{{if .Block.Background}}{{.Block.Background}}{{else}}#FFFFFF{{end}}">
-                    <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; font-weight:normal;">
+                    <label class="appearance-bg-none">
                         <input type="checkbox" id="appearance-bg-none" {{if not .Block.Background}}checked{{end}}>
                         <span data-i18n="common.none">None</span>
                     </label>
