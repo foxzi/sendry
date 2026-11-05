@@ -56,6 +56,12 @@ body {
     min-height: 100vh;
 }
 
+/* Until i18n.js translates the page (see the inline script in layout.html);
+   body itself stays visible so the theme background does not flash */
+html[data-i18n-pending] body > * {
+    visibility: hidden;
+}
+
 a {
     color: var(--primary);
     text-decoration: none;

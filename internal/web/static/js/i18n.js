@@ -495,6 +495,8 @@ var I18n = (function() {
     function init() {
         applyTranslations();
         updateLangButtons();
+        // Set by the inline script in <head> to hide the untranslated page
+        document.documentElement.removeAttribute('data-i18n-pending');
 
         document.querySelectorAll('.lang-btn').forEach(function(btn) {
             btn.addEventListener('click', function() {
