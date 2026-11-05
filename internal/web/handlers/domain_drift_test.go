@@ -291,6 +291,18 @@ func TestDomainsImport(t *testing.T) {
 		t.Errorf("DKIM import: %s %+v", w.Header().Get("Location"), s)
 	}
 
+	// Syncing it must not push a config without DKIM: the MTA replaces the
+	// whole domain and would stop signing it.
+	calls := mta.calls.Load()
+	req := httptest.NewRequest(http.MethodPost, "/domains/"+s.ID+"/sync", nil)
+	h.deployDomainToServer(req, s, "mta-1")
+	if got := mta.calls.Load(); got != calls {
+		t.Errorf("server was called %d times for a domain without a DKIM key", got-calls)
+	}
+	if s, _ = repo.GetByID(s.ID); len(s.Deployments) != 1 || s.Deployments[0].Status != "failed" {
+		t.Errorf("deployment should be failed: %+v", s.Deployments)
+	}
+
 	if w := importDomain("nope.example"); w.Code != http.StatusNotFound {
 		t.Errorf("missing domain: %d", w.Code)
 	}

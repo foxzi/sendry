@@ -279,3 +279,18 @@ func TestAPIDeleteRecipient(t *testing.T) {
 		t.Errorf("audit rows = %d", n)
 	}
 }
+
+// The mux already unescapes {email}; a second unescape turned a literal
+// "%41" in the local part into "A" and missed the address.
+func TestAPIDeleteRecipient_PercentInLocalPart(t *testing.T) {
+	srv, d, key := newAPIListsServer(t)
+	if r := decodeAdd(t, apiDo(srv, key, "POST", "/api/v1/lists/l1/recipients", `{"recipients":[{"email":"x%41y@example.org"}]}`)); r.Added != 1 {
+		t.Fatalf("add: %+v", r)
+	}
+	if rec := apiDo(srv, key, "DELETE", "/api/v1/lists/l1/recipients/x%2541y@example.org", ""); rec.Code != 204 {
+		t.Fatalf("delete: %d %s", rec.Code, rec.Body.String())
+	}
+	if _, _, _, found := recipientRow(t, d, "x%41y@example.org"); found {
+		t.Error("recipient still there")
+	}
+}

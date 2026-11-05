@@ -193,7 +193,7 @@ func (h *Handlers) TemplateView(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	skeleton, _ := json.MarshalIndent(buildSampleData(t.HTML+" "+t.Subject), "", "  ")
+	skeleton, _ := json.MarshalIndent(buildSampleData(t.HTML+" "+t.Subject+" "+t.Preheader), "", "  ")
 	data := map[string]any{
 		"Title":          t.Name,
 		"Active":         "templates",
@@ -663,7 +663,7 @@ func (h *Handlers) TemplateTestPage(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("list user smtp", "error", err)
 	}
 
-	sampleJSON, _ := json.MarshalIndent(buildSampleData(t.HTML+" "+t.Subject), "", "  ")
+	sampleJSON, _ := json.MarshalIndent(buildSampleData(t.HTML+" "+t.Subject+" "+t.Preheader), "", "  ")
 
 	data := map[string]any{
 		"Title":      "Send Test Email - " + t.Name,

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 	"net/mail"
-	"net/url"
 	"strconv"
 	"strings"
 
@@ -169,10 +168,7 @@ func (h *Handlers) APIAddRecipients(w http.ResponseWriter, r *http.Request) {
 // APIDeleteRecipient handles DELETE /api/v1/lists/{id}/recipients/{email}
 func (h *Handlers) APIDeleteRecipient(w http.ResponseWriter, r *http.Request) {
 	listID := r.PathValue("id")
-	email := r.PathValue("email")
-	if u, err := url.PathUnescape(email); err == nil {
-		email = u
-	}
+	email := r.PathValue("email") // already unescaped by the mux
 
 	err := h.recipients.DeleteRecipientByEmail(listID, email)
 	switch {

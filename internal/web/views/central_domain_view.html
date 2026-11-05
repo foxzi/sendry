@@ -13,7 +13,7 @@
 </div>
 
 {{if .ImportNoKey}}
-<div class="alert alert-warning" data-i18n="infra.import_no_dkim_key">The server signs this domain with a DKIM key the panel does not have. The domain was added with DKIM on but no key linked: link or upload the key before syncing, otherwise the servers get the domain without DKIM.</div>
+<div class="alert alert-warning" data-i18n="infra.import_no_dkim_key">The server signs this domain with a DKIM key the panel does not have. The domain was added with DKIM on but no key linked: link or upload the key: until then the panel will not deploy this domain, so the servers keep their DKIM.</div>
 {{end}}
 <div class="grid grid-2">
     <div class="card">

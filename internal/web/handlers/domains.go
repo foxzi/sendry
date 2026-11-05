@@ -386,7 +386,8 @@ func (h *Handlers) DomainsDelete(w http.ResponseWriter, r *http.Request) {
 // The panel cannot read a DKIM private key back from a server. When the
 // server signs the domain with a key the panel does not have (same domain
 // and selector), the domain is imported with DKIM on but no key linked, and
-// the card warns: a sync would deploy it without DKIM until a key is linked.
+// the card warns; deployDomainToServer refuses to deploy it until a key is
+// linked, so a sync cannot strip DKIM from the server.
 func (h *Handlers) DomainsImport(w http.ResponseWriter, r *http.Request) {
 	serverName := r.PathValue("server")
 	domainName := r.PathValue("domain")
@@ -882,6 +883,17 @@ func (h *Handlers) deployDomainToServer(r *http.Request, domain *models.Domain, 
 				}
 			}
 		}
+	}
+
+	// The MTA replaces the whole domain config: without DKIM in the request a
+	// server that signs the domain stops signing it. DKIM is on in the panel
+	// but there is no key to send (none linked, e.g. after an import, or it
+	// could not be uploaded), so do not touch the server.
+	if domain.DKIMEnabled && req.DKIM == nil {
+		h.domains.CreateDeployment(domain.ID, serverName, "failed", domain.ConfigHash(),
+			"DKIM is enabled but no DKIM key could be deployed; link a key to the domain")
+		h.serverDomainsCache.invalidate(serverName)
+		return
 	}
 
 	if domain.RateLimitHour > 0 || domain.RateLimitDay > 0 || domain.RateLimitRecipients > 0 {

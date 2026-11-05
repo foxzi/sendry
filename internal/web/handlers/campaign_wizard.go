@@ -524,7 +524,7 @@ func (h *Handlers) CampaignWizardTest(w http.ResponseWriter, r *http.Request) {
 	if subjectSrc == "" {
 		subjectSrc = t.Subject
 	}
-	data := h.wizardRenderData(t.HTML+" "+t.Text+" "+subjectSrc, vars)
+	data := h.wizardRenderData(t.HTML+" "+t.Text+" "+subjectSrc+" "+t.Preheader, vars)
 	data["email"] = to
 	data["recipient_email"] = to
 
@@ -538,6 +538,12 @@ func (h *Handlers) CampaignWizardTest(w http.ResponseWriter, r *http.Request) {
 		fail(http.StatusBadRequest, "Render HTML: "+err.Error())
 		return
 	}
+	preheader, err := emailtpl.RenderText("preheader", t.Preheader, data)
+	if err != nil {
+		fail(http.StatusBadRequest, "Render preheader: "+err.Error())
+		return
+	}
+	html = emailtpl.InsertPreheader(html, preheader)
 	text, err := emailtpl.RenderText("text", t.Text, data)
 	if err != nil {
 		fail(http.StatusBadRequest, "Render text: "+err.Error())
