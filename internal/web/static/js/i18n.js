@@ -407,6 +407,12 @@ var I18n = (function() {
 
     var currentLang = localStorage.getItem('lang') || 'en';
 
+    // The server picks the language of generated names (e.g. "(copy)") from this cookie
+    function rememberLang(lang) {
+        document.cookie = 'lang=' + lang + '; path=/; max-age=31536000; SameSite=Lax';
+    }
+    rememberLang(currentLang);
+
     // Merge section dictionaries ({en: {...}, ru: {...}}) loaded from /static/js/i18n/*.js
     function register(dict) {
         for (var lang in dict) {
@@ -443,6 +449,7 @@ var I18n = (function() {
         if (translations[lang]) {
             currentLang = lang;
             localStorage.setItem('lang', lang);
+            rememberLang(lang);
             document.documentElement.lang = lang;
             applyTranslations();
             updateLangButtons();

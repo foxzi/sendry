@@ -202,6 +202,7 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("GET /campaigns/{id}", h.CampaignView)
 	protected.HandleFunc("POST /campaigns/{id}/section/{row}", h.CampaignSection)
 	protected.HandleFunc("DELETE /campaigns/{id}", h.CampaignDelete)
+	protected.HandleFunc("POST /campaigns/{id}/copy", h.CampaignCopy)
 	// pages that were folded into the campaign page
 	protected.HandleFunc("GET /campaigns/{id}/edit", h.CampaignRedirect)
 	protected.HandleFunc("GET /campaigns/{id}/variables", h.CampaignRedirect)

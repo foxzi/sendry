@@ -107,6 +107,29 @@ func (h *Handlers) CampaignDelete(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/campaigns", http.StatusSeeOther)
 }
 
+// CampaignCopy makes a draft copy of a campaign and opens it.
+func (h *Handlers) CampaignCopy(w http.ResponseWriter, r *http.Request) {
+	suffix := " (copy)"
+	if ck, err := r.Cookie("lang"); err == nil && ck.Value == "ru" {
+		suffix = " (копия)"
+	}
+
+	cp, err := h.campaigns.Copy(r.PathValue("id"), suffix)
+	if err != nil {
+		h.logger.Error("failed to copy campaign", "error", err)
+		h.error(w, http.StatusInternalServerError, "Failed to copy campaign")
+		return
+	}
+	if cp == nil {
+		h.error(w, http.StatusNotFound, "Campaign not found")
+		return
+	}
+
+	h.settings.LogAction(r, middleware.GetUserID(r), middleware.GetUserEmail(r),
+		"copy", "campaign", cp.ID, "from "+r.PathValue("id"))
+	http.Redirect(w, r, "/campaigns/"+cp.ID, http.StatusSeeOther)
+}
+
 // publicOrigin returns the public origin of unsubscribe and tracking links:
 // the tracking base URL setting or server.public_url; "" if neither is set.
 func (h *Handlers) publicOrigin() (string, error) {

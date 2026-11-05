@@ -234,3 +234,39 @@ func (r *CampaignRepository) UpdateVariables(id, variables string) error {
 		variables, time.Now(), id)
 	return err
 }
+
+// Copy creates a draft copy of a campaign in one transaction: the same sender,
+// settings, variables, tags and variants with weights. Runs, statistics and
+// tracking events are not copied. The copy is named "<name><suffix>". Returns
+// nil, nil if the source campaign does not exist.
+func (r *CampaignRepository) Copy(id, suffix string) (*models.Campaign, error) {
+	var cp *models.Campaign
+	err := r.InTx(func(tx *CampaignRepository) error {
+		src, err := tx.GetByID(id)
+		if err != nil || src == nil {
+			return err
+		}
+		variants, err := tx.GetVariants(id)
+		if err != nil {
+			return err
+		}
+		c := *src
+		c.Name = src.Name + suffix
+		if err := tx.Create(&c); err != nil {
+			return err
+		}
+		for _, v := range variants {
+			nv := v
+			nv.CampaignID = c.ID
+			if err := tx.AddVariant(&nv); err != nil {
+				return err
+			}
+		}
+		cp = &c
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return cp, nil
+}
