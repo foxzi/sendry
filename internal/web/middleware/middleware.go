@@ -386,6 +386,24 @@ func APIAuth(apiKeys *repository.APIKeyRepository, logger *slog.Logger) func(htt
 	}
 }
 
+// RequireAPIPermission lets the request through only when the API key set by
+// APIAuth holds the permission; otherwise it answers 403.
+func RequireAPIPermission(perm string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		key := GetAPIKeyFromContext(r)
+		if key == nil || !key.HasPermission(perm) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "API key does not have the \"" + perm + "\" permission",
+				"code":  "PERMISSION_DENIED",
+			})
+			return
+		}
+		next(w, r)
+	}
+}
+
 // GetAPIKeyFromContext returns the API key from request context
 func GetAPIKeyFromContext(r *http.Request) *models.APIKey {
 	if key, ok := r.Context().Value(ctxKeyAPIKey).(*models.APIKey); ok {

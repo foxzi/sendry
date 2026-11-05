@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sendry-web: a DKIM key opened from a server page goes to the panel's key page, which lists every server with its deployment state; the separate per-server key page is removed (`/servers/{server}/dkim/{id}` redirects to `/dkim/{id}`)
 
 ### Security
+- sendry-web: API keys have permissions: `send` (send email and check its status) and `lists` (recipient list API). A new key gets `send` by default, `lists` is off; a key cannot be saved without a permission; existing keys keep only `send` (old `template` and `status` values count as `send`). Before, any active key could read and change every recipient list. Requests outside the key's permissions get `403 PERMISSION_DENIED`
 - MTA API: addresses in send and template-send requests must have one `@` and no spaces, brackets or quotes; a quoted local part like `"x> NOTIFY=SUCCESS"@example.com` was unquoted by `net/mail` and smuggled SMTP parameters into MAIL FROM / RCPT TO
 
 ### Fixed

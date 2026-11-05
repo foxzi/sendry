@@ -234,10 +234,22 @@ Details: [Tracking](tracking.md).
 Panel port (8088 by default), API key authentication (`Authorization: Bearer <key>` or `X-API-Key`).
 
 ```
-POST /api/v1/send
-POST /api/v1/send/template
-GET  /api/v1/send/{id}/status
+POST   /api/v1/send                               # permission: send
+POST   /api/v1/send/template                      # permission: send
+GET    /api/v1/send/{id}/status                   # permission: send
+GET    /api/v1/lists                              # permission: lists
+POST   /api/v1/lists/{id}/recipients              # permission: lists
+DELETE /api/v1/lists/{id}/recipients/{email}      # permission: lists
 ```
+
+Each key has permissions, set in Settings → API keys:
+
+| Permission | Allows |
+|------------|--------|
+| `send` | Sending email (plain and by template) and checking its status. On by default for a new key |
+| `lists` | Reading recipient lists, adding and removing recipients. Off by default |
+
+A key needs at least one permission. A request outside the key's permissions gets `403` with `"code": "PERMISSION_DENIED"`. Keys created before permissions existed have only `send` (the old values `template` and `status` count as `send`).
 
 Besides the usual message fields (`from`, `to`, `subject`, `html`, `template_id`, `data`, and others), send requests accept optional tracking fields:
 

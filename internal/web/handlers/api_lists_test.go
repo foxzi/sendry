@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/foxzi/sendry/internal/web/middleware"
+	"github.com/foxzi/sendry/internal/web/models"
 	"github.com/foxzi/sendry/internal/web/repository"
 )
 
@@ -20,15 +21,23 @@ func newAPIListsServer(t *testing.T) (http.Handler, *sql.DB, string) {
 	t.Helper()
 	h, d := newCampaignTestHandlers(t, "")
 	keys := repository.NewAPIKeyRepository(d)
-	res, err := keys.Create(repository.APIKeyCreateOptions{Name: "shop"})
+	res, err := keys.Create(repository.APIKeyCreateOptions{Name: "shop", Permissions: []string{models.PermissionLists}})
 	if err != nil {
 		t.Fatal(err)
 	}
+	return apiListsMux(h, keys), d, res.Key
+}
+
+// apiListsMux mirrors the list routes of server.setupRoutes.
+func apiListsMux(h *Handlers, keys *repository.APIKeyRepository) http.Handler {
+	lists := func(f http.HandlerFunc) http.HandlerFunc {
+		return middleware.RequireAPIPermission(models.PermissionLists, f)
+	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v1/lists", h.APIListLists)
-	mux.HandleFunc("POST /api/v1/lists/{id}/recipients", h.APIAddRecipients)
-	mux.HandleFunc("DELETE /api/v1/lists/{id}/recipients/{email}", h.APIDeleteRecipient)
-	return middleware.APIAuth(keys, h.logger)(mux), d, res.Key
+	mux.HandleFunc("GET /api/v1/lists", lists(h.APIListLists))
+	mux.HandleFunc("POST /api/v1/lists/{id}/recipients", lists(h.APIAddRecipients))
+	mux.HandleFunc("DELETE /api/v1/lists/{id}/recipients/{email}", lists(h.APIDeleteRecipient))
+	return middleware.APIAuth(keys, h.logger)(mux)
 }
 
 func apiDo(srv http.Handler, key, method, path, body string) *httptest.ResponseRecorder {
@@ -292,5 +301,29 @@ func TestAPIDeleteRecipient_PercentInLocalPart(t *testing.T) {
 	}
 	if _, _, _, found := recipientRow(t, d, "x%41y@example.org"); found {
 		t.Error("recipient still there")
+	}
+}
+
+// A key with only the send permission cannot touch recipient lists.
+func TestAPILists_RequiresListsPermission(t *testing.T) {
+	h, d := newCampaignTestHandlers(t, "")
+	keys := repository.NewAPIKeyRepository(d)
+	res, err := keys.Create(repository.APIKeyCreateOptions{Name: "sender", Permissions: []string{models.PermissionSend}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := apiListsMux(h, keys)
+	for _, c := range [][3]string{
+		{"GET", "/api/v1/lists", ""},
+		{"POST", "/api/v1/lists/l1/recipients", `{"recipients":[{"email":"new@example.org"}]}`},
+		{"DELETE", "/api/v1/lists/l1/recipients/a@example.org", ""},
+	} {
+		rec := apiDo(srv, res.Key, c[0], c[1], c[2])
+		if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "PERMISSION_DENIED") {
+			t.Errorf("%s %s: %d %s", c[0], c[1], rec.Code, rec.Body.String())
+		}
+	}
+	if _, _, _, found := recipientRow(t, d, "a@example.org"); !found {
+		t.Error("recipient was deleted by a send-only key")
 	}
 }

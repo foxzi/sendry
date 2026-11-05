@@ -43,16 +43,17 @@ func (h *Handlers) APIKeysList(w http.ResponseWriter, r *http.Request) {
 	domains, _ := h.domains.List(models.DomainFilter{})
 
 	data := map[string]any{
-		"Title":      "API Keys",
-		"Active":     "apikeys",
-		"User":       h.getUserFromContext(r),
-		"APIKeys":    keys,
-		"Total":      total,
-		"Page":       page,
-		"TotalPages": totalPages,
-		"Search":     search,
-		"NewKey":     newKey,
-		"Domains":    domains,
+		"Title":       "API Keys",
+		"Active":      "apikeys",
+		"User":        h.getUserFromContext(r),
+		"APIKeys":     keys,
+		"Total":       total,
+		"Page":        page,
+		"TotalPages":  totalPages,
+		"Search":      search,
+		"NewKey":      newKey,
+		"Domains":     domains,
+		"Permissions": models.APIKeyPermissions,
 	}
 
 	h.render(w, "apikeys_list", data)
@@ -95,11 +96,16 @@ func (h *Handlers) APIKeyCreate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	permissions, ok := h.apiKeyPermissionsFromForm(w, r)
+	if !ok {
+		return
+	}
+
 	user := h.getUserFromContext(r)
 	opts := repository.APIKeyCreateOptions{
 		Name:            name,
 		CreatedBy:       user["Email"].(string),
-		Permissions:     []string{"send"},
+		Permissions:     permissions,
 		AllowedDomains:  allowedDomains,
 		ExpiresAt:       expiresAt,
 		RateLimitMinute: rateLimitMinute,
@@ -198,7 +204,12 @@ func (h *Handlers) APIKeyEdit(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := h.apiKeys.Update(id, name, allowedDomains, rateLimitMinute, rateLimitHour); err != nil {
+	permissions, ok := h.apiKeyPermissionsFromForm(w, r)
+	if !ok {
+		return
+	}
+
+	if err := h.apiKeys.Update(id, name, permissions, allowedDomains, rateLimitMinute, rateLimitHour); err != nil {
 		h.logger.Error("failed to update API key", "id", id, "error", err)
 		h.error(w, r, http.StatusInternalServerError, "Failed to update API key")
 		return
@@ -231,4 +242,21 @@ func (h *Handlers) APIKeyGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.apiJSON(w, http.StatusOK, apiKey)
+}
+
+// apiKeyPermissionsFromForm reads the permission checkboxes. A key without
+// any permission, or with an unknown one, is rejected with 400.
+func (h *Handlers) apiKeyPermissionsFromForm(w http.ResponseWriter, r *http.Request) ([]string, bool) {
+	perms := r.Form["permissions"]
+	for _, p := range perms {
+		if !models.ValidAPIKeyPermission(p) {
+			h.error(w, r, http.StatusBadRequest, "Unknown permission: "+p)
+			return nil, false
+		}
+	}
+	if len(perms) == 0 {
+		h.error(w, r, http.StatusBadRequest, "Select at least one permission")
+		return nil, false
+	}
+	return perms, true
 }

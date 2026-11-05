@@ -6,7 +6,9 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/foxzi/sendry/internal/web/models"
@@ -48,13 +50,9 @@ func (r *APIKeyRepository) Create(opts APIKeyCreateOptions) (*models.APIKeyCreat
 	// Get prefix for display
 	keyPrefix := key[:11] // "sk_" + first 8 chars
 
-	// Serialize permissions
-	permJSON := `["send"]`
-	if len(opts.Permissions) > 0 {
-		permJSON = `["` + opts.Permissions[0] + `"]`
-		for _, p := range opts.Permissions[1:] {
-			permJSON = permJSON[:len(permJSON)-1] + `","` + p + `"]`
-		}
+	permJSON, err := encodePermissions(opts.Permissions)
+	if err != nil {
+		return nil, err
 	}
 
 	// Serialize allowed domains
@@ -79,7 +77,7 @@ func (r *APIKeyRepository) Create(opts APIKeyCreateOptions) (*models.APIKeyCreat
 		Active:          true,
 	}
 
-	_, err := r.db.Exec(`
+	_, err = r.db.Exec(`
 		INSERT INTO api_keys (id, name, key_hash, key_prefix, permissions, allowed_domains, rate_limit_minute, rate_limit_hour, created_by, created_at, expires_at, active)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		apiKey.ID, apiKey.Name, apiKey.KeyHash, apiKey.KeyPrefix, apiKey.Permissions, domainsJSON,
@@ -290,8 +288,37 @@ func (r *APIKeyRepository) Delete(id string) error {
 	return nil
 }
 
+// ErrNoPermissions is returned when an API key would be saved without any
+// permission: such a key could not call any endpoint.
+var ErrNoPermissions = errors.New("an API key needs at least one permission")
+
+// encodePermissions validates permissions and stores them as a JSON array in
+// the canonical order, without duplicates.
+func encodePermissions(perms []string) (string, error) {
+	out := make([]string, 0, len(models.APIKeyPermissions))
+	for _, p := range perms {
+		if !models.ValidAPIKeyPermission(p) {
+			return "", fmt.Errorf("unknown API key permission %q", p)
+		}
+	}
+	for _, p := range models.APIKeyPermissions {
+		if slices.Contains(perms, p) {
+			out = append(out, p)
+		}
+	}
+	if len(out) == 0 {
+		return "", ErrNoPermissions
+	}
+	b, err := json.Marshal(out)
+	return string(b), err
+}
+
 // Update updates an API key's settings
-func (r *APIKeyRepository) Update(id string, name string, allowedDomains []string, rateLimitMinute, rateLimitHour int) error {
+func (r *APIKeyRepository) Update(id string, name string, permissions, allowedDomains []string, rateLimitMinute, rateLimitHour int) error {
+	permJSON, err := encodePermissions(permissions)
+	if err != nil {
+		return err
+	}
 	domainsJSON := "[]"
 	if len(allowedDomains) > 0 {
 		domainsBytes, _ := json.Marshal(allowedDomains)
@@ -299,8 +326,8 @@ func (r *APIKeyRepository) Update(id string, name string, allowedDomains []strin
 	}
 
 	result, err := r.db.Exec(`
-		UPDATE api_keys SET name = ?, allowed_domains = ?, rate_limit_minute = ?, rate_limit_hour = ?
-		WHERE id = ?`, name, domainsJSON, rateLimitMinute, rateLimitHour, id)
+		UPDATE api_keys SET name = ?, permissions = ?, allowed_domains = ?, rate_limit_minute = ?, rate_limit_hour = ?
+		WHERE id = ?`, name, permJSON, domainsJSON, rateLimitMinute, rateLimitHour, id)
 	if err != nil {
 		return err
 	}

@@ -12,6 +12,7 @@ import (
 	"github.com/foxzi/sendry/internal/web/db"
 	"github.com/foxzi/sendry/internal/web/handlers"
 	"github.com/foxzi/sendry/internal/web/middleware"
+	"github.com/foxzi/sendry/internal/web/models"
 	"github.com/foxzi/sendry/internal/web/repository"
 	"github.com/foxzi/sendry/internal/web/static"
 	"github.com/foxzi/sendry/internal/web/tracking"
@@ -117,12 +118,18 @@ func (s *Server) setupRoutes() http.Handler {
 
 	// Public API routes (API key auth)
 	apiMux := http.NewServeMux()
-	apiMux.HandleFunc("POST /api/v1/send", h.APISend)
-	apiMux.HandleFunc("POST /api/v1/send/template", h.APISendTemplate)
-	apiMux.HandleFunc("GET /api/v1/send/{id}/status", h.APIGetStatus)
-	apiMux.HandleFunc("GET /api/v1/lists", h.APIListLists)
-	apiMux.HandleFunc("POST /api/v1/lists/{id}/recipients", h.APIAddRecipients)
-	apiMux.HandleFunc("DELETE /api/v1/lists/{id}/recipients/{email}", h.APIDeleteRecipient)
+	send := func(f http.HandlerFunc) http.HandlerFunc {
+		return middleware.RequireAPIPermission(models.PermissionSend, f)
+	}
+	lists := func(f http.HandlerFunc) http.HandlerFunc {
+		return middleware.RequireAPIPermission(models.PermissionLists, f)
+	}
+	apiMux.HandleFunc("POST /api/v1/send", send(h.APISend))
+	apiMux.HandleFunc("POST /api/v1/send/template", send(h.APISendTemplate))
+	apiMux.HandleFunc("GET /api/v1/send/{id}/status", send(h.APIGetStatus))
+	apiMux.HandleFunc("GET /api/v1/lists", lists(h.APIListLists))
+	apiMux.HandleFunc("POST /api/v1/lists/{id}/recipients", lists(h.APIAddRecipients))
+	apiMux.HandleFunc("DELETE /api/v1/lists/{id}/recipients/{email}", lists(h.APIDeleteRecipient))
 
 	apiKeysRepo := repository.NewAPIKeyRepository(s.db.DB)
 	apiAuth := middleware.APIAuth(apiKeysRepo, s.logger)
