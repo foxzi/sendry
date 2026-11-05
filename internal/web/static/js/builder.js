@@ -883,7 +883,7 @@
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             credentials: 'same-origin',
-            body: JSON.stringify({html: html, data: data})
+            body: JSON.stringify({html: html, preheader: (document.getElementById('preheader') || {}).value || '', data: data})
         }).then(function(r) {
             if (!r.ok) return r.text().then(function(t) { throw new Error(t); });
             return r.text();

@@ -90,6 +90,7 @@ func (h *Handlers) BuilderUpdate(w http.ResponseWriter, r *http.Request) {
 
 	name := r.FormValue("name")
 	subject := r.FormValue("subject")
+	preheader := r.FormValue("preheader")
 	description := r.FormValue("description")
 	folder := r.FormValue("folder")
 	html := r.FormValue("html")
@@ -106,6 +107,7 @@ func (h *Handlers) BuilderUpdate(w http.ResponseWriter, r *http.Request) {
 	t.Name = name
 	t.Description = description
 	t.Subject = subject
+	t.Preheader = preheader
 	t.Variables = variables
 	t.Folder = folder
 	t.ContainerRadius = cs.Radius
@@ -163,6 +165,7 @@ func (h *Handlers) BuilderCreate(w http.ResponseWriter, r *http.Request) {
 
 	name := r.FormValue("name")
 	subject := r.FormValue("subject")
+	preheader := r.FormValue("preheader")
 	description := r.FormValue("description")
 	folder := r.FormValue("folder")
 	html := r.FormValue("html")
@@ -187,6 +190,7 @@ func (h *Handlers) BuilderCreate(w http.ResponseWriter, r *http.Request) {
 		Name:                  name,
 		Description:           description,
 		Subject:               subject,
+		Preheader:             preheader,
 		HTML:                  html,
 		Text:                  text,
 		Variables:             variables,
@@ -363,8 +367,9 @@ func parseContainerSettings(r *http.Request) containerForm {
 
 func (h *Handlers) BuilderRenderPreview(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		HTML string         `json:"html"`
-		Data map[string]any `json:"data"`
+		HTML      string         `json:"html"`
+		Preheader string         `json:"preheader"`
+		Data      map[string]any `json:"data"`
 	}
 	raw, _ := io.ReadAll(r.Body)
 	if len(raw) > 0 {
@@ -380,6 +385,15 @@ func (h *Handlers) BuilderRenderPreview(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		http.Error(w, "Render error: "+err.Error(), http.StatusBadRequest)
 		return
+	}
+	// Same as the send: the preheader is rendered with the preview variables
+	if strings.TrimSpace(body.Preheader) != "" {
+		pre, err := emailtpl.RenderText("builder-preheader", body.Preheader, body.Data)
+		if err != nil {
+			http.Error(w, "Render preheader: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		out = emailtpl.InsertPreheader(out, pre)
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write([]byte(out))

@@ -360,6 +360,11 @@ func (r *EmailRouter) resolveTemplate(ctx context.Context, req *APISendRequest) 
 	if err != nil {
 		return nil, "", fmt.Errorf("render html: %w", err)
 	}
+	preheader, err := renderVars("preheader", tmpl.Preheader, data, false)
+	if err != nil {
+		return nil, "", fmt.Errorf("render preheader: %w", err)
+	}
+	html = emailtpl.InsertPreheader(html, preheader)
 	text, err := renderVars("text", tmpl.Text, data, false)
 	if err != nil {
 		return nil, "", fmt.Errorf("render text: %w", err)
