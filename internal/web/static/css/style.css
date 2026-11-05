@@ -3131,3 +3131,45 @@ label.cf-list:has(input:focus-visible) {
     font-weight: 600;
     margin-bottom: 0.25rem;
 }
+
+/* Domain list: server state icon with hover details (app.js initTips) */
+.srv-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    cursor: default;
+    border-radius: var(--radius);
+    outline-offset: 2px;
+}
+.srv-icon { width: 18px; height: 18px; flex: none; }
+.srv-icon--success { color: var(--success); }
+.srv-icon--warning { color: var(--warning); }
+.srv-icon--failed { color: var(--error); }
+.srv-icon--draft { color: var(--secondary); }
+.srv-status-tip {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    min-width: 260px;
+    max-width: 380px;
+    padding: 0.75rem;
+    background: var(--bg-card);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    font-size: 0.875rem;
+    white-space: normal;
+}
+.srv-status.is-open .srv-status-tip { display: block; }
+.srv-status-tip-title { display: block; }
+.srv-status-tip-sub { display: block; color: var(--text-muted); margin-bottom: 0.5rem; }
+.srv-status-tip-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    padding: 0.25rem 0;
+    border-top: 1px solid var(--border);
+}
+.srv-status-tip-name { min-width: 4.5rem; font-weight: 500; }
+.srv-status-tip-row--idle .srv-status-tip-name { color: var(--text-muted); font-weight: 400; }

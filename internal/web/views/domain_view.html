@@ -1,87 +1,116 @@
 {{define "content"}}
+<p class="text-muted" style="margin-bottom: 0.5rem;">
+    <a href="/servers" data-i18n="servers">Servers</a> →
+    <a href="/servers/{{.ServerName}}">{{.ServerName}}</a> →
+    <a href="/servers/{{.ServerName}}/domains" data-i18n="domains">Domains</a>
+</p>
 <div class="page-header">
-    <h1><span data-i18n="common.domain">Domain</span>: {{.Domain.Domain}}</h1>
+    <h1>{{.Domain.Domain}} <span class="text-muted" style="font-weight: normal;"><span data-i18n="infra.on_server">on server</span> {{.ServerName}}</span></h1>
     <div class="header-actions">
         <a href="/servers/{{.ServerName}}/domains/{{.Domain.Domain}}/edit" class="btn btn-primary" data-i18n="edit">Edit</a>
+        {{if .Panel.ID}}
+        <a href="/domains/{{.Panel.ID}}" class="btn btn-secondary" data-i18n="infra.open_in_panel">Open in panel</a>
+        {{end}}
         <a href="/servers/{{.ServerName}}/domains" class="btn btn-secondary" data-i18n="infra.back_to_domains">Back to domains</a>
     </div>
 </div>
 
-<div class="card">
-    <div class="card-header">
-        <h3 data-i18n="infra.general_settings">General Settings</h3>
-    </div>
-    <div class="card-body">
-        <div class="table-scroll">
-        <table class="table table-details">
-            <tr>
-                <th data-i18n="common.domain">Domain</th>
-                <td>{{.Domain.Domain}}</td>
-            </tr>
-            <tr>
-                <th data-i18n="common.mode">Mode</th>
-                <td>
-                    <span class="badge badge-{{if eq .Domain.Mode "production"}}running{{else if eq .Domain.Mode "sandbox"}}draft{{else if eq .Domain.Mode "redirect"}}warning{{else}}info{{end}}" data-i18n="infra.mode.{{if .Domain.Mode}}{{.Domain.Mode}}{{else}}production{{end}}">
-                        {{if .Domain.Mode}}{{.Domain.Mode}}{{else}}production{{end}}
-                    </span>
-                </td>
-            </tr>
-            {{if .Domain.DefaultFrom}}
-            <tr>
-                <th data-i18n="infra.default_from">Default From</th>
-                <td>{{.Domain.DefaultFrom}}</td>
-            </tr>
-            {{end}}
-            {{if .Domain.RedirectTo}}
-            <tr>
-                <th data-i18n="infra.redirect_to">Redirect To</th>
-                <td>
-                    {{range .Domain.RedirectTo}}
-                    <span class="badge badge-info">{{.}}</span>
-                    {{end}}
-                </td>
-            </tr>
-            {{end}}
-            {{if .Domain.BCCTo}}
-            <tr>
-                <th data-i18n="infra.bcc_to">BCC To</th>
-                <td>
-                    {{range .Domain.BCCTo}}
-                    <span class="badge badge-info">{{.}}</span>
-                    {{end}}
-                </td>
-            </tr>
-            {{end}}
-        </table>
-        </div>
-    </div>
+{{if .Panel.ID}}
+<div class="alert alert-success">
+    <span data-i18n="infra.server_domain_managed">This domain is managed by the panel. Below is what is configured on this server right now. Change the domain in the panel and deploy it: edits made here are overwritten by the next deployment.</span>
+    <a href="/domains/{{.Panel.ID}}" data-i18n="infra.open_in_panel">Open in panel</a>
 </div>
+{{else}}
+<div class="alert alert-warning">
+    <span data-i18n="infra.server_domain_local">This domain is not in the panel: it comes from the server's config file or was added through its API. Changes here apply to this server only.</span>
+</div>
+{{end}}
 
-<div class="card">
-    <div class="card-header">
-        <h3 data-i18n="infra.dkim_settings">DKIM Settings</h3>
-    </div>
-    <div class="card-body">
-        {{if and .Domain.DKIM .Domain.DKIM.Enabled}}
-        <div class="table-scroll">
-        <table class="table table-details">
-            <tr>
-                <th data-i18n="status">Status</th>
-                <td><span class="badge badge-running" data-i18n="infra.enabled">Enabled</span></td>
-            </tr>
-            <tr>
-                <th data-i18n="infra.selector">Selector</th>
-                <td>{{.Domain.DKIM.Selector}}</td>
-            </tr>
-            <tr>
-                <th data-i18n="infra.dns_name">DNS Name</th>
-                <td><code>{{.Domain.DKIM.Selector}}._domainkey.{{.Domain.Domain}}</code></td>
-            </tr>
-        </table>
+<div class="grid grid-2">
+    <div class="card">
+        <div class="card-header">
+            <h3 data-i18n="infra.general_settings">General Settings</h3>
         </div>
-        {{else}}
-        <p class="text-muted" data-i18n="infra.dkim_signing_is_disabled_for_this_domain">DKIM signing is disabled for this domain</p>
-        {{end}}
+        <div class="card-body">
+            <div class="table-scroll">
+            <table class="table table-details">
+                <tr>
+                    <th data-i18n="common.domain">Domain</th>
+                    <td>{{.Domain.Domain}}</td>
+                </tr>
+                <tr>
+                    <th data-i18n="common.server">Server</th>
+                    <td><a href="/servers/{{.ServerName}}">{{.ServerName}}</a></td>
+                </tr>
+                <tr>
+                    <th data-i18n="common.mode">Mode</th>
+                    <td>
+                        <span class="badge badge-{{if eq .Domain.Mode "production"}}running{{else if eq .Domain.Mode "sandbox"}}draft{{else if eq .Domain.Mode "redirect"}}warning{{else}}info{{end}}" data-i18n="infra.mode.{{if .Domain.Mode}}{{.Domain.Mode}}{{else}}production{{end}}">
+                            {{if .Domain.Mode}}{{.Domain.Mode}}{{else}}production{{end}}
+                        </span>
+                    </td>
+                </tr>
+                {{if .Domain.DefaultFrom}}
+                <tr>
+                    <th data-i18n="infra.default_from">Default From</th>
+                    <td>{{.Domain.DefaultFrom}}</td>
+                </tr>
+                {{end}}
+                {{if .Domain.RedirectTo}}
+                <tr>
+                    <th data-i18n="infra.redirect_to">Redirect To</th>
+                    <td>
+                        {{range .Domain.RedirectTo}}
+                        <span class="badge badge-info">{{.}}</span>
+                        {{end}}
+                    </td>
+                </tr>
+                {{end}}
+                {{if .Domain.BCCTo}}
+                <tr>
+                    <th data-i18n="infra.bcc_to">BCC To</th>
+                    <td>
+                        {{range .Domain.BCCTo}}
+                        <span class="badge badge-info">{{.}}</span>
+                        {{end}}
+                    </td>
+                </tr>
+                {{end}}
+                <tr>
+                    <th data-i18n="infra.in_panel">In panel</th>
+                    <td>{{template "panel_link_badge" .Panel}}</td>
+                </tr>
+            </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3 data-i18n="infra.dkim_settings">DKIM Settings</h3>
+        </div>
+        <div class="card-body">
+            {{if and .Domain.DKIM .Domain.DKIM.Enabled}}
+            <div class="table-scroll">
+            <table class="table table-details">
+                <tr>
+                    <th data-i18n="status">Status</th>
+                    <td><span class="badge badge-success" data-i18n="infra.enabled">Enabled</span></td>
+                </tr>
+                <tr>
+                    <th data-i18n="infra.selector">Selector</th>
+                    <td>{{.Domain.DKIM.Selector}}</td>
+                </tr>
+                <tr>
+                    <th data-i18n="infra.dns_name">DNS Name</th>
+                    <td><code>{{.Domain.DKIM.Selector}}._domainkey.{{.Domain.Domain}}</code></td>
+                </tr>
+            </table>
+            </div>
+            {{else}}
+            <p class="text-muted" data-i18n="infra.dkim_signing_is_disabled_for_this_domain">DKIM signing is disabled for this domain</p>
+            {{end}}
+        </div>
     </div>
 </div>
 
@@ -95,15 +124,15 @@
         <table class="table table-details">
             <tr>
                 <th data-i18n="infra.messages_per_hour">Messages per Hour</th>
-                <td>{{.Domain.RateLimit.MessagesPerHour}}</td>
+                <td>{{if .Domain.RateLimit.MessagesPerHour}}{{.Domain.RateLimit.MessagesPerHour}}{{else}}<span data-i18n="infra.unlimited">Unlimited</span>{{end}}</td>
             </tr>
             <tr>
                 <th data-i18n="infra.messages_per_day">Messages per Day</th>
-                <td>{{.Domain.RateLimit.MessagesPerDay}}</td>
+                <td>{{if .Domain.RateLimit.MessagesPerDay}}{{.Domain.RateLimit.MessagesPerDay}}{{else}}<span data-i18n="infra.unlimited">Unlimited</span>{{end}}</td>
             </tr>
             <tr>
                 <th data-i18n="infra.recipients_per_message">Recipients per Message</th>
-                <td>{{.Domain.RateLimit.RecipientsPerMessage}}</td>
+                <td>{{if .Domain.RateLimit.RecipientsPerMessage}}{{.Domain.RateLimit.RecipientsPerMessage}}{{else}}<span data-i18n="infra.unlimited">Unlimited</span>{{end}}</td>
             </tr>
         </table>
         </div>
@@ -121,6 +150,9 @@
         <form method="POST" action="/servers/{{.ServerName}}/domains/{{.Domain.Domain}}/delete"
               onsubmit="return confirm(I18n.t('infra.are_you_sure_you_want_to_delete_this_domain'));">
             <p class="text-muted" data-i18n="infra.deleting_a_domain_will_remove_it_from_the">Deleting a domain will remove it from the server configuration. This will not delete any DKIM keys stored in Sendry Web.</p>
+            {{if .Panel.ID}}
+            <p class="text-muted" data-i18n="infra.server_domain_delete_managed">The panel still lists this domain as deployed here. To remove it from all servers, delete it in the panel.</p>
+            {{end}}
             <button type="submit" class="btn btn-danger" data-i18n="infra.delete_domain_2">Delete Domain</button>
         </form>
     </div>

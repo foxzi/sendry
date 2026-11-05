@@ -43,6 +43,8 @@ type Handlers struct {
 	tracking   *repository.TrackingRepository
 	unsubs     *repository.UnsubscribeRepository
 	proxies    tracking.TrustedProxies // reverse proxies allowed to set the client IP
+
+	serverDomainsCache *serverDomainsCache // per-MTA domain lists for drift checks
 }
 
 func New(cfg *config.Config, db *db.DB, logger *slog.Logger, v *views.Engine, oidcProvider *auth.OIDCProvider) *Handlers {
@@ -109,6 +111,8 @@ func New(cfg *config.Config, db *db.DB, logger *slog.Logger, v *views.Engine, oi
 		tracking:   repository.NewTrackingRepository(db.DB),
 		unsubs:     repository.NewUnsubscribeRepository(db.DB),
 		proxies:    proxies,
+
+		serverDomainsCache: newServerDomainsCache(),
 	}
 }
 

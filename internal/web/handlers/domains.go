@@ -5,10 +5,41 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/foxzi/sendry/internal/web/models"
 	"github.com/foxzi/sendry/internal/web/sendry"
 )
+
+// panelLink tells how a domain found on an MTA relates to the panel's own
+// domain list. ID is empty when the domain exists only on the server (its
+// config file or a direct API call). Status is the panel's deployment of the
+// domain to that server, one of the state* constants; Diff lists what differs
+// from the panel when Status is stateDiffers.
+type panelLink struct {
+	ID     string
+	Status string
+	Diff   []string
+}
+
+// panelLinkFor compares a domain as the server reports it with the panel's.
+func (h *Handlers) panelLinkFor(sd *sendry.Domain, serverName string) panelLink {
+	d, err := h.domains.GetByDomain(sd.Domain)
+	if err != nil {
+		h.logger.Error("failed to look up panel domain", "error", err, "domain", sd.Domain)
+		return panelLink{}
+	}
+	if d == nil {
+		return panelLink{}
+	}
+	link := panelLink{ID: d.ID, Status: stateNotDeployed}
+	snap := map[string]serverDomainsEntry{serverName: newServerDomainsEntry([]*sendry.Domain{sd}, nil)}
+	if st, ok := h.deploymentStates(d, snap)[serverName]; ok {
+		link.Status = st.Status
+		link.Diff = st.Diff
+	}
+	return link
+}
 
 // DomainsList shows domains for a server
 func (h *Handlers) DomainsList(w http.ResponseWriter, r *http.Request) {
@@ -30,12 +61,19 @@ func (h *Handlers) DomainsList(w http.ResponseWriter, r *http.Request) {
 	// Get DKIM keys for linking
 	dkimKeys, _ := h.dkim.List()
 
+	h.serverDomainsCache.store(serverName, domains.Domains)
+	panel := make(map[string]panelLink, len(domains.Domains))
+	for _, d := range domains.Domains {
+		panel[d.Domain] = h.panelLinkFor(d, serverName)
+	}
+
 	data := map[string]any{
 		"Title":      fmt.Sprintf("%s - Domains", serverName),
 		"Active":     "servers",
 		"User":       h.getUserFromContext(r),
 		"ServerName": serverName,
 		"Domains":    domains.Domains,
+		"Panel":      panel,
 		"DKIMKeys":   dkimKeys,
 	}
 
@@ -153,6 +191,7 @@ func (h *Handlers) DomainsCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.serverDomainsCache.invalidate(serverName)
 	http.Redirect(w, r, "/servers/"+serverName+"/domains", http.StatusSeeOther)
 }
 
@@ -178,11 +217,12 @@ func (h *Handlers) DomainsView(w http.ResponseWriter, r *http.Request) {
 	dkimKeys, _ := h.dkim.List()
 
 	data := map[string]any{
-		"Title":      fmt.Sprintf("Domain: %s", domainName),
+		"Title":      fmt.Sprintf("%s on %s", domainName, serverName),
 		"Active":     "servers",
 		"User":       h.getUserFromContext(r),
 		"ServerName": serverName,
 		"Domain":     domain,
+		"Panel":      h.panelLinkFor(domain, serverName),
 		"DKIMKeys":   dkimKeys,
 		"Modes":      []string{"production", "sandbox", "redirect", "bcc"},
 	}
@@ -312,6 +352,7 @@ func (h *Handlers) DomainsUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.serverDomainsCache.invalidate(serverName)
 	http.Redirect(w, r, "/servers/"+serverName+"/domains/"+domainName, http.StatusSeeOther)
 }
 
@@ -333,6 +374,7 @@ func (h *Handlers) DomainsDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.serverDomainsCache.invalidate(serverName)
 	http.Redirect(w, r, "/servers/"+serverName+"/domains", http.StatusSeeOther)
 }
 
@@ -349,10 +391,27 @@ func (h *Handlers) CentralDomainsList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Load deployments for each domain
+	// Compare every domain with what its servers report. Full domains are
+	// needed for the settings comparison; one cached request per server.
+	full := make([]*models.Domain, 0, len(domains))
+	var servers []string
 	for i := range domains {
-		deployments, _ := h.domains.GetDeployments(domains[i].ID)
-		domains[i].Deployments = deployments
+		d, err := h.domains.GetByID(domains[i].ID)
+		if err != nil || d == nil {
+			continue
+		}
+		domains[i].Deployments = d.Deployments
+		full = append(full, d)
+		servers = append(servers, deployedServers(d)...)
+	}
+	snap := h.serverDomains(r.Context(), servers, false)
+	known := make([]string, 0, len(h.cfg.Sendry.Servers))
+	for _, srv := range h.cfg.Sendry.Servers {
+		known = append(known, srv.Name)
+	}
+	drift := make(map[string]driftSummary, len(full))
+	for _, d := range full {
+		drift[d.ID] = summarizeStates(h.deploymentStates(d, snap), known...)
 	}
 
 	data := map[string]any{
@@ -360,6 +419,7 @@ func (h *Handlers) CentralDomainsList(w http.ResponseWriter, r *http.Request) {
 		"Active":  "domains",
 		"User":    h.getUserFromContext(r),
 		"Domains": domains,
+		"Drift":   drift,
 		"Servers": h.getServersStatus(),
 	}
 
@@ -489,26 +549,33 @@ func (h *Handlers) CentralDomainsView(w http.ResponseWriter, r *http.Request) {
 		spfValue = fmt.Sprintf("v=spf1 a mx include:%s ~all", spfInclude)
 	}
 
-	// Check for outdated deployments
-	currentHash := domain.ConfigHash()
-	outdatedCount := 0
-	for _, d := range domain.Deployments {
-		if d.ConfigHash != currentHash && d.Status == "deployed" {
-			outdatedCount++
+	// Compare with what the servers report; ?refresh=1 skips the cache.
+	snap := h.serverDomains(r.Context(), deployedServers(domain), r.URL.Query().Get("refresh") == "1")
+	states := h.deploymentStates(domain, snap)
+	syncCount := 0
+	var checkedAt time.Time
+	for _, st := range states {
+		if st.NeedsSync() {
+			syncCount++
+		}
+		if !st.CheckedAt.IsZero() && (checkedAt.IsZero() || st.CheckedAt.Before(checkedAt)) {
+			checkedAt = st.CheckedAt
 		}
 	}
 
 	data := map[string]any{
-		"Title":         fmt.Sprintf("Domain: %s", domain.Domain),
-		"Active":        "domains",
-		"User":          h.getUserFromContext(r),
-		"Domain":        domain,
-		"Servers":       servers,
-		"DeployedMap":   deployedMap,
-		"OutdatedCount": outdatedCount,
-		"ConfigHash":    currentHash,
-		"SPFValue":      spfValue,
-		"SPFInclude":    spfInclude,
+		"Title":       fmt.Sprintf("Domain: %s", domain.Domain),
+		"Active":      "domains",
+		"User":        h.getUserFromContext(r),
+		"Domain":      domain,
+		"Servers":     servers,
+		"DeployedMap": deployedMap,
+		"States":      states,
+		"SyncCount":   syncCount,
+		"CheckedAt":   checkedAt,
+		"ConfigHash":  domain.ConfigHash(),
+		"SPFValue":    spfValue,
+		"SPFInclude":  spfInclude,
 	}
 
 	// Run DNS check if requested
@@ -640,6 +707,7 @@ func (h *Handlers) CentralDomainsDelete(w http.ResponseWriter, r *http.Request) 
 		if err == nil {
 			_ = client.DeleteDomain(r.Context(), domain.Domain)
 		}
+		h.serverDomainsCache.invalidate(d.ServerName)
 	}
 
 	if err := h.domains.Delete(id); err != nil {
@@ -689,11 +757,13 @@ func (h *Handlers) CentralDomainsSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Find all outdated deployments
-	currentHash := domain.ConfigHash()
-	for _, d := range domain.Deployments {
-		if d.ConfigHash != currentHash && d.Status != "failed" {
-			h.deployDomainToServer(r, domain, d.ServerName)
+	// Redeploy wherever the server does not have what the panel has:
+	// outdated in the panel, or deleted or changed on the server. Ask the
+	// servers afresh so a sync never acts on a stale snapshot.
+	snap := h.serverDomains(r.Context(), deployedServers(domain), true)
+	for server, st := range h.deploymentStates(domain, snap) {
+		if st.NeedsSync() {
+			h.deployDomainToServer(r, domain, server)
 		}
 	}
 
@@ -766,6 +836,7 @@ func (h *Handlers) deployDomainToServer(r *http.Request, domain *models.Domain, 
 	} else {
 		h.domains.CreateDeployment(domain.ID, serverName, "deployed", domain.ConfigHash(), "")
 	}
+	h.serverDomainsCache.invalidate(serverName)
 }
 
 // Helper to parse newline-separated addresses

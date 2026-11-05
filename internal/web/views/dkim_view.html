@@ -34,7 +34,7 @@
                     <th><span data-i18n="infra.status_on">Status on</span> {{.ServerName}}</th>
                     <td>
                         {{if .IsDeployed}}
-                        <span class="badge badge-running" data-i18n="infra.deployed">Deployed</span>
+                        <span class="badge badge-success" data-i18n="infra.deployed">Deployed</span>
                         {{else}}
                         <span class="badge badge-draft" data-i18n="infra.not_deployed">Not deployed</span>
                         {{end}}
@@ -117,7 +117,7 @@
                     <td>{{.ServerName}}</td>
                     <td>
                         {{if eq .Status "deployed"}}
-                        <span class="badge badge-running" data-i18n="infra.deployed">Deployed</span>
+                        <span class="badge badge-success" data-i18n="infra.deployed">Deployed</span>
                         {{else}}
                         <span class="badge badge-failed" data-i18n="infra.failed">Failed</span>
                         {{end}}

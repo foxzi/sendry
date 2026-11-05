@@ -1,0 +1,24 @@
+{{/* deployment_state_badge renders a domain's state on one server.
+     Takes handlers.deploymentState (or panelLink): {Status, Diff}. */}}
+{{define "deployment_state_badge"}}
+{{- if eq .Status "synced"}}<span class="badge badge-success" data-i18n="infra.panel_synced">In sync</span>
+{{- else if eq .Status "outdated"}}<span class="badge badge-warning" title="Changed in the panel after deployment" data-i18n-title="infra.outdated_hint" data-i18n="infra.outdated">Outdated</span>
+{{- else if eq .Status "failed"}}<span class="badge badge-failed" data-i18n="infra.failed">Failed</span>
+{{- else if eq .Status "missing"}}<span class="badge badge-failed" title="Deployed by the panel, but the server does not have it" data-i18n-title="infra.missing_hint" data-i18n="infra.missing_on_server">Not on server</span>
+{{- else if eq .Status "differs"}}<span class="badge badge-failed" data-i18n="infra.differs">Differs</span>
+{{- if .Diff}} <span class="text-muted" style="font-size: 0.85em;">{{range $i, $f := .Diff}}{{if $i}}, {{end}}<span data-i18n="infra.diff.{{$f}}">{{$f}}</span>{{end}}</span>{{end}}
+{{- else if eq .Status "unknown"}}<span class="badge badge-draft" title="The server did not answer" data-i18n-title="infra.unknown_hint" data-i18n="infra.unknown">Not checked</span>
+{{- else}}<span class="badge badge-info" data-i18n="infra.panel_not_deployed_here">Not deployed here</span>
+{{- end -}}
+{{end}}
+
+{{/* srv_status_icon: a small coloured icon for a domain's overall state on
+     its servers. Takes the badge colour: success, warning, failed or draft. */}}
+{{define "srv_status_icon"}}
+<svg class="srv-icon srv-icon--{{.}}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+{{- if eq . "success"}}<circle cx="12" cy="12" r="10"/><path d="m8 12.5 2.5 2.5L16 9.5"/>
+{{- else if eq . "warning"}}<circle cx="12" cy="12" r="10"/><path d="M12 7v5l3 2"/>
+{{- else if eq . "failed"}}<circle cx="12" cy="12" r="10"/><path d="M12 7v6"/><path d="M12 16.5v.5"/>
+{{- else}}<circle cx="12" cy="12" r="10"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5"/><path d="M12 16.5v.5"/>
+{{- end}}</svg>
+{{end}}
