@@ -40,6 +40,16 @@ func (f *fakeMTA) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"down"}`, http.StatusInternalServerError)
 		return
 	}
+	if name, ok := strings.CutPrefix(r.URL.Path, "/api/v1/domains/"); ok && name != "" {
+		for _, d := range f.domains {
+			if d.Domain == name {
+				_ = json.NewEncoder(w).Encode(d)
+				return
+			}
+		}
+		http.Error(w, `{"error":"Domain not found"}`, http.StatusNotFound)
+		return
+	}
 	_ = json.NewEncoder(w).Encode(sendry.DomainsListResponse{Domains: f.domains})
 }
 
@@ -234,5 +244,54 @@ func TestCentralDomainsListShowsServerStates(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("list does not contain %q", want)
 		}
+	}
+}
+
+func TestDomainsImport(t *testing.T) {
+	h, database, mta := newDriftTestHandlers(t)
+	mta.set(
+		&sendry.Domain{Domain: "local.example", Mode: "sandbox", DefaultFrom: "a@local.example",
+			RateLimit: &sendry.RateLimitCfg{MessagesPerHour: 10}},
+		&sendry.Domain{Domain: "signed.example", Mode: "production",
+			DKIM: &sendry.DKIMConfig{Enabled: true, Selector: "s1", KeyFile: "/keys/s1.pem"}},
+	)
+	importDomain := func(name string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/servers/mta-1/domains/"+name+"/import", nil)
+		req.SetPathValue("server", "mta-1")
+		req.SetPathValue("domain", name)
+		w := httptest.NewRecorder()
+		h.DomainsImport(w, req)
+		return w
+	}
+	repo := repository.NewDomainRepository(database.DB)
+
+	w := importDomain("local.example")
+	d, _ := repo.GetByDomain("local.example")
+	if w.Code != http.StatusSeeOther || d == nil || w.Header().Get("Location") != "/domains/"+d.ID {
+		t.Fatalf("import: %d %s, domain %+v", w.Code, w.Header().Get("Location"), d)
+	}
+	if d.Mode != "sandbox" || d.DefaultFrom != "a@local.example" || d.RateLimitHour != 10 {
+		t.Errorf("imported settings: %+v", d)
+	}
+	snap := h.serverDomains(context.Background(), []string{"mta-1"}, true)
+	if st := h.deploymentStates(d, snap)["mta-1"]; st.Status != stateSynced {
+		t.Errorf("imported domain should be in sync on its server: %+v", st)
+	}
+
+	// Importing again just opens the panel card.
+	if w := importDomain("local.example"); w.Header().Get("Location") != "/domains/"+d.ID {
+		t.Errorf("second import: %s", w.Header().Get("Location"))
+	}
+
+	// DKIM key the panel does not have: imported with DKIM on, no key, and a warning.
+	w = importDomain("signed.example")
+	s, _ := repo.GetByDomain("signed.example")
+	if s == nil || !s.DKIMEnabled || s.DKIMSelector != "s1" || s.DKIMKeyID != "" ||
+		!strings.HasSuffix(w.Header().Get("Location"), "?imported=nokey") {
+		t.Errorf("DKIM import: %s %+v", w.Header().Get("Location"), s)
+	}
+
+	if w := importDomain("nope.example"); w.Code != http.StatusNotFound {
+		t.Errorf("missing domain: %d", w.Code)
 	}
 }

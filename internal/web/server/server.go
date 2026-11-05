@@ -267,6 +267,7 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("GET /servers/{server}/domains/{domain}/edit", h.DomainsEdit)
 	protected.HandleFunc("POST /servers/{server}/domains/{domain}", h.DomainsUpdate)
 	protected.HandleFunc("POST /servers/{server}/domains/{domain}/delete", h.DomainsDelete)
+	protected.HandleFunc("POST /servers/{server}/domains/{domain}/import", h.DomainsImport)
 
 	// Send History
 	protected.HandleFunc("GET /sends", h.SendsList)

@@ -53,6 +53,11 @@
                     <td>{{template "panel_link_badge" $link}}</td>
                     <td>
                         <a href="/servers/{{$.ServerName}}/domains/{{.Domain}}/edit" class="btn btn-sm btn-secondary" data-i18n="edit">Edit</a>
+                        {{if not $link.ID}}
+                        <form method="POST" action="/servers/{{$.ServerName}}/domains/{{.Domain}}/import" style="display:inline;">
+                            <button type="submit" class="btn btn-sm btn-primary" data-i18n="infra.add_to_panel">Add to panel</button>
+                        </form>
+                        {{end}}
                     </td>
                 </tr>
                 {{end}}

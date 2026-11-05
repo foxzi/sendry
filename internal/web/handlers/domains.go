@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/foxzi/sendry/internal/web/middleware"
 	"github.com/foxzi/sendry/internal/web/models"
 	"github.com/foxzi/sendry/internal/web/sendry"
 )
@@ -378,6 +379,84 @@ func (h *Handlers) DomainsDelete(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/servers/"+serverName+"/domains", http.StatusSeeOther)
 }
 
+// DomainsImport adds a domain that exists only on a server (its config file
+// or a direct API call) to the panel, with the settings the server has, and
+// records it as deployed there so the drift check starts from "in sync".
+//
+// The panel cannot read a DKIM private key back from a server. When the
+// server signs the domain with a key the panel does not have (same domain
+// and selector), the domain is imported with DKIM on but no key linked, and
+// the card warns: a sync would deploy it without DKIM until a key is linked.
+func (h *Handlers) DomainsImport(w http.ResponseWriter, r *http.Request) {
+	serverName := r.PathValue("server")
+	domainName := r.PathValue("domain")
+
+	if existing, err := h.domains.GetByDomain(domainName); err != nil {
+		h.logger.Error("failed to look up panel domain", "error", err)
+		h.error(w, http.StatusInternalServerError, "Failed to import domain")
+		return
+	} else if existing != nil {
+		http.Redirect(w, r, "/domains/"+existing.ID, http.StatusSeeOther)
+		return
+	}
+
+	client, err := h.sendry.GetClient(serverName)
+	if err != nil {
+		h.error(w, http.StatusNotFound, "Server not found")
+		return
+	}
+	sd, err := client.GetDomain(r.Context(), domainName)
+	if err != nil {
+		h.logger.Error("failed to get domain", "error", err, "server", serverName)
+		h.error(w, http.StatusNotFound, "Domain not found")
+		return
+	}
+
+	d := &models.Domain{
+		Domain:      sd.Domain,
+		Mode:        modeOrDefault(sd.Mode),
+		DefaultFrom: sd.DefaultFrom,
+		RedirectTo:  sd.RedirectTo,
+		BCCTo:       sd.BCCTo,
+	}
+	if sd.RateLimit != nil {
+		d.RateLimitHour = sd.RateLimit.MessagesPerHour
+		d.RateLimitDay = sd.RateLimit.MessagesPerDay
+		d.RateLimitRecipients = sd.RateLimit.RecipientsPerMessage
+	}
+	missingKey := false
+	if sd.DKIM != nil && sd.DKIM.Enabled {
+		d.DKIMEnabled = true
+		d.DKIMSelector = sd.DKIM.Selector
+		key, err := h.dkim.GetByDomainSelector(sd.Domain, sd.DKIM.Selector)
+		if err != nil {
+			h.logger.Error("failed to look up DKIM key", "error", err)
+		}
+		if key != nil {
+			d.DKIMKeyID = key.ID
+		} else {
+			missingKey = true
+		}
+	}
+
+	if err := h.domains.Create(d); err != nil {
+		h.logger.Error("failed to create domain", "error", err)
+		h.error(w, http.StatusInternalServerError, "Failed to import domain")
+		return
+	}
+	if err := h.domains.CreateDeployment(d.ID, serverName, "deployed", d.ConfigHash(), ""); err != nil {
+		h.logger.Error("failed to record deployment", "error", err)
+	}
+	h.settings.LogAction(r, middleware.GetUserID(r), middleware.GetUserEmail(r),
+		"import", "domain", d.ID, auditJSON(map[string]any{"domain": d.Domain, "server": serverName}))
+
+	target := "/domains/" + d.ID
+	if missingKey {
+		target += "?imported=nokey"
+	}
+	http.Redirect(w, r, target, http.StatusSeeOther)
+}
+
 // ============================================================================
 // Central Domain Management Handlers
 // ============================================================================
@@ -573,6 +652,7 @@ func (h *Handlers) CentralDomainsView(w http.ResponseWriter, r *http.Request) {
 		"States":      states,
 		"SyncCount":   syncCount,
 		"CheckedAt":   checkedAt,
+		"ImportNoKey": r.URL.Query().Get("imported") == "nokey",
 		"ConfigHash":  domain.ConfigHash(),
 		"SPFValue":    spfValue,
 		"SPFInclude":  spfInclude,

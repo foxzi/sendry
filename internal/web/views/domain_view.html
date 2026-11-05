@@ -21,8 +21,11 @@
     <a href="/domains/{{.Panel.ID}}" data-i18n="infra.open_in_panel">Open in panel</a>
 </div>
 {{else}}
-<div class="alert alert-warning">
+<div class="alert alert-warning" style="display:flex; gap: 1rem; align-items: center; justify-content: space-between; flex-wrap: wrap;">
     <span data-i18n="infra.server_domain_local">This domain is not in the panel: it comes from the server's config file or was added through its API. Changes here apply to this server only.</span>
+    <form method="POST" action="/servers/{{.ServerName}}/domains/{{.Domain.Domain}}/import" style="margin:0;">
+        <button type="submit" class="btn btn-sm btn-primary" data-i18n="infra.add_to_panel">Add to panel</button>
+    </form>
 </div>
 {{end}}
 
