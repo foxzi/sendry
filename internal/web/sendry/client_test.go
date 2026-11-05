@@ -234,3 +234,34 @@ func TestClient_APIError(t *testing.T) {
 		t.Errorf("error = %q, want to contain 'not found'", err.Error())
 	}
 }
+
+func TestRateLimitCfgJSON(t *testing.T) {
+	out, err := json.Marshal(&RateLimitCfg{MessagesPerHour: 50, MessagesPerDay: 0, RecipientsPerMessage: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"messages_per_hour":50`, `"MessagesPerHour":50`, `"messages_per_day":0`, `"RecipientsPerMessage":5`} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("%s lacks %s", out, want)
+		}
+	}
+
+	for name, in := range map[string]string{
+		"documented": `{"messages_per_hour":50,"messages_per_day":7,"recipients_per_message":5}`,
+		"legacy":     `{"MessagesPerHour":50,"MessagesPerDay":7,"RecipientsPerMessage":5}`,
+	} {
+		var got RateLimitCfg
+		if err := json.Unmarshal([]byte(in), &got); err != nil {
+			t.Fatal(err)
+		}
+		if got != (RateLimitCfg{50, 7, 5}) {
+			t.Errorf("%s: got %+v", name, got)
+		}
+	}
+
+	// A domain update request carries the limits in both spellings.
+	body, _ := json.Marshal(DomainUpdateRequest{RateLimit: &RateLimitCfg{MessagesPerHour: 3}})
+	if !strings.Contains(string(body), `"MessagesPerHour":3`) {
+		t.Errorf("update request: %s", body)
+	}
+}

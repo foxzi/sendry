@@ -1,6 +1,9 @@
 package sendry
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // ErrorResponse represents an API error
 type ErrorResponse struct {
@@ -110,11 +113,57 @@ type TLSConfig struct {
 	Required bool `json:"required"`
 }
 
-// RateLimitCfg represents rate limit configuration
+// RateLimitCfg represents a domain's rate limits.
+//
+// MTAs up to 0.4.x read and write these fields as MessagesPerHour etc. (no
+// JSON names on their config struct) and ignore messages_per_hour, so domain
+// limits deployed from the panel never reached them. Later MTAs use the
+// documented snake_case names. Until every server is upgraded the panel
+// writes both spellings and reads either.
 type RateLimitCfg struct {
 	MessagesPerHour      int `json:"messages_per_hour"`
 	MessagesPerDay       int `json:"messages_per_day"`
 	RecipientsPerMessage int `json:"recipients_per_message"`
+}
+
+type rateLimitWire struct {
+	MessagesPerHour      *int `json:"messages_per_hour,omitempty"`
+	MessagesPerDay       *int `json:"messages_per_day,omitempty"`
+	RecipientsPerMessage *int `json:"recipients_per_message,omitempty"`
+	LegacyHour           *int `json:"MessagesPerHour,omitempty"`
+	LegacyDay            *int `json:"MessagesPerDay,omitempty"`
+	LegacyRecipients     *int `json:"RecipientsPerMessage,omitempty"`
+}
+
+// MarshalJSON writes both the documented and the legacy field names.
+func (c RateLimitCfg) MarshalJSON() ([]byte, error) {
+	return json.Marshal(rateLimitWire{
+		MessagesPerHour: &c.MessagesPerHour, MessagesPerDay: &c.MessagesPerDay, RecipientsPerMessage: &c.RecipientsPerMessage,
+		LegacyHour: &c.MessagesPerHour, LegacyDay: &c.MessagesPerDay, LegacyRecipients: &c.RecipientsPerMessage,
+	})
+}
+
+// UnmarshalJSON reads the documented names, falling back to the legacy ones.
+func (c *RateLimitCfg) UnmarshalJSON(data []byte) error {
+	var w rateLimitWire
+	if err := json.Unmarshal(data, &w); err != nil {
+		return err
+	}
+	pick := func(v, legacy *int) int {
+		if v != nil {
+			return *v
+		}
+		if legacy != nil {
+			return *legacy
+		}
+		return 0
+	}
+	*c = RateLimitCfg{
+		MessagesPerHour:      pick(w.MessagesPerHour, w.LegacyHour),
+		MessagesPerDay:       pick(w.MessagesPerDay, w.LegacyDay),
+		RecipientsPerMessage: pick(w.RecipientsPerMessage, w.LegacyRecipients),
+	}
+	return nil
 }
 
 // Template represents a template

@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -593,5 +594,34 @@ func TestDNSBLList(t *testing.T) {
 	dnsbls, ok := resp["dnsbls"].([]interface{})
 	if !ok || len(dnsbls) < 10 {
 		t.Errorf("expected at least 10 DNSBLs, got %d", len(dnsbls))
+	}
+}
+
+// The documented snake_case rate limit names must be accepted and returned;
+// before they had no JSON names and messages_per_hour was silently dropped.
+func TestDomainsRateLimitJSONNames(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{SMTP: config.SMTPConfig{Domain: "example.com"}}
+	mgmt := NewManagementServer(nil, nil, cfg, tmpDir, tmpDir)
+	router := chi.NewRouter()
+	mgmt.RegisterRoutes(router)
+
+	body := `{"domain": "limits.com", "rate_limit": {"messages_per_hour": 50, "messages_per_day": 500, "recipients_per_message": 5}}`
+	req := httptest.NewRequest("POST", "/domains/", bytes.NewBufferString(body))
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", w.Code, w.Body.String())
+	}
+	rl := cfg.Domains["limits.com"].RateLimit
+	if rl == nil || rl.MessagesPerHour != 50 || rl.MessagesPerDay != 500 || rl.RecipientsPerMessage != 5 {
+		t.Fatalf("stored rate limit = %+v", rl)
+	}
+
+	req = httptest.NewRequest("GET", "/domains/limits.com", nil)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if !strings.Contains(w.Body.String(), `"messages_per_hour":50`) {
+		t.Errorf("response does not use the documented name: %s", w.Body.String())
 	}
 }
