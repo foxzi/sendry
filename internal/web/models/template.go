@@ -7,6 +7,7 @@ type Template struct {
 	Name                  string    `json:"name"`
 	Description           string    `json:"description"`
 	Subject               string    `json:"subject"`
+	Preheader             string    `json:"preheader"` // preview line after the subject; may use variables
 	HTML                  string    `json:"html"`
 	Text                  string    `json:"text"`
 	Variables             string    `json:"variables"` // JSON
@@ -41,6 +42,7 @@ type TemplateVersion struct {
 	TemplateID string    `json:"template_id"`
 	Version    int       `json:"version"`
 	Subject    string    `json:"subject"`
+	Preheader  string    `json:"preheader"`
 	HTML       string    `json:"html"`
 	Text       string    `json:"text"`
 	Variables  string    `json:"variables"`

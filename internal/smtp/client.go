@@ -39,7 +39,6 @@ type Client struct {
 	timeout      time.Duration
 	hostname     string
 	logger       *slog.Logger
-	dkimSigner   *dkim.Signer // Legacy single signer (deprecated)
 	dkimProvider DKIMProvider // Multi-domain DKIM provider
 	port         string       // MX port, overridden in tests
 }
@@ -58,11 +57,6 @@ func NewClient(resolver *dns.Resolver, hostname string, timeout time.Duration, l
 	}
 }
 
-// SetDKIMSigner sets the DKIM signer for outgoing messages (deprecated, use SetDKIMProvider)
-func (c *Client) SetDKIMSigner(signer *dkim.Signer) {
-	c.dkimSigner = signer
-}
-
 // SetDKIMProvider sets the multi-domain DKIM provider
 func (c *Client) SetDKIMProvider(provider DKIMProvider) {
 	c.dkimProvider = provider
@@ -70,15 +64,10 @@ func (c *Client) SetDKIMProvider(provider DKIMProvider) {
 
 // getDKIMSigner returns the appropriate DKIM signer for an email address
 func (c *Client) getDKIMSigner(from string) *dkim.Signer {
-	// Try multi-domain provider first
-	if c.dkimProvider != nil {
-		if signer := c.dkimProvider.GetSignerForEmail(from); signer != nil {
-			return signer
-		}
+	if c.dkimProvider == nil {
+		return nil
 	}
-
-	// Fall back to legacy single signer
-	return c.dkimSigner
+	return c.dkimProvider.GetSignerForEmail(from)
 }
 
 // Send sends a message to all recipients

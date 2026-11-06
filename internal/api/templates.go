@@ -380,7 +380,7 @@ func (s *TemplateServer) handleSendTemplate(w http.ResponseWriter, r *http.Reque
 		sendError(w, http.StatusBadRequest, "from is required")
 		return
 	}
-	from, err := mail.ParseAddress(req.From)
+	from, err := parseAddress(req.From)
 	if err != nil {
 		sendError(w, http.StatusBadRequest, "invalid from address")
 		return
@@ -391,19 +391,19 @@ func (s *TemplateServer) handleSendTemplate(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	for _, to := range req.To {
-		if _, err := mail.ParseAddress(to); err != nil {
+		if _, err := parseAddress(to); err != nil {
 			sendError(w, http.StatusBadRequest, fmt.Sprintf("invalid to address: %s", to))
 			return
 		}
 	}
 	for _, cc := range req.CC {
-		if _, err := mail.ParseAddress(cc); err != nil {
+		if _, err := parseAddress(cc); err != nil {
 			sendError(w, http.StatusBadRequest, fmt.Sprintf("invalid cc address: %s", cc))
 			return
 		}
 	}
 	for _, bcc := range req.BCC {
-		if _, err := mail.ParseAddress(bcc); err != nil {
+		if _, err := parseAddress(bcc); err != nil {
 			sendError(w, http.StatusBadRequest, fmt.Sprintf("invalid bcc address: %s", bcc))
 			return
 		}

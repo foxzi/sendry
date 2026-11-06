@@ -25,6 +25,8 @@
 
                 <dt data-i18n="common.subject">Subject</dt>
                 <dd><code>{{.Template.Subject}}</code></dd>
+                {{if .Template.Preheader}}<dt data-i18n="tpl.preheader">Preheader</dt>
+                <dd><code>{{.Template.Preheader}}</code></dd>{{end}}
 
                 <dt data-i18n="current_version">Current Version</dt>
                 <dd>v{{.Template.CurrentVersion}}</dd>
@@ -213,6 +215,7 @@ document.querySelectorAll('.tab').forEach(function(tab) {
 
     var html = {{toJSON .Template.HTML}};
     var subject = {{toJSON .Template.Subject}};
+    var preheader = {{toJSON .Template.Preheader}};
     var sample = {};
     try { sample = JSON.parse({{toJSON .VariablesShape}}); } catch (e) { sample = {}; }
     sample.Subject = subject;
@@ -223,7 +226,7 @@ document.querySelectorAll('.tab').forEach(function(tab) {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             credentials: 'same-origin',
-            body: JSON.stringify({html: html, data: sample})
+            body: JSON.stringify({html: html, preheader: preheader, data: sample})
         }).then(function(r) {
             if (!r.ok) return r.text().then(function(t) { throw new Error(t); });
             return r.text();

@@ -22,7 +22,7 @@ func (r *JobRepository) SetSkippedUnsubscribed(jobID string, n int) error {
 func (r *JobRepository) GetVariantTemplates(jobID string) (map[string]*models.JobVariantTemplate, error) {
 	rows, err := r.db.Query(`
 		SELECT variant_id, COALESCE(template_id, ''), COALESCE(template_version, 0),
-			COALESCE(template_subject, ''), template_html, COALESCE(template_text, '')
+			COALESCE(template_subject, ''), COALESCE(template_preheader, ''), template_html, COALESCE(template_text, '')
 		FROM job_variant_snapshots
 		WHERE job_id = ? AND template_html IS NOT NULL`, jobID)
 	if err != nil {
@@ -33,7 +33,7 @@ func (r *JobRepository) GetVariantTemplates(jobID string) (map[string]*models.Jo
 	out := map[string]*models.JobVariantTemplate{}
 	for rows.Next() {
 		t := &models.JobVariantTemplate{}
-		if err := rows.Scan(&t.VariantID, &t.TemplateID, &t.TemplateVersion, &t.Subject, &t.HTML, &t.Text); err != nil {
+		if err := rows.Scan(&t.VariantID, &t.TemplateID, &t.TemplateVersion, &t.Subject, &t.Preheader, &t.HTML, &t.Text); err != nil {
 			return nil, err
 		}
 		out[t.VariantID] = t
@@ -58,16 +58,16 @@ func (r *JobRepository) FreezeVariantTemplate(s *models.JobVariantSnapshot, t *m
 	}
 	_, err = r.db.Exec(`
 		INSERT INTO job_variant_snapshots (job_id, variant_id, variant_name, template_id, template_version, html, links,
-			template_subject, template_html, template_text, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			template_subject, template_preheader, template_html, template_text, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(job_id, variant_id) DO UPDATE SET
 			variant_name = excluded.variant_name, template_id = excluded.template_id,
 			template_version = excluded.template_version, html = excluded.html, links = excluded.links,
-			template_subject = excluded.template_subject, template_html = excluded.template_html,
+			template_subject = excluded.template_subject, template_preheader = excluded.template_preheader, template_html = excluded.template_html,
 			template_text = excluded.template_text, created_at = excluded.created_at
 		WHERE job_variant_snapshots.template_html IS NULL`,
 		s.JobID, s.VariantID, s.VariantName, t.TemplateID, t.TemplateVersion, s.HTML, string(linksJSON),
-		t.Subject, t.HTML, t.Text, s.CreatedAt,
+		t.Subject, t.Preheader, t.HTML, t.Text, s.CreatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to freeze variant template: %w", err)

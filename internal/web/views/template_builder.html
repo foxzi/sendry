@@ -375,6 +375,12 @@
                         value="{{if .Template}}{{.Template.Subject}}{{end}}">
                 </div>
                 <div class="form-group">
+                    <label for="preheader" data-i18n="tpl.preheader">Preheader</label>
+                    <input type="text" id="preheader" name="preheader" class="input" autocomplete="off"
+                        value="{{if .Template}}{{.Template.Preheader}}{{end}}">
+                    <small class="form-help" data-i18n="tpl.preheader_help">The preview line shown after the subject in the inbox list. You can use variables.</small>
+                </div>
+                <div class="form-group">
                     <label for="description" data-i18n="common.description">Description</label>
                     <input type="text" id="description" name="description" class="input" placeholder="Brief description of this template" data-i18n-placeholder="tpl.desc_ph"
                         value="{{if .Template}}{{.Template.Description}}{{end}}">

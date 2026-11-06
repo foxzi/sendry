@@ -138,6 +138,7 @@ type JobVariantTemplate struct {
 	TemplateID      string
 	TemplateVersion int
 	Subject         string
+	Preheader       string
 	HTML            string // numbered (data-sl), not rendered
 	Text            string
 }

@@ -25,7 +25,7 @@ func (h *Handlers) Settings(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) GlobalVariables(w http.ResponseWriter, r *http.Request) {
 	vars, err := h.settings.GetAllVariables()
 	if err != nil {
-		h.error(w, http.StatusInternalServerError, "Failed to load variables")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load variables")
 		return
 	}
 
@@ -42,7 +42,7 @@ func (h *Handlers) GlobalVariables(w http.ResponseWriter, r *http.Request) {
 // GlobalVariablesUpdate updates global variables
 func (h *Handlers) GlobalVariablesUpdate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
@@ -57,17 +57,17 @@ func (h *Handlers) GlobalVariablesUpdate(w http.ResponseWriter, r *http.Request)
 	switch action {
 	case "delete":
 		if err := h.settings.DeleteVariable(key); err != nil {
-			h.error(w, http.StatusInternalServerError, "Failed to delete variable")
+			h.error(w, r, http.StatusInternalServerError, "Failed to delete variable")
 			return
 		}
 		h.settings.LogAction(r, actorID, actorEmail, "delete", "variable", key, "")
 	default:
 		if key == "" {
-			h.error(w, http.StatusBadRequest, "Key is required")
+			h.error(w, r, http.StatusBadRequest, "Key is required")
 			return
 		}
 		if err := h.settings.SetVariable(key, value, description); err != nil {
-			h.error(w, http.StatusInternalServerError, "Failed to save variable")
+			h.error(w, r, http.StatusInternalServerError, "Failed to save variable")
 			return
 		}
 		h.settings.LogAction(r, actorID, actorEmail, "update", "variable", key, "")
@@ -95,7 +95,7 @@ func (h *Handlers) AuditLog(w http.ResponseWriter, r *http.Request) {
 
 	entries, total, err := h.settings.ListAuditLog(filter)
 	if err != nil {
-		h.error(w, http.StatusInternalServerError, "Failed to load audit log")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load audit log")
 		return
 	}
 

@@ -326,3 +326,56 @@ func TestTemplateRepository_Folders(t *testing.T) {
 		t.Errorf("GetFolders() returned %d folders, want 3", len(got))
 	}
 }
+
+func TestTemplateRepository_Preheader(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewTemplateRepository(db)
+
+	tmpl := &models.Template{Name: "Pre", Subject: "S", Preheader: "Hi {{name}}", HTML: "<p>x</p>"}
+	if err := repo.Create(tmpl, "test@example.com"); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	byID, err := repo.GetByID(tmpl.ID)
+	if err != nil || byID == nil || byID.Preheader != "Hi {{name}}" {
+		t.Fatalf("GetByID() = %+v, %v", byID, err)
+	}
+	byName, err := repo.GetByName("Pre")
+	if err != nil || byName == nil || byName.Preheader != "Hi {{name}}" {
+		t.Fatalf("GetByName() = %+v, %v", byName, err)
+	}
+
+	tmpl.Preheader = "Changed"
+	if err := repo.Update(tmpl, "v2", "test@example.com"); err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	byID, _ = repo.GetByID(tmpl.ID)
+	if byID.Preheader != "Changed" {
+		t.Errorf("after Update Preheader = %q", byID.Preheader)
+	}
+
+	list, _, err := repo.List(models.TemplateListFilter{})
+	if err != nil || len(list) != 1 || list[0].Preheader != "Changed" {
+		t.Errorf("List() = %+v, %v", list, err)
+	}
+
+	for ver, want := range map[int]string{1: "Hi {{name}}", 2: "Changed"} {
+		v, err := repo.GetVersion(tmpl.ID, ver)
+		if err != nil || v == nil || v.Preheader != want {
+			t.Errorf("GetVersion(%d) = %+v, %v; want preheader %q", ver, v, err, want)
+		}
+	}
+	versions, err := repo.GetVersions(tmpl.ID)
+	if err != nil || len(versions) != 2 || versions[0].Preheader != "Changed" || versions[1].Preheader != "Hi {{name}}" {
+		t.Errorf("GetVersions() = %+v, %v", versions, err)
+	}
+
+	// a template saved without a preheader reads back empty
+	plain := &models.Template{Name: "Plain", Subject: "S"}
+	if err := repo.Create(plain, "test@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := repo.GetByID(plain.ID); got.Preheader != "" {
+		t.Errorf("Preheader = %q, want empty", got.Preheader)
+	}
+}

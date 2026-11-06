@@ -32,8 +32,6 @@ type MonitoringData struct {
 	Period      string            `json:"period"`
 	TotalSent   int               `json:"total_sent"`
 	TotalFailed int               `json:"total_failed"`
-	TotalQueue  int               `json:"total_queue"`
-	TotalDLQ    int               `json:"total_dlq"`
 }
 
 // ServerStats represents live stats from a Sendry server

@@ -38,7 +38,7 @@ func (h *Handlers) SendsList(w http.ResponseWriter, r *http.Request) {
 	sends, total, err := h.sends.List(filter)
 	if err != nil {
 		h.logger.Error("failed to list sends", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load sends")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load sends")
 		return
 	}
 
@@ -82,19 +82,19 @@ func (h *Handlers) SendsList(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) SendView(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == "" {
-		h.error(w, http.StatusBadRequest, "Send ID is required")
+		h.error(w, r, http.StatusBadRequest, "Send ID is required")
 		return
 	}
 
 	send, err := h.sends.GetByID(id)
 	if err != nil {
 		h.logger.Error("failed to get send", "id", id, "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load send")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load send")
 		return
 	}
 
 	if send == nil {
-		h.error(w, http.StatusNotFound, "Send not found")
+		h.error(w, r, http.StatusNotFound, "Send not found")
 		return
 	}
 

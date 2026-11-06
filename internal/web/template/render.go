@@ -258,3 +258,28 @@ func RenderText(name, src string, data map[string]any) (string, error) {
 	}
 	return buf.String(), nil
 }
+
+// preheaderFiller pushes the body text out of the inbox preview: a short
+// preheader would otherwise be followed by the first words of the email.
+// Combining joiner + zero-width non-joiner + nbsp are invisible and not
+// collapsed as whitespace by clients.
+var preheaderFiller = strings.Repeat("&#847;&zwnj;&nbsp;", 80)
+
+var bodyOpenRe = regexp.MustCompile(`(?i)<body(?:\s[^>]*)?>`)
+
+// InsertPreheader puts the preview line mail clients show after the subject
+// into html as a hidden block right after the opening <body> tag (at the very
+// start when there is no <body>). text is plain text and gets escaped; empty
+// or blank text leaves html unchanged.
+func InsertPreheader(html, text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return html
+	}
+	block := `<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">` +
+		htmltpl.HTMLEscapeString(text) + preheaderFiller + `</div>`
+	if loc := bodyOpenRe.FindStringIndex(html); loc != nil {
+		return html[:loc[1]] + block + html[loc[1]:]
+	}
+	return block + html
+}

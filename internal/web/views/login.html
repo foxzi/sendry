@@ -5,6 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Sendry Web</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <script>
+        // Hide the page until i18n.js translates it, so it does not flash English
+        (function() {
+            var root = document.documentElement, lang = 'en';
+            try { lang = localStorage.getItem('lang') || 'en'; } catch (e) {}
+            if (lang === 'en') return;
+            root.lang = lang;
+            root.setAttribute('data-i18n-pending', '');
+            setTimeout(function() { root.removeAttribute('data-i18n-pending'); }, 3000);
+        })();
+    </script>
 </head>
 <body class="login-page">
     <div class="login-container">

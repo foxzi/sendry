@@ -12,6 +12,7 @@ import (
 	"github.com/foxzi/sendry/internal/web/db"
 	"github.com/foxzi/sendry/internal/web/handlers"
 	"github.com/foxzi/sendry/internal/web/middleware"
+	"github.com/foxzi/sendry/internal/web/models"
 	"github.com/foxzi/sendry/internal/web/repository"
 	"github.com/foxzi/sendry/internal/web/static"
 	"github.com/foxzi/sendry/internal/web/tracking"
@@ -117,9 +118,18 @@ func (s *Server) setupRoutes() http.Handler {
 
 	// Public API routes (API key auth)
 	apiMux := http.NewServeMux()
-	apiMux.HandleFunc("POST /api/v1/send", h.APISend)
-	apiMux.HandleFunc("POST /api/v1/send/template", h.APISendTemplate)
-	apiMux.HandleFunc("GET /api/v1/send/{id}/status", h.APIGetStatus)
+	send := func(f http.HandlerFunc) http.HandlerFunc {
+		return middleware.RequireAPIPermission(models.PermissionSend, f)
+	}
+	lists := func(f http.HandlerFunc) http.HandlerFunc {
+		return middleware.RequireAPIPermission(models.PermissionLists, f)
+	}
+	apiMux.HandleFunc("POST /api/v1/send", send(h.APISend))
+	apiMux.HandleFunc("POST /api/v1/send/template", send(h.APISendTemplate))
+	apiMux.HandleFunc("GET /api/v1/send/{id}/status", send(h.APIGetStatus))
+	apiMux.HandleFunc("GET /api/v1/lists", lists(h.APIListLists))
+	apiMux.HandleFunc("POST /api/v1/lists/{id}/recipients", lists(h.APIAddRecipients))
+	apiMux.HandleFunc("DELETE /api/v1/lists/{id}/recipients/{email}", lists(h.APIDeleteRecipient))
 
 	apiKeysRepo := repository.NewAPIKeyRepository(s.db.DB)
 	apiAuth := middleware.APIAuth(apiKeysRepo, s.logger)
@@ -202,6 +212,7 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("GET /campaigns/{id}", h.CampaignView)
 	protected.HandleFunc("POST /campaigns/{id}/section/{row}", h.CampaignSection)
 	protected.HandleFunc("DELETE /campaigns/{id}", h.CampaignDelete)
+	protected.HandleFunc("POST /campaigns/{id}/copy", h.CampaignCopy)
 	// pages that were folded into the campaign page
 	protected.HandleFunc("GET /campaigns/{id}/edit", h.CampaignRedirect)
 	protected.HandleFunc("GET /campaigns/{id}/variables", h.CampaignRedirect)
@@ -266,6 +277,7 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("GET /servers/{server}/domains/{domain}/edit", h.DomainsEdit)
 	protected.HandleFunc("POST /servers/{server}/domains/{domain}", h.DomainsUpdate)
 	protected.HandleFunc("POST /servers/{server}/domains/{domain}/delete", h.DomainsDelete)
+	protected.HandleFunc("POST /servers/{server}/domains/{domain}/import", h.DomainsImport)
 
 	// Send History
 	protected.HandleFunc("GET /sends", h.SendsList)
@@ -280,7 +292,7 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("GET /monitoring/api/servers", h.MonitoringAPIServers)
 
 	// Settings — admin only
-	adminOnly := middleware.AdminOnly
+	adminOnly := middleware.AdminOnly(h.Forbidden)
 	protected.HandleFunc("GET /settings", adminOnly(http.HandlerFunc(h.Settings)).ServeHTTP)
 	protected.HandleFunc("GET /settings/variables", adminOnly(http.HandlerFunc(h.GlobalVariables)).ServeHTTP)
 	protected.HandleFunc("PUT /settings/variables", adminOnly(http.HandlerFunc(h.GlobalVariablesUpdate)).ServeHTTP)
@@ -306,9 +318,6 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("GET /servers/{server}/dkim/new", h.DKIMNew)
 	protected.HandleFunc("POST /servers/{server}/dkim", h.DKIMCreate)
 	protected.HandleFunc("GET /servers/{server}/dkim/{id}", h.DKIMView)
-	protected.HandleFunc("DELETE /servers/{server}/dkim/{id}", h.DKIMDelete)
-	protected.HandleFunc("POST /servers/{server}/dkim/{id}/deploy", h.DKIMDeploy)
-	protected.HandleFunc("DELETE /servers/{server}/dkim/{id}/deployments", h.DKIMDeploymentDelete)
 
 	// DNS/IP Checks (per server)
 	protected.HandleFunc("GET /servers/{server}/dns-check", h.DNSCheck)

@@ -55,6 +55,17 @@ A complete email sending solution you can run on your own servers:
 - Graceful shutdown
 - Structured JSON logging
 
+### Web Panel (sendry-web)
+
+- Campaigns with A/B variants, scheduled launches, pilot sends and test emails
+- Template builder with blocks, versions, variables and preheader
+- Recipient lists with CSV import and per-list unsubscribe
+- Open and click tracking, click map, Open Rate / CTR, `List-Unsubscribe` (RFC 8058)
+- Delivery errors by type for campaigns and API sends
+- Domains and DKIM keys managed in one place and deployed to one or more MTA servers, with a check that servers match the panel
+- Panel API: send email and add or remove list recipients with API keys
+- Local and OIDC login, audit log, English and Russian UI
+
 ## Installation
 
 ### Package Repository (recommended)
@@ -74,10 +85,12 @@ gpgcheck=0
 EOF
 sudo dnf install sendry
 
-# Alpine
-wget https://github.com/foxzi/sendry/releases/latest/download/sendry_0.4.18-r1_x86_64.apk
+# Alpine: download the .apk for your architecture from
+# https://github.com/foxzi/sendry/releases/latest
 apk add --allow-untrusted sendry_*.apk
 ```
+
+The package installs both binaries, `sendry` (MTA) and `sendry-web` (panel), with systemd units `sendry` and `sendry-web` and example configs in `/etc/sendry/`.
 
 ### From Binary
 
@@ -85,7 +98,14 @@ apk add --allow-untrusted sendry_*.apk
 wget https://github.com/foxzi/sendry/releases/latest/download/sendry-linux-amd64
 chmod +x sendry-linux-amd64
 sudo mv sendry-linux-amd64 /usr/local/bin/sendry
+
+# Web panel (optional)
+wget https://github.com/foxzi/sendry/releases/latest/download/sendry-web-linux-amd64
+chmod +x sendry-web-linux-amd64
+sudo mv sendry-web-linux-amd64 /usr/local/bin/sendry-web
 ```
+
+Binaries for `arm64` are published as well.
 
 ### Docker
 
@@ -122,12 +142,14 @@ ansible-playbook -i inventory/hosts.yml playbooks/sendry.yml
 
 ### Build from Source
 
-Requires Go 1.24+
+Requires Go 1.24+. The web panel also needs CGO and a C compiler (SQLite).
 
 ```bash
 git clone https://github.com/foxzi/sendry.git
 cd sendry
-make build
+make build       # sendry (MTA)
+make build-web   # sendry-web (panel)
+make all         # both
 ```
 
 ## Quick Start
@@ -174,6 +196,18 @@ storage:
 ./sendry config validate -c config.yaml
 ```
 
+### Web Panel
+
+The panel listens on `:8088` and talks to one or more MTA servers through their HTTP API.
+
+```bash
+cp configs/web.example.yaml web.yaml   # set sendry.servers and server.public_url
+./sendry-web user create -c web.yaml --email admin@example.com
+./sendry-web serve -c web.yaml
+```
+
+See [Sendry Web panel](docs/sendry-web.md) for configuration and features.
+
 ## API
 
 ### Health Check
@@ -186,7 +220,7 @@ Response:
 ```json
 {
   "status": "ok",
-  "version": "0.4.18",
+  "version": "0.7.0",
   "uptime": "1h30m",
   "queue": {
     "pending": 5,
@@ -322,20 +356,38 @@ See documentation:
 
 ```
 sendry/
-├── cmd/sendry/          # CLI entry point
+├── cmd/
+│   ├── sendry/          # MTA CLI entry point
+│   └── sendry-web/      # Web panel CLI entry point
 ├── internal/
 │   ├── api/             # HTTP API server
 │   ├── app/             # Application orchestration
 │   ├── config/          # Configuration
 │   ├── dkim/            # DKIM signing
 │   ├── dns/             # MX resolver
+│   ├── domain/          # Domains and their modes
 │   ├── metrics/         # Prometheus metrics
 │   ├── queue/           # Message queue & storage
+│   ├── ratelimit/       # Rate limiting
+│   ├── sandbox/         # Sandbox capture
 │   ├── smtp/            # SMTP server & client
-│   └── tls/             # TLS/ACME support
+│   ├── tls/             # TLS/ACME support
+│   └── web/             # Web panel (handlers, views, SQLite, worker, tracking)
+├── ansible/             # Ansible roles and playbooks
+├── packaging/           # deb/rpm/apk scripts and systemd units
 ├── configs/             # Example configurations
 └── docs/                # Documentation
 ```
+
+## Message Statuses
+
+| Status | Description |
+|--------|-------------|
+| `pending` | Waiting to be sent |
+| `sending` | Being sent |
+| `delivered` | Delivered |
+| `deferred` | Postponed after a temporary error, will be retried |
+| `failed` | Delivery failed (retries exhausted or permanent error) |
 
 ## License
 

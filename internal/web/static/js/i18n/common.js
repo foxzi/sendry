@@ -2,6 +2,16 @@
 // Loaded after i18n.js; keys merge into the shared dictionary. Section files add their own keys.
 I18n.register({
     en: {
+        'err.forbidden_title': 'Access denied',
+        'err.forbidden_text': 'This page needs administrator rights. Ask an administrator if you need it.',
+        'err.not_found_title': 'Not found',
+        'err.not_found_text': 'The page or record does not exist or was deleted.',
+        'err.bad_request_title': 'The request could not be completed',
+        'err.bad_request_text': 'Check the entered data and try again.',
+        'err.server_title': 'Something went wrong',
+        'err.server_text': 'The panel could not complete the action. Try again later; if it repeats, tell the administrator.',
+        'err.back': '\u2190 Back',
+        'err.home': 'Go to overview',
         'common.back': 'Back',
         'common.clear': 'Clear',
         'common.nothing_found': 'Nothing found',
@@ -24,7 +34,6 @@ I18n.register({
         'common.key': 'Key',
         'common.value': 'Value',
         'common.mode': 'Mode',
-        'common.no_results': 'Nothing found',
         'common.optional': 'optional',
         'common.page': 'Page',
         'common.of': 'of',
@@ -44,7 +53,6 @@ I18n.register({
         'common.none': 'None',
         'common.unknown': 'Unknown',
         'common.copied': 'Copied',
-        'common.are_you_sure': 'Are you sure?',
 
         'status.draft': 'draft',
         'status.scheduled': 'scheduled',
@@ -80,6 +88,16 @@ I18n.register({
         'error_type.unknown': 'Unknown error'
     },
     ru: {
+        'err.forbidden_title': 'Нет доступа',
+        'err.forbidden_text': 'Эта страница доступна только администратору. Если она нужна, обратитесь к администратору.',
+        'err.not_found_title': 'Не найдено',
+        'err.not_found_text': 'Такой страницы или записи нет, либо она удалена.',
+        'err.bad_request_title': 'Не удалось выполнить запрос',
+        'err.bad_request_text': 'Проверьте введённые данные и попробуйте ещё раз.',
+        'err.server_title': 'Что-то пошло не так',
+        'err.server_text': 'Панель не смогла выполнить действие. Попробуйте позже; если ошибка повторяется, сообщите администратору.',
+        'err.back': '\u2190 Назад',
+        'err.home': 'На главную',
         'common.back': 'Назад',
         'common.clear': 'Сбросить',
         'common.nothing_found': 'Ничего не найдено',
@@ -102,7 +120,6 @@ I18n.register({
         'common.key': 'Ключ',
         'common.value': 'Значение',
         'common.mode': 'Режим',
-        'common.no_results': 'Ничего не найдено',
         'common.optional': 'необязательно',
         'common.page': 'Страница',
         'common.of': 'из',
@@ -122,7 +139,6 @@ I18n.register({
         'common.none': 'Нет',
         'common.unknown': 'Неизвестно',
         'common.copied': 'Скопировано',
-        'common.are_you_sure': 'Вы уверены?',
 
         'status.draft': 'черновик',
         'status.scheduled': 'запланирован',

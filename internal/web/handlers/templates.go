@@ -39,7 +39,7 @@ func (h *Handlers) TemplateList(w http.ResponseWriter, r *http.Request) {
 	templates, total, err := h.templates.List(filter)
 	if err != nil {
 		h.logger.Error("failed to list templates", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load templates")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load templates")
 		return
 	}
 
@@ -68,7 +68,7 @@ func (h *Handlers) TemplateList(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) TemplateCreate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
@@ -76,6 +76,7 @@ func (h *Handlers) TemplateCreate(w http.ResponseWriter, r *http.Request) {
 		Name:        r.FormValue("name"),
 		Description: r.FormValue("description"),
 		Subject:     r.FormValue("subject"),
+		Preheader:   r.FormValue("preheader"),
 		HTML:        r.FormValue("html"),
 		Text:        r.FormValue("text"),
 		Variables:   r.FormValue("variables"),
@@ -84,7 +85,7 @@ func (h *Handlers) TemplateCreate(w http.ResponseWriter, r *http.Request) {
 
 	// Validate required fields
 	if t.Name == "" || t.Subject == "" {
-		h.error(w, http.StatusBadRequest, "Name and subject are required")
+		h.error(w, r, http.StatusBadRequest, "Name and subject are required")
 		return
 	}
 
@@ -96,7 +97,7 @@ func (h *Handlers) TemplateCreate(w http.ResponseWriter, r *http.Request) {
 	user := h.getUserFromContext(r)
 	if err := h.templates.Create(t, user["Email"].(string)); err != nil {
 		h.logger.Error("failed to create template", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to create template")
+		h.error(w, r, http.StatusInternalServerError, "Failed to create template")
 		return
 	}
 
@@ -158,11 +159,11 @@ func (h *Handlers) TemplateView(w http.ResponseWriter, r *http.Request) {
 	t, err := h.templates.GetByID(id)
 	if err != nil {
 		h.logger.Error("failed to get template", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load template")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load template")
 		return
 	}
 	if t == nil {
-		h.error(w, http.StatusNotFound, "Template not found")
+		h.error(w, r, http.StatusNotFound, "Template not found")
 		return
 	}
 
@@ -192,7 +193,7 @@ func (h *Handlers) TemplateView(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	skeleton, _ := json.MarshalIndent(buildSampleData(t.HTML+" "+t.Subject), "", "  ")
+	skeleton, _ := json.MarshalIndent(buildSampleData(t.HTML+" "+t.Subject+" "+t.Preheader), "", "  ")
 	data := map[string]any{
 		"Title":          t.Name,
 		"Active":         "templates",
@@ -210,19 +211,20 @@ func (h *Handlers) TemplateUpdate(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
 	t, err := h.templates.GetByID(id)
 	if err != nil || t == nil {
-		h.error(w, http.StatusNotFound, "Template not found")
+		h.error(w, r, http.StatusNotFound, "Template not found")
 		return
 	}
 
 	t.Name = r.FormValue("name")
 	t.Description = r.FormValue("description")
 	t.Subject = r.FormValue("subject")
+	t.Preheader = r.FormValue("preheader")
 	t.HTML = r.FormValue("html")
 	t.Text = r.FormValue("text")
 	t.Variables = r.FormValue("variables")
@@ -242,7 +244,7 @@ func (h *Handlers) TemplateUpdate(w http.ResponseWriter, r *http.Request) {
 	user := h.getUserFromContext(r)
 	if err := h.templates.Update(t, changeNote, user["Email"].(string)); err != nil {
 		h.logger.Error("failed to update template", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to update template")
+		h.error(w, r, http.StatusInternalServerError, "Failed to update template")
 		return
 	}
 
@@ -261,11 +263,11 @@ func (h *Handlers) TemplateDelete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	if err := h.templates.Delete(id); errors.Is(err, repository.ErrInUse) {
-		h.error(w, http.StatusConflict, "Cannot delete the template: campaign variants use it. Remove those variants first.")
+		h.error(w, r, http.StatusConflict, "Cannot delete the template: campaign variants use it. Remove those variants first.")
 		return
 	} else if err != nil {
 		h.logger.Error("failed to delete template", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to delete template")
+		h.error(w, r, http.StatusInternalServerError, "Failed to delete template")
 		return
 	}
 
@@ -280,14 +282,14 @@ func (h *Handlers) TemplateVersions(w http.ResponseWriter, r *http.Request) {
 
 	t, err := h.templates.GetByID(id)
 	if err != nil || t == nil {
-		h.error(w, http.StatusNotFound, "Template not found")
+		h.error(w, r, http.StatusNotFound, "Template not found")
 		return
 	}
 
 	versions, err := h.templates.GetVersions(id)
 	if err != nil {
 		h.logger.Error("failed to get versions", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load versions")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load versions")
 		return
 	}
 
@@ -306,26 +308,26 @@ func (h *Handlers) TemplateDeploy(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
 	serverName := r.FormValue("server")
 	if serverName == "" {
-		h.error(w, http.StatusBadRequest, "Server name is required")
+		h.error(w, r, http.StatusBadRequest, "Server name is required")
 		return
 	}
 
 	t, err := h.templates.GetByID(id)
 	if err != nil || t == nil {
-		h.error(w, http.StatusNotFound, "Template not found")
+		h.error(w, r, http.StatusNotFound, "Template not found")
 		return
 	}
 
 	// Get Sendry client for this server
 	client, err := h.sendry.GetClient(serverName)
 	if err != nil {
-		h.error(w, http.StatusBadRequest, "Server not found: "+serverName)
+		h.error(w, r, http.StatusBadRequest, "Server not found: "+serverName)
 		return
 	}
 
@@ -338,8 +340,9 @@ func (h *Handlers) TemplateDeploy(w http.ResponseWriter, r *http.Request) {
 		Name:        t.Name,
 		Description: t.Description,
 		Subject:     convertToGoTemplate(t.Subject),
-		HTML:        convertToGoTemplate(t.HTML),
-		Text:        convertToGoTemplate(t.Text),
+		// The MTA stores only HTML, so the preheader is baked into it
+		HTML: convertToGoTemplate(emailtpl.InsertPreheader(t.HTML, t.Preheader)),
+		Text: convertToGoTemplate(t.Text),
 	}
 
 	var remoteID string
@@ -350,7 +353,7 @@ func (h *Handlers) TemplateDeploy(w http.ResponseWriter, r *http.Request) {
 		resp, err := client.UpdateTemplate(ctx, existingDeployment.RemoteID, req)
 		if err != nil {
 			h.logger.Error("failed to update template on Sendry", "server", serverName, "error", err)
-			h.error(w, http.StatusInternalServerError, "Failed to deploy template: "+err.Error())
+			h.error(w, r, http.StatusInternalServerError, "Failed to deploy template: "+err.Error())
 			return
 		}
 		remoteID = resp.ID
@@ -359,7 +362,7 @@ func (h *Handlers) TemplateDeploy(w http.ResponseWriter, r *http.Request) {
 		resp, err := client.CreateTemplate(ctx, req)
 		if err != nil {
 			h.logger.Error("failed to create template on Sendry", "server", serverName, "error", err)
-			h.error(w, http.StatusInternalServerError, "Failed to deploy template: "+err.Error())
+			h.error(w, r, http.StatusInternalServerError, "Failed to deploy template: "+err.Error())
 			return
 		}
 		remoteID = resp.ID
@@ -375,7 +378,7 @@ func (h *Handlers) TemplateDeploy(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.templates.SaveDeployment(deployment); err != nil {
 		h.logger.Error("failed to save deployment", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to save deployment record")
+		h.error(w, r, http.StatusInternalServerError, "Failed to save deployment record")
 		return
 	}
 
@@ -393,14 +396,14 @@ func (h *Handlers) TemplateDiff(w http.ResponseWriter, r *http.Request) {
 
 	t, err := h.templates.GetByID(id)
 	if err != nil || t == nil {
-		h.error(w, http.StatusNotFound, "Template not found")
+		h.error(w, r, http.StatusNotFound, "Template not found")
 		return
 	}
 
 	versions, err := h.templates.GetVersions(id)
 	if err != nil {
 		h.logger.Error("failed to get versions", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load versions")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load versions")
 		return
 	}
 
@@ -424,7 +427,7 @@ func (h *Handlers) TemplateDiff(w http.ResponseWriter, r *http.Request) {
 	ver1, err := h.templates.GetVersion(id, v1)
 	if err != nil {
 		h.logger.Error("failed to get version", "version", v1, "error", err)
-		h.error(w, http.StatusNotFound, "Version not found")
+		h.error(w, r, http.StatusNotFound, "Version not found")
 		return
 	}
 
@@ -432,7 +435,7 @@ func (h *Handlers) TemplateDiff(w http.ResponseWriter, r *http.Request) {
 	ver2, err := h.templates.GetVersion(id, v2)
 	if err != nil {
 		h.logger.Error("failed to get version", "version", v2, "error", err)
-		h.error(w, http.StatusNotFound, "Version not found")
+		h.error(w, r, http.StatusNotFound, "Version not found")
 		return
 	}
 
@@ -457,12 +460,13 @@ func (h *Handlers) TemplatePreview(w http.ResponseWriter, r *http.Request) {
 
 	t, err := h.templates.GetByID(id)
 	if err != nil || t == nil {
-		h.error(w, http.StatusNotFound, "Template not found")
+		h.error(w, r, http.StatusNotFound, "Template not found")
 		return
 	}
 
 	html := t.HTML
 	subject := t.Subject
+	preheader := t.Preheader
 
 	// If version specified, get that version
 	if versionStr != "" {
@@ -472,19 +476,22 @@ func (h *Handlers) TemplatePreview(w http.ResponseWriter, r *http.Request) {
 			if err == nil && v != nil {
 				html = v.HTML
 				subject = v.Subject
+				preheader = v.Preheader
 			}
 		}
 	}
 
 	html = stripDarkModeCSS(html)
+	html = emailtpl.InsertPreheader(html, preheader)
 
 	data := map[string]any{
-		"Title":    "Preview: " + t.Name,
-		"Active":   "templates",
-		"User":     h.getUserFromContext(r),
-		"Template": t,
-		"HTML":     html,
-		"Subject":  subject,
+		"Title":     "Preview: " + t.Name,
+		"Active":    "templates",
+		"User":      h.getUserFromContext(r),
+		"Template":  t,
+		"HTML":      html,
+		"Subject":   subject,
+		"Preheader": preheader,
 	}
 
 	h.render(w, "template_preview", data)
@@ -506,6 +513,7 @@ type TemplateExportData struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Subject     string `json:"subject"`
+	Preheader   string `json:"preheader"` // missing in older exports: empty
 	HTML        string `json:"html"`
 	Text        string `json:"text"`
 	Variables   string `json:"variables"`
@@ -519,7 +527,7 @@ func (h *Handlers) TemplateExport(w http.ResponseWriter, r *http.Request) {
 
 	t, err := h.templates.GetByID(id)
 	if err != nil || t == nil {
-		h.error(w, http.StatusNotFound, "Template not found")
+		h.error(w, r, http.StatusNotFound, "Template not found")
 		return
 	}
 
@@ -527,6 +535,7 @@ func (h *Handlers) TemplateExport(w http.ResponseWriter, r *http.Request) {
 		Name:        t.Name,
 		Description: t.Description,
 		Subject:     t.Subject,
+		Preheader:   t.Preheader,
 		HTML:        t.HTML,
 		Text:        t.Text,
 		Variables:   t.Variables,
@@ -562,7 +571,7 @@ func (h *Handlers) TemplateImport(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(10 << 20); err != nil { // 10MB max
 		// Try regular form parse
 		if err := r.ParseForm(); err != nil {
-			h.error(w, http.StatusBadRequest, "Invalid form data")
+			h.error(w, r, http.StatusBadRequest, "Invalid form data")
 			return
 		}
 	}
@@ -574,18 +583,18 @@ func (h *Handlers) TemplateImport(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		defer file.Close()
 		if err := json.NewDecoder(file).Decode(&importData); err != nil {
-			h.error(w, http.StatusBadRequest, "Invalid JSON file: "+err.Error())
+			h.error(w, r, http.StatusBadRequest, "Invalid JSON file: "+err.Error())
 			return
 		}
 	} else {
 		// Try JSON text input
 		jsonText := r.FormValue("json")
 		if jsonText == "" {
-			h.error(w, http.StatusBadRequest, "No file or JSON provided")
+			h.error(w, r, http.StatusBadRequest, "No file or JSON provided")
 			return
 		}
 		if err := json.Unmarshal([]byte(jsonText), &importData); err != nil {
-			h.error(w, http.StatusBadRequest, "Invalid JSON: "+err.Error())
+			h.error(w, r, http.StatusBadRequest, "Invalid JSON: "+err.Error())
 			return
 		}
 	}
@@ -602,7 +611,7 @@ func (h *Handlers) TemplateImport(w http.ResponseWriter, r *http.Request) {
 
 	// Validate required fields
 	if importData.Name == "" || importData.Subject == "" {
-		h.error(w, http.StatusBadRequest, "Name and subject are required")
+		h.error(w, r, http.StatusBadRequest, "Name and subject are required")
 		return
 	}
 
@@ -611,6 +620,7 @@ func (h *Handlers) TemplateImport(w http.ResponseWriter, r *http.Request) {
 		Name:        importData.Name,
 		Description: importData.Description,
 		Subject:     importData.Subject,
+		Preheader:   importData.Preheader,
 		HTML:        importData.HTML,
 		Text:        importData.Text,
 		Variables:   importData.Variables,
@@ -620,7 +630,7 @@ func (h *Handlers) TemplateImport(w http.ResponseWriter, r *http.Request) {
 	user := h.getUserFromContext(r)
 	if err := h.templates.Create(t, user["Email"].(string)); err != nil {
 		h.logger.Error("failed to import template", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to import template")
+		h.error(w, r, http.StatusInternalServerError, "Failed to import template")
 		return
 	}
 
@@ -635,7 +645,7 @@ func (h *Handlers) TemplateTestPage(w http.ResponseWriter, r *http.Request) {
 
 	t, err := h.templates.GetByID(id)
 	if err != nil || t == nil {
-		h.error(w, http.StatusNotFound, "Template not found")
+		h.error(w, r, http.StatusNotFound, "Template not found")
 		return
 	}
 
@@ -653,7 +663,7 @@ func (h *Handlers) TemplateTestPage(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("list user smtp", "error", err)
 	}
 
-	sampleJSON, _ := json.MarshalIndent(buildSampleData(t.HTML+" "+t.Subject), "", "  ")
+	sampleJSON, _ := json.MarshalIndent(buildSampleData(t.HTML+" "+t.Subject+" "+t.Preheader), "", "  ")
 
 	data := map[string]any{
 		"Title":      "Send Test Email - " + t.Name,
@@ -672,13 +682,13 @@ func (h *Handlers) TemplateTest(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
 	t, err := h.templates.GetByID(id)
 	if err != nil || t == nil {
-		h.error(w, http.StatusNotFound, "Template not found")
+		h.error(w, r, http.StatusNotFound, "Template not found")
 		return
 	}
 
@@ -688,14 +698,14 @@ func (h *Handlers) TemplateTest(w http.ResponseWriter, r *http.Request) {
 	}
 	to := strings.TrimSpace(r.FormValue("to"))
 	if to == "" {
-		h.error(w, http.StatusBadRequest, "Recipient (to) is required")
+		h.error(w, r, http.StatusBadRequest, "Recipient (to) is required")
 		return
 	}
 
 	sampleData := map[string]any{}
 	if varsJSON := strings.TrimSpace(r.FormValue("variables")); varsJSON != "" {
 		if err := json.Unmarshal([]byte(varsJSON), &sampleData); err != nil {
-			h.error(w, http.StatusBadRequest, "Invalid JSON in 'Sample data': "+err.Error())
+			h.error(w, r, http.StatusBadRequest, "Invalid JSON in 'Sample data': "+err.Error())
 			return
 		}
 	}
@@ -708,12 +718,12 @@ func (h *Handlers) TemplateTest(w http.ResponseWriter, r *http.Request) {
 	serverName := r.FormValue("server")
 	from := strings.TrimSpace(r.FormValue("from"))
 	if serverName == "" || from == "" {
-		h.error(w, http.StatusBadRequest, "Server and from are required for Sendry transport")
+		h.error(w, r, http.StatusBadRequest, "Server and from are required for Sendry transport")
 		return
 	}
 	client, err := h.sendry.GetClient(serverName)
 	if err != nil {
-		h.error(w, http.StatusBadRequest, "Server not found: "+serverName)
+		h.error(w, r, http.StatusBadRequest, "Server not found: "+serverName)
 		return
 	}
 
@@ -732,6 +742,7 @@ func (h *Handlers) TemplateTest(w http.ResponseWriter, r *http.Request) {
 
 	subject := renderTemplateVars(t.Subject, globalVars)
 	html := renderTemplateVars(t.HTML, globalVars)
+	html = emailtpl.InsertPreheader(html, renderTemplateVars(t.Preheader, globalVars))
 	text := renderTemplateVars(t.Text, globalVars)
 	html = makeAbsoluteURLs(html, h.cfg.Server.PublicURL, h.cfg.Server.PublicUploadURL)
 
@@ -746,7 +757,7 @@ func (h *Handlers) TemplateTest(w http.ResponseWriter, r *http.Request) {
 	resp, err := client.Send(ctx, req)
 	if err != nil {
 		h.logger.Error("failed to send test email", "error", err, "template_id", id, "server", serverName)
-		h.error(w, http.StatusInternalServerError, "Failed to send test email: "+err.Error())
+		h.error(w, r, http.StatusInternalServerError, "Failed to send test email: "+err.Error())
 		return
 	}
 	user := h.getUserFromContext(r)
@@ -756,37 +767,43 @@ func (h *Handlers) TemplateTest(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) testSendViaSMTP(w http.ResponseWriter, r *http.Request, t *models.Template, to string, sampleData map[string]any) {
 	if h.cipher == nil {
-		h.error(w, http.StatusServiceUnavailable, "Encryption not configured. Set auth.encryption_key in web.yaml.")
+		h.error(w, r, http.StatusServiceUnavailable, "Encryption not configured. Set auth.encryption_key in web.yaml.")
 		return
 	}
 	smtpID := r.FormValue("smtp_id")
 	if smtpID == "" {
-		h.error(w, http.StatusBadRequest, "SMTP server is required")
+		h.error(w, r, http.StatusBadRequest, "SMTP server is required")
 		return
 	}
 	userID := middleware.GetUserID(r)
 	srv, err := h.userSMTP.GetByID(smtpID, userID)
 	if err != nil || srv == nil {
-		h.error(w, http.StatusBadRequest, "SMTP server not found")
+		h.error(w, r, http.StatusBadRequest, "SMTP server not found")
 		return
 	}
 	password, err := h.cipher.Decrypt(srv.PasswordEnc)
 	if err != nil {
 		h.logger.Error("decrypt smtp password", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to decrypt SMTP password")
+		h.error(w, r, http.StatusInternalServerError, "Failed to decrypt SMTP password")
 		return
 	}
 
 	subject, err := emailtpl.RenderHTML("subject", t.Subject, sampleData)
 	if err != nil {
-		h.error(w, http.StatusBadRequest, "Render subject: "+err.Error())
+		h.error(w, r, http.StatusBadRequest, "Render subject: "+err.Error())
 		return
 	}
 	html, err := emailtpl.RenderHTML("body", t.HTML, sampleData)
 	if err != nil {
-		h.error(w, http.StatusBadRequest, "Render HTML: "+err.Error())
+		h.error(w, r, http.StatusBadRequest, "Render HTML: "+err.Error())
 		return
 	}
+	preheader, err := emailtpl.RenderText("preheader", t.Preheader, sampleData)
+	if err != nil {
+		h.error(w, r, http.StatusBadRequest, "Render preheader: "+err.Error())
+		return
+	}
+	html = emailtpl.InsertPreheader(html, preheader)
 	html = makeAbsoluteURLs(html, h.cfg.Server.PublicURL, h.cfg.Server.PublicUploadURL)
 
 	err = smtpclient.Send(smtpclient.Server{
@@ -804,7 +821,7 @@ func (h *Handlers) testSendViaSMTP(w http.ResponseWriter, r *http.Request, t *mo
 	})
 	if err != nil {
 		h.logger.Error("smtp test send", "template_id", t.ID, "smtp_id", smtpID, "error", err)
-		h.error(w, http.StatusInternalServerError, "SMTP send failed: "+err.Error())
+		h.error(w, r, http.StatusInternalServerError, "SMTP send failed: "+err.Error())
 		return
 	}
 	user := h.getUserFromContext(r)

@@ -35,9 +35,9 @@ func (r *TemplateRepository) Create(t *models.Template, createdBy string) error 
 
 	// Insert template
 	_, err = tx.Exec(`
-		INSERT INTO templates (id, name, description, subject, html, text, variables, folder, current_version, use_blocks, container_radius, container_transparent, container_width, container_padding_v, container_padding_h, page_background, container_radius_top, container_radius_bottom, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		t.ID, t.Name, t.Description, t.Subject, t.HTML, t.Text, t.Variables, t.Folder, t.CurrentVersion, t.UseBlocks, t.ContainerRadius, t.ContainerTransparent, t.ContainerWidth, t.ContainerPaddingV, t.ContainerPaddingH, t.PageBackground, t.ContainerRadiusTop, t.ContainerRadiusBottom, t.CreatedAt, t.UpdatedAt,
+		INSERT INTO templates (id, name, description, subject, preheader, html, text, variables, folder, current_version, use_blocks, container_radius, container_transparent, container_width, container_padding_v, container_padding_h, page_background, container_radius_top, container_radius_bottom, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		t.ID, t.Name, t.Description, t.Subject, t.Preheader, t.HTML, t.Text, t.Variables, t.Folder, t.CurrentVersion, t.UseBlocks, t.ContainerRadius, t.ContainerTransparent, t.ContainerWidth, t.ContainerPaddingV, t.ContainerPaddingH, t.PageBackground, t.ContainerRadiusTop, t.ContainerRadiusBottom, t.CreatedAt, t.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create template: %w", err)
@@ -45,9 +45,9 @@ func (r *TemplateRepository) Create(t *models.Template, createdBy string) error 
 
 	// Insert first version
 	_, err = tx.Exec(`
-		INSERT INTO template_versions (template_id, version, subject, html, text, variables, change_note, created_by, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		t.ID, 1, t.Subject, t.HTML, t.Text, t.Variables, "Initial version", createdBy, t.CreatedAt,
+		INSERT INTO template_versions (template_id, version, subject, preheader, html, text, variables, change_note, created_by, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		t.ID, 1, t.Subject, t.Preheader, t.HTML, t.Text, t.Variables, "Initial version", createdBy, t.CreatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create template version: %w", err)
@@ -60,9 +60,9 @@ func (r *TemplateRepository) Create(t *models.Template, createdBy string) error 
 func (r *TemplateRepository) GetByID(id string) (*models.Template, error) {
 	t := &models.Template{}
 	err := r.db.QueryRow(`
-		SELECT id, name, description, subject, html, text, variables, folder, current_version, use_blocks, container_radius, container_transparent, container_width, container_padding_v, container_padding_h, page_background, container_radius_top, container_radius_bottom, created_at, updated_at
+		SELECT id, name, description, subject, preheader, html, text, variables, folder, current_version, use_blocks, container_radius, container_transparent, container_width, container_padding_v, container_padding_h, page_background, container_radius_top, container_radius_bottom, created_at, updated_at
 		FROM templates WHERE id = ?`, id,
-	).Scan(&t.ID, &t.Name, &t.Description, &t.Subject, &t.HTML, &t.Text, &t.Variables, &t.Folder, &t.CurrentVersion, &t.UseBlocks, &t.ContainerRadius, &t.ContainerTransparent, &t.ContainerWidth, &t.ContainerPaddingV, &t.ContainerPaddingH, &t.PageBackground, &t.ContainerRadiusTop, &t.ContainerRadiusBottom, &t.CreatedAt, &t.UpdatedAt)
+	).Scan(&t.ID, &t.Name, &t.Description, &t.Subject, &t.Preheader, &t.HTML, &t.Text, &t.Variables, &t.Folder, &t.CurrentVersion, &t.UseBlocks, &t.ContainerRadius, &t.ContainerTransparent, &t.ContainerWidth, &t.ContainerPaddingV, &t.ContainerPaddingH, &t.PageBackground, &t.ContainerRadiusTop, &t.ContainerRadiusBottom, &t.CreatedAt, &t.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -77,9 +77,9 @@ func (r *TemplateRepository) GetByID(id string) (*models.Template, error) {
 func (r *TemplateRepository) GetByName(name string) (*models.Template, error) {
 	t := &models.Template{}
 	err := r.db.QueryRow(`
-		SELECT id, name, description, subject, html, text, variables, folder, current_version, created_at, updated_at
+		SELECT id, name, description, subject, preheader, html, text, variables, folder, current_version, created_at, updated_at
 		FROM templates WHERE name = ?`, name,
-	).Scan(&t.ID, &t.Name, &t.Description, &t.Subject, &t.HTML, &t.Text, &t.Variables, &t.Folder, &t.CurrentVersion, &t.CreatedAt, &t.UpdatedAt)
+	).Scan(&t.ID, &t.Name, &t.Description, &t.Subject, &t.Preheader, &t.HTML, &t.Text, &t.Variables, &t.Folder, &t.CurrentVersion, &t.CreatedAt, &t.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -112,7 +112,7 @@ func (r *TemplateRepository) List(filter models.TemplateListFilter) ([]models.Te
 
 	// Get templates
 	query := `
-		SELECT t.id, t.name, t.description, t.subject, t.html, t.text, t.variables, t.folder, t.current_version, t.use_blocks, t.container_radius, t.container_transparent, t.container_width, t.container_padding_v, t.container_padding_h, t.page_background, t.container_radius_top, t.container_radius_bottom, t.created_at, t.updated_at,
+		SELECT t.id, t.name, t.description, t.subject, t.preheader, t.html, t.text, t.variables, t.folder, t.current_version, t.use_blocks, t.container_radius, t.container_transparent, t.container_width, t.container_padding_v, t.container_padding_h, t.page_background, t.container_radius_top, t.container_radius_bottom, t.created_at, t.updated_at,
 			COALESCE(d.deployed_count, 0) as deployed_count,
 			COALESCE(d.out_of_sync_count, 0) as out_of_sync_count
 		FROM templates t
@@ -156,7 +156,7 @@ func (r *TemplateRepository) List(filter models.TemplateListFilter) ([]models.Te
 	for rows.Next() {
 		var t models.TemplateWithStatus
 		err := rows.Scan(
-			&t.ID, &t.Name, &t.Description, &t.Subject, &t.HTML, &t.Text,
+			&t.ID, &t.Name, &t.Description, &t.Subject, &t.Preheader, &t.HTML, &t.Text,
 			&t.Variables, &t.Folder, &t.CurrentVersion, &t.UseBlocks, &t.ContainerRadius, &t.ContainerTransparent, &t.ContainerWidth, &t.ContainerPaddingV, &t.ContainerPaddingH, &t.PageBackground, &t.ContainerRadiusTop, &t.ContainerRadiusBottom, &t.CreatedAt, &t.UpdatedAt,
 			&t.DeployedCount, &t.OutOfSyncCount,
 		)
@@ -200,9 +200,9 @@ func (r *TemplateRepository) Update(t *models.Template, changeNote, updatedBy st
 
 	// Update template
 	_, err = tx.Exec(`
-		UPDATE templates SET name = ?, description = ?, subject = ?, html = ?, text = ?, variables = ?, folder = ?, current_version = ?, use_blocks = ?, container_radius = ?, container_transparent = ?, container_width = ?, container_padding_v = ?, container_padding_h = ?, page_background = ?, container_radius_top = ?, container_radius_bottom = ?, updated_at = ?
+		UPDATE templates SET name = ?, description = ?, subject = ?, preheader = ?, html = ?, text = ?, variables = ?, folder = ?, current_version = ?, use_blocks = ?, container_radius = ?, container_transparent = ?, container_width = ?, container_padding_v = ?, container_padding_h = ?, page_background = ?, container_radius_top = ?, container_radius_bottom = ?, updated_at = ?
 		WHERE id = ?`,
-		t.Name, t.Description, t.Subject, t.HTML, t.Text, t.Variables, t.Folder, t.CurrentVersion, t.UseBlocks, t.ContainerRadius, t.ContainerTransparent, t.ContainerWidth, t.ContainerPaddingV, t.ContainerPaddingH, t.PageBackground, t.ContainerRadiusTop, t.ContainerRadiusBottom, t.UpdatedAt, t.ID,
+		t.Name, t.Description, t.Subject, t.Preheader, t.HTML, t.Text, t.Variables, t.Folder, t.CurrentVersion, t.UseBlocks, t.ContainerRadius, t.ContainerTransparent, t.ContainerWidth, t.ContainerPaddingV, t.ContainerPaddingH, t.PageBackground, t.ContainerRadiusTop, t.ContainerRadiusBottom, t.UpdatedAt, t.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update template: %w", err)
@@ -210,9 +210,9 @@ func (r *TemplateRepository) Update(t *models.Template, changeNote, updatedBy st
 
 	// Insert new version
 	_, err = tx.Exec(`
-		INSERT INTO template_versions (template_id, version, subject, html, text, variables, change_note, created_by, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		t.ID, newVersion, t.Subject, t.HTML, t.Text, t.Variables, changeNote, updatedBy, t.UpdatedAt,
+		INSERT INTO template_versions (template_id, version, subject, preheader, html, text, variables, change_note, created_by, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		t.ID, newVersion, t.Subject, t.Preheader, t.HTML, t.Text, t.Variables, changeNote, updatedBy, t.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create template version: %w", err)
@@ -230,7 +230,7 @@ func (r *TemplateRepository) Delete(id string) error {
 // GetVersions returns all versions of a template
 func (r *TemplateRepository) GetVersions(templateID string) ([]models.TemplateVersion, error) {
 	rows, err := r.db.Query(`
-		SELECT id, template_id, version, subject, html, text, variables, change_note, created_by, created_at
+		SELECT id, template_id, version, subject, preheader, html, text, variables, change_note, created_by, created_at
 		FROM template_versions WHERE template_id = ? ORDER BY version DESC`, templateID,
 	)
 	if err != nil {
@@ -241,7 +241,7 @@ func (r *TemplateRepository) GetVersions(templateID string) ([]models.TemplateVe
 	versions := []models.TemplateVersion{}
 	for rows.Next() {
 		var v models.TemplateVersion
-		err := rows.Scan(&v.ID, &v.TemplateID, &v.Version, &v.Subject, &v.HTML, &v.Text, &v.Variables, &v.ChangeNote, &v.CreatedBy, &v.CreatedAt)
+		err := rows.Scan(&v.ID, &v.TemplateID, &v.Version, &v.Subject, &v.Preheader, &v.HTML, &v.Text, &v.Variables, &v.ChangeNote, &v.CreatedBy, &v.CreatedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -254,9 +254,9 @@ func (r *TemplateRepository) GetVersions(templateID string) ([]models.TemplateVe
 func (r *TemplateRepository) GetVersion(templateID string, version int) (*models.TemplateVersion, error) {
 	v := &models.TemplateVersion{}
 	err := r.db.QueryRow(`
-		SELECT id, template_id, version, subject, html, text, variables, change_note, created_by, created_at
+		SELECT id, template_id, version, subject, preheader, html, text, variables, change_note, created_by, created_at
 		FROM template_versions WHERE template_id = ? AND version = ?`, templateID, version,
-	).Scan(&v.ID, &v.TemplateID, &v.Version, &v.Subject, &v.HTML, &v.Text, &v.Variables, &v.ChangeNote, &v.CreatedBy, &v.CreatedAt)
+	).Scan(&v.ID, &v.TemplateID, &v.Version, &v.Subject, &v.Preheader, &v.HTML, &v.Text, &v.Variables, &v.ChangeNote, &v.CreatedBy, &v.CreatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil

@@ -11,7 +11,7 @@ import (
 func (h *Handlers) UserList(w http.ResponseWriter, r *http.Request) {
 	users, err := h.settings.ListUsers()
 	if err != nil {
-		h.error(w, http.StatusInternalServerError, "Failed to load users")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load users")
 		return
 	}
 
@@ -38,7 +38,7 @@ func (h *Handlers) UserNew(w http.ResponseWriter, r *http.Request) {
 // UserCreate handles user creation
 func (h *Handlers) UserCreate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
@@ -102,7 +102,7 @@ func (h *Handlers) UserEdit(w http.ResponseWriter, r *http.Request) {
 // UserUpdate handles user update (name + role)
 func (h *Handlers) UserUpdate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
@@ -133,7 +133,7 @@ func (h *Handlers) UserUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.settings.UpdateUser(id, name, role); err != nil {
-		h.error(w, http.StatusInternalServerError, "Failed to update user")
+		h.error(w, r, http.StatusInternalServerError, "Failed to update user")
 		return
 	}
 
@@ -148,7 +148,7 @@ func (h *Handlers) UserUpdate(w http.ResponseWriter, r *http.Request) {
 // UserChangePassword handles password change
 func (h *Handlers) UserChangePassword(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
@@ -170,7 +170,7 @@ func (h *Handlers) UserChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.settings.ChangePassword(id, password); err != nil {
-		h.error(w, http.StatusInternalServerError, "Failed to change password")
+		h.error(w, r, http.StatusInternalServerError, "Failed to change password")
 		return
 	}
 
@@ -208,7 +208,7 @@ func (h *Handlers) UserDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.settings.DeleteUser(id); err != nil {
-		h.error(w, http.StatusInternalServerError, "Failed to delete user")
+		h.error(w, r, http.StatusInternalServerError, "Failed to delete user")
 		return
 	}
 

@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"encoding/json"
+	"slices"
+	"time"
+)
 
 // APIKey represents an API key for authentication
 type APIKey struct {
@@ -32,16 +36,58 @@ func (k *APIKey) CanSendFromDomain(domain string) bool {
 	return false
 }
 
-// APIKeyPermission constants
+// API key permissions. A key holds at least one.
 const (
-	PermissionSend     = "send"
-	PermissionTemplate = "template"
-	PermissionStatus   = "status"
+	PermissionSend  = "send"  // send email (plain and template) and check its status
+	PermissionLists = "lists" // read recipient lists, add and remove recipients
 )
+
+// APIKeyPermissions are all permissions, in display order.
+var APIKeyPermissions = []string{PermissionSend, PermissionLists}
+
+// ValidAPIKeyPermission reports whether p is a known permission.
+func ValidAPIKeyPermission(p string) bool {
+	return slices.Contains(APIKeyPermissions, p)
+}
+
+// legacyPermissions maps values stored before permissions were enforced
+// (when every key could call every endpoint) to the current ones.
+var legacyPermissions = map[string]string{
+	"template": PermissionSend,
+	"status":   PermissionSend,
+}
+
+// PermissionList returns the key's known permissions in display order.
+// Keys stored without a readable list predate permissions and get send.
+func (k *APIKey) PermissionList() []string {
+	var stored []string
+	_ = json.Unmarshal([]byte(k.Permissions), &stored)
+	have := map[string]bool{}
+	for _, p := range stored {
+		if mapped, ok := legacyPermissions[p]; ok {
+			p = mapped
+		}
+		have[p] = true
+	}
+	perms := make([]string, 0, len(APIKeyPermissions))
+	for _, p := range APIKeyPermissions {
+		if have[p] {
+			perms = append(perms, p)
+		}
+	}
+	if len(perms) == 0 {
+		return []string{PermissionSend}
+	}
+	return perms
+}
+
+// HasPermission reports whether the key holds permission p.
+func (k *APIKey) HasPermission(p string) bool {
+	return slices.Contains(k.PermissionList(), p)
+}
 
 // APIKeyFilter for listing API keys
 type APIKeyFilter struct {
-	Active bool
 	Search string
 	Limit  int
 	Offset int

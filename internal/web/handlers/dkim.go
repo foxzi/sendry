@@ -8,6 +8,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/foxzi/sendry/internal/web/models"
@@ -20,14 +21,14 @@ func (h *Handlers) DKIMList(w http.ResponseWriter, r *http.Request) {
 
 	// Verify server exists
 	if _, err := h.sendry.GetClient(serverName); err != nil {
-		h.error(w, http.StatusNotFound, "Server not found")
+		h.error(w, r, http.StatusNotFound, "Server not found")
 		return
 	}
 
 	keys, err := h.dkim.List()
 	if err != nil {
 		h.logger.Error("failed to list DKIM keys", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load DKIM keys")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load DKIM keys")
 		return
 	}
 
@@ -59,7 +60,7 @@ func (h *Handlers) DKIMNew(w http.ResponseWriter, r *http.Request) {
 
 	// Verify server exists
 	if _, err := h.sendry.GetClient(serverName); err != nil {
-		h.error(w, http.StatusNotFound, "Server not found")
+		h.error(w, r, http.StatusNotFound, "Server not found")
 		return
 	}
 
@@ -78,7 +79,7 @@ func (h *Handlers) DKIMCreate(w http.ResponseWriter, r *http.Request) {
 	serverName := r.PathValue("server")
 
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
@@ -87,14 +88,14 @@ func (h *Handlers) DKIMCreate(w http.ResponseWriter, r *http.Request) {
 	autoDeploy := r.FormValue("auto_deploy") == "on"
 
 	if domain == "" || selector == "" {
-		h.error(w, http.StatusBadRequest, "Domain and selector are required")
+		h.error(w, r, http.StatusBadRequest, "Domain and selector are required")
 		return
 	}
 
 	// Check if key already exists
 	existing, _ := h.dkim.GetByDomainSelector(domain, selector)
 	if existing != nil {
-		h.error(w, http.StatusConflict, "DKIM key for this domain and selector already exists")
+		h.error(w, r, http.StatusConflict, "DKIM key for this domain and selector already exists")
 		return
 	}
 
@@ -102,7 +103,7 @@ func (h *Handlers) DKIMCreate(w http.ResponseWriter, r *http.Request) {
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		h.logger.Error("failed to generate RSA key", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to generate key")
+		h.error(w, r, http.StatusInternalServerError, "Failed to generate key")
 		return
 	}
 
@@ -116,7 +117,7 @@ func (h *Handlers) DKIMCreate(w http.ResponseWriter, r *http.Request) {
 	publicKeyDER, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
 	if err != nil {
 		h.logger.Error("failed to marshal public key", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to generate public key")
+		h.error(w, r, http.StatusInternalServerError, "Failed to generate public key")
 		return
 	}
 	publicKeyPEM := pem.EncodeToMemory(&pem.Block{
@@ -140,7 +141,7 @@ func (h *Handlers) DKIMCreate(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.dkim.Create(key); err != nil {
 		h.logger.Error("failed to create DKIM key", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to save DKIM key")
+		h.error(w, r, http.StatusInternalServerError, "Failed to save DKIM key")
 		return
 	}
 
@@ -159,152 +160,13 @@ func (h *Handlers) DKIMCreate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	http.Redirect(w, r, fmt.Sprintf("/servers/%s/dkim/%s", serverName, key.ID), http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("/dkim/%s", key.ID), http.StatusSeeOther)
 }
 
-// DKIMView shows a single DKIM key
+// DKIMView redirects to the panel's DKIM key page: a key is one record for
+// all servers, and that page lists every server with its deployment state.
 func (h *Handlers) DKIMView(w http.ResponseWriter, r *http.Request) {
-	serverName := r.PathValue("server")
-	id := r.PathValue("id")
-
-	// Verify server exists
-	if _, err := h.sendry.GetClient(serverName); err != nil {
-		h.error(w, http.StatusNotFound, "Server not found")
-		return
-	}
-
-	key, err := h.dkim.GetByID(id)
-	if err != nil {
-		h.logger.Error("failed to get DKIM key", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load DKIM key")
-		return
-	}
-	if key == nil {
-		h.error(w, http.StatusNotFound, "DKIM key not found")
-		return
-	}
-
-	// Check if deployed to current server
-	isDeployed := false
-	for _, d := range key.Deployments {
-		if d.ServerName == serverName && d.Status == "deployed" {
-			isDeployed = true
-			break
-		}
-	}
-
-	// Get all servers for deployment
-	servers := h.getServersStatus()
-
-	// Filter out current server for "other servers" list
-	var otherServers []map[string]any
-	for _, s := range servers {
-		if s["Name"] != serverName {
-			otherServers = append(otherServers, s)
-		}
-	}
-
-	data := map[string]any{
-		"Title":        fmt.Sprintf("DKIM: %s._domainkey.%s", key.Selector, key.Domain),
-		"Active":       "servers",
-		"User":         h.getUserFromContext(r),
-		"Key":          key,
-		"DNSName":      key.Selector + "._domainkey." + key.Domain,
-		"Servers":      servers,
-		"OtherServers": otherServers,
-		"ServerName":   serverName,
-		"IsDeployed":   isDeployed,
-	}
-
-	h.render(w, "dkim_view", data)
-}
-
-// DKIMDelete deletes a DKIM key
-func (h *Handlers) DKIMDelete(w http.ResponseWriter, r *http.Request) {
-	serverName := r.PathValue("server")
-	id := r.PathValue("id")
-
-	if err := h.dkim.Delete(id); err != nil {
-		h.logger.Error("failed to delete DKIM key", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to delete DKIM key")
-		return
-	}
-
-	http.Redirect(w, r, fmt.Sprintf("/servers/%s/dkim", serverName), http.StatusSeeOther)
-}
-
-// DKIMDeploy deploys a DKIM key to selected servers
-func (h *Handlers) DKIMDeploy(w http.ResponseWriter, r *http.Request) {
-	serverName := r.PathValue("server")
-	id := r.PathValue("id")
-
-	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
-		return
-	}
-
-	key, err := h.dkim.GetByID(id)
-	if err != nil || key == nil {
-		h.error(w, http.StatusNotFound, "DKIM key not found")
-		return
-	}
-
-	servers := r.Form["servers"]
-	if len(servers) == 0 {
-		h.error(w, http.StatusBadRequest, "No servers selected")
-		return
-	}
-
-	var deployErrors []string
-	for _, srvName := range servers {
-		client, err := h.sendry.GetClient(srvName)
-		if err != nil {
-			deployErrors = append(deployErrors, fmt.Sprintf("%s: %v", srvName, err))
-			h.dkim.CreateDeployment(key.ID, srvName, "failed", err.Error())
-			continue
-		}
-
-		resp, err := client.UploadDKIM(r.Context(), key.Domain, key.Selector, key.PrivateKey)
-		if err != nil {
-			deployErrors = append(deployErrors, fmt.Sprintf("%s: %v", srvName, err))
-			h.dkim.CreateDeployment(key.ID, srvName, "failed", err.Error())
-		} else {
-			// Update domain config with DKIM settings
-			h.updateDomainDKIM(r.Context(), client, key.Domain, key.Selector, resp.KeyFile)
-			h.dkim.CreateDeployment(key.ID, srvName, "deployed", "")
-		}
-	}
-
-	if len(deployErrors) > 0 {
-		h.logger.Error("some deployments failed", "errors", deployErrors)
-	}
-
-	http.Redirect(w, r, fmt.Sprintf("/servers/%s/dkim/%s", serverName, id), http.StatusSeeOther)
-}
-
-// DKIMDeploymentDelete removes a deployment record and optionally the key from server
-func (h *Handlers) DKIMDeploymentDelete(w http.ResponseWriter, r *http.Request) {
-	serverName := r.PathValue("server")
-	id := r.PathValue("id")
-
-	key, err := h.dkim.GetByID(id)
-	if err != nil || key == nil {
-		h.error(w, http.StatusNotFound, "DKIM key not found")
-		return
-	}
-
-	// Try to delete from server
-	client, err := h.sendry.GetClient(serverName)
-	if err == nil {
-		_ = client.DeleteDKIM(r.Context(), key.Domain, key.Selector)
-	}
-
-	// Remove deployment record
-	if err := h.dkim.DeleteDeployment(key.ID, serverName); err != nil {
-		h.logger.Error("failed to delete deployment", "error", err)
-	}
-
-	http.Redirect(w, r, fmt.Sprintf("/servers/%s/dkim/%s", serverName, id), http.StatusSeeOther)
+	http.Redirect(w, r, "/dkim/"+url.PathEscape(r.PathValue("id")), http.StatusSeeOther)
 }
 
 // ============================================================================
@@ -316,7 +178,7 @@ func (h *Handlers) CentralDKIMList(w http.ResponseWriter, r *http.Request) {
 	keys, err := h.dkim.List()
 	if err != nil {
 		h.logger.Error("failed to list DKIM keys", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load DKIM keys")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load DKIM keys")
 		return
 	}
 
@@ -352,7 +214,7 @@ func (h *Handlers) CentralDKIMNew(w http.ResponseWriter, r *http.Request) {
 // CentralDKIMCreate creates a new DKIM key (central management)
 func (h *Handlers) CentralDKIMCreate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
@@ -361,14 +223,14 @@ func (h *Handlers) CentralDKIMCreate(w http.ResponseWriter, r *http.Request) {
 	deployServers := r.Form["servers"]
 
 	if domain == "" || selector == "" {
-		h.error(w, http.StatusBadRequest, "Domain and selector are required")
+		h.error(w, r, http.StatusBadRequest, "Domain and selector are required")
 		return
 	}
 
 	// Check if key already exists
 	existing, _ := h.dkim.GetByDomainSelector(domain, selector)
 	if existing != nil {
-		h.error(w, http.StatusConflict, "DKIM key for this domain and selector already exists")
+		h.error(w, r, http.StatusConflict, "DKIM key for this domain and selector already exists")
 		return
 	}
 
@@ -376,7 +238,7 @@ func (h *Handlers) CentralDKIMCreate(w http.ResponseWriter, r *http.Request) {
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		h.logger.Error("failed to generate RSA key", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to generate key")
+		h.error(w, r, http.StatusInternalServerError, "Failed to generate key")
 		return
 	}
 
@@ -390,7 +252,7 @@ func (h *Handlers) CentralDKIMCreate(w http.ResponseWriter, r *http.Request) {
 	publicKeyDER, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
 	if err != nil {
 		h.logger.Error("failed to marshal public key", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to generate public key")
+		h.error(w, r, http.StatusInternalServerError, "Failed to generate public key")
 		return
 	}
 	publicKeyPEM := pem.EncodeToMemory(&pem.Block{
@@ -414,7 +276,7 @@ func (h *Handlers) CentralDKIMCreate(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.dkim.Create(key); err != nil {
 		h.logger.Error("failed to create DKIM key", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to save DKIM key")
+		h.error(w, r, http.StatusInternalServerError, "Failed to save DKIM key")
 		return
 	}
 
@@ -446,11 +308,11 @@ func (h *Handlers) CentralDKIMView(w http.ResponseWriter, r *http.Request) {
 	key, err := h.dkim.GetByID(id)
 	if err != nil {
 		h.logger.Error("failed to get DKIM key", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load DKIM key")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load DKIM key")
 		return
 	}
 	if key == nil {
-		h.error(w, http.StatusNotFound, "DKIM key not found")
+		h.error(w, r, http.StatusNotFound, "DKIM key not found")
 		return
 	}
 
@@ -482,7 +344,7 @@ func (h *Handlers) CentralDKIMDelete(w http.ResponseWriter, r *http.Request) {
 
 	key, err := h.dkim.GetByID(id)
 	if err != nil || key == nil {
-		h.error(w, http.StatusNotFound, "DKIM key not found")
+		h.error(w, r, http.StatusNotFound, "DKIM key not found")
 		return
 	}
 
@@ -496,7 +358,7 @@ func (h *Handlers) CentralDKIMDelete(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.dkim.Delete(id); err != nil {
 		h.logger.Error("failed to delete DKIM key", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to delete DKIM key")
+		h.error(w, r, http.StatusInternalServerError, "Failed to delete DKIM key")
 		return
 	}
 
@@ -508,19 +370,19 @@ func (h *Handlers) CentralDKIMDeploy(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
 	key, err := h.dkim.GetByID(id)
 	if err != nil || key == nil {
-		h.error(w, http.StatusNotFound, "DKIM key not found")
+		h.error(w, r, http.StatusNotFound, "DKIM key not found")
 		return
 	}
 
 	servers := r.Form["servers"]
 	if len(servers) == 0 {
-		h.error(w, http.StatusBadRequest, "No servers selected")
+		h.error(w, r, http.StatusBadRequest, "No servers selected")
 		return
 	}
 
@@ -558,7 +420,7 @@ func (h *Handlers) CentralDKIMDeploymentDelete(w http.ResponseWriter, r *http.Re
 
 	key, err := h.dkim.GetByID(id)
 	if err != nil || key == nil {
-		h.error(w, http.StatusNotFound, "DKIM key not found")
+		h.error(w, r, http.StatusNotFound, "DKIM key not found")
 		return
 	}
 

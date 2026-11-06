@@ -55,6 +55,17 @@
 - Graceful shutdown
 - Структурированное логирование (JSON)
 
+### Веб-панель (sendry-web)
+
+- Рассылки с A/B-вариантами, отложенными запусками, пилотной отправкой и пробными письмами
+- Конструктор шаблонов из блоков, версии, переменные и прехедер
+- Списки получателей с импортом CSV и отпиской по каждому списку
+- Трекинг открытий и кликов, карта кликов, Open Rate / CTR, `List-Unsubscribe` (RFC 8058)
+- Ошибки доставки по типам для рассылок и отправок через API
+- Домены и DKIM-ключи в одном месте с развёртыванием на один или несколько MTA и проверкой, что серверы совпадают с панелью
+- API панели: отправка писем и добавление или удаление получателей списка по API-ключам
+- Вход по паролю и через OIDC, журнал действий, интерфейс на русском и английском
+
 ## Установка
 
 ### Репозиторий пакетов (рекомендуется)
@@ -74,10 +85,12 @@ gpgcheck=0
 EOF
 sudo dnf install sendry
 
-# Alpine
-wget https://github.com/foxzi/sendry/releases/latest/download/sendry_0.4.18-r1_x86_64.apk
+# Alpine: скачайте .apk для своей архитектуры со страницы
+# https://github.com/foxzi/sendry/releases/latest
 apk add --allow-untrusted sendry_*.apk
 ```
+
+Пакет ставит оба бинарника, `sendry` (MTA) и `sendry-web` (панель), systemd-юниты `sendry` и `sendry-web` и примеры конфигов в `/etc/sendry/`.
 
 ### Бинарный файл
 
@@ -85,7 +98,14 @@ apk add --allow-untrusted sendry_*.apk
 wget https://github.com/foxzi/sendry/releases/latest/download/sendry-linux-amd64
 chmod +x sendry-linux-amd64
 sudo mv sendry-linux-amd64 /usr/local/bin/sendry
+
+# Веб-панель (по желанию)
+wget https://github.com/foxzi/sendry/releases/latest/download/sendry-web-linux-amd64
+chmod +x sendry-web-linux-amd64
+sudo mv sendry-web-linux-amd64 /usr/local/bin/sendry-web
 ```
+
+Есть и сборки для `arm64`.
 
 ### Docker
 
@@ -94,6 +114,19 @@ docker pull ghcr.io/foxzi/sendry:latest
 docker run -p 25:25 -p 587:587 -p 8080:8080 \
   -v /path/to/config.yaml:/etc/sendry/config.yaml \
   ghcr.io/foxzi/sendry:latest
+```
+
+### Docker Compose
+
+Чтобы запустить MTA и веб-панель вместе, см. [документацию Docker](docker.ru.md).
+
+```bash
+git clone https://github.com/foxzi/sendry.git
+cd sendry
+cp configs/sendry.example.yaml configs/sendry.yaml
+cp configs/web.example.yaml configs/web.yaml
+# Отредактируйте конфиги
+docker compose up -d
 ```
 
 ### Ansible
@@ -109,12 +142,14 @@ ansible-playbook -i inventory/hosts.yml playbooks/sendry.yml
 
 ### Сборка из исходников
 
-Требуется Go 1.24+
+Требуется Go 1.24+. Для веб-панели нужны ещё CGO и компилятор C (SQLite).
 
 ```bash
 git clone https://github.com/foxzi/sendry.git
 cd sendry
-make build
+make build       # sendry (MTA)
+make build-web   # sendry-web (панель)
+make all         # оба
 ```
 
 ## Быстрый старт
@@ -161,6 +196,18 @@ storage:
 ./sendry config validate -c config.yaml
 ```
 
+### Веб-панель
+
+Панель слушает `:8088` и работает с одним или несколькими MTA через их HTTP API.
+
+```bash
+cp configs/web.example.yaml web.yaml   # укажите sendry.servers и server.public_url
+./sendry-web user create -c web.yaml --email admin@example.com
+./sendry-web serve -c web.yaml
+```
+
+Настройка и возможности: [Веб-панель Sendry](sendry-web.ru.md).
+
 ## API
 
 ### Health Check
@@ -173,7 +220,7 @@ curl http://localhost:8080/health
 ```json
 {
   "status": "ok",
-  "version": "0.4.18",
+  "version": "0.7.0",
   "uptime": "1h30m",
   "queue": {
     "pending": 5,
@@ -309,17 +356,25 @@ curl -X DELETE http://localhost:8080/api/v1/queue/{message_id} \
 
 ```
 sendry/
-├── cmd/sendry/          # CLI точка входа
+├── cmd/
+│   ├── sendry/          # CLI точка входа MTA
+│   └── sendry-web/      # CLI точка входа веб-панели
 ├── internal/
 │   ├── api/             # HTTP API сервер
 │   ├── app/             # Оркестрация приложения
 │   ├── config/          # Конфигурация
 │   ├── dkim/            # DKIM подпись
 │   ├── dns/             # MX резолвер
+│   ├── domain/          # Домены и их режимы
 │   ├── metrics/         # Prometheus метрики
 │   ├── queue/           # Очередь сообщений и хранилище
+│   ├── ratelimit/       # Ограничение скорости
+│   ├── sandbox/         # Перехват писем песочницы
 │   ├── smtp/            # SMTP сервер и клиент
-│   └── tls/             # TLS/ACME поддержка
+│   ├── tls/             # TLS/ACME поддержка
+│   └── web/             # Веб-панель (обработчики, страницы, SQLite, воркер, трекинг)
+├── ansible/             # Роли и плейбуки Ansible
+├── packaging/           # Скрипты deb/rpm/apk и systemd-юниты
 ├── configs/             # Примеры конфигураций
 └── docs/                # Документация
 ```

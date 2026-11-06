@@ -49,7 +49,7 @@ func (h *Handlers) MediaList(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		h.logger.Error("failed to list media", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to list media")
+		h.error(w, r, http.StatusInternalServerError, "Failed to list media")
 		return
 	}
 
@@ -74,26 +74,26 @@ func (h *Handlers) MediaList(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) MediaUpload(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
-		h.error(w, http.StatusBadRequest, "File too large (max 10MB)")
+		h.error(w, r, http.StatusBadRequest, "File too large (max 10MB)")
 		return
 	}
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		h.error(w, http.StatusBadRequest, "No file uploaded")
+		h.error(w, r, http.StatusBadRequest, "No file uploaded")
 		return
 	}
 	defer file.Close()
 
 	mimeType := header.Header.Get("Content-Type")
 	if !allowedMimeTypes[mimeType] {
-		h.error(w, http.StatusBadRequest, "Only images are allowed (PNG, JPEG, GIF, WebP, SVG)")
+		h.error(w, r, http.StatusBadRequest, "Only images are allowed (PNG, JPEG, GIF, WebP, SVG)")
 		return
 	}
 
 	ext := strings.ToLower(filepath.Ext(header.Filename))
 	if !allowedExtensions[ext] {
-		h.error(w, http.StatusBadRequest, "File extension not allowed. Accepted: .png, .jpg, .jpeg, .gif, .webp, .svg")
+		h.error(w, r, http.StatusBadRequest, "File extension not allowed. Accepted: .png, .jpg, .jpeg, .gif, .webp, .svg")
 		return
 	}
 
@@ -112,14 +112,14 @@ func (h *Handlers) MediaUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !allowedMimeTypes[detectedType] {
-		h.error(w, http.StatusBadRequest, "File content does not match an allowed image type")
+		h.error(w, r, http.StatusBadRequest, "File content does not match an allowed image type")
 		return
 	}
 
 	uploadPath := h.cfg.Server.UploadPath
 	if err := os.MkdirAll(uploadPath, 0755); err != nil {
 		h.logger.Error("failed to create upload dir", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to save file")
+		h.error(w, r, http.StatusInternalServerError, "Failed to save file")
 		return
 	}
 
@@ -128,7 +128,7 @@ func (h *Handlers) MediaUpload(w http.ResponseWriter, r *http.Request) {
 	dst, err := os.Create(filepath.Join(uploadPath, storedName))
 	if err != nil {
 		h.logger.Error("failed to create file", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to save file")
+		h.error(w, r, http.StatusInternalServerError, "Failed to save file")
 		return
 	}
 	defer dst.Close()
@@ -136,7 +136,7 @@ func (h *Handlers) MediaUpload(w http.ResponseWriter, r *http.Request) {
 	written, err := io.Copy(dst, file)
 	if err != nil {
 		h.logger.Error("failed to write file", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to save file")
+		h.error(w, r, http.StatusInternalServerError, "Failed to save file")
 		return
 	}
 
@@ -153,7 +153,7 @@ func (h *Handlers) MediaUpload(w http.ResponseWriter, r *http.Request) {
 	if err := h.media.Create(m); err != nil {
 		h.logger.Error("failed to save media record", "error", err)
 		os.Remove(filepath.Join(uploadPath, storedName))
-		h.error(w, http.StatusInternalServerError, "Failed to save file")
+		h.error(w, r, http.StatusInternalServerError, "Failed to save file")
 		return
 	}
 
@@ -175,11 +175,11 @@ func (h *Handlers) MediaDelete(w http.ResponseWriter, r *http.Request) {
 	m, err := h.media.GetByID(id)
 	if err != nil {
 		h.logger.Error("failed to get media", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load media")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load media")
 		return
 	}
 	if m == nil {
-		h.error(w, http.StatusNotFound, "File not found")
+		h.error(w, r, http.StatusNotFound, "File not found")
 		return
 	}
 
@@ -190,7 +190,7 @@ func (h *Handlers) MediaDelete(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.media.Delete(id); err != nil {
 		h.logger.Error("failed to delete media", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to delete file")
+		h.error(w, r, http.StatusInternalServerError, "Failed to delete file")
 		return
 	}
 

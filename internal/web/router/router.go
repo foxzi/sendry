@@ -18,7 +18,6 @@ import (
 
 var (
 	ErrDomainNotFound     = errors.New("domain not configured")
-	ErrDomainNotAllowed   = errors.New("domain not allowed for this API key")
 	ErrNoServersAvailable = errors.New("no healthy servers available for domain")
 	ErrAllServersFailed   = errors.New("all servers failed to send")
 	ErrTemplateNotFound   = errors.New("template not found")
@@ -360,6 +359,11 @@ func (r *EmailRouter) resolveTemplate(ctx context.Context, req *APISendRequest) 
 	if err != nil {
 		return nil, "", fmt.Errorf("render html: %w", err)
 	}
+	preheader, err := renderVars("preheader", tmpl.Preheader, data, false)
+	if err != nil {
+		return nil, "", fmt.Errorf("render preheader: %w", err)
+	}
+	html = emailtpl.InsertPreheader(html, preheader)
 	text, err := renderVars("text", tmpl.Text, data, false)
 	if err != nil {
 		return nil, "", fmt.Errorf("render text: %w", err)

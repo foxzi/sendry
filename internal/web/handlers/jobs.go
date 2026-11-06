@@ -27,7 +27,7 @@ func (h *Handlers) JobList(w http.ResponseWriter, r *http.Request) {
 	jobs, total, err := h.jobs.List(filter)
 	if err != nil {
 		h.logger.Error("failed to list jobs", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load jobs")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load jobs")
 		return
 	}
 
@@ -75,11 +75,11 @@ func (h *Handlers) JobView(w http.ResponseWriter, r *http.Request) {
 	job, err := h.jobs.GetByID(id)
 	if err != nil {
 		h.logger.Error("failed to get job", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load job")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load job")
 		return
 	}
 	if job == nil {
-		h.error(w, http.StatusNotFound, "Job not found")
+		h.error(w, r, http.StatusNotFound, "Job not found")
 		return
 	}
 
@@ -162,7 +162,7 @@ func (h *Handlers) JobItems(w http.ResponseWriter, r *http.Request) {
 
 	job, err := h.jobs.GetByID(id)
 	if err != nil || job == nil {
-		h.error(w, http.StatusNotFound, "Job not found")
+		h.error(w, r, http.StatusNotFound, "Job not found")
 		return
 	}
 
@@ -182,7 +182,7 @@ func (h *Handlers) JobItems(w http.ResponseWriter, r *http.Request) {
 	items, total, err := h.jobs.ListItems(filter)
 	if err != nil {
 		h.logger.Error("failed to list items", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load items")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load items")
 		return
 	}
 
@@ -212,18 +212,18 @@ func (h *Handlers) JobPause(w http.ResponseWriter, r *http.Request) {
 
 	job, err := h.jobs.GetByID(id)
 	if err != nil || job == nil {
-		h.error(w, http.StatusNotFound, "Job not found")
+		h.error(w, r, http.StatusNotFound, "Job not found")
 		return
 	}
 
 	if job.Status != "running" {
-		h.error(w, http.StatusBadRequest, "Can only pause running jobs")
+		h.error(w, r, http.StatusBadRequest, "Can only pause running jobs")
 		return
 	}
 
 	if err := h.jobs.UpdateStatus(id, "paused"); err != nil {
 		h.logger.Error("failed to pause job", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to pause job")
+		h.error(w, r, http.StatusInternalServerError, "Failed to pause job")
 		return
 	}
 
@@ -235,18 +235,18 @@ func (h *Handlers) JobResume(w http.ResponseWriter, r *http.Request) {
 
 	job, err := h.jobs.GetByID(id)
 	if err != nil || job == nil {
-		h.error(w, http.StatusNotFound, "Job not found")
+		h.error(w, r, http.StatusNotFound, "Job not found")
 		return
 	}
 
 	if job.Status != "paused" {
-		h.error(w, http.StatusBadRequest, "Can only resume paused jobs")
+		h.error(w, r, http.StatusBadRequest, "Can only resume paused jobs")
 		return
 	}
 
 	if err := h.jobs.UpdateStatus(id, "running"); err != nil {
 		h.logger.Error("failed to resume job", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to resume job")
+		h.error(w, r, http.StatusInternalServerError, "Failed to resume job")
 		return
 	}
 
@@ -258,18 +258,18 @@ func (h *Handlers) JobCancel(w http.ResponseWriter, r *http.Request) {
 
 	job, err := h.jobs.GetByID(id)
 	if err != nil || job == nil {
-		h.error(w, http.StatusNotFound, "Job not found")
+		h.error(w, r, http.StatusNotFound, "Job not found")
 		return
 	}
 
 	if job.Status != "running" && job.Status != "paused" && job.Status != "scheduled" {
-		h.error(w, http.StatusBadRequest, "Cannot cancel job in status: "+job.Status)
+		h.error(w, r, http.StatusBadRequest, "Cannot cancel job in status: "+job.Status)
 		return
 	}
 
 	if err := h.jobs.UpdateStatus(id, "cancelled"); err != nil {
 		h.logger.Error("failed to cancel job", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to cancel job")
+		h.error(w, r, http.StatusInternalServerError, "Failed to cancel job")
 		return
 	}
 
@@ -282,19 +282,19 @@ func (h *Handlers) JobRetry(w http.ResponseWriter, r *http.Request) {
 
 	job, err := h.jobs.GetByID(id)
 	if err != nil || job == nil {
-		h.error(w, http.StatusNotFound, "Job not found")
+		h.error(w, r, http.StatusNotFound, "Job not found")
 		return
 	}
 
 	if job.Status != "completed" && job.Status != "failed" {
-		h.error(w, http.StatusBadRequest, "Can only retry completed or failed jobs")
+		h.error(w, r, http.StatusBadRequest, "Can only retry completed or failed jobs")
 		return
 	}
 
 	n, err := h.jobs.RetryFailedItems(id)
 	if err != nil {
 		h.logger.Error("failed to reset failed items", "job_id", id, "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to retry job")
+		h.error(w, r, http.StatusInternalServerError, "Failed to retry job")
 		return
 	}
 	if n == 0 {
@@ -304,7 +304,7 @@ func (h *Handlers) JobRetry(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.jobs.UpdateStatus(id, "running"); err != nil {
 		h.logger.Error("failed to retry job", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to retry job")
+		h.error(w, r, http.StatusInternalServerError, "Failed to retry job")
 		return
 	}
 

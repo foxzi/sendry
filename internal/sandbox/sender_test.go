@@ -2,6 +2,7 @@ package sandbox
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -20,7 +21,7 @@ type mockSender struct {
 
 func (m *mockSender) Send(ctx context.Context, msg *queue.Message) error {
 	if m.shouldError {
-		return &SimulatedError{Message: m.errorMsg, Temporary: true}
+		return errors.New(m.errorMsg)
 	}
 	m.sentMessages = append(m.sentMessages, msg)
 	return nil

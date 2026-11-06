@@ -19,7 +19,7 @@
                     <th data-i18n="common.domain">Domain</th>
                     <th data-i18n="common.mode">Mode</th>
                     <th>DKIM</th>
-                    <th data-i18n="infra.deployments">Deployments</th>
+                    <th data-i18n="servers">Servers</th>
                     <th data-i18n="common.created">Created</th>
                     <th data-i18n="actions">Actions</th>
                 </tr>
@@ -35,19 +35,30 @@
                     </td>
                     <td>
                         {{if .DKIMEnabled}}
-                        <span class="badge badge-running">{{.DKIMSelector}}</span>
+                        <span class="badge badge-success">{{.DKIMSelector}}</span>
                         {{else}}
                         <span class="badge badge-draft" data-i18n="infra.disabled">Disabled</span>
                         {{end}}
                     </td>
                     <td>
-                        {{if .DeploymentCount}}
-                        <span class="badge badge-running">{{.DeploymentCount}} <span data-i18n="infra.server_s">server(s)</span></span>
-                        {{if .OutdatedCount}}
-                        <span class="badge badge-warning">{{.OutdatedCount}} <span data-i18n="infra.outdated_lower">outdated</span></span>
-                        {{end}}
+                        {{$c := index $.Drift .ID}}
+                        {{if $c.Total}}
+                        <span class="srv-status" tabindex="0" data-tip>
+                            {{template "srv_status_icon" $c.Badge}}
+                            <span>{{$c.Total}}</span>
+                            <span class="srv-status-tip" role="tooltip">
+                                <strong class="srv-status-tip-title" data-i18n="{{$c.Label}}">{{$c.Label}}</strong>
+                                <span class="srv-status-tip-sub">{{$c.Synced}}/{{$c.Total}} <span data-i18n="infra.in_sync_hint_short">servers match the panel</span></span>
+                                {{range $c.Servers}}
+                                <span class="srv-status-tip-row"><span class="srv-status-tip-name">{{.Name}}</span>{{template "deployment_state_badge" .State}}</span>
+                                {{end}}
+                                {{range $c.NotDeployed}}
+                                <span class="srv-status-tip-row srv-status-tip-row--idle"><span class="srv-status-tip-name">{{.}}</span><span class="badge badge-draft" data-i18n="infra.not_deployed">Not deployed</span></span>
+                                {{end}}
+                            </span>
+                        </span>
                         {{else}}
-                        <span class="badge badge-draft" data-i18n="infra.not_deployed">Not deployed</span>
+                        <span class="text-muted" data-i18n="infra.not_deployed">Not deployed</span>
                         {{end}}
                     </td>
                     <td>{{.CreatedAt.Format "2006-01-02"}}</td>

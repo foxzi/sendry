@@ -5,6 +5,9 @@
         <p class="text-muted" id="cf-page-desc"{{if not .Campaign.Description}} hidden{{end}}>{{.Campaign.Description}}</p>
     </div>
     <div class="header-actions">
+        <form method="post" action="/campaigns/{{.Campaign.ID}}/copy">
+            <button type="submit" class="btn" data-i18n="cmp.copy_campaign" data-i18n-title="cmp.copy_campaign_hint" title="Creates a draft with the same emails, variants, variables and tags. Runs and statistics are not copied.">Copy</button>
+        </form>
         <a href="/campaigns/{{.Campaign.ID}}/launch" class="btn btn-primary" data-i18n="cmp.cf_send_btn">Send&hellip;</a>
     </div>
 </div>
