@@ -1271,18 +1271,6 @@ td.actions form {
     color: #111827;
 }
 
-.btn-success {
-    background: var(--success);
-    border-color: var(--success);
-    color: #111827;
-}
-
-.btn-success:hover {
-    background: #059669;
-    border-color: #059669;
-    color: #111827;
-}
-
 /* Current version row highlight */
 .current-version {
     background: rgba(59, 130, 246, 0.05);
@@ -1799,11 +1787,6 @@ td.actions form {
 .err-none {
     font-size: 13px;
     color: var(--text-muted);
-}
-
-.err-hint {
-    margin-top: 1rem;
-    font-size: 12px;
 }
 
 @media (max-width: 720px) {

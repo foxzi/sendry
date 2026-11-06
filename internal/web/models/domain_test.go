@@ -49,51 +49,6 @@ func TestDomain_ConfigHash_DifferentDomains(t *testing.T) {
 	}
 }
 
-func TestDomain_IsOutdated(t *testing.T) {
-	domain := &Domain{
-		Domain: "example.com",
-		Mode:   "production",
-	}
-
-	deployment := DomainDeployment{
-		ConfigHash: domain.ConfigHash(),
-	}
-
-	if domain.IsOutdated(deployment) {
-		t.Error("IsOutdated() should return false when hashes match")
-	}
-
-	// Change domain config
-	domain.Mode = "sandbox"
-
-	if !domain.IsOutdated(deployment) {
-		t.Error("IsOutdated() should return true when hashes differ")
-	}
-}
-
-func TestDomain_GetOutdatedDeployments(t *testing.T) {
-	domain := &Domain{
-		Domain: "example.com",
-		Mode:   "production",
-	}
-
-	currentHash := domain.ConfigHash()
-
-	domain.Deployments = []DomainDeployment{
-		{ServerName: "server1", ConfigHash: currentHash, Status: "deployed"},
-		{ServerName: "server2", ConfigHash: "old-hash", Status: "deployed"},
-		{ServerName: "server3", ConfigHash: "old-hash", Status: "deployed"},
-		{ServerName: "server4", ConfigHash: "old-hash", Status: "failed"},
-	}
-
-	outdated := domain.GetOutdatedDeployments()
-
-	// server1 is current, server4 is failed (excluded), so only server2 and server3
-	if len(outdated) != 2 {
-		t.Errorf("GetOutdatedDeployments() returned %d, want 2", len(outdated))
-	}
-}
-
 func TestDomain_ConfigHash_WithArrays(t *testing.T) {
 	domain := &Domain{
 		Domain:     "example.com",

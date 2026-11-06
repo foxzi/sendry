@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"net/mail"
-	"strings"
 	"text/template"
 	"time"
 
@@ -25,11 +24,6 @@ func NewGenerator(hostname string) *Generator {
 		postmaster:   "postmaster@" + hostname,
 		reportingMTA: hostname,
 	}
-}
-
-// SetPostmaster sets custom postmaster address
-func (g *Generator) SetPostmaster(addr string) {
-	g.postmaster = addr
 }
 
 // GenerateDSN generates a Delivery Status Notification (bounce) message
@@ -71,29 +65,6 @@ func (g *Generator) GenerateDSN(msg *queue.Message, errorMsg string, permanent b
 	return buf.Bytes(), nil
 }
 
-// GenerateSimpleBounce generates a simple bounce message (not full DSN format)
-func (g *Generator) GenerateSimpleBounce(msg *queue.Message, errorMsg string) ([]byte, error) {
-	originalSubject := extractSubject(msg.Data)
-
-	data := simpleBounceData{
-		Hostname:        g.hostname,
-		Postmaster:      g.postmaster,
-		Date:            time.Now().Format(time.RFC1123Z),
-		MessageID:       fmt.Sprintf("<%s.bounce@%s>", msg.ID, g.hostname),
-		OriginalFrom:    msg.From,
-		Recipients:      strings.Join(msg.To, ", "),
-		OriginalSubject: originalSubject,
-		ErrorMessage:    errorMsg,
-	}
-
-	var buf bytes.Buffer
-	if err := simpleBounceTemplate.Execute(&buf, data); err != nil {
-		return nil, fmt.Errorf("failed to generate bounce: %w", err)
-	}
-
-	return buf.Bytes(), nil
-}
-
 type dsnData struct {
 	Hostname        string
 	Postmaster      string
@@ -109,17 +80,6 @@ type dsnData struct {
 	Status          string
 	DiagnosticCode  string
 	Boundary        string
-}
-
-type simpleBounceData struct {
-	Hostname        string
-	Postmaster      string
-	Date            string
-	MessageID       string
-	OriginalFrom    string
-	Recipients      string
-	OriginalSubject string
-	ErrorMessage    string
 }
 
 var dsnTemplate = template.Must(template.New("dsn").Parse(`From: Mail Delivery System <{{.Postmaster}}>
@@ -164,30 +124,6 @@ Status: {{$.Status}}
 Diagnostic-Code: smtp; {{$.DiagnosticCode}}
 {{end}}
 --{{.Boundary}}--
-`))
-
-var simpleBounceTemplate = template.Must(template.New("bounce").Parse(`From: Mail Delivery System <{{.Postmaster}}>
-To: <{{.OriginalFrom}}>
-Subject: Undelivered Mail Returned to Sender
-Date: {{.Date}}
-Message-ID: {{.MessageID}}
-Content-Type: text/plain; charset=utf-8
-Auto-Submitted: auto-replied
-
-This is the mail delivery system at {{.Hostname}}.
-
-I'm sorry to inform you that your message could not be delivered.
-
---- Original message information ---
-
-To: {{.Recipients}}
-Subject: {{.OriginalSubject}}
-
---- Error details ---
-
-{{.ErrorMessage}}
-
-If you have questions, please contact the postmaster at {{.Postmaster}}.
 `))
 
 // extractSubject extracts Subject header from raw email data

@@ -93,20 +93,3 @@ func (d *Domain) ConfigHash() string {
 	hash := sha256.Sum256(jsonData)
 	return fmt.Sprintf("%x", hash[:8])
 }
-
-// IsOutdated checks if a deployment is outdated compared to current config
-func (d *Domain) IsOutdated(deployment DomainDeployment) bool {
-	return deployment.ConfigHash != d.ConfigHash()
-}
-
-// GetOutdatedDeployments returns list of deployments that need to be synced
-func (d *Domain) GetOutdatedDeployments() []DomainDeployment {
-	var outdated []DomainDeployment
-	currentHash := d.ConfigHash()
-	for _, dep := range d.Deployments {
-		if dep.ConfigHash != currentHash && dep.Status != "failed" {
-			outdated = append(outdated, dep)
-		}
-	}
-	return outdated
-}

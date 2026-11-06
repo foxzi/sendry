@@ -228,13 +228,6 @@ func (r *CampaignRepository) DeleteVariant(id string) error {
 	return inUse(err)
 }
 
-// UpdateVariables updates campaign variables
-func (r *CampaignRepository) UpdateVariables(id, variables string) error {
-	_, err := r.db.Exec("UPDATE campaigns SET variables = ?, updated_at = ? WHERE id = ?",
-		variables, time.Now(), id)
-	return err
-}
-
 // Copy creates a draft copy of a campaign in one transaction: the same sender,
 // settings, variables, tags and variants with weights. Runs, statistics and
 // tracking events are not copied. The copy is named "<name><suffix>". Returns

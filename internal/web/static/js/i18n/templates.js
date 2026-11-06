@@ -288,7 +288,6 @@ I18n.register({
         'tpl.test_value_ph': 'Test value...',
         'tpl.preview_only': 'preview only',
         'tpl.images_in_block': 'Images in block',
-        'tpl.enter_value_for': 'Enter value for',
         'tpl.uploading': 'Uploading...',
         'tpl.upload_failed': 'Upload failed'
     },
@@ -579,7 +578,6 @@ I18n.register({
         'tpl.test_value_ph': 'Тестовое значение...',
         'tpl.preview_only': 'только предпросмотр',
         'tpl.images_in_block': 'Изображения в блоке',
-        'tpl.enter_value_for': 'Введите значение для',
         'tpl.uploading': 'Загрузка...',
         'tpl.upload_failed': 'Не удалось загрузить'
     }

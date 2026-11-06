@@ -88,7 +88,6 @@ func (k *APIKey) HasPermission(p string) bool {
 
 // APIKeyFilter for listing API keys
 type APIKeyFilter struct {
-	Active bool
 	Search string
 	Limit  int
 	Offset int

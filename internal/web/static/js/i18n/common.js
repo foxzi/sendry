@@ -34,7 +34,6 @@ I18n.register({
         'common.key': 'Key',
         'common.value': 'Value',
         'common.mode': 'Mode',
-        'common.no_results': 'Nothing found',
         'common.optional': 'optional',
         'common.page': 'Page',
         'common.of': 'of',
@@ -54,7 +53,6 @@ I18n.register({
         'common.none': 'None',
         'common.unknown': 'Unknown',
         'common.copied': 'Copied',
-        'common.are_you_sure': 'Are you sure?',
 
         'status.draft': 'draft',
         'status.scheduled': 'scheduled',
@@ -122,7 +120,6 @@ I18n.register({
         'common.key': 'Ключ',
         'common.value': 'Значение',
         'common.mode': 'Режим',
-        'common.no_results': 'Ничего не найдено',
         'common.optional': 'необязательно',
         'common.page': 'Страница',
         'common.of': 'из',
@@ -142,7 +139,6 @@ I18n.register({
         'common.none': 'Нет',
         'common.unknown': 'Неизвестно',
         'common.copied': 'Скопировано',
-        'common.are_you_sure': 'Вы уверены?',
 
         'status.draft': 'черновик',
         'status.scheduled': 'запланирован',
