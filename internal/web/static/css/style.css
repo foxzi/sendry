@@ -826,6 +826,24 @@ body {
     transition: width 0.3s;
 }
 
+.progress-with-count {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.progress-with-count .progress {
+    flex: 1;
+    min-width: 60px;
+}
+
+.progress-count {
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
 /* Alerts */
 .alert {
     padding: 1rem;
