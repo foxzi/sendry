@@ -17,10 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sendry-web: domain deployment state is checked against the servers: each server domain list is fetched in one API call and cached for a minute; per server a domain is in sync, outdated, not on server, differing (with the differing settings), failed or not checked. Sync redeploys outdated, missing and differing domains. The domain list shows one icon with the number of servers, the domain card shows the state per server with "Check now"
 - sendry-web: server domain pages are titled with the server name, use the same layout as the panel domain card and show whether the panel manages the domain
 - sendry-web: static files are served with a content ETag and `Cache-Control: no-cache` (repeat loads get 304); the page is hidden until translation is applied, so non-English users no longer see an English flash; the UI language is remembered in a cookie
-
 - sendry-web: errors on a page load (not found, admin only, failed action) show the panel's error page with the menu, a short explanation, Back and Go to overview; requests from scripts still get the plain text message
 - sendry-web: the Russian UI says «Недоставленные (DLQ)» instead of «DLQ»
 - sendry-web: a DKIM key opened from a server page goes to the panel's key page, which lists every server with its deployment state; the separate per-server key page is removed (`/servers/{server}/dkim/{id}` redirects to `/dkim/{id}`)
+- sendry-web: the button on a running launch page says "Stop run" and its confirmation explains that messages already handed to the server will still be delivered; a scheduled launch keeps "Cancel launch"
+- sendry-web: the dashboard shows sent / total next to the progress bar of a launch; the activity charts draw straight lines between points instead of smoothed curves
+- sendry-web: block page and block form: the appearance inputs (radius, padding, background) line up in one row, the details table has left-aligned labels
 
 ### Security
 - sendry-web: API keys have permissions: `send` (send email and check its status) and `lists` (recipient list API). A new key gets `send` by default, `lists` is off; a key cannot be saved without a permission; existing keys keep only `send` (old `template` and `status` values count as `send`). Before, any active key could read and change every recipient list. Requests outside the key's permissions get `403 PERMISSION_DENIED`
@@ -31,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sendry-web: DELETE `/api/v1/lists/{id}/recipients/{email}` missed an address with a literal `%` in the local part (the path was unescaped twice)
 - sendry-web: the campaign test send rendered without the preheader; sample variables of the template page and test page include variables used only in the preheader
 - sendry-web: syncing a domain added with "Add to panel" whose DKIM key the panel does not have no longer deploys it without DKIM (the MTA would stop signing); the deployment is marked failed until a key is linked
+- MTA: a domain with DKIM enabled whose key file is missing or unreadable (for example the key was deleted through the API while the domain still pointed at it) no longer keeps the MTA from starting; the error is logged and mail for that domain is sent unsigned until the key is restored
 - Domain rate limits deployed from the panel never reached the MTA: the MTA expected `MessagesPerHour` instead of the documented `rate_limit.messages_per_hour`. **Upgrade note**: until every MTA is upgraded the panel writes and reads both spellings, so it keeps working with 0.4.x–0.7.x MTAs
 
 ## [0.7.0] - 2026-10-26

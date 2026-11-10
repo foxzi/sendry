@@ -67,7 +67,17 @@ func (m *Manager) loadSigners() error {
 				dc.DKIM.Selector,
 			)
 			if err != nil {
-				return fmt.Errorf("failed to load DKIM signer for %s: %w", domain, err)
+				// One domain with a missing or broken key (e.g. the key
+				// was deleted via the API while the domain still points
+				// at it) must not keep the whole MTA from starting: its
+				// mail goes out unsigned until the key is restored.
+				m.logger.Error("DKIM key not loaded, mail for this domain will be sent unsigned",
+					"domain", domain,
+					"selector", dc.DKIM.Selector,
+					"key_file", dc.DKIM.KeyFile,
+					"error", err,
+				)
+				continue
 			}
 			m.signers[domain] = signer
 			m.logger.Info("loaded DKIM signer",
