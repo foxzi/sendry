@@ -101,3 +101,41 @@ func TestCampaignListSearchIgnoresCase(t *testing.T) {
 		}
 	}
 }
+
+func TestCampaignCopy(t *testing.T) {
+	db := setupTestDB(t)
+	mustExec(t, db, `INSERT INTO templates (id, name, subject) VALUES ('t1', 'tpl', 's')`)
+	repo := NewCampaignRepository(db)
+
+	src := &models.Campaign{Name: "Sale", FromEmail: "a@example.com", TrackOpens: true}
+	if err := repo.Create(src); err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range []models.CampaignVariant{
+		{CampaignID: src.ID, Name: "A", TemplateID: "t1", Weight: 70},
+		{CampaignID: src.ID, Name: "B", TemplateID: "t1", SubjectOverride: "Hi", Weight: 30},
+	} {
+		if err := repo.AddVariant(&v); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	cp, err := repo.Copy(src.ID, " (copy)")
+	if err != nil || cp == nil {
+		t.Fatalf("Copy() = %v, %v", cp, err)
+	}
+	if cp.ID == src.ID || cp.Name != "Sale (copy)" || cp.FromEmail != src.FromEmail || !cp.TrackOpens {
+		t.Errorf("copy = %+v", cp)
+	}
+	vs, err := repo.GetVariants(cp.ID)
+	if err != nil || len(vs) != 2 {
+		t.Fatalf("variants = %v, %v", vs, err)
+	}
+	if orig, _ := repo.GetVariants(src.ID); len(orig) != 2 {
+		t.Errorf("source variants changed: %d", len(orig))
+	}
+
+	if missing, err := repo.Copy("nope", " (copy)"); missing != nil || err != nil {
+		t.Errorf("Copy(missing) = %v, %v", missing, err)
+	}
+}

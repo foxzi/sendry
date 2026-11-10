@@ -23,9 +23,15 @@
         <a href="/campaigns/{{.Job.CampaignID}}/launch?job={{.Job.ID}}" class="btn" data-i18n="cmp.sched_change">Change</a>
         {{end}}
         {{if or (eq .Job.Status "running") (eq .Job.Status "paused") (eq .Job.Status "scheduled")}}
-        <form method="post" action="/jobs/{{.Job.ID}}/cancel" style="display:inline" onsubmit="return confirm(I18n.t('cmp.confirm_cancel_run'))">
-            <button type="submit" class="btn btn-danger" data-i18n="cancel">Cancel</button>
+        {{if eq .Job.Status "scheduled"}}
+        <form method="post" action="/jobs/{{.Job.ID}}/cancel" style="display:inline" onsubmit="return confirm(I18n.t('cmp.sched_cancel_confirm'))">
+            <button type="submit" class="btn btn-danger" data-i18n="cmp.sched_cancel">Cancel launch</button>
         </form>
+        {{else}}
+        <form method="post" action="/jobs/{{.Job.ID}}/cancel" style="display:inline" onsubmit="return confirm(I18n.t('cmp.confirm_stop_run'))">
+            <button type="submit" class="btn btn-danger" data-i18n="cmp.stop_run">Stop run</button>
+        </form>
+        {{end}}
         {{end}}
     </div>
 </div>

@@ -114,11 +114,13 @@ type DomainTLSConfig struct {
 	KeyFile  string `yaml:"key_file"`
 }
 
-// DomainRateLimitConfig contains rate limit settings for a domain
+// DomainRateLimitConfig contains rate limit settings for a domain. The JSON
+// names are the ones the domains API documents (docs/api.md); without them
+// the API expected MessagesPerHour and silently dropped messages_per_hour.
 type DomainRateLimitConfig struct {
-	MessagesPerHour      int `yaml:"messages_per_hour"`
-	MessagesPerDay       int `yaml:"messages_per_day"`
-	RecipientsPerMessage int `yaml:"recipients_per_message"`
+	MessagesPerHour      int `yaml:"messages_per_hour" json:"messages_per_hour"`
+	MessagesPerDay       int `yaml:"messages_per_day" json:"messages_per_day"`
+	RecipientsPerMessage int `yaml:"recipients_per_message" json:"recipients_per_message"`
 }
 
 // ServerConfig contains server-wide settings

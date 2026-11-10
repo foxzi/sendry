@@ -210,57 +210,6 @@ func (l *Limiter) AllowRecipient(ctx context.Context, recipientDomain string) (*
 	return result, nil
 }
 
-// Check checks if the action would be allowed without incrementing counters
-func (l *Limiter) Check(ctx context.Context, req *Request) (*Result, error) {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-
-	result := &Result{
-		Allowed: true,
-	}
-
-	now := time.Now()
-	checks := l.getChecks(req)
-
-	for _, check := range checks {
-		counter, exists := l.counters[check.key]
-		if !exists {
-			continue
-		}
-
-		// Check if counters are still valid
-		hourlyCount := counter.HourlyCount
-		dailyCount := counter.DailyCount
-
-		if now.Sub(counter.HourStart) >= time.Hour {
-			hourlyCount = 0
-		}
-		if now.Sub(counter.DayStart) >= 24*time.Hour {
-			dailyCount = 0
-		}
-
-		// Check hourly limit
-		if check.limit.MessagesPerHour > 0 && hourlyCount >= check.limit.MessagesPerHour {
-			result.Allowed = false
-			result.DeniedBy = check.level
-			result.DeniedKey = check.key
-			result.RetryAfter = counter.HourStart.Add(time.Hour).Sub(now)
-			return result, nil
-		}
-
-		// Check daily limit
-		if check.limit.MessagesPerDay > 0 && dailyCount >= check.limit.MessagesPerDay {
-			result.Allowed = false
-			result.DeniedBy = check.level
-			result.DeniedKey = check.key
-			result.RetryAfter = counter.DayStart.Add(24 * time.Hour).Sub(now)
-			return result, nil
-		}
-	}
-
-	return result, nil
-}
-
 // GetStats returns current rate limit statistics
 func (l *Limiter) GetStats(ctx context.Context, level Level, key string) (*Stats, error) {
 	l.mu.RLock()

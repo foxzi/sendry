@@ -131,19 +131,19 @@
                     placeholder="Short description of this block" data-i18n-placeholder="tpl.block_desc_ph">
             </div>
 
-            <div class="form-row">
+            <div class="form-row appearance-row">
                 <div class="form-group">
                     <label for="border_radius" data-i18n="tpl.border_radius">Border radius (px)</label>
                     <input type="number" id="border_radius" name="border_radius" min="0" max="64" step="1" class="input"
                         value="{{if .Block}}{{.Block.BorderRadius}}{{else}}0{{end}}">
                 </div>
                 <div class="form-group">
-                    <label for="padding_v" data-i18n="tpl.content_pad_v">Content padding — vertical (px)</label>
+                    <label for="padding_v" data-i18n="tpl.content_pad_v">Padding top / bottom (px)</label>
                     <input type="number" id="padding_v" name="padding_v" min="0" max="200" step="2" class="input"
                         value="{{if .Block}}{{.Block.PaddingV}}{{else}}0{{end}}">
                 </div>
                 <div class="form-group">
-                    <label for="padding_h" data-i18n="tpl.content_pad_h">Content padding — horizontal (px)</label>
+                    <label for="padding_h" data-i18n="tpl.content_pad_h">Padding left / right (px)</label>
                     <input type="number" id="padding_h" name="padding_h" min="0" max="200" step="2" class="input"
                         value="{{if .Block}}{{.Block.PaddingH}}{{else}}0{{end}}">
                 </div>

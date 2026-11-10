@@ -148,3 +148,41 @@ func TestRenderHTML_KeepsConditionalComments(t *testing.T) {
 		t.Errorf("plain comment kept or placeholder left: %s", out)
 	}
 }
+
+func TestInsertPreheader(t *testing.T) {
+	const open = `<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">`
+	cases := []struct {
+		name, html, text string
+		wantPrefix       string // html expected before the block
+		wantText         string // escaped text inside the block, "" = unchanged html
+		wantSuffix       string // html expected after the block
+	}{
+		{"empty", "<body>x</body>", "", "", "", ""},
+		{"blank", "<body>x</body>", "  \n\t", "", "", ""},
+		{"with body", "<html><body><p>x</p></body></html>", "Hello", "<html><body>", "Hello", "<p>x</p></body></html>"},
+		{"uppercase body with attributes", `<HTML><BODY class="a" style="margin:0"><p>x</p></BODY></HTML>`, "Hi", `<HTML><BODY class="a" style="margin:0">`, "Hi", "<p>x</p></BODY></HTML>"},
+		{"no body", "<p>x</p>", "Hi", "", "Hi", "<p>x</p>"},
+		{"escaping", "<body></body>", `<b>"A" & 'B'</b>`, "<body>", "&lt;b&gt;&#34;A&#34; &amp; &#39;B&#39;&lt;/b&gt;", "</body>"},
+		{"not a body-prefixed tag", "<bodyguard>x</bodyguard>", "Hi", "", "Hi", "<bodyguard>x</bodyguard>"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := InsertPreheader(tc.html, tc.text)
+			if tc.wantText == "" {
+				if got != tc.html {
+					t.Fatalf("html must stay unchanged, got %q", got)
+				}
+				return
+			}
+			if !strings.HasPrefix(got, tc.wantPrefix+open+tc.wantText+"&#847;&zwnj;&nbsp;") {
+				t.Fatalf("prefix/block mismatch: %q", got)
+			}
+			if !strings.HasSuffix(got, "</div>"+tc.wantSuffix) {
+				t.Fatalf("suffix mismatch: %q", got)
+			}
+			if n := strings.Count(got, "&#847;&zwnj;&nbsp;"); n < 60 || n > 90 {
+				t.Errorf("filler repeated %d times", n)
+			}
+		})
+	}
+}

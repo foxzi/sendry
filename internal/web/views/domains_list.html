@@ -1,13 +1,13 @@
 {{define "content"}}
 <div class="page-header">
-    <h1>{{.ServerName}} - <span data-i18n="domains">Domains</span></h1>
+    <h1><span data-i18n="infra.domains_on_server">Domains on server</span> {{.ServerName}}</h1>
     <div class="header-actions">
         <a href="/servers/{{.ServerName}}/domains/new" class="btn btn-primary" data-i18n="infra.add_domain">Add domain</a>
         <a href="/servers/{{.ServerName}}" class="btn btn-secondary" data-i18n="infra.back_to_server">Back to server</a>
     </div>
 </div>
 
-<p class="text-muted" style="margin-bottom: 1rem;"><span data-i18n="infra.server_local_domains">Server-local settings. To manage domains for all servers use</span> <a href="/domains" data-i18n="infra.infrastructure_domains">Infrastructure → Domains</a>.</p>
+<p class="text-muted" style="margin-bottom: 1rem;"><span data-i18n="infra.server_domains_intro">What is configured on this server right now, read from its API. The «In panel» column shows whether the panel manages the domain; the panel's own list is in</span> <a href="/domains" data-i18n="infra.infrastructure_domains">Infrastructure → Domains</a>.</p>
 
 <div class="card">
     <div class="card-body">
@@ -20,6 +20,7 @@
                     <th data-i18n="common.mode">Mode</th>
                     <th>DKIM</th>
                     <th data-i18n="infra.rate_limit">Rate Limit</th>
+                    <th data-i18n="infra.in_panel">In panel</th>
                     <th data-i18n="actions">Actions</th>
                 </tr>
             </thead>
@@ -36,7 +37,7 @@
                     </td>
                     <td>
                         {{if and .DKIM .DKIM.Enabled}}
-                        <span class="badge badge-running">{{.DKIM.Selector}}</span>
+                        <span class="badge badge-success">{{.DKIM.Selector}}</span>
                         {{else}}
                         <span class="badge badge-draft" data-i18n="infra.disabled">Disabled</span>
                         {{end}}
@@ -48,8 +49,15 @@
                         <span class="text-muted" data-i18n="infra.default">Default</span>
                         {{end}}
                     </td>
+                    {{$link := index $.Panel .Domain}}
+                    <td>{{template "panel_link_badge" $link}}</td>
                     <td>
                         <a href="/servers/{{$.ServerName}}/domains/{{.Domain}}/edit" class="btn btn-sm btn-secondary" data-i18n="edit">Edit</a>
+                        {{if not $link.ID}}
+                        <form method="POST" action="/servers/{{$.ServerName}}/domains/{{.Domain}}/import" style="display:inline;">
+                            <button type="submit" class="btn btn-sm btn-primary" data-i18n="infra.add_to_panel">Add to panel</button>
+                        </form>
+                        {{end}}
                     </td>
                 </tr>
                 {{end}}

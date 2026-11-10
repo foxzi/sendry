@@ -241,6 +241,34 @@
         });
     }
 
+    // Hover/focus details for [data-tip] elements (domain list server state).
+    // The tip is position: fixed so the scrolling table does not clip it;
+    // it opens below the trigger, or above when there is no room.
+    function initTips() {
+        function place(el) {
+            var tip = el.querySelector('.srv-status-tip');
+            if (!tip) return;
+            el.classList.add('is-open');
+            var r = el.getBoundingClientRect();
+            var h = tip.offsetHeight, w = tip.offsetWidth;
+            var top = r.bottom + 6;
+            if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+            var left = Math.min(r.left, window.innerWidth - w - 8);
+            tip.style.top = top + 'px';
+            tip.style.left = Math.max(8, left) + 'px';
+        }
+        function close(el) { el.classList.remove('is-open'); }
+        document.querySelectorAll('[data-tip]').forEach(function(el) {
+            el.addEventListener('mouseenter', function() { place(el); });
+            el.addEventListener('mouseleave', function() { if (document.activeElement !== el) close(el); });
+            el.addEventListener('focus', function() { place(el); });
+            el.addEventListener('blur', function() { close(el); });
+        });
+        window.addEventListener('scroll', function() {
+            document.querySelectorAll('[data-tip].is-open').forEach(close);
+        }, true);
+    }
+
     // Initialize everything
     function init() {
         initLocalTimes();
@@ -251,6 +279,7 @@
         initPartials();
         initConfirmDialogs();
         initFlashMessages();
+        initTips();
     }
 
     // Run on DOM ready

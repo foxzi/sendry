@@ -180,7 +180,7 @@ func (h *Handlers) CampaignNew(w http.ResponseWriter, r *http.Request) {
 	data, err := h.campaignFlowData(r, "create", &models.Campaign{TrackOpens: hasOrigin, TrackClicks: hasOrigin})
 	if err != nil {
 		h.logger.Error("failed to build new campaign page", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load the page")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load the page")
 		return
 	}
 	h.render(w, "campaign_new", data)
@@ -196,7 +196,7 @@ type wizardVariant struct {
 
 func (h *Handlers) CampaignCreate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
@@ -217,13 +217,13 @@ func (h *Handlers) CampaignCreate(w http.ResponseWriter, r *http.Request) {
 
 	// Everything is validated before the first write
 	if serr := validateSender(c.FromEmail, c.ReplyTo); serr != nil {
-		h.error(w, serr.status, serr.message)
+		h.error(w, r, serr.status, serr.message)
 		return
 	}
 	if c.Variables != "" {
 		var vars map[string]string
 		if err := json.Unmarshal([]byte(c.Variables), &vars); err != nil {
-			h.error(w, http.StatusBadRequest, "Campaign variables must be a JSON object of strings: "+err.Error())
+			h.error(w, r, http.StatusBadRequest, "Campaign variables must be a JSON object of strings: "+err.Error())
 			return
 		}
 	}
@@ -234,13 +234,13 @@ func (h *Handlers) CampaignCreate(w http.ResponseWriter, r *http.Request) {
 		action = "save"
 	}
 	if action != "save" && action != "launch" {
-		h.error(w, http.StatusBadRequest, "Unknown action")
+		h.error(w, r, http.StatusBadRequest, "Unknown action")
 		return
 	}
 
 	variants, perr := h.wizardVariants(r)
 	if perr != nil {
-		h.error(w, perr.status, perr.message)
+		h.error(w, r, perr.status, perr.message)
 		return
 	}
 
@@ -276,7 +276,7 @@ func (h *Handlers) CampaignCreate(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		h.logger.Error("failed to create campaign", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to create campaign")
+		h.error(w, r, http.StatusInternalServerError, "Failed to create campaign")
 		return
 	}
 
@@ -422,11 +422,11 @@ func (h *Handlers) TemplateFrame(w http.ResponseWriter, r *http.Request) {
 	t, err := h.templates.GetByID(r.PathValue("id"))
 	if err != nil {
 		h.logger.Error("failed to get template", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load template")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load template")
 		return
 	}
 	if t == nil {
-		h.error(w, http.StatusNotFound, "Template not found")
+		h.error(w, r, http.StatusNotFound, "Template not found")
 		return
 	}
 	h.writeHTML(w, h.renderWizardHTML(t, nil))
@@ -524,7 +524,7 @@ func (h *Handlers) CampaignWizardTest(w http.ResponseWriter, r *http.Request) {
 	if subjectSrc == "" {
 		subjectSrc = t.Subject
 	}
-	data := h.wizardRenderData(t.HTML+" "+t.Text+" "+subjectSrc, vars)
+	data := h.wizardRenderData(t.HTML+" "+t.Text+" "+subjectSrc+" "+t.Preheader, vars)
 	data["email"] = to
 	data["recipient_email"] = to
 
@@ -538,6 +538,12 @@ func (h *Handlers) CampaignWizardTest(w http.ResponseWriter, r *http.Request) {
 		fail(http.StatusBadRequest, "Render HTML: "+err.Error())
 		return
 	}
+	preheader, err := emailtpl.RenderText("preheader", t.Preheader, data)
+	if err != nil {
+		fail(http.StatusBadRequest, "Render preheader: "+err.Error())
+		return
+	}
+	html = emailtpl.InsertPreheader(html, preheader)
 	text, err := emailtpl.RenderText("text", t.Text, data)
 	if err != nil {
 		fail(http.StatusBadRequest, "Render text: "+err.Error())

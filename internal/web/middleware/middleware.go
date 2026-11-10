@@ -213,15 +213,18 @@ func Auth(cfg *config.Config, database *db.DB, logger *slog.Logger) func(http.Ha
 	}
 }
 
-// AdminOnly middleware restricts access to admin users only
-func AdminOnly(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !IsAdmin(r) {
-			http.Error(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
+// AdminOnly restricts access to admin users only; forbidden answers everyone
+// else (the panel renders its error page there).
+func AdminOnly(forbidden http.HandlerFunc) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !IsAdmin(r) {
+				forbidden(w, r)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // SameOrigin rejects state-changing requests sent from another site (CSRF).
@@ -380,6 +383,24 @@ func APIAuth(apiKeys *repository.APIKeyRepository, logger *slog.Logger) func(htt
 			ctx := context.WithValue(r.Context(), ctxKeyAPIKey, apiKey)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
+	}
+}
+
+// RequireAPIPermission lets the request through only when the API key set by
+// APIAuth holds the permission; otherwise it answers 403.
+func RequireAPIPermission(perm string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		key := GetAPIKeyFromContext(r)
+		if key == nil || !key.HasPermission(perm) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "API key does not have the \"" + perm + "\" permission",
+				"code":  "PERMISSION_DENIED",
+			})
+			return
+		}
+		next(w, r)
 	}
 }
 

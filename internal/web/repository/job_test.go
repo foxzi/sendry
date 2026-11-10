@@ -287,7 +287,7 @@ func TestJobRepository_FreezeVariantTemplate(t *testing.T) {
 
 	snap := &models.JobVariantSnapshot{JobID: jobID, VariantID: "v1", VariantName: "A", HTML: "rendered",
 		Links: []models.LinkInfo{{ID: 1, URL: "https://a.com", Label: "A", Kind: "text"}}}
-	tpl := &models.JobVariantTemplate{VariantID: "v1", TemplateID: "t1", TemplateVersion: 2, Subject: "Hi", HTML: `<a href="https://a.com" data-sl="1">A</a>`, Text: "txt"}
+	tpl := &models.JobVariantTemplate{VariantID: "v1", TemplateID: "t1", TemplateVersion: 2, Subject: "Hi", Preheader: "Hello {{name}}", HTML: `<a href="https://a.com" data-sl="1">A</a>`, Text: "txt"}
 	if err := repo.FreezeVariantTemplate(snap, tpl); err != nil {
 		t.Fatal(err)
 	}
@@ -295,6 +295,7 @@ func TestJobRepository_FreezeVariantTemplate(t *testing.T) {
 	// the first freeze wins
 	edited := *tpl
 	edited.HTML = "edited"
+	edited.Preheader = "edited"
 	if err := repo.FreezeVariantTemplate(&models.JobVariantSnapshot{JobID: jobID, VariantID: "v1", HTML: "x"}, &edited); err != nil {
 		t.Fatal(err)
 	}

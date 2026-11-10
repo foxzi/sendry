@@ -135,6 +135,9 @@ func (db *DB) Migrate() error {
 		"ALTER TABLE job_variant_snapshots ADD COLUMN template_subject TEXT",
 		"ALTER TABLE job_variant_snapshots ADD COLUMN template_html TEXT",
 		"ALTER TABLE job_variant_snapshots ADD COLUMN template_text TEXT",
+		"ALTER TABLE templates ADD COLUMN preheader TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE template_versions ADD COLUMN preheader TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE job_variant_snapshots ADD COLUMN template_preheader TEXT NOT NULL DEFAULT ''",
 	}
 	for _, m := range alterMigrations {
 		db.Exec(m) // Ignore errors (column may already exist)

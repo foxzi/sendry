@@ -485,6 +485,12 @@ func (w *Worker) processItem(
 		return
 	}
 
+	preheader, err := renderTextTemplate("preheader", tmpl.Preheader, vars)
+	if err != nil {
+		w.updateItemFailed(item.ID, "render preheader: "+err.Error())
+		return
+	}
+
 	// Without the public origin there is no unsubscribe link: drop the links
 	// and text lines that would carry it
 	htmlSrc, textSrc := tmpl.HTML, tmpl.Text
@@ -494,7 +500,7 @@ func (w *Worker) processItem(
 	}
 
 	// Render HTML (links already numbered) and text with variable substitution
-	html, err := buildCampaignHTML(htmlSrc, vars, env, campaign, item.ID)
+	html, err := buildCampaignHTML(htmlSrc, preheader, vars, env, campaign, item.ID)
 	if err != nil {
 		w.updateItemFailed(item.ID, "render html: "+err.Error())
 		return
@@ -624,11 +630,14 @@ func (e *trackingEnv) unsubscribeURL(itemID, recipientID string) string {
 // buildCampaignHTML renders numbered template HTML with the recipient variables
 // and applies open/click tracking and UTM, as the campaign asks. UTM does not
 // depend on click tracking. A nil env only strips the numbering (and adds UTM).
-func buildCampaignHTML(numbered string, vars map[string]any, env *trackingEnv, campaign *models.Campaign, itemID string) (string, error) {
+func buildCampaignHTML(numbered, preheader string, vars map[string]any, env *trackingEnv, campaign *models.Campaign, itemID string) (string, error) {
 	html, err := renderTemplate("html", numbered, vars)
 	if err != nil {
 		return "", err
 	}
+
+	// Before tracking, so the final HTML carries it
+	html = emailtpl.InsertPreheader(html, preheader)
 
 	opts := tracking.Options{SourceType: models.SourceJobItem, SourceID: itemID}
 	if env != nil {
@@ -689,6 +698,7 @@ func (w *Worker) freezeVariant(
 		TemplateID:      tmpl.ID,
 		TemplateVersion: tmpl.CurrentVersion,
 		Subject:         tmpl.Subject,
+		Preheader:       tmpl.Preheader,
 		HTML:            tracking.NumberLinks(tmpl.HTML),
 		Text:            tmpl.Text,
 	}

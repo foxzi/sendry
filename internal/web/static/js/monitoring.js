@@ -153,7 +153,7 @@
                             borderColor: '#10b981',
                             backgroundColor: 'rgba(16, 185, 129, 0.1)',
                             fill: true,
-                            tension: 0.3
+                            tension: 0
                         },
                         {
                             label: I18n.t('monitoring.stats.failed'),
@@ -161,7 +161,7 @@
                             borderColor: '#ef4444',
                             backgroundColor: 'rgba(239, 68, 68, 0.1)',
                             fill: true,
-                            tension: 0.3
+                            tension: 0
                         },
                         {
                             label: I18n.t('infra.pending'),
@@ -169,7 +169,7 @@
                             borderColor: '#f59e0b',
                             backgroundColor: 'rgba(245, 158, 11, 0.1)',
                             fill: true,
-                            tension: 0.3
+                            tension: 0
                         }
                     ]
                 },

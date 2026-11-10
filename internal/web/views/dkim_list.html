@@ -32,14 +32,14 @@
                     <td><code>{{.DNSName}}</code></td>
                     <td>
                         {{if .IsDeployed}}
-                        <span class="badge badge-running" data-i18n="infra.deployed">Deployed</span>
+                        <span class="badge badge-success" data-i18n="infra.deployed">Deployed</span>
                         {{else}}
                         <span class="badge badge-draft" data-i18n="infra.not_deployed">Not deployed</span>
                         {{end}}
                     </td>
                     <td>{{.CreatedAt.Format "2006-01-02"}}</td>
                     <td>
-                        <a href="/servers/{{$.ServerName}}/dkim/{{.ID}}" class="btn btn-sm btn-secondary" data-i18n="view">View</a>
+                        <a href="/dkim/{{.ID}}" class="btn btn-sm btn-secondary" data-i18n="view">View</a>
                     </td>
                 </tr>
                 {{end}}

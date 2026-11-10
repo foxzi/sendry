@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math/rand"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/foxzi/sendry/internal/email"
@@ -34,10 +32,6 @@ type Sender struct {
 	storage         *Storage
 	logger          *slog.Logger
 	headerProcessor *headers.Processor
-
-	mu               sync.RWMutex
-	simulateErrors   bool
-	errorProbability float64 // 0.0 to 1.0
 }
 
 // NewSender creates a new sandbox sender
@@ -51,22 +45,10 @@ func NewSender(
 		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	return &Sender{
-		realSender:       realSender,
-		domainProvider:   domainProvider,
-		storage:          storage,
-		logger:           logger,
-		simulateErrors:   false,
-		errorProbability: 0.1, // 10% error rate when simulation is enabled
-	}
-}
-
-// SetErrorSimulation enables/disables error simulation
-func (s *Sender) SetErrorSimulation(enabled bool, probability float64) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.simulateErrors = enabled
-	if probability > 0 && probability <= 1 {
-		s.errorProbability = probability
+		realSender:     realSender,
+		domainProvider: domainProvider,
+		storage:        storage,
+		logger:         logger,
 	}
 }
 
@@ -115,46 +97,6 @@ func (s *Sender) handleSandbox(ctx context.Context, msg *queue.Message, domain s
 		"to", msg.To,
 		"domain", domain,
 	)
-
-	// Simulate random errors if enabled
-	s.mu.RLock()
-	simulateErrors := s.simulateErrors
-	errorProbability := s.errorProbability
-	s.mu.RUnlock()
-
-	if simulateErrors && rand.Float64() < errorProbability {
-		errorTypes := []string{
-			"550 User not found",
-			"451 Temporary failure",
-			"452 Insufficient storage",
-			"421 Service not available",
-		}
-		errMsg := errorTypes[rand.Intn(len(errorTypes))]
-
-		sandboxMsg := &Message{
-			ID:           msg.ID,
-			From:         msg.From,
-			To:           msg.To,
-			Subject:      extractSubject(msg.Data),
-			Data:         msg.Data,
-			Domain:       domain,
-			Mode:         "sandbox",
-			CapturedAt:   time.Now(),
-			ClientIP:     msg.ClientIP,
-			SimulatedErr: errMsg,
-		}
-
-		if err := s.storage.Save(ctx, sandboxMsg); err != nil {
-			s.logger.Error("sandbox: failed to save message", "error", err)
-		}
-
-		// Return simulated error
-		isTemp := strings.HasPrefix(errMsg, "4")
-		return &SimulatedError{
-			Message:   errMsg,
-			Temporary: isTemp,
-		}
-	}
 
 	// Store message in sandbox
 	sandboxMsg := &Message{
@@ -291,16 +233,6 @@ func (s *Sender) handleBCC(ctx context.Context, msg *queue.Message, domain strin
 	}
 
 	return nil
-}
-
-// SimulatedError represents a simulated delivery error
-type SimulatedError struct {
-	Message   string
-	Temporary bool
-}
-
-func (e *SimulatedError) Error() string {
-	return e.Message
 }
 
 // extractSubject extracts the Subject header from email data

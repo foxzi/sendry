@@ -15,7 +15,7 @@ func (h *Handlers) SMTPList(w http.ResponseWriter, r *http.Request) {
 	servers, err := h.userSMTP.ListByUser(userID)
 	if err != nil {
 		h.logger.Error("list smtp servers", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load SMTP servers")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load SMTP servers")
 		return
 	}
 	data := map[string]any{
@@ -38,22 +38,22 @@ func (h *Handlers) SMTPNew(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) SMTPCreate(w http.ResponseWriter, r *http.Request) {
 	if h.cipher == nil {
-		h.error(w, http.StatusServiceUnavailable, "Encryption not configured. Set auth.encryption_key in web.yaml.")
+		h.error(w, r, http.StatusServiceUnavailable, "Encryption not configured. Set auth.encryption_key in web.yaml.")
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form")
+		h.error(w, r, http.StatusBadRequest, "Invalid form")
 		return
 	}
 	srv, derr := parseSMTPForm(r)
 	if derr != "" {
-		h.error(w, http.StatusBadRequest, derr)
+		h.error(w, r, http.StatusBadRequest, derr)
 		return
 	}
 	enc, err := h.cipher.Encrypt(r.FormValue("password"))
 	if err != nil {
 		h.logger.Error("encrypt password", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to encrypt password")
+		h.error(w, r, http.StatusInternalServerError, "Failed to encrypt password")
 		return
 	}
 	srv.PasswordEnc = enc
@@ -61,7 +61,7 @@ func (h *Handlers) SMTPCreate(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.userSMTP.Create(srv); err != nil {
 		h.logger.Error("create smtp", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to save SMTP server")
+		h.error(w, r, http.StatusInternalServerError, "Failed to save SMTP server")
 		return
 	}
 	user := h.getUserFromContext(r)
@@ -76,7 +76,7 @@ func (h *Handlers) SMTPEdit(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r)
 	srv, err := h.userSMTP.GetByID(id, userID)
 	if err != nil || srv == nil {
-		h.error(w, http.StatusNotFound, "SMTP server not found")
+		h.error(w, r, http.StatusNotFound, "SMTP server not found")
 		return
 	}
 	data := map[string]any{
@@ -91,20 +91,20 @@ func (h *Handlers) SMTPEdit(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) SMTPUpdate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form")
+		h.error(w, r, http.StatusBadRequest, "Invalid form")
 		return
 	}
 	id := r.PathValue("id")
 	userID := middleware.GetUserID(r)
 	existing, err := h.userSMTP.GetByID(id, userID)
 	if err != nil || existing == nil {
-		h.error(w, http.StatusNotFound, "SMTP server not found")
+		h.error(w, r, http.StatusNotFound, "SMTP server not found")
 		return
 	}
 
 	srv, derr := parseSMTPForm(r)
 	if derr != "" {
-		h.error(w, http.StatusBadRequest, derr)
+		h.error(w, r, http.StatusBadRequest, derr)
 		return
 	}
 	srv.ID = id
@@ -112,13 +112,13 @@ func (h *Handlers) SMTPUpdate(w http.ResponseWriter, r *http.Request) {
 
 	if newPass := r.FormValue("password"); newPass != "" {
 		if h.cipher == nil {
-			h.error(w, http.StatusServiceUnavailable, "Encryption not configured")
+			h.error(w, r, http.StatusServiceUnavailable, "Encryption not configured")
 			return
 		}
 		enc, err := h.cipher.Encrypt(newPass)
 		if err != nil {
 			h.logger.Error("encrypt password", "error", err)
-			h.error(w, http.StatusInternalServerError, "Failed to encrypt password")
+			h.error(w, r, http.StatusInternalServerError, "Failed to encrypt password")
 			return
 		}
 		srv.PasswordEnc = enc
@@ -126,7 +126,7 @@ func (h *Handlers) SMTPUpdate(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.userSMTP.Update(srv); err != nil {
 		h.logger.Error("update smtp", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to save SMTP server")
+		h.error(w, r, http.StatusInternalServerError, "Failed to save SMTP server")
 		return
 	}
 	user := h.getUserFromContext(r)
@@ -141,7 +141,7 @@ func (h *Handlers) SMTPDelete(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r)
 	if err := h.userSMTP.Delete(id, userID); err != nil {
 		h.logger.Error("delete smtp", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to delete SMTP server")
+		h.error(w, r, http.StatusInternalServerError, "Failed to delete SMTP server")
 		return
 	}
 	user := h.getUserFromContext(r)

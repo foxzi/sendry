@@ -51,6 +51,7 @@ func TestAPIKeyRepository_GetByID(t *testing.T) {
 
 	// Create a key first
 	opts := APIKeyCreateOptions{
+		Permissions:    []string{"send"},
 		Name:           "Get Test Key",
 		CreatedBy:      "test@example.com",
 		AllowedDomains: []string{"example.com"},
@@ -83,8 +84,9 @@ func TestAPIKeyRepository_GetByHash(t *testing.T) {
 	repo := NewAPIKeyRepository(db)
 
 	opts := APIKeyCreateOptions{
-		Name:      "Hash Test Key",
-		CreatedBy: "test@example.com",
+		Permissions: []string{"send"},
+		Name:        "Hash Test Key",
+		CreatedBy:   "test@example.com",
 	}
 
 	result, err := repo.Create(opts)
@@ -114,8 +116,9 @@ func TestAPIKeyRepository_List(t *testing.T) {
 	// Create multiple keys
 	for i := 0; i < 3; i++ {
 		opts := APIKeyCreateOptions{
-			Name:      "List Key " + string(rune('A'+i)),
-			CreatedBy: "test@example.com",
+			Permissions: []string{"send"},
+			Name:        "List Key " + string(rune('A'+i)),
+			CreatedBy:   "test@example.com",
 		}
 		if _, err := repo.Create(opts); err != nil {
 			t.Fatalf("failed to create API key: %v", err)
@@ -151,6 +154,7 @@ func TestAPIKeyRepository_Update(t *testing.T) {
 	repo := NewAPIKeyRepository(db)
 
 	opts := APIKeyCreateOptions{
+		Permissions:    []string{"send"},
 		Name:           "Update Test Key",
 		CreatedBy:      "test@example.com",
 		AllowedDomains: []string{"old.com"},
@@ -162,7 +166,7 @@ func TestAPIKeyRepository_Update(t *testing.T) {
 	}
 
 	// Update
-	err = repo.Update(result.ID, "Updated Name", []string{"new.com", "other.com"}, 20, 200)
+	err = repo.Update(result.ID, "Updated Name", []string{"send", "lists"}, []string{"new.com", "other.com"}, 20, 200)
 	if err != nil {
 		t.Fatalf("failed to update API key: %v", err)
 	}
@@ -192,8 +196,9 @@ func TestAPIKeyRepository_ToggleActive(t *testing.T) {
 	repo := NewAPIKeyRepository(db)
 
 	opts := APIKeyCreateOptions{
-		Name:      "Toggle Test Key",
-		CreatedBy: "test@example.com",
+		Permissions: []string{"send"},
+		Name:        "Toggle Test Key",
+		CreatedBy:   "test@example.com",
 	}
 
 	result, err := repo.Create(opts)
@@ -237,8 +242,9 @@ func TestAPIKeyRepository_Delete(t *testing.T) {
 	repo := NewAPIKeyRepository(db)
 
 	opts := APIKeyCreateOptions{
-		Name:      "Delete Test Key",
-		CreatedBy: "test@example.com",
+		Permissions: []string{"send"},
+		Name:        "Delete Test Key",
+		CreatedBy:   "test@example.com",
 	}
 
 	result, err := repo.Create(opts)
@@ -267,8 +273,9 @@ func TestAPIKeyRepository_UpdateLastUsed(t *testing.T) {
 	repo := NewAPIKeyRepository(db)
 
 	opts := APIKeyCreateOptions{
-		Name:      "Last Used Test Key",
-		CreatedBy: "test@example.com",
+		Permissions: []string{"send"},
+		Name:        "Last Used Test Key",
+		CreatedBy:   "test@example.com",
 	}
 
 	result, err := repo.Create(opts)
@@ -304,9 +311,10 @@ func TestAPIKeyRepository_Expiration(t *testing.T) {
 
 	expTime := time.Now().Add(24 * time.Hour)
 	opts := APIKeyCreateOptions{
-		Name:      "Expiring Key",
-		CreatedBy: "test@example.com",
-		ExpiresAt: &expTime,
+		Permissions: []string{"send"},
+		Name:        "Expiring Key",
+		CreatedBy:   "test@example.com",
+		ExpiresAt:   &expTime,
 	}
 
 	result, err := repo.Create(opts)

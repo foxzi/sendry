@@ -71,8 +71,6 @@ I18n.register({
         'trk.no_domain_text': 'Emails are sent without an unsubscribe link, opens and clicks are not tracked.',
         'trk.ask_admin': 'Ask an administrator to set it in the tracking settings.',
         'trk.no_domain_fields': 'Opens and clicks tracking needs the proxying domain.',
-        'trk.no_unsub_link': 'The template has no unsubscribe link',
-        'trk.no_unsub_link_text': 'Mail services will show their own unsubscribe button, but add the link to the email footer.'
     },
     ru: {
         'trk.sent': 'Отправлено',
@@ -145,7 +143,5 @@ I18n.register({
         'trk.no_domain_text': 'Письма уходят без ссылки отписки, открытия и клики не отслеживаются.',
         'trk.ask_admin': 'Попросите администратора указать его в настройках трекинга.',
         'trk.no_domain_fields': 'Для отслеживания открытий и кликов нужен проксирующий домен.',
-        'trk.no_unsub_link': 'В шаблоне нет ссылки отписки',
-        'trk.no_unsub_link_text': 'Почтовые сервисы покажут свою кнопку отписки, но добавьте ссылку в футер письма.'
     }
 });

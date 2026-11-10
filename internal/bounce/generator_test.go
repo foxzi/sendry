@@ -21,15 +21,6 @@ func TestNewGenerator(t *testing.T) {
 	}
 }
 
-func TestSetPostmaster(t *testing.T) {
-	g := NewGenerator("mail.example.com")
-	g.SetPostmaster("admin@example.com")
-
-	if g.postmaster != "admin@example.com" {
-		t.Errorf("expected postmaster admin@example.com, got %s", g.postmaster)
-	}
-}
-
 func TestGenerateDSN(t *testing.T) {
 	g := NewGenerator("mail.example.com")
 
@@ -124,52 +115,6 @@ func TestGenerateDSN(t *testing.T) {
 	}
 }
 
-func TestGenerateSimpleBounce(t *testing.T) {
-	g := NewGenerator("mail.example.com")
-
-	msg := &queue.Message{
-		ID:   "test-msg-456",
-		From: "sender@example.com",
-		To:   []string{"recipient@test.com"},
-		Data: []byte("Subject: Hello World\r\n\r\nBody"),
-	}
-
-	bounce, err := g.GenerateSimpleBounce(msg, "Connection refused")
-	if err != nil {
-		t.Fatalf("GenerateSimpleBounce failed: %v", err)
-	}
-
-	bounceStr := string(bounce)
-
-	// Check headers
-	if !strings.Contains(bounceStr, "From: Mail Delivery System <postmaster@mail.example.com>") {
-		t.Error("missing From header")
-	}
-	if !strings.Contains(bounceStr, "To: <sender@example.com>") {
-		t.Error("missing To header")
-	}
-	if !strings.Contains(bounceStr, "Subject: Undelivered Mail Returned to Sender") {
-		t.Error("missing Subject header")
-	}
-	if !strings.Contains(bounceStr, "Content-Type: text/plain") {
-		t.Error("missing Content-Type header")
-	}
-	if !strings.Contains(bounceStr, "Auto-Submitted: auto-replied") {
-		t.Error("missing Auto-Submitted header")
-	}
-
-	// Check content
-	if !strings.Contains(bounceStr, "To: recipient@test.com") {
-		t.Error("missing recipient in body")
-	}
-	if !strings.Contains(bounceStr, "Subject: Hello World") {
-		t.Error("missing original subject")
-	}
-	if !strings.Contains(bounceStr, "Connection refused") {
-		t.Error("missing error message")
-	}
-}
-
 func TestExtractSubject(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -210,29 +155,5 @@ func TestExtractSubject(t *testing.T) {
 				t.Errorf("extractSubject() = %q, want %q", result, tc.expected)
 			}
 		})
-	}
-}
-
-func TestGenerateDSNWithCustomPostmaster(t *testing.T) {
-	g := NewGenerator("mail.example.com")
-	g.SetPostmaster("noreply@example.com")
-
-	msg := &queue.Message{
-		ID:   "test-123",
-		From: "sender@example.com",
-		To:   []string{"rcpt@test.com"},
-		Data: []byte("Subject: Test\r\n\r\nBody"),
-	}
-
-	dsn, err := g.GenerateDSN(msg, "Error", true)
-	if err != nil {
-		t.Fatalf("GenerateDSN failed: %v", err)
-	}
-
-	if !strings.Contains(string(dsn), "From: Mail Delivery System <noreply@example.com>") {
-		t.Error("custom postmaster not used in From header")
-	}
-	if !strings.Contains(string(dsn), "contact <noreply@example.com>") {
-		t.Error("custom postmaster not used in body")
 	}
 }

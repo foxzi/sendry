@@ -30,7 +30,7 @@ func (h *Handlers) CampaignList(w http.ResponseWriter, r *http.Request) {
 	campaigns, total, err := h.campaigns.List(filter)
 	if err != nil {
 		h.logger.Error("failed to list campaigns", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load campaigns")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load campaigns")
 		return
 	}
 
@@ -56,18 +56,18 @@ func (h *Handlers) CampaignView(w http.ResponseWriter, r *http.Request) {
 	c, err := h.campaigns.GetByID(id)
 	if err != nil {
 		h.logger.Error("failed to get campaign", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load campaign")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load campaign")
 		return
 	}
 	if c == nil {
-		h.error(w, http.StatusNotFound, "Campaign not found")
+		h.error(w, r, http.StatusNotFound, "Campaign not found")
 		return
 	}
 
 	data, err := h.campaignFlowData(r, "edit", c)
 	if err != nil {
 		h.logger.Error("failed to build campaign page", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load campaign")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load campaign")
 		return
 	}
 
@@ -94,7 +94,7 @@ func (h *Handlers) CampaignDelete(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.campaigns.Delete(id); err != nil {
 		h.logger.Error("failed to delete campaign", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to delete campaign")
+		h.error(w, r, http.StatusInternalServerError, "Failed to delete campaign")
 		return
 	}
 	// email_events has no foreign key to campaigns
@@ -105,6 +105,29 @@ func (h *Handlers) CampaignDelete(w http.ResponseWriter, r *http.Request) {
 	h.settings.LogAction(r, middleware.GetUserID(r), middleware.GetUserEmail(r),
 		"delete", "campaign", id, "")
 	http.Redirect(w, r, "/campaigns", http.StatusSeeOther)
+}
+
+// CampaignCopy makes a draft copy of a campaign and opens it.
+func (h *Handlers) CampaignCopy(w http.ResponseWriter, r *http.Request) {
+	suffix := " (copy)"
+	if ck, err := r.Cookie("lang"); err == nil && ck.Value == "ru" {
+		suffix = " (копия)"
+	}
+
+	cp, err := h.campaigns.Copy(r.PathValue("id"), suffix)
+	if err != nil {
+		h.logger.Error("failed to copy campaign", "error", err)
+		h.error(w, r, http.StatusInternalServerError, "Failed to copy campaign")
+		return
+	}
+	if cp == nil {
+		h.error(w, r, http.StatusNotFound, "Campaign not found")
+		return
+	}
+
+	h.settings.LogAction(r, middleware.GetUserID(r), middleware.GetUserEmail(r),
+		"copy", "campaign", cp.ID, "from "+r.PathValue("id"))
+	http.Redirect(w, r, "/campaigns/"+cp.ID, http.StatusSeeOther)
 }
 
 // publicOrigin returns the public origin of unsubscribe and tracking links:
@@ -142,11 +165,11 @@ func (h *Handlers) CampaignLaunch(w http.ResponseWriter, r *http.Request) {
 	c, err := h.campaigns.GetByID(id)
 	if err != nil {
 		h.logger.Error("failed to get campaign", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load campaign")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load campaign")
 		return
 	}
 	if c == nil {
-		h.error(w, http.StatusNotFound, "Campaign not found")
+		h.error(w, r, http.StatusNotFound, "Campaign not found")
 		return
 	}
 
@@ -155,11 +178,11 @@ func (h *Handlers) CampaignLaunch(w http.ResponseWriter, r *http.Request) {
 		job, err = h.jobs.GetByID(jobID)
 		if err != nil {
 			h.logger.Error("failed to get job", "error", err)
-			h.error(w, http.StatusInternalServerError, "Failed to load launch")
+			h.error(w, r, http.StatusInternalServerError, "Failed to load launch")
 			return
 		}
 		if job == nil || job.CampaignID != c.ID || job.Status != "scheduled" {
-			h.error(w, http.StatusNotFound, "Scheduled launch not found")
+			h.error(w, r, http.StatusNotFound, "Scheduled launch not found")
 			return
 		}
 	}
@@ -242,7 +265,7 @@ func (h *Handlers) launchPage(w http.ResponseWriter, r *http.Request, c *models.
 	data, err := h.campaignFlowData(r, "launch", c)
 	if err != nil {
 		h.logger.Error("failed to build launch page", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load the page")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load the page")
 		return
 	}
 	data["Title"] = c.Name + " - Launch"
@@ -275,7 +298,7 @@ func (h *Handlers) launchPage(w http.ResponseWriter, r *http.Request, c *models.
 // else is a bare error.
 func (h *Handlers) launchFail(w http.ResponseWriter, r *http.Request, c *models.Campaign, job *models.SendJob, p jobParams, serr *statusError) {
 	if serr.status >= http.StatusInternalServerError {
-		h.error(w, serr.status, serr.message)
+		h.error(w, r, serr.status, serr.message)
 		return
 	}
 	h.logger.Warn("launch form rejected", "campaign_id", c.ID, "status", serr.status, "message", serr.message)
@@ -301,13 +324,13 @@ func (h *Handlers) CampaignSend(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
 	c, err := h.campaigns.GetByID(id)
 	if err != nil || c == nil {
-		h.error(w, http.StatusNotFound, "Campaign not found")
+		h.error(w, r, http.StatusNotFound, "Campaign not found")
 		return
 	}
 
@@ -509,7 +532,7 @@ func (h *Handlers) CampaignJobs(w http.ResponseWriter, r *http.Request) {
 
 	c, err := h.campaigns.GetByID(id)
 	if err != nil || c == nil {
-		h.error(w, http.StatusNotFound, "Campaign not found")
+		h.error(w, r, http.StatusNotFound, "Campaign not found")
 		return
 	}
 

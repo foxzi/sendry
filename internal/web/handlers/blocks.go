@@ -32,7 +32,7 @@ func (h *Handlers) BlockList(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		h.logger.Error("failed to list blocks", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to list blocks")
+		h.error(w, r, http.StatusInternalServerError, "Failed to list blocks")
 		return
 	}
 
@@ -74,7 +74,7 @@ func (h *Handlers) BlockNew(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) BlockCreate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
@@ -88,7 +88,7 @@ func (h *Handlers) BlockCreate(w http.ResponseWriter, r *http.Request) {
 	background := strings.TrimSpace(r.FormValue("background"))
 
 	if name == "" || category == "" || html == "" {
-		h.error(w, http.StatusBadRequest, "Name, category and HTML are required")
+		h.error(w, r, http.StatusBadRequest, "Name, category and HTML are required")
 		return
 	}
 
@@ -105,7 +105,7 @@ func (h *Handlers) BlockCreate(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.blocks.Create(b); err != nil {
 		h.logger.Error("failed to create block", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to create block")
+		h.error(w, r, http.StatusInternalServerError, "Failed to create block")
 		return
 	}
 
@@ -121,11 +121,11 @@ func (h *Handlers) BlockView(w http.ResponseWriter, r *http.Request) {
 	b, err := h.blocks.GetByID(id)
 	if err != nil {
 		h.logger.Error("failed to get block", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load block")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load block")
 		return
 	}
 	if b == nil {
-		h.error(w, http.StatusNotFound, "Block not found")
+		h.error(w, r, http.StatusNotFound, "Block not found")
 		return
 	}
 
@@ -153,11 +153,11 @@ func (h *Handlers) BlockEdit(w http.ResponseWriter, r *http.Request) {
 	b, err := h.blocks.GetByID(id)
 	if err != nil {
 		h.logger.Error("failed to get block", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load block")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load block")
 		return
 	}
 	if b == nil {
-		h.error(w, http.StatusNotFound, "Block not found")
+		h.error(w, r, http.StatusNotFound, "Block not found")
 		return
 	}
 
@@ -181,18 +181,18 @@ func (h *Handlers) BlockEdit(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) BlockUpdate(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
 	b, err := h.blocks.GetByID(id)
 	if err != nil {
 		h.logger.Error("failed to get block", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load block")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load block")
 		return
 	}
 	if b == nil {
-		h.error(w, http.StatusNotFound, "Block not found")
+		h.error(w, r, http.StatusNotFound, "Block not found")
 		return
 	}
 
@@ -202,7 +202,7 @@ func (h *Handlers) BlockUpdate(w http.ResponseWriter, r *http.Request) {
 	previewText := r.FormValue("preview_text")
 
 	if name == "" || category == "" || html == "" {
-		h.error(w, http.StatusBadRequest, "Name, category and HTML are required")
+		h.error(w, r, http.StatusBadRequest, "Name, category and HTML are required")
 		return
 	}
 
@@ -219,7 +219,7 @@ func (h *Handlers) BlockUpdate(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.blocks.Update(b); err != nil {
 		h.logger.Error("failed to update block", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to update block")
+		h.error(w, r, http.StatusInternalServerError, "Failed to update block")
 		return
 	}
 
@@ -358,18 +358,18 @@ func (h *Handlers) BlockDelete(w http.ResponseWriter, r *http.Request) {
 	b, err := h.blocks.GetByID(id)
 	if err != nil {
 		h.logger.Error("failed to get block", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load block")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load block")
 		return
 	}
 	if b == nil {
-		h.error(w, http.StatusNotFound, "Block not found")
+		h.error(w, r, http.StatusNotFound, "Block not found")
 		return
 	}
 
 	used, err := h.templates.GetTemplatesByBlockID(id)
 	if err != nil {
 		h.logger.Error("check block usage", "block_id", id, "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to check block usage")
+		h.error(w, r, http.StatusInternalServerError, "Failed to check block usage")
 		return
 	}
 	if len(used) > 0 {
@@ -377,13 +377,13 @@ func (h *Handlers) BlockDelete(w http.ResponseWriter, r *http.Request) {
 		for _, t := range used {
 			names = append(names, t.Name)
 		}
-		h.error(w, http.StatusConflict, "Block is used in templates: "+strings.Join(names, ", ")+". Remove it from those templates first.")
+		h.error(w, r, http.StatusConflict, "Block is used in templates: "+strings.Join(names, ", ")+". Remove it from those templates first.")
 		return
 	}
 
 	if err := h.blocks.Delete(id); err != nil {
 		h.logger.Error("failed to delete block", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to delete block")
+		h.error(w, r, http.StatusInternalServerError, "Failed to delete block")
 		return
 	}
 
@@ -398,11 +398,11 @@ func (h *Handlers) BlockPreview(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	b, err := h.blocks.GetByID(id)
 	if err != nil {
-		h.error(w, http.StatusInternalServerError, "Failed to load block")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load block")
 		return
 	}
 	if b == nil {
-		h.error(w, http.StatusNotFound, "Block not found")
+		h.error(w, r, http.StatusNotFound, "Block not found")
 		return
 	}
 

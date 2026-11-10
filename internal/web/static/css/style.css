@@ -56,6 +56,12 @@ body {
     min-height: 100vh;
 }
 
+/* Until i18n.js translates the page (see the inline script in layout.html);
+   body itself stays visible so the theme background does not flash */
+html[data-i18n-pending] body > * {
+    visibility: hidden;
+}
+
 a {
     color: var(--primary);
     text-decoration: none;
@@ -820,6 +826,24 @@ body {
     transition: width 0.3s;
 }
 
+.progress-with-count {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.progress-with-count .progress {
+    flex: 1;
+    min-width: 60px;
+}
+
+.progress-count {
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
 /* Alerts */
 .alert {
     padding: 1rem;
@@ -1006,6 +1030,50 @@ body {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 1rem;
+}
+
+/* Label / value table on detail pages (block view) */
+.detail-table {
+    border-collapse: collapse;
+}
+
+.detail-table th,
+.detail-table td {
+    padding: 0.35rem 0;
+    text-align: left;
+    vertical-align: top;
+}
+
+.detail-table th {
+    padding-right: 1.5rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+/* Block appearance: inputs line up even when a label wraps */
+.appearance-row {
+    align-items: end;
+}
+
+.appearance-bg {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.appearance-bg input[type="color"] {
+    width: 4rem;
+    height: 2.3125rem; /* same as the number inputs next to it */
+    padding: 3px;
+    cursor: pointer;
+}
+
+.appearance-bg .appearance-bg-none {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0;
+    font-weight: normal;
 }
 
 /* Input class */
@@ -1221,18 +1289,6 @@ td.actions form {
     color: #111827;
 }
 
-.btn-success {
-    background: var(--success);
-    border-color: var(--success);
-    color: #111827;
-}
-
-.btn-success:hover {
-    background: #059669;
-    border-color: #059669;
-    color: #111827;
-}
-
 /* Current version row highlight */
 .current-version {
     background: rgba(59, 130, 246, 0.05);
@@ -1280,6 +1336,7 @@ td.actions form {
 
 .server-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.5rem;
 }
 
@@ -1748,11 +1805,6 @@ td.actions form {
 .err-none {
     font-size: 13px;
     color: var(--text-muted);
-}
-
-.err-hint {
-    margin-top: 1rem;
-    font-size: 12px;
 }
 
 @media (max-width: 720px) {
@@ -3125,3 +3177,45 @@ label.cf-list:has(input:focus-visible) {
     font-weight: 600;
     margin-bottom: 0.25rem;
 }
+
+/* Domain list: server state icon with hover details (app.js initTips) */
+.srv-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    cursor: default;
+    border-radius: var(--radius);
+    outline-offset: 2px;
+}
+.srv-icon { width: 18px; height: 18px; flex: none; }
+.srv-icon--success { color: var(--success); }
+.srv-icon--warning { color: var(--warning); }
+.srv-icon--failed { color: var(--error); }
+.srv-icon--draft { color: var(--secondary); }
+.srv-status-tip {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    min-width: 260px;
+    max-width: 380px;
+    padding: 0.75rem;
+    background: var(--bg-card);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    font-size: 0.875rem;
+    white-space: normal;
+}
+.srv-status.is-open .srv-status-tip { display: block; }
+.srv-status-tip-title { display: block; }
+.srv-status-tip-sub { display: block; color: var(--text-muted); margin-bottom: 0.5rem; }
+.srv-status-tip-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    padding: 0.25rem 0;
+    border-top: 1px solid var(--border);
+}
+.srv-status-tip-name { min-width: 4.5rem; font-weight: 500; }
+.srv-status-tip-row--idle .srv-status-tip-name { color: var(--text-muted); font-weight: 400; }

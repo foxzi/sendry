@@ -55,7 +55,7 @@ func (h *Handlers) TrackingSettings(w http.ResponseWriter, r *http.Request) {
 	s, err := h.settings.GetTrackingSettings()
 	if err != nil || s == nil {
 		h.logger.Error("failed to load tracking settings", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load tracking settings")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load tracking settings")
 		return
 	}
 	ok := ""
@@ -71,7 +71,7 @@ func (h *Handlers) TrackingSettings(w http.ResponseWriter, r *http.Request) {
 // TrackingSettingsSave handles POST /settings/tracking.
 func (h *Handlers) TrackingSettingsSave(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 	s := &models.TrackingSettings{}
@@ -88,7 +88,7 @@ func (h *Handlers) TrackingSettingsSave(w http.ResponseWriter, r *http.Request) 
 
 	if err := h.settings.SaveTrackingSettings(s); err != nil {
 		h.logger.Error("failed to save tracking settings", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to save tracking settings")
+		h.error(w, r, http.StatusInternalServerError, "Failed to save tracking settings")
 		return
 	}
 	h.settings.LogAction(r, middleware.GetUserID(r), middleware.GetUserEmail(r), "update", "tracking_settings", "tracking",
@@ -105,7 +105,7 @@ func (h *Handlers) TrackingSettingsSave(w http.ResponseWriter, r *http.Request) 
 func (h *Handlers) TrackingSecretRotate(w http.ResponseWriter, r *http.Request) {
 	if err := h.settings.RotateTrackingSecret(); err != nil {
 		h.logger.Error("failed to rotate tracking secret", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to rotate tracking secret")
+		h.error(w, r, http.StatusInternalServerError, "Failed to rotate tracking secret")
 		return
 	}
 	h.settings.LogAction(r, middleware.GetUserID(r), middleware.GetUserEmail(r), "rotate_secret", "tracking_settings", "tracking", "{}")
@@ -123,7 +123,7 @@ func (h *Handlers) JobClickMap(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	job, err := h.jobs.GetByID(id)
 	if err != nil || job == nil {
-		h.error(w, http.StatusNotFound, "Job not found")
+		h.error(w, r, http.StatusNotFound, "Job not found")
 		return
 	}
 	snaps, err := h.tracking.GetSnapshots(id)

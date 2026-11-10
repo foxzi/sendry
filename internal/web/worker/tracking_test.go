@@ -18,7 +18,7 @@ func buildFor(t *testing.T, campaign *models.Campaign, env *trackingEnv) (string
 	t.Helper()
 	vars := map[string]any{"name": "bob"}
 	vars["unsubscribe_url"] = env.unsubscribeURL("item1", "rcpt1")
-	return buildCampaignHTML(tracking.NumberLinks(tplHTML), vars, env, campaign, "item1")
+	return buildCampaignHTML(tracking.NumberLinks(tplHTML), "", vars, env, campaign, "item1")
 }
 
 func TestBuildCampaignHTML_Tracking(t *testing.T) {
@@ -131,7 +131,7 @@ func TestBuildCampaignHTML_UTMWithoutClickTracking(t *testing.T) {
 func TestBuildCampaignHTML_Empty(t *testing.T) {
 	c := &models.Campaign{ID: "c1", TrackOpens: true, TrackClicks: true}
 	for _, src := range []string{"", "  \n"} {
-		html, err := buildCampaignHTML(src, map[string]any{}, testEnv(), c, "item1")
+		html, err := buildCampaignHTML(src, "", map[string]any{}, testEnv(), c, "item1")
 		if err != nil || html != "" {
 			t.Errorf("%q: got %q, %v; want empty HTML without a pixel", src, html, err)
 		}
@@ -155,7 +155,7 @@ func TestBuildCampaignHTML_MSOButtonTracked(t *testing.T) {
 	src := `<html><body><!--[if mso]><v:roundrect href="https://shop.example.com/sale">Sale</v:roundrect><![endif]-->` +
 		`<!--[if !mso]><!--><a href="https://shop.example.com/sale" class="btn">Sale</a><!--<![endif]--></body></html>`
 	c := &models.Campaign{ID: "c1", TrackClicks: true}
-	html, err := buildCampaignHTML(tracking.NumberLinks(src), map[string]any{}, testEnv(), c, "item1")
+	html, err := buildCampaignHTML(tracking.NumberLinks(src), "", map[string]any{}, testEnv(), c, "item1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,5 +164,31 @@ func TestBuildCampaignHTML_MSOButtonTracked(t *testing.T) {
 	}
 	if strings.Count(html, "/t/c/") != 2 || strings.Contains(html, "shop.example.com/sale\"") {
 		t.Errorf("expected both links tracked: %s", html)
+	}
+}
+
+func TestBuildCampaignHTML_Preheader(t *testing.T) {
+	vars := map[string]any{"name": "bob"}
+	// rendered the way processItem does, with the recipient variables
+	pre, err := renderTextTemplate("preheader", "Hi {{name}}, your offer", vars)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &models.Campaign{ID: "c1", Name: "Spring", TrackOpens: true, TrackClicks: true}
+	html, err := buildCampaignHTML(tracking.NumberLinks(tplHTML), pre, vars, testEnv(), c, "item1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(html, "<body><div style=\"display:none;") || !strings.Contains(html, "Hi bob, your offer&#847;") {
+		t.Errorf("preheader missing or misplaced: %s", html)
+	}
+	if !strings.Contains(html, "https://lnk.example.com/t/o/") {
+		t.Errorf("tracking must still be applied: %s", html)
+	}
+
+	// no preheader: html is what it was
+	plain, err := buildCampaignHTML(tracking.NumberLinks(tplHTML), "", vars, testEnv(), c, "item1")
+	if err != nil || strings.Contains(plain, "display:none;font-size:1px") {
+		t.Errorf("unexpected preheader: %s, %v", plain, err)
 	}
 }

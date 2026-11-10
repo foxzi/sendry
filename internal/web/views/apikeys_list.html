@@ -2,7 +2,7 @@
 <div class="page-header">
     <div>
         <h1 data-i18n="sub.api_keys">API keys</h1>
-        <p class="text-muted" data-i18n="admin.keys_for_sending_through_the_http_api">Keys for sending through the HTTP API</p>
+        <p class="text-muted" data-i18n="admin.keys_for_sending_through_the_http_api">Keys for the HTTP API: sending email and managing recipient lists</p>
     </div>
     <div class="header-actions">
         <button onclick="document.getElementById('create-modal').style.display='flex'" class="btn btn-primary" data-i18n="admin.new_api_key">New API key</button>
@@ -32,6 +32,7 @@
             <thead>
                 <tr>
                     <th data-i18n="name">Name</th>
+                    <th data-i18n="admin.permissions">Permissions</th>
                     <th data-i18n="admin.allowed_domains">Allowed Domains</th>
                     <th data-i18n="admin.sends">Sends</th>
                     <th data-i18n="infra.rate_limits">Rate Limits</th>
@@ -52,6 +53,9 @@
                             {{end}}
                         </div>
                         <div class="key-prefix" title="{{.KeyPrefix}}">{{.KeyPrefix}}...</div>
+                    </td>
+                    <td class="perms-cell" data-label="Permissions" data-i18n-label="admin.permissions">
+                        <span class="domain-badges">{{range .PermissionList}}<span class="badge badge-info" data-i18n="admin.perm.{{.}}">{{.}}</span> {{end}}</span>
                     </td>
                     <td class="domains-cell" data-label="Allowed domains" data-i18n-label="admin.allowed_domains">
                         {{if .AllowedDomains}}
@@ -82,7 +86,7 @@
                     </td>
                     <td class="actions">
                         <div class="icon-actions">
-                        <button type="button" class="btn-icon-sm" onclick="editKey('{{.ID}}', '{{.Name}}', [{{range $i, $d := .AllowedDomains}}{{if $i}},{{end}}'{{$d}}'{{end}}], {{.RateLimitMinute}}, {{.RateLimitHour}})" title="Edit" data-i18n-title="edit" aria-label="Edit">
+                        <button type="button" class="btn-icon-sm" onclick="editKey('{{.ID}}', '{{.Name}}', [{{range $i, $d := .AllowedDomains}}{{if $i}},{{end}}'{{$d}}'{{end}}], {{.RateLimitMinute}}, {{.RateLimitHour}}, [{{range $i, $p := .PermissionList}}{{if $i}},{{end}}'{{$p}}'{{end}}])" title="Edit" data-i18n-title="edit" aria-label="Edit">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
                         </button>
                         <form method="post" action="/settings/api-keys/{{.ID}}/toggle">
@@ -137,11 +141,23 @@
             <h2 data-i18n="admin.create_api_key">Create API Key</h2>
             <button type="button" onclick="document.getElementById('create-modal').style.display='none'" class="close">&times;</button>
         </div>
-        <form method="post" action="/settings/api-keys">
+        <form method="post" action="/settings/api-keys" data-perms-form>
             <div class="modal-body">
                 <div class="form-group">
                     <label for="name" data-i18n="name">Name</label>
                     <input type="text" id="name" name="name" class="input" required data-i18n-placeholder="admin.e_g_production_app" placeholder="e.g. Production App">
+                </div>
+                <div class="form-group">
+                    <label><span data-i18n="admin.permissions">Permissions</span></label>
+                    <div class="checkbox-list perms-list">
+                        {{range $.Permissions}}
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="permissions" value="{{.}}"{{if eq . "send"}} checked{{end}}>
+                            <span><span data-i18n="admin.perm.{{.}}">{{.}}</span> <small class="text-muted" data-i18n="admin.perm.{{.}}_hint"></small></span>
+                        </label>
+                        {{end}}
+                    </div>
+                    <small class="form-help perms-error" hidden data-i18n="admin.perm_required">Select at least one permission.</small>
                 </div>
                 <div class="form-group">
                     <label for="expires_at" data-i18n="admin.expires_optional">Expires (optional)</label>
@@ -186,11 +202,23 @@
             <h2 data-i18n="admin.edit_api_key">Edit API Key</h2>
             <button type="button" onclick="document.getElementById('edit-modal').style.display='none'" class="close">&times;</button>
         </div>
-        <form method="post" action="" id="edit-form">
+        <form method="post" action="" id="edit-form" data-perms-form>
             <div class="modal-body">
                 <div class="form-group">
                     <label for="edit_name" data-i18n="name">Name</label>
                     <input type="text" id="edit_name" name="name" class="input" required>
+                </div>
+                <div class="form-group">
+                    <label><span data-i18n="admin.permissions">Permissions</span></label>
+                    <div class="checkbox-list perms-list">
+                        {{range $.Permissions}}
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="permissions" value="{{.}}" class="edit-perm-checkbox">
+                            <span><span data-i18n="admin.perm.{{.}}">{{.}}</span> <small class="text-muted" data-i18n="admin.perm.{{.}}_hint"></small></span>
+                        </label>
+                        {{end}}
+                    </div>
+                    <small class="form-help perms-error" hidden data-i18n="admin.perm_required">Select at least one permission.</small>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
@@ -225,11 +253,16 @@
 </div>
 
 <script>
-function editKey(id, name, allowedDomains, rateLimitMinute, rateLimitHour) {
+function editKey(id, name, allowedDomains, rateLimitMinute, rateLimitHour, permissions) {
     document.getElementById('edit-form').action = '/settings/api-keys/' + id + '/edit';
     document.getElementById('edit_name').value = name;
     document.getElementById('edit_rate_limit_minute').value = rateLimitMinute || '';
     document.getElementById('edit_rate_limit_hour').value = rateLimitHour || '';
+
+    document.querySelectorAll('.edit-perm-checkbox').forEach(cb => {
+        cb.checked = permissions.includes(cb.value);
+    });
+    document.querySelector('#edit-form .perms-error').hidden = true;
 
     // Reset all checkboxes
     document.querySelectorAll('.edit-domain-checkbox').forEach(cb => {
@@ -238,6 +271,18 @@ function editKey(id, name, allowedDomains, rateLimitMinute, rateLimitHour) {
 
     document.getElementById('edit-modal').style.display = 'flex';
 }
+
+// A key without permissions cannot be saved; the server checks it too.
+document.querySelectorAll('[data-perms-form]').forEach(form => {
+    form.addEventListener('submit', e => {
+        const none = !form.querySelector('input[name="permissions"]:checked');
+        form.querySelector('.perms-error').hidden = !none;
+        if (none) e.preventDefault();
+    });
+    form.querySelectorAll('input[name="permissions"]').forEach(cb => cb.addEventListener('change', () => {
+        form.querySelector('.perms-error').hidden = true;
+    }));
+});
 
 function toggleDomains(btn, extraCount) {
     const badges = btn.closest('.domain-badges');
@@ -375,6 +420,15 @@ function toggleDomains(btn, extraCount) {
 }
 .domains-cell {
     min-width: 140px;
+}
+.perms-list {
+    max-height: none;
+}
+.perms-error {
+    color: var(--danger, #dc2626);
+}
+.perms-error[hidden] {
+    display: none;
 }
 .domain-badges {
     display: flex;

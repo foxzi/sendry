@@ -307,44 +307,6 @@ func TestAllowDailyLimit(t *testing.T) {
 	}
 }
 
-func TestCheck(t *testing.T) {
-	db, cleanup := setupTestDB(t)
-	defer cleanup()
-
-	cfg := &Config{
-		Global: &LimitConfig{
-			MessagesPerHour: 2,
-		},
-		FlushInterval: time.Hour,
-	}
-
-	limiter, err := NewLimiter(db, cfg)
-	if err != nil {
-		t.Fatalf("failed to create limiter: %v", err)
-	}
-	defer limiter.Stop()
-
-	ctx := context.Background()
-	req := &Request{Domain: "example.com"}
-
-	// Check should not increment counters
-	for i := 0; i < 5; i++ {
-		result, err := limiter.Check(ctx, req)
-		if err != nil {
-			t.Fatalf("Check failed: %v", err)
-		}
-		if !result.Allowed {
-			t.Errorf("Check %d should return allowed (doesn't increment)", i+1)
-		}
-	}
-
-	// Allow should still work since Check didn't increment
-	result, _ := limiter.Allow(ctx, req)
-	if !result.Allowed {
-		t.Error("first Allow should be allowed")
-	}
-}
-
 func TestGetStats(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
@@ -925,54 +887,5 @@ func TestGetRecipientDomainLimit(t *testing.T) {
 			t.Errorf("getRecipientDomainLimit(%s) = %d, want %d",
 				tt.domain, limit.MessagesPerHour, tt.expected)
 		}
-	}
-}
-
-func TestCheckWithoutIncrement(t *testing.T) {
-	db, cleanup := setupTestDB(t)
-	defer cleanup()
-
-	cfg := &Config{
-		Global: &LimitConfig{
-			MessagesPerHour: 3,
-		},
-		FlushInterval: time.Hour,
-	}
-
-	limiter, err := NewLimiter(db, cfg)
-	if err != nil {
-		t.Fatalf("failed to create limiter: %v", err)
-	}
-	defer limiter.Stop()
-
-	ctx := context.Background()
-	req := &Request{Domain: "example.com"}
-
-	// Use up 2 of 3 allowed
-	limiter.Allow(ctx, req)
-	limiter.Allow(ctx, req)
-
-	// Check should say allowed but not increment
-	result, _ := limiter.Check(ctx, req)
-	if !result.Allowed {
-		t.Error("Check should report allowed")
-	}
-
-	// Another Check should still be allowed
-	result, _ = limiter.Check(ctx, req)
-	if !result.Allowed {
-		t.Error("Check should still report allowed (no increment)")
-	}
-
-	// Allow consumes the last one
-	result, _ = limiter.Allow(ctx, req)
-	if !result.Allowed {
-		t.Error("Allow should succeed")
-	}
-
-	// Now Check should report denied
-	result, _ = limiter.Check(ctx, req)
-	if result.Allowed {
-		t.Error("Check should report denied after limit reached")
 	}
 }

@@ -1,0 +1,9 @@
+{{/* panel_link_badge renders how a domain on an MTA relates to the panel.
+     Takes handlers.panelLink: {ID, Status, Diff}. */}}
+{{define "panel_link_badge"}}
+{{- if .ID -}}
+<a href="/domains/{{.ID}}" title="Open in panel" data-i18n-title="infra.open_in_panel" style="text-decoration: none;">{{template "deployment_state_badge" .}}</a>
+{{- else -}}
+<span class="badge badge-draft" data-i18n="infra.not_in_panel">Not in panel</span>
+{{- end -}}
+{{end}}

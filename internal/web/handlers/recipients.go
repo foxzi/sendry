@@ -29,7 +29,7 @@ func (h *Handlers) RecipientListList(w http.ResponseWriter, r *http.Request) {
 	lists, total, err := h.recipients.ListLists(filter)
 	if err != nil {
 		h.logger.Error("failed to list recipient lists", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load recipient lists")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load recipient lists")
 		return
 	}
 
@@ -61,7 +61,7 @@ func (h *Handlers) RecipientListNew(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) RecipientListCreate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
@@ -72,13 +72,13 @@ func (h *Handlers) RecipientListCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if list.Name == "" {
-		h.error(w, http.StatusBadRequest, "Name is required")
+		h.error(w, r, http.StatusBadRequest, "Name is required")
 		return
 	}
 
 	if err := h.recipients.CreateList(list); err != nil {
 		h.logger.Error("failed to create recipient list", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to create recipient list")
+		h.error(w, r, http.StatusInternalServerError, "Failed to create recipient list")
 		return
 	}
 
@@ -91,11 +91,11 @@ func (h *Handlers) RecipientListView(w http.ResponseWriter, r *http.Request) {
 	list, err := h.recipients.GetListByID(id)
 	if err != nil {
 		h.logger.Error("failed to get recipient list", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load recipient list")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load recipient list")
 		return
 	}
 	if list == nil {
-		h.error(w, http.StatusNotFound, "Recipient list not found")
+		h.error(w, r, http.StatusNotFound, "Recipient list not found")
 		return
 	}
 
@@ -152,11 +152,11 @@ func (h *Handlers) RecipientListEdit(w http.ResponseWriter, r *http.Request) {
 	list, err := h.recipients.GetListByID(id)
 	if err != nil {
 		h.logger.Error("failed to get recipient list", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load recipient list")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load recipient list")
 		return
 	}
 	if list == nil {
-		h.error(w, http.StatusNotFound, "Recipient list not found")
+		h.error(w, r, http.StatusNotFound, "Recipient list not found")
 		return
 	}
 
@@ -174,13 +174,13 @@ func (h *Handlers) RecipientListUpdate(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
 	list, err := h.recipients.GetListByID(id)
 	if err != nil || list == nil {
-		h.error(w, http.StatusNotFound, "Recipient list not found")
+		h.error(w, r, http.StatusNotFound, "Recipient list not found")
 		return
 	}
 
@@ -189,7 +189,7 @@ func (h *Handlers) RecipientListUpdate(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.recipients.UpdateList(list); err != nil {
 		h.logger.Error("failed to update recipient list", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to update recipient list")
+		h.error(w, r, http.StatusInternalServerError, "Failed to update recipient list")
 		return
 	}
 
@@ -200,12 +200,12 @@ func (h *Handlers) RecipientListDelete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	if err := h.recipients.DeleteList(id); errors.Is(err, repository.ErrInUse) {
-		h.error(w, http.StatusConflict, "Cannot delete the list: campaigns were sent to it. "+
+		h.error(w, r, http.StatusConflict, "Cannot delete the list: campaigns were sent to it. "+
 			"Delete those campaigns first (their statistics are deleted too).")
 		return
 	} else if err != nil {
 		h.logger.Error("failed to delete recipient list", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to delete recipient list")
+		h.error(w, r, http.StatusInternalServerError, "Failed to delete recipient list")
 		return
 	}
 
@@ -217,7 +217,7 @@ func (h *Handlers) RecipientImportPage(w http.ResponseWriter, r *http.Request) {
 
 	list, err := h.recipients.GetListByID(id)
 	if err != nil || list == nil {
-		h.error(w, http.StatusNotFound, "Recipient list not found")
+		h.error(w, r, http.StatusNotFound, "Recipient list not found")
 		return
 	}
 
@@ -236,19 +236,19 @@ func (h *Handlers) RecipientImport(w http.ResponseWriter, r *http.Request) {
 
 	list, err := h.recipients.GetListByID(id)
 	if err != nil || list == nil {
-		h.error(w, http.StatusNotFound, "Recipient list not found")
+		h.error(w, r, http.StatusNotFound, "Recipient list not found")
 		return
 	}
 
 	// Parse multipart form (max 10MB)
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
-		h.error(w, http.StatusBadRequest, "Failed to parse form")
+		h.error(w, r, http.StatusBadRequest, "Failed to parse form")
 		return
 	}
 
 	file, _, err := r.FormFile("file")
 	if err != nil {
-		h.error(w, http.StatusBadRequest, "No file uploaded")
+		h.error(w, r, http.StatusBadRequest, "No file uploaded")
 		return
 	}
 	defer file.Close()
@@ -260,7 +260,7 @@ func (h *Handlers) RecipientImport(w http.ResponseWriter, r *http.Request) {
 	result, err := h.recipients.ImportCSV(id, file)
 	if err != nil {
 		h.logger.Error("failed to import CSV", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to import: "+err.Error())
+		h.error(w, r, http.StatusInternalServerError, "Failed to import: "+err.Error())
 		return
 	}
 
@@ -280,7 +280,7 @@ func (h *Handlers) RecipientAdd(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
@@ -294,13 +294,13 @@ func (h *Handlers) RecipientAdd(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if recipient.Email == "" {
-		h.error(w, http.StatusBadRequest, "Email is required")
+		h.error(w, r, http.StatusBadRequest, "Email is required")
 		return
 	}
 
 	if err := h.recipients.AddRecipient(recipient); err != nil {
 		h.logger.Error("failed to add recipient", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to add recipient")
+		h.error(w, r, http.StatusInternalServerError, "Failed to add recipient")
 		return
 	}
 
@@ -313,12 +313,12 @@ func (h *Handlers) RecipientDelete(w http.ResponseWriter, r *http.Request) {
 	recipientID := r.PathValue("recipientId")
 
 	if err := h.recipients.DeleteRecipient(recipientID, listID); errors.Is(err, repository.ErrInUse) {
-		h.error(w, http.StatusConflict, "Cannot delete the recipient: campaigns were sent to this address. "+
+		h.error(w, r, http.StatusConflict, "Cannot delete the recipient: campaigns were sent to this address. "+
 			"Set the status to unsubscribed to stop sending to it.")
 		return
 	} else if err != nil {
 		h.logger.Error("failed to delete recipient", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to delete recipient")
+		h.error(w, r, http.StatusInternalServerError, "Failed to delete recipient")
 		return
 	}
 
@@ -331,7 +331,7 @@ func (h *Handlers) RecipientListExport(w http.ResponseWriter, r *http.Request) {
 
 	list, err := h.recipients.GetListByID(id)
 	if err != nil || list == nil {
-		h.error(w, http.StatusNotFound, "Recipient list not found")
+		h.error(w, r, http.StatusNotFound, "Recipient list not found")
 		return
 	}
 
@@ -339,7 +339,7 @@ func (h *Handlers) RecipientListExport(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.recipients.StreamRecipients(id)
 	if err != nil {
 		h.logger.Error("failed to stream recipients for export", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to export recipients")
+		h.error(w, r, http.StatusInternalServerError, "Failed to export recipients")
 		return
 	}
 	defer rows.Close()

@@ -217,7 +217,7 @@ func (s *Server) buildMessageFromRequest(req *SendRequest, remoteAddr string) (*
 	if req.From == "" {
 		return nil, http.StatusBadRequest, "from is required"
 	}
-	from, err := mail.ParseAddress(req.From)
+	from, err := parseAddress(req.From)
 	if err != nil {
 		return nil, http.StatusBadRequest, "invalid from address"
 	}
@@ -225,17 +225,17 @@ func (s *Server) buildMessageFromRequest(req *SendRequest, remoteAddr string) (*
 		return nil, http.StatusBadRequest, "to is required"
 	}
 	for _, to := range req.To {
-		if _, err := mail.ParseAddress(to); err != nil {
+		if _, err := parseAddress(to); err != nil {
 			return nil, http.StatusBadRequest, fmt.Sprintf("invalid to address: %s", to)
 		}
 	}
 	for _, cc := range req.CC {
-		if _, err := mail.ParseAddress(cc); err != nil {
+		if _, err := parseAddress(cc); err != nil {
 			return nil, http.StatusBadRequest, fmt.Sprintf("invalid cc address: %s", cc)
 		}
 	}
 	for _, bcc := range req.BCC {
-		if _, err := mail.ParseAddress(bcc); err != nil {
+		if _, err := parseAddress(bcc); err != nil {
 			return nil, http.StatusBadRequest, fmt.Sprintf("invalid bcc address: %s", bcc)
 		}
 	}
@@ -633,4 +633,24 @@ func (s *Server) handleDLQDelete(w http.ResponseWriter, r *http.Request) {
 
 	s.logger.Info("message deleted from DLQ", "id", id)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// parseAddress parses a single address and rejects ones that are valid by
+// RFC 5322 but unsafe on the SMTP envelope. net/mail unquotes the local part,
+// so `"x> NOTIFY=SUCCESS"@example.com` would become `x> NOTIFY=SUCCESS@example.com`
+// and smuggle parameters into MAIL FROM / RCPT TO.
+func parseAddress(s string) (*mail.Address, error) {
+	addr, err := mail.ParseAddress(s)
+	if err != nil {
+		return nil, err
+	}
+	if strings.Count(addr.Address, "@") != 1 {
+		return nil, fmt.Errorf("address must contain exactly one @")
+	}
+	for _, r := range addr.Address {
+		if r <= ' ' || r == 0x7f || strings.ContainsRune(`<>"\()[],;:`, r) {
+			return nil, fmt.Errorf("address contains forbidden character %q", r)
+		}
+	}
+	return addr, nil
 }

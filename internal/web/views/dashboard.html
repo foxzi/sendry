@@ -91,8 +91,11 @@
                         <td><a href="/jobs/{{.Job.ID}}">{{.Job.CampaignName}}</a></td>
                         <td>{{template "job_status" .}}</td>
                         <td>
-                            <div class="progress">
-                                <div class="progress-bar" style="width: {{.Progress}}%"></div>
+                            <div class="progress-with-count">
+                                <div class="progress">
+                                    <div class="progress-bar" style="width: {{.Progress}}%"></div>
+                                </div>
+                                <span class="progress-count">{{.Stats.Sent}} / {{.Stats.Total}}</span>
                             </div>
                         </td>
                         <td>{{.Job.CreatedAt.Format "2006-01-02 15:04"}}</td>

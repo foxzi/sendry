@@ -10,7 +10,6 @@ type UserSMTPServer struct {
 	Port        int       `json:"port"`
 	Username    string    `json:"username"`
 	PasswordEnc string    `json:"-"`
-	Password    string    `json:"-"`
 	Encryption  string    `json:"encryption"`
 	FromAddress string    `json:"from_address"`
 	FromName    string    `json:"from_name"`

@@ -32,7 +32,6 @@ type PlanEntry struct {
 	Type     string // DNS record type, e.g. TXT
 	Name     string // FQDN
 	Expected string
-	Current  string
 	Action   Action
 	Reason   string // optional human-readable reason, especially for Skip/Noop
 }

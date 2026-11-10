@@ -1,11 +1,14 @@
 package domain
 
 import (
+	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/foxzi/sendry/internal/config"
+	"github.com/foxzi/sendry/internal/dkim"
 )
 
 func TestNewManagerWithoutDKIM(t *testing.T) {
@@ -252,5 +255,47 @@ func TestGetSignerWithoutDKIM(t *testing.T) {
 	signer = m.GetSignerForEmail("user@example.com")
 	if signer != nil {
 		t.Error("expected nil signer for email when DKIM not configured")
+	}
+}
+
+// A domain whose DKIM key file is missing must not stop the manager from
+// starting: the other domains keep their signers, the broken one has none.
+func TestNewManagerSkipsDomainWithMissingDKIMKey(t *testing.T) {
+	dir := t.TempDir()
+	keyFile := filepath.Join(dir, "good.example", "mail.key")
+	kp, err := dkim.GenerateKey("good.example", "mail")
+	if err != nil {
+		t.Fatalf("GenerateKey failed: %v", err)
+	}
+	if err := kp.SavePrivateKey(keyFile); err != nil {
+		t.Fatalf("SavePrivateKey failed: %v", err)
+	}
+
+	cfg := &config.Config{
+		Domains: map[string]config.DomainConfig{
+			"good.example": {
+				DKIM: &config.DomainDKIMConfig{Enabled: true, Selector: "mail", KeyFile: keyFile},
+			},
+			"broken.example": {
+				DKIM: &config.DomainDKIMConfig{
+					Enabled:  true,
+					Selector: "mail",
+					KeyFile:  filepath.Join(dir, "broken.example", "mail.key"),
+				},
+			},
+		},
+	}
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	m, err := NewManager(cfg, logger)
+	if err != nil {
+		t.Fatalf("NewManager failed: %v", err)
+	}
+	if m.GetSigner("good.example") == nil {
+		t.Error("expected a signer for the domain with a valid key")
+	}
+	if m.GetSigner("broken.example") != nil {
+		t.Error("expected no signer for the domain with a missing key")
 	}
 }

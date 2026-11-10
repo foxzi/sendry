@@ -5,10 +5,42 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/foxzi/sendry/internal/web/middleware"
 	"github.com/foxzi/sendry/internal/web/models"
 	"github.com/foxzi/sendry/internal/web/sendry"
 )
+
+// panelLink tells how a domain found on an MTA relates to the panel's own
+// domain list. ID is empty when the domain exists only on the server (its
+// config file or a direct API call). Status is the panel's deployment of the
+// domain to that server, one of the state* constants; Diff lists what differs
+// from the panel when Status is stateDiffers.
+type panelLink struct {
+	ID     string
+	Status string
+	Diff   []string
+}
+
+// panelLinkFor compares a domain as the server reports it with the panel's.
+func (h *Handlers) panelLinkFor(sd *sendry.Domain, serverName string) panelLink {
+	d, err := h.domains.GetByDomain(sd.Domain)
+	if err != nil {
+		h.logger.Error("failed to look up panel domain", "error", err, "domain", sd.Domain)
+		return panelLink{}
+	}
+	if d == nil {
+		return panelLink{}
+	}
+	link := panelLink{ID: d.ID, Status: stateNotDeployed}
+	snap := map[string]serverDomainsEntry{serverName: newServerDomainsEntry([]*sendry.Domain{sd}, nil)}
+	if st, ok := h.deploymentStates(d, snap)[serverName]; ok {
+		link.Status = st.Status
+		link.Diff = st.Diff
+	}
+	return link
+}
 
 // DomainsList shows domains for a server
 func (h *Handlers) DomainsList(w http.ResponseWriter, r *http.Request) {
@@ -16,19 +48,25 @@ func (h *Handlers) DomainsList(w http.ResponseWriter, r *http.Request) {
 
 	client, err := h.sendry.GetClient(serverName)
 	if err != nil {
-		h.error(w, http.StatusNotFound, "Server not found")
+		h.error(w, r, http.StatusNotFound, "Server not found")
 		return
 	}
 
 	domains, err := client.ListDomains(r.Context())
 	if err != nil {
 		h.logger.Error("failed to list domains", "error", err, "server", serverName)
-		h.error(w, http.StatusInternalServerError, "Failed to load domains")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load domains")
 		return
 	}
 
 	// Get DKIM keys for linking
 	dkimKeys, _ := h.dkim.List()
+
+	h.serverDomainsCache.store(serverName, domains.Domains)
+	panel := make(map[string]panelLink, len(domains.Domains))
+	for _, d := range domains.Domains {
+		panel[d.Domain] = h.panelLinkFor(d, serverName)
+	}
 
 	data := map[string]any{
 		"Title":      fmt.Sprintf("%s - Domains", serverName),
@@ -36,6 +74,7 @@ func (h *Handlers) DomainsList(w http.ResponseWriter, r *http.Request) {
 		"User":       h.getUserFromContext(r),
 		"ServerName": serverName,
 		"Domains":    domains.Domains,
+		"Panel":      panel,
 		"DKIMKeys":   dkimKeys,
 	}
 
@@ -66,19 +105,19 @@ func (h *Handlers) DomainsCreate(w http.ResponseWriter, r *http.Request) {
 	serverName := r.PathValue("server")
 
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
 	client, err := h.sendry.GetClient(serverName)
 	if err != nil {
-		h.error(w, http.StatusNotFound, "Server not found")
+		h.error(w, r, http.StatusNotFound, "Server not found")
 		return
 	}
 
 	domain := strings.TrimSpace(r.FormValue("domain"))
 	if domain == "" {
-		h.error(w, http.StatusBadRequest, "Domain name is required")
+		h.error(w, r, http.StatusBadRequest, "Domain name is required")
 		return
 	}
 
@@ -149,10 +188,11 @@ func (h *Handlers) DomainsCreate(w http.ResponseWriter, r *http.Request) {
 	_, err = client.CreateDomain(r.Context(), req)
 	if err != nil {
 		h.logger.Error("failed to create domain", "error", err)
-		h.error(w, http.StatusInternalServerError, fmt.Sprintf("Failed to create domain: %v", err))
+		h.error(w, r, http.StatusInternalServerError, fmt.Sprintf("Failed to create domain: %v", err))
 		return
 	}
 
+	h.serverDomainsCache.invalidate(serverName)
 	http.Redirect(w, r, "/servers/"+serverName+"/domains", http.StatusSeeOther)
 }
 
@@ -163,14 +203,14 @@ func (h *Handlers) DomainsView(w http.ResponseWriter, r *http.Request) {
 
 	client, err := h.sendry.GetClient(serverName)
 	if err != nil {
-		h.error(w, http.StatusNotFound, "Server not found")
+		h.error(w, r, http.StatusNotFound, "Server not found")
 		return
 	}
 
 	domain, err := client.GetDomain(r.Context(), domainName)
 	if err != nil {
 		h.logger.Error("failed to get domain", "error", err)
-		h.error(w, http.StatusNotFound, "Domain not found")
+		h.error(w, r, http.StatusNotFound, "Domain not found")
 		return
 	}
 
@@ -178,11 +218,12 @@ func (h *Handlers) DomainsView(w http.ResponseWriter, r *http.Request) {
 	dkimKeys, _ := h.dkim.List()
 
 	data := map[string]any{
-		"Title":      fmt.Sprintf("Domain: %s", domainName),
+		"Title":      fmt.Sprintf("%s on %s", domainName, serverName),
 		"Active":     "servers",
 		"User":       h.getUserFromContext(r),
 		"ServerName": serverName,
 		"Domain":     domain,
+		"Panel":      h.panelLinkFor(domain, serverName),
 		"DKIMKeys":   dkimKeys,
 		"Modes":      []string{"production", "sandbox", "redirect", "bcc"},
 	}
@@ -197,14 +238,14 @@ func (h *Handlers) DomainsEdit(w http.ResponseWriter, r *http.Request) {
 
 	client, err := h.sendry.GetClient(serverName)
 	if err != nil {
-		h.error(w, http.StatusNotFound, "Server not found")
+		h.error(w, r, http.StatusNotFound, "Server not found")
 		return
 	}
 
 	domain, err := client.GetDomain(r.Context(), domainName)
 	if err != nil {
 		h.logger.Error("failed to get domain", "error", err)
-		h.error(w, http.StatusNotFound, "Domain not found")
+		h.error(w, r, http.StatusNotFound, "Domain not found")
 		return
 	}
 
@@ -230,13 +271,13 @@ func (h *Handlers) DomainsUpdate(w http.ResponseWriter, r *http.Request) {
 	domainName := r.PathValue("domain")
 
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
 	client, err := h.sendry.GetClient(serverName)
 	if err != nil {
-		h.error(w, http.StatusNotFound, "Server not found")
+		h.error(w, r, http.StatusNotFound, "Server not found")
 		return
 	}
 
@@ -308,10 +349,11 @@ func (h *Handlers) DomainsUpdate(w http.ResponseWriter, r *http.Request) {
 	_, err = client.UpdateDomain(r.Context(), domainName, req)
 	if err != nil {
 		h.logger.Error("failed to update domain", "error", err)
-		h.error(w, http.StatusInternalServerError, fmt.Sprintf("Failed to update domain: %v", err))
+		h.error(w, r, http.StatusInternalServerError, fmt.Sprintf("Failed to update domain: %v", err))
 		return
 	}
 
+	h.serverDomainsCache.invalidate(serverName)
 	http.Redirect(w, r, "/servers/"+serverName+"/domains/"+domainName, http.StatusSeeOther)
 }
 
@@ -322,18 +364,98 @@ func (h *Handlers) DomainsDelete(w http.ResponseWriter, r *http.Request) {
 
 	client, err := h.sendry.GetClient(serverName)
 	if err != nil {
-		h.error(w, http.StatusNotFound, "Server not found")
+		h.error(w, r, http.StatusNotFound, "Server not found")
 		return
 	}
 
 	err = client.DeleteDomain(r.Context(), domainName)
 	if err != nil {
 		h.logger.Error("failed to delete domain", "error", err)
-		h.error(w, http.StatusInternalServerError, fmt.Sprintf("Failed to delete domain: %v", err))
+		h.error(w, r, http.StatusInternalServerError, fmt.Sprintf("Failed to delete domain: %v", err))
 		return
 	}
 
+	h.serverDomainsCache.invalidate(serverName)
 	http.Redirect(w, r, "/servers/"+serverName+"/domains", http.StatusSeeOther)
+}
+
+// DomainsImport adds a domain that exists only on a server (its config file
+// or a direct API call) to the panel, with the settings the server has, and
+// records it as deployed there so the drift check starts from "in sync".
+//
+// The panel cannot read a DKIM private key back from a server. When the
+// server signs the domain with a key the panel does not have (same domain
+// and selector), the domain is imported with DKIM on but no key linked, and
+// the card warns; deployDomainToServer refuses to deploy it until a key is
+// linked, so a sync cannot strip DKIM from the server.
+func (h *Handlers) DomainsImport(w http.ResponseWriter, r *http.Request) {
+	serverName := r.PathValue("server")
+	domainName := r.PathValue("domain")
+
+	if existing, err := h.domains.GetByDomain(domainName); err != nil {
+		h.logger.Error("failed to look up panel domain", "error", err)
+		h.error(w, r, http.StatusInternalServerError, "Failed to import domain")
+		return
+	} else if existing != nil {
+		http.Redirect(w, r, "/domains/"+existing.ID, http.StatusSeeOther)
+		return
+	}
+
+	client, err := h.sendry.GetClient(serverName)
+	if err != nil {
+		h.error(w, r, http.StatusNotFound, "Server not found")
+		return
+	}
+	sd, err := client.GetDomain(r.Context(), domainName)
+	if err != nil {
+		h.logger.Error("failed to get domain", "error", err, "server", serverName)
+		h.error(w, r, http.StatusNotFound, "Domain not found")
+		return
+	}
+
+	d := &models.Domain{
+		Domain:      sd.Domain,
+		Mode:        modeOrDefault(sd.Mode),
+		DefaultFrom: sd.DefaultFrom,
+		RedirectTo:  sd.RedirectTo,
+		BCCTo:       sd.BCCTo,
+	}
+	if sd.RateLimit != nil {
+		d.RateLimitHour = sd.RateLimit.MessagesPerHour
+		d.RateLimitDay = sd.RateLimit.MessagesPerDay
+		d.RateLimitRecipients = sd.RateLimit.RecipientsPerMessage
+	}
+	missingKey := false
+	if sd.DKIM != nil && sd.DKIM.Enabled {
+		d.DKIMEnabled = true
+		d.DKIMSelector = sd.DKIM.Selector
+		key, err := h.dkim.GetByDomainSelector(sd.Domain, sd.DKIM.Selector)
+		if err != nil {
+			h.logger.Error("failed to look up DKIM key", "error", err)
+		}
+		if key != nil {
+			d.DKIMKeyID = key.ID
+		} else {
+			missingKey = true
+		}
+	}
+
+	if err := h.domains.Create(d); err != nil {
+		h.logger.Error("failed to create domain", "error", err)
+		h.error(w, r, http.StatusInternalServerError, "Failed to import domain")
+		return
+	}
+	if err := h.domains.CreateDeployment(d.ID, serverName, "deployed", d.ConfigHash(), ""); err != nil {
+		h.logger.Error("failed to record deployment", "error", err)
+	}
+	h.settings.LogAction(r, middleware.GetUserID(r), middleware.GetUserEmail(r),
+		"import", "domain", d.ID, auditJSON(map[string]any{"domain": d.Domain, "server": serverName}))
+
+	target := "/domains/" + d.ID
+	if missingKey {
+		target += "?imported=nokey"
+	}
+	http.Redirect(w, r, target, http.StatusSeeOther)
 }
 
 // ============================================================================
@@ -345,14 +467,31 @@ func (h *Handlers) CentralDomainsList(w http.ResponseWriter, r *http.Request) {
 	domains, err := h.domains.List(models.DomainFilter{})
 	if err != nil {
 		h.logger.Error("failed to list domains", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load domains")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load domains")
 		return
 	}
 
-	// Load deployments for each domain
+	// Compare every domain with what its servers report. Full domains are
+	// needed for the settings comparison; one cached request per server.
+	full := make([]*models.Domain, 0, len(domains))
+	var servers []string
 	for i := range domains {
-		deployments, _ := h.domains.GetDeployments(domains[i].ID)
-		domains[i].Deployments = deployments
+		d, err := h.domains.GetByID(domains[i].ID)
+		if err != nil || d == nil {
+			continue
+		}
+		domains[i].Deployments = d.Deployments
+		full = append(full, d)
+		servers = append(servers, deployedServers(d)...)
+	}
+	snap := h.serverDomains(r.Context(), servers, false)
+	known := make([]string, 0, len(h.cfg.Sendry.Servers))
+	for _, srv := range h.cfg.Sendry.Servers {
+		known = append(known, srv.Name)
+	}
+	drift := make(map[string]driftSummary, len(full))
+	for _, d := range full {
+		drift[d.ID] = summarizeStates(h.deploymentStates(d, snap), known...)
 	}
 
 	data := map[string]any{
@@ -360,6 +499,7 @@ func (h *Handlers) CentralDomainsList(w http.ResponseWriter, r *http.Request) {
 		"Active":  "domains",
 		"User":    h.getUserFromContext(r),
 		"Domains": domains,
+		"Drift":   drift,
 		"Servers": h.getServersStatus(),
 	}
 
@@ -385,20 +525,20 @@ func (h *Handlers) CentralDomainsNew(w http.ResponseWriter, r *http.Request) {
 // CentralDomainsCreate creates a new domain locally
 func (h *Handlers) CentralDomainsCreate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
 	domainName := strings.TrimSpace(r.FormValue("domain"))
 	if domainName == "" {
-		h.error(w, http.StatusBadRequest, "Domain name is required")
+		h.error(w, r, http.StatusBadRequest, "Domain name is required")
 		return
 	}
 
 	// Check if domain already exists
 	existing, _ := h.domains.GetByDomain(domainName)
 	if existing != nil {
-		h.error(w, http.StatusConflict, "Domain already exists")
+		h.error(w, r, http.StatusConflict, "Domain already exists")
 		return
 	}
 
@@ -439,7 +579,7 @@ func (h *Handlers) CentralDomainsCreate(w http.ResponseWriter, r *http.Request) 
 
 	if err := h.domains.Create(domain); err != nil {
 		h.logger.Error("failed to create domain", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to create domain")
+		h.error(w, r, http.StatusInternalServerError, "Failed to create domain")
 		return
 	}
 
@@ -459,11 +599,11 @@ func (h *Handlers) CentralDomainsView(w http.ResponseWriter, r *http.Request) {
 	domain, err := h.domains.GetByID(id)
 	if err != nil {
 		h.logger.Error("failed to get domain", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to load domain")
+		h.error(w, r, http.StatusInternalServerError, "Failed to load domain")
 		return
 	}
 	if domain == nil {
-		h.error(w, http.StatusNotFound, "Domain not found")
+		h.error(w, r, http.StatusNotFound, "Domain not found")
 		return
 	}
 
@@ -489,26 +629,34 @@ func (h *Handlers) CentralDomainsView(w http.ResponseWriter, r *http.Request) {
 		spfValue = fmt.Sprintf("v=spf1 a mx include:%s ~all", spfInclude)
 	}
 
-	// Check for outdated deployments
-	currentHash := domain.ConfigHash()
-	outdatedCount := 0
-	for _, d := range domain.Deployments {
-		if d.ConfigHash != currentHash && d.Status == "deployed" {
-			outdatedCount++
+	// Compare with what the servers report; ?refresh=1 skips the cache.
+	snap := h.serverDomains(r.Context(), deployedServers(domain), r.URL.Query().Get("refresh") == "1")
+	states := h.deploymentStates(domain, snap)
+	syncCount := 0
+	var checkedAt time.Time
+	for _, st := range states {
+		if st.NeedsSync() {
+			syncCount++
+		}
+		if !st.CheckedAt.IsZero() && (checkedAt.IsZero() || st.CheckedAt.Before(checkedAt)) {
+			checkedAt = st.CheckedAt
 		}
 	}
 
 	data := map[string]any{
-		"Title":         fmt.Sprintf("Domain: %s", domain.Domain),
-		"Active":        "domains",
-		"User":          h.getUserFromContext(r),
-		"Domain":        domain,
-		"Servers":       servers,
-		"DeployedMap":   deployedMap,
-		"OutdatedCount": outdatedCount,
-		"ConfigHash":    currentHash,
-		"SPFValue":      spfValue,
-		"SPFInclude":    spfInclude,
+		"Title":       fmt.Sprintf("Domain: %s", domain.Domain),
+		"Active":      "domains",
+		"User":        h.getUserFromContext(r),
+		"Domain":      domain,
+		"Servers":     servers,
+		"DeployedMap": deployedMap,
+		"States":      states,
+		"SyncCount":   syncCount,
+		"CheckedAt":   checkedAt,
+		"ImportNoKey": r.URL.Query().Get("imported") == "nokey",
+		"ConfigHash":  domain.ConfigHash(),
+		"SPFValue":    spfValue,
+		"SPFInclude":  spfInclude,
 	}
 
 	// Run DNS check if requested
@@ -544,7 +692,7 @@ func (h *Handlers) CentralDomainsEdit(w http.ResponseWriter, r *http.Request) {
 
 	domain, err := h.domains.GetByID(id)
 	if err != nil || domain == nil {
-		h.error(w, http.StatusNotFound, "Domain not found")
+		h.error(w, r, http.StatusNotFound, "Domain not found")
 		return
 	}
 
@@ -567,13 +715,13 @@ func (h *Handlers) CentralDomainsUpdate(w http.ResponseWriter, r *http.Request) 
 	id := r.PathValue("id")
 
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
 	domain, err := h.domains.GetByID(id)
 	if err != nil || domain == nil {
-		h.error(w, http.StatusNotFound, "Domain not found")
+		h.error(w, r, http.StatusNotFound, "Domain not found")
 		return
 	}
 
@@ -617,7 +765,7 @@ func (h *Handlers) CentralDomainsUpdate(w http.ResponseWriter, r *http.Request) 
 
 	if err := h.domains.Update(id, domain); err != nil {
 		h.logger.Error("failed to update domain", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to update domain")
+		h.error(w, r, http.StatusInternalServerError, "Failed to update domain")
 		return
 	}
 
@@ -630,7 +778,7 @@ func (h *Handlers) CentralDomainsDelete(w http.ResponseWriter, r *http.Request) 
 
 	domain, err := h.domains.GetByID(id)
 	if err != nil || domain == nil {
-		h.error(w, http.StatusNotFound, "Domain not found")
+		h.error(w, r, http.StatusNotFound, "Domain not found")
 		return
 	}
 
@@ -640,11 +788,12 @@ func (h *Handlers) CentralDomainsDelete(w http.ResponseWriter, r *http.Request) 
 		if err == nil {
 			_ = client.DeleteDomain(r.Context(), domain.Domain)
 		}
+		h.serverDomainsCache.invalidate(d.ServerName)
 	}
 
 	if err := h.domains.Delete(id); err != nil {
 		h.logger.Error("failed to delete domain", "error", err)
-		h.error(w, http.StatusInternalServerError, "Failed to delete domain")
+		h.error(w, r, http.StatusInternalServerError, "Failed to delete domain")
 		return
 	}
 
@@ -656,19 +805,19 @@ func (h *Handlers) CentralDomainsDeploy(w http.ResponseWriter, r *http.Request) 
 	id := r.PathValue("id")
 
 	if err := r.ParseForm(); err != nil {
-		h.error(w, http.StatusBadRequest, "Invalid form data")
+		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
 
 	domain, err := h.domains.GetByID(id)
 	if err != nil || domain == nil {
-		h.error(w, http.StatusNotFound, "Domain not found")
+		h.error(w, r, http.StatusNotFound, "Domain not found")
 		return
 	}
 
 	servers := r.Form["servers"]
 	if len(servers) == 0 {
-		h.error(w, http.StatusBadRequest, "No servers selected")
+		h.error(w, r, http.StatusBadRequest, "No servers selected")
 		return
 	}
 
@@ -685,15 +834,17 @@ func (h *Handlers) CentralDomainsSync(w http.ResponseWriter, r *http.Request) {
 
 	domain, err := h.domains.GetByID(id)
 	if err != nil || domain == nil {
-		h.error(w, http.StatusNotFound, "Domain not found")
+		h.error(w, r, http.StatusNotFound, "Domain not found")
 		return
 	}
 
-	// Find all outdated deployments
-	currentHash := domain.ConfigHash()
-	for _, d := range domain.Deployments {
-		if d.ConfigHash != currentHash && d.Status != "failed" {
-			h.deployDomainToServer(r, domain, d.ServerName)
+	// Redeploy wherever the server does not have what the panel has:
+	// outdated in the panel, or deleted or changed on the server. Ask the
+	// servers afresh so a sync never acts on a stale snapshot.
+	snap := h.serverDomains(r.Context(), deployedServers(domain), true)
+	for server, st := range h.deploymentStates(domain, snap) {
+		if st.NeedsSync() {
+			h.deployDomainToServer(r, domain, server)
 		}
 	}
 
@@ -734,6 +885,17 @@ func (h *Handlers) deployDomainToServer(r *http.Request, domain *models.Domain, 
 		}
 	}
 
+	// The MTA replaces the whole domain config: without DKIM in the request a
+	// server that signs the domain stops signing it. DKIM is on in the panel
+	// but there is no key to send (none linked, e.g. after an import, or it
+	// could not be uploaded), so do not touch the server.
+	if domain.DKIMEnabled && req.DKIM == nil {
+		h.domains.CreateDeployment(domain.ID, serverName, "failed", domain.ConfigHash(),
+			"DKIM is enabled but no DKIM key could be deployed; link a key to the domain")
+		h.serverDomainsCache.invalidate(serverName)
+		return
+	}
+
 	if domain.RateLimitHour > 0 || domain.RateLimitDay > 0 || domain.RateLimitRecipients > 0 {
 		req.RateLimit = &sendry.RateLimitCfg{
 			MessagesPerHour:      domain.RateLimitHour,
@@ -766,6 +928,7 @@ func (h *Handlers) deployDomainToServer(r *http.Request, domain *models.Domain, 
 	} else {
 		h.domains.CreateDeployment(domain.ID, serverName, "deployed", domain.ConfigHash(), "")
 	}
+	h.serverDomainsCache.invalidate(serverName)
 }
 
 // Helper to parse newline-separated addresses
