@@ -320,7 +320,6 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("GET /servers/{server}/dkim/{id}", h.DKIMView)
 
 	// DNS/IP Checks (per server)
-	protected.HandleFunc("GET /servers/{server}/dns-check", h.DNSCheck)
 	protected.HandleFunc("GET /servers/{server}/ip-check", h.IPCheck)
 
 	// Tracking settings, stop list, click map
