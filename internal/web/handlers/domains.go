@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/foxzi/sendry/internal/web/dnssync"
 	"github.com/foxzi/sendry/internal/web/middleware"
 	"github.com/foxzi/sendry/internal/web/models"
 	"github.com/foxzi/sendry/internal/web/sendry"
@@ -668,28 +669,20 @@ func (h *Handlers) CentralDomainsView(w http.ResponseWriter, r *http.Request) {
 			selector = "mail"
 		}
 
-		// NS and provider zones are looked up by the panel itself, in
-		// parallel with the record check on the MTA.
-		hostingCtx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+		// Everything is looked up by the panel itself, no MTA involved:
+		// the records are public, so any resolver sees the same answer.
+		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 		defer cancel()
 		hostingDone := make(chan *dnsHosting, 1)
 		go func() {
-			hostingDone <- checkDNSHosting(hostingCtx, domain.Domain, h.dnsProviders, net.DefaultResolver.LookupNS)
+			hostingDone <- checkDNSHosting(ctx, domain.Domain, h.dnsProviders, net.DefaultResolver.LookupNS)
 		}()
 
-		// Try to get DNS check from any available server
-		for _, srv := range servers {
-			client, err := h.sendry.GetClient(srv["Name"].(string))
-			if err != nil {
-				continue
-			}
-			result, err := client.CheckDNS(r.Context(), domain.Domain, selector)
-			if err != nil {
-				data["DNSCheckError"] = err.Error()
-			} else {
-				data["DNSCheck"] = result
-			}
-			break
+		recommended := dnssync.BuildRecommended(domain, spfInclude)
+		if result, err := checkDomainRecords(ctx, domain.Domain, selector, recommended, net.DefaultResolver.LookupTXT); err != nil {
+			data["DNSCheckError"] = err.Error()
+		} else {
+			data["DNSCheck"] = result
 		}
 
 		hosting := <-hostingDone
