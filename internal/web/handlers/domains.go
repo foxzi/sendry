@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -666,6 +668,15 @@ func (h *Handlers) CentralDomainsView(w http.ResponseWriter, r *http.Request) {
 			selector = "mail"
 		}
 
+		// NS and provider zones are looked up by the panel itself, in
+		// parallel with the record check on the MTA.
+		hostingCtx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+		defer cancel()
+		hostingDone := make(chan *dnsHosting, 1)
+		go func() {
+			hostingDone <- checkDNSHosting(hostingCtx, domain.Domain, h.dnsProviders, net.DefaultResolver.LookupNS)
+		}()
+
 		// Try to get DNS check from any available server
 		for _, srv := range servers {
 			client, err := h.sendry.GetClient(srv["Name"].(string))
@@ -680,6 +691,14 @@ func (h *Handlers) CentralDomainsView(w http.ResponseWriter, r *http.Request) {
 			}
 			break
 		}
+
+		hosting := <-hostingDone
+		for _, p := range hosting.Providers {
+			if p.Error != "" {
+				h.logger.Warn("dns provider zone lookup failed", "domain", domain.Domain, "provider", p.Provider, "error", p.Error)
+			}
+		}
+		data["DNSHosting"] = hosting
 		data["DNSCheckRan"] = true
 	}
 

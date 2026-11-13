@@ -75,3 +75,32 @@ func TestMultiSendStrategy(t *testing.T) {
 		t.Error("unknown strategy accepted")
 	}
 }
+
+func TestDNSProvidersEnvFallback(t *testing.T) {
+	t.Setenv("CLOUDFLARE_API_TOKEN", "env-token")
+	t.Setenv("NAMEDOT_API_URL", "https://dns.example.com")
+	t.Setenv("NAMEDOT_API_TOKEN", "env-namedot")
+
+	cfg, err := loadYAML(t, baseYAML)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.DNSProviders.Cloudflare.APIToken; got != "env-token" {
+		t.Errorf("cloudflare token from env = %q", got)
+	}
+	if n := cfg.DNSProviders.Namedot; n.URL != "https://dns.example.com" || n.Token != "env-namedot" {
+		t.Errorf("namedot from env = %+v", n)
+	}
+
+	// Values in the file win; a configured global key is not mixed with an env token.
+	cfg, err = loadYAML(t, baseYAML+"dns_providers:\n  cloudflare:\n    email: a@example.com\n    api_key: file-key\n  namedot:\n    token: file-namedot\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cf := cfg.DNSProviders.Cloudflare; cf.APIToken != "" || cf.APIKey != "file-key" {
+		t.Errorf("cloudflare = %+v", cf)
+	}
+	if n := cfg.DNSProviders.Namedot; n.Token != "file-namedot" || n.URL != "https://dns.example.com" {
+		t.Errorf("namedot = %+v", n)
+	}
+}

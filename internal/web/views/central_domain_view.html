@@ -215,6 +215,38 @@
     </div>
     <div class="card-body">
         {{if .DNSCheckRan}}
+            {{with .DNSHosting}}
+            <div class="table-scroll" style="margin-bottom: 1rem;">
+            <table class="table table-details">
+                <tr>
+                    <th data-i18n="infra.name_servers">Name servers (NS)</th>
+                    <td>
+                        {{if .NSError}}
+                        <span class="badge badge-draft" data-i18n="infra.not_found">Not Found</span> <span class="text-muted">{{.NSError}}</span>
+                        {{else}}
+                        {{range .NS}}<div><code>{{.}}</code></div>{{end}}
+                        {{if ne .NSZone $.Domain.Domain}}<div class="text-muted"><span data-i18n="infra.ns_of_parent_zone">From the parent zone</span> <code>{{.NSZone}}</code></div>{{end}}
+                        {{end}}
+                    </td>
+                </tr>
+                {{range .Providers}}
+                <tr>
+                    <th>{{.Provider}}</th>
+                    <td>
+                        {{if .Error}}<span class="badge badge-failed" data-i18n="common.error">Error</span> <span class="text-muted" style="word-break: break-all;">{{.Error}}</span>
+                        {{else if .Found}}<span class="badge badge-success" data-i18n="infra.zone_in_account">Zone in account</span> <code>{{.Zone}}</code>
+                        {{else}}<span class="badge badge-draft" data-i18n="infra.zone_not_in_account">Not in account</span>{{end}}
+                    </td>
+                </tr>
+                {{else}}
+                <tr>
+                    <th data-i18n="infra.dns_providers">DNS providers</th>
+                    <td class="text-muted"><span data-i18n="infra.dns_providers_not_configured">Not configured. Add Cloudflare or namedot credentials to</span> <code>dns_providers</code> (web.yaml)</td>
+                </tr>
+                {{end}}
+            </table>
+            </div>
+            {{end}}
             {{if .DNSCheckError}}
             <div class="alert alert-danger"><span data-i18n="common.error">Error</span>: {{.DNSCheckError}}</div>
             {{else if .DNSCheck}}
