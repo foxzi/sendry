@@ -911,7 +911,7 @@ func (h *Handlers) CentralDomainsDeploy(w http.ResponseWriter, r *http.Request) 
 		h.deployDomainToServer(r, domain, srvName)
 	}
 
-	http.Redirect(w, r, fmt.Sprintf("/domains/%s", id), http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("/domains/%s#deployments", id), http.StatusSeeOther)
 }
 
 // CentralDomainsSync syncs all outdated deployments

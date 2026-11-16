@@ -133,12 +133,12 @@
     </div>
 </div>
 
-<div class="card">
+<div class="card" id="deployments">
     <div class="card-header">
         <h3 data-i18n="infra.server_deployments">Server Deployments</h3>
         <div style="display:flex; gap: 0.5rem; align-items:center;">
             {{if not .CheckedAt.IsZero}}<span class="text-muted"><span data-i18n="infra.checked_at">Checked at</span> {{.CheckedAt.Format "15:04:05"}}</span>{{end}}
-            <a href="/domains/{{.Domain.ID}}?refresh=1" class="btn btn-sm btn-secondary" data-i18n="infra.check_now">Check now</a>
+            <a href="/domains/{{.Domain.ID}}?refresh=1#deployments" class="btn btn-sm btn-secondary" data-i18n="infra.check_now">Check now</a>
         </div>
     </div>
     <div class="card-body">
@@ -209,7 +209,7 @@
     <div class="card-header">
         <h3 data-i18n="infra.dns_check_2">DNS Check</h3>
         <div style="display:flex; gap: 0.5rem; align-items:center;">
-            <a href="/domains/{{.Domain.ID}}?check=true" class="btn btn-sm btn-primary" data-i18n="infra.run_check">Run check</a>
+            <a href="/domains/{{.Domain.ID}}?check=true#dns-check" class="btn btn-sm btn-primary" data-i18n="infra.run_check">Run check</a>
             <a href="#dns-recommended" class="btn btn-sm btn-secondary" data-i18n="infra.dns_setup">DNS Setup</a>
         </div>
     </div>
@@ -268,14 +268,23 @@
                                 {{end}}
                             </tbody>
                         </table>
+                        <div class="dns-publish-row">
                         {{if .HasChanges}}
-                        <form method="POST" action="/domains/{{$.Domain.ID}}/dns-publish" style="display:inline;">
+                        <form method="POST" action="/domains/{{$.Domain.ID}}/dns-publish">
                             <input type="hidden" name="provider" value="{{.Key}}">
-                            <button type="submit" class="btn btn-sm btn-primary" onclick="return confirm(I18n.t('infra.dns_publish_confirm'))"><span data-i18n="infra.dns_publish_to">Publish to</span> {{.Provider}}</button>
+                            <button type="submit" class="btn btn-primary" onclick="return confirm(I18n.t('infra.dns_publish_confirm'))"><span data-i18n="infra.dns_publish_to">Publish to</span> {{.Provider}}</button>
                         </form>
+                        <span class="text-muted" data-i18n="infra.dns_publish_hint">Creates and replaces the records marked above. Other records in the zone stay as they are.</span>
+                        {{else}}
+                        <span class="text-muted" data-i18n="infra.dns_publish_nothing">All records are up to date, nothing to publish.</span>
                         {{end}}
+                        </div>
+                        {{else}}
+                        <div class="text-muted" style="margin-top: 0.5rem;" data-i18n="infra.dns_publish_unsupported">The panel does not publish records here, add them by hand.</div>
                         {{end}}
-                        {{else}}<span class="badge badge-draft" data-i18n="infra.zone_not_in_account">Not in account</span>{{end}}
+                        {{else}}<span class="badge badge-draft" data-i18n="infra.zone_not_in_account">Not in account</span>
+                        {{if eq .Key "namedot"}}<div class="text-muted" style="margin-top: 0.5rem;" data-i18n="infra.dns_publish_no_zone">Create the zone in namedot, then run the check again to publish the records.</div>{{end}}
+                        {{end}}
                     </td>
                 </tr>
                 {{else}}
@@ -326,6 +335,7 @@
             {{end}}
         {{else}}
         <p class="text-muted" data-i18n="infra.click_run_check_to_verify_spf_dkim_dmarc_and_mx">Click "Run Check" to verify SPF, DKIM, DMARC and MX records for this domain.</p>
+        <p class="text-muted" data-i18n="infra.dns_check_publish_note">If the domain zone is in namedot, the check also shows what will change there and a button to publish the records.</p>
         {{end}}
     </div>
 </div>
