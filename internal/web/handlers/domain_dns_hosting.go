@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/foxzi/sendry/internal/web/dnsprovider"
+	"github.com/foxzi/sendry/internal/web/dnssync"
 )
 
 // dnsHosting tells who serves a domain's DNS: the public NS records and
@@ -22,10 +23,26 @@ type dnsHosting struct {
 }
 
 type providerZone struct {
+	Key      string // provider Name(), sent back by the publish form
 	Provider string // display name, e.g. Cloudflare
 	Zone     string // zone name when found
 	Found    bool
 	Error    string
+
+	// Plan is what publishing would do with each recommended record;
+	// filled only when the zone is found at a provider the panel
+	// publishes to (dnsPublishProviders).
+	Plan []dnssync.SyncResult
+}
+
+// HasChanges tells whether publishing would create or replace a record.
+func (p providerZone) HasChanges() bool {
+	for _, r := range p.Plan {
+		if r.Action == dnssync.ActionCreate || r.Action == dnssync.ActionUpdate {
+			return true
+		}
+	}
+	return false
 }
 
 // nsLookupFunc matches net.Resolver.LookupNS; tests replace it.
@@ -36,9 +53,15 @@ var providerDisplayNames = map[string]string{
 	"namedot":    "namedot",
 }
 
-// checkDNSHosting looks up NS records and asks every provider for the zone,
+// dnsPublishProviders are the providers the panel may publish records to;
+// with the others it only reports whether the zone is in the account.
+var dnsPublishProviders = map[string]bool{"namedot": true}
+
+// checkDNSHosting looks up NS records and asks every provider for the zone
+// and, where found and publishing is allowed, what publishing the
+// recommended records would change;
 // all in parallel. Failures are reported in the result, never returned.
-func checkDNSHosting(ctx context.Context, domain string, providers []dnsprovider.Provider, lookupNS nsLookupFunc) *dnsHosting {
+func checkDNSHosting(ctx context.Context, domain string, providers []dnsprovider.Provider, recommended []dnssync.PlanEntry, lookupNS nsLookupFunc) *dnsHosting {
 	res := &dnsHosting{Providers: make([]providerZone, len(providers))}
 	domain = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(domain)), ".")
 
@@ -53,7 +76,7 @@ func checkDNSHosting(ctx context.Context, domain string, providers []dnsprovider
 		wg.Add(1)
 		go func(i int, p dnsprovider.Provider) {
 			defer wg.Done()
-			pz := providerZone{Provider: providerDisplayNames[p.Name()]}
+			pz := providerZone{Key: p.Name(), Provider: providerDisplayNames[p.Name()]}
 			if pz.Provider == "" {
 				pz.Provider = p.Name()
 			}
@@ -64,6 +87,9 @@ func checkDNSHosting(ctx context.Context, domain string, providers []dnsprovider
 				pz.Error = err.Error()
 			case zone != nil:
 				pz.Found, pz.Zone = true, zone.Name
+				if dnsPublishProviders[p.Name()] {
+					pz.Plan, _ = (&dnssync.Syncer{Provider: p, Zone: zone}).Plan(ctx, recommended)
+				}
 			}
 			res.Providers[i] = pz
 		}(i, p)
@@ -97,4 +123,18 @@ func findNS(ctx context.Context, domain string, lookupNS nsLookupFunc) (zone str
 		return name, hosts, ""
 	}
 	return "", nil, "no NS records found"
+}
+
+// findDNSPublishProvider returns the configured provider with the given
+// Name() if the panel may publish records to it.
+func (h *Handlers) findDNSPublishProvider(key string) dnsprovider.Provider {
+	if !dnsPublishProviders[key] {
+		return nil
+	}
+	for _, p := range h.dnsProviders {
+		if p.Name() == key {
+			return p
+		}
+	}
+	return nil
 }

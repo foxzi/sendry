@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -661,6 +662,13 @@ func (h *Handlers) CentralDomainsView(w http.ResponseWriter, r *http.Request) {
 		"SPFValue":    spfValue,
 		"SPFInclude":  spfInclude,
 	}
+	if q := r.URL.Query(); q.Has("published") {
+		data["Published"] = map[string]string{
+			"Provider": q.Get("published"),
+			"Count":    q.Get("count"),
+			"Error":    q.Get("publish_error"),
+		}
+	}
 
 	// Run DNS check if requested
 	if r.URL.Query().Get("check") == "true" {
@@ -673,12 +681,12 @@ func (h *Handlers) CentralDomainsView(w http.ResponseWriter, r *http.Request) {
 		// the records are public, so any resolver sees the same answer.
 		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 		defer cancel()
+		recommended := dnssync.BuildRecommended(domain, spfInclude)
 		hostingDone := make(chan *dnsHosting, 1)
 		go func() {
-			hostingDone <- checkDNSHosting(ctx, domain.Domain, h.dnsProviders, net.DefaultResolver.LookupNS)
+			hostingDone <- checkDNSHosting(ctx, domain.Domain, h.dnsProviders, recommended, net.DefaultResolver.LookupNS)
 		}()
 
-		recommended := dnssync.BuildRecommended(domain, spfInclude)
 		if result, err := checkDomainRecords(ctx, domain.Domain, selector, recommended, net.DefaultResolver.LookupTXT); err != nil {
 			data["DNSCheckError"] = err.Error()
 		} else {
@@ -696,6 +704,72 @@ func (h *Handlers) CentralDomainsView(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.render(w, "central_domain_view", data)
+}
+
+// CentralDomainsPublishDNS creates or replaces the domain's recommended
+// SPF, DKIM and DMARC records in the zone at the chosen DNS provider
+// (namedot only, see dnsPublishProviders).
+func (h *Handlers) CentralDomainsPublishDNS(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	domain, err := h.domains.GetByID(id)
+	if err != nil || domain == nil {
+		h.error(w, r, http.StatusNotFound, "Domain not found")
+		return
+	}
+	if domain.DKIMKeyID != "" {
+		domain.DKIMKey, _ = h.dkim.GetByID(domain.DKIMKeyID)
+	}
+	provider := h.findDNSPublishProvider(r.FormValue("provider"))
+	if provider == nil {
+		h.error(w, r, http.StatusBadRequest, "Publishing to this DNS provider is not available")
+		return
+	}
+	display := providerDisplayNames[provider.Name()]
+	if display == "" {
+		display = provider.Name()
+	}
+
+	back := func(count int, errMsg string) {
+		q := url.Values{"check": {"true"}, "published": {display}, "count": {strconv.Itoa(count)}}
+		if errMsg != "" {
+			if len(errMsg) > 300 {
+				errMsg = errMsg[:300] + "..."
+			}
+			q.Set("publish_error", errMsg)
+		}
+		http.Redirect(w, r, "/domains/"+id+"?"+q.Encode()+"#dns-check", http.StatusSeeOther)
+	}
+
+	globalVars, err := h.settings.GetGlobalVariablesMap()
+	if err != nil {
+		h.logger.Error("failed to load global variables", "error", err)
+	}
+	recommended := dnssync.BuildRecommended(domain, strings.TrimSpace(globalVars["spf_include"]))
+
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	zone, err := provider.ResolveZone(ctx, domain.Domain)
+	if err != nil {
+		back(0, err.Error())
+		return
+	}
+	results, _ := (&dnssync.Syncer{Provider: provider, Zone: zone}).Apply(ctx, recommended)
+
+	applied, firstErr := 0, ""
+	for _, res := range results {
+		switch {
+		case res.Error != "":
+			h.logger.Error("dns publish failed", "domain", domain.Domain, "provider", provider.Name(), "record", res.Name, "error", res.Error)
+			if firstErr == "" {
+				firstErr = fmt.Sprintf("%s: %s", res.Kind, res.Error)
+			}
+		case res.Applied:
+			applied++
+			h.logger.Info("dns record published", "domain", domain.Domain, "provider", provider.Name(),
+				"record", res.Name, "action", res.Action, "old", res.Current, "new", res.Expected)
+		}
+	}
+	back(applied, firstErr)
 }
 
 // CentralDomainsEdit shows domain edit form

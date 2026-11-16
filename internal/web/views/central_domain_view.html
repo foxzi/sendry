@@ -205,7 +205,7 @@
     </div>
 </div>
 
-<div class="card">
+<div class="card" id="dns-check">
     <div class="card-header">
         <h3 data-i18n="infra.dns_check_2">DNS Check</h3>
         <div style="display:flex; gap: 0.5rem; align-items:center;">
@@ -214,6 +214,13 @@
         </div>
     </div>
     <div class="card-body">
+        {{with .Published}}
+            {{if .Error}}
+            <div class="alert alert-danger"><span data-i18n="infra.dns_publish_failed">Publishing to</span> {{.Provider}}: <span data-i18n="infra.dns_publish_done_count">records changed</span> {{.Count}}. <span data-i18n="common.error">Error</span>: {{.Error}}</div>
+            {{else}}
+            <div class="alert alert-success"><span data-i18n="infra.dns_published_to">Published to</span> {{.Provider}}: <span data-i18n="infra.dns_publish_done_count">records changed</span> {{.Count}}. <span data-i18n="infra.dns_publish_cache_note">Resolvers may show the old values for a while (TTL).</span></div>
+            {{end}}
+        {{end}}
         {{if .DNSCheckRan}}
             {{with .DNSHosting}}
             <div class="table-scroll" style="margin-bottom: 1rem;">
@@ -235,6 +242,39 @@
                     <td>
                         {{if .Error}}<span class="badge badge-failed" data-i18n="common.error">Error</span> <span class="text-muted" style="word-break: break-all;">{{.Error}}</span>
                         {{else if .Found}}<span class="badge badge-success" data-i18n="infra.zone_in_account">Zone in account</span> <code>{{.Zone}}</code>
+                        {{if .Plan}}
+                        <table class="table" style="margin-top: 0.75rem;">
+                            <thead>
+                                <tr>
+                                    <th data-i18n="infra.dns_record">Record</th>
+                                    <th data-i18n="infra.dns_now">Now</th>
+                                    <th data-i18n="infra.dns_will_be">Will be</th>
+                                    <th data-i18n="infra.dns_action">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {{range .Plan}}
+                                <tr>
+                                    <td><strong>{{.Kind}}</strong>{{if .Name}}<div class="text-muted"><code>{{.Name}}</code></div>{{end}}</td>
+                                    <td><code style="word-break: break-all; font-size: 0.85em;">{{if .Current}}{{.Current}}{{else}}-{{end}}</code></td>
+                                    <td><code style="word-break: break-all; font-size: 0.85em;">{{if .Expected}}{{.Expected}}{{else}}-{{end}}</code></td>
+                                    <td>
+                                        {{if eq .Action "create"}}<span class="badge badge-warning" data-i18n="infra.dns_action_create">Create</span>
+                                        {{else if eq .Action "update"}}<span class="badge badge-failed" data-i18n="infra.dns_action_update">Replace</span>
+                                        {{else if eq .Action "noop"}}<span class="badge badge-success" data-i18n="infra.dns_action_noop">Up to date</span>
+                                        {{else}}<span class="badge badge-draft" data-i18n="infra.dns_action_skip">Skipped</span> <div class="text-muted">{{.Reason}}</div>{{end}}
+                                    </td>
+                                </tr>
+                                {{end}}
+                            </tbody>
+                        </table>
+                        {{if .HasChanges}}
+                        <form method="POST" action="/domains/{{$.Domain.ID}}/dns-publish" style="display:inline;">
+                            <input type="hidden" name="provider" value="{{.Key}}">
+                            <button type="submit" class="btn btn-sm btn-primary" onclick="return confirm(I18n.t('infra.dns_publish_confirm'))"><span data-i18n="infra.dns_publish_to">Publish to</span> {{.Provider}}</button>
+                        </form>
+                        {{end}}
+                        {{end}}
                         {{else}}<span class="badge badge-draft" data-i18n="infra.zone_not_in_account">Not in account</span>{{end}}
                     </td>
                 </tr>

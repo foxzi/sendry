@@ -50,7 +50,7 @@ func TestCheckDNSHosting(t *testing.T) {
 	}
 	lookup := fakeNS(map[string][]string{"example.com": {"Lisa.NS.Cloudflare.com.", "bob.ns.cloudflare.com."}})
 
-	got := checkDNSHosting(context.Background(), "Mail.Example.com.", providers, lookup)
+	got := checkDNSHosting(context.Background(), "Mail.Example.com.", providers, nil, lookup)
 
 	if got.NSError != "" || got.NSZone != "example.com" {
 		t.Fatalf("NS zone = %q, err = %q", got.NSZone, got.NSError)
@@ -59,9 +59,9 @@ func TestCheckDNSHosting(t *testing.T) {
 		t.Errorf("NS = %v, want %v", got.NS, want)
 	}
 	want := []providerZone{
-		{Provider: "Cloudflare", Zone: "example.com", Found: true},
-		{Provider: "namedot"},
-		{Provider: "other", Error: "403 forbidden"},
+		{Key: "cloudflare", Provider: "Cloudflare", Zone: "example.com", Found: true},
+		{Key: "namedot", Provider: "namedot"},
+		{Key: "other", Provider: "other", Error: "403 forbidden"},
 	}
 	if !reflect.DeepEqual(got.Providers, want) {
 		t.Errorf("providers = %+v, want %+v", got.Providers, want)
