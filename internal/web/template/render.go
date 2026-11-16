@@ -115,11 +115,25 @@ func firstToken(s string) string {
 	return m
 }
 
+var wrapperDarkModeRe = regexp.MustCompile(`(?s)@media\s*\(prefers-color-scheme:\s*dark\)\s*\{.*?\}\s*\}`)
+
+func StripDarkModeCSS(html string) string {
+	if !strings.Contains(html, "prefers-color-scheme") {
+		return html
+	}
+	return wrapperDarkModeRe.ReplaceAllStringFunc(html, func(m string) string {
+		if strings.Contains(m, ".force-page-bg") {
+			return ""
+		}
+		return m
+	})
+}
+
 func RenderHTML(name, src string, data map[string]any) (string, error) {
 	if src == "" {
 		return "", nil
 	}
-	protected, markers := protectConditionalComments(src)
+	protected, markers := protectConditionalComments(StripDarkModeCSS(src))
 	t, err := htmltpl.New(name).Option("missingkey=zero").Parse(Preprocess(protected))
 	if err != nil {
 		return "", fmt.Errorf("parse %s: %w", name, err)

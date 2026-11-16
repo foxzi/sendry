@@ -482,7 +482,7 @@ func (h *Handlers) TemplatePreview(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	html = stripDarkModeCSS(html)
+	html = emailtpl.StripDarkModeCSS(html)
 	html = emailtpl.InsertPreheader(html, preheader)
 
 	data := map[string]any{
@@ -496,17 +496,6 @@ func (h *Handlers) TemplatePreview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.render(w, "template_preview", data)
-}
-
-var darkModeBlockRe = regexp.MustCompile(`(?s)@media\s*\(prefers-color-scheme:\s*dark\)\s*\{.*?\}\s*\}`)
-
-func stripDarkModeCSS(html string) string {
-	return darkModeBlockRe.ReplaceAllStringFunc(html, func(m string) string {
-		if strings.Contains(m, ".force-page-bg") {
-			return ""
-		}
-		return m
-	})
 }
 
 // TemplateExportData represents template data for export/import
@@ -742,7 +731,7 @@ func (h *Handlers) TemplateTest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	subject := renderTemplateVars(t.Subject, globalVars)
-	html := renderTemplateVars(t.HTML, globalVars)
+	html := emailtpl.StripDarkModeCSS(renderTemplateVars(t.HTML, globalVars))
 	html = emailtpl.InsertPreheader(html, renderTemplateVars(t.Preheader, globalVars))
 	text := renderTemplateVars(t.Text, globalVars)
 	html = makeAbsoluteURLs(html, h.cfg.Server.PublicURL, h.cfg.Server.PublicUploadURL)

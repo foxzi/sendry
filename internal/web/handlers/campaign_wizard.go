@@ -400,7 +400,7 @@ func (h *Handlers) renderWizardHTML(t *models.Template, campaignVars map[string]
 		h.logger.Warn("wizard preview render failed", "template_id", t.ID, "error", err)
 		html = t.HTML
 	}
-	return stripDarkModeCSS(html)
+	return emailtpl.StripDarkModeCSS(html)
 }
 
 // writeHTML serves template HTML. It is user content: sandboxed even when

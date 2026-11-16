@@ -186,3 +186,78 @@ func TestInsertPreheader(t *testing.T) {
 		})
 	}
 }
+
+func TestStripDarkModeCSS(t *testing.T) {
+	wrapperBlock := `@media (prefers-color-scheme: dark) {
+      body, .force-page-bg {
+        background-color: #1C1C1E !important;
+      }
+      .email-container {
+        background-color: #2C2C2E !important;
+      }
+    }`
+
+	tests := []struct {
+		name        string
+		input       string
+		wantContain []string
+		wantMissing []string
+	}{
+		{
+			name:        "removes wrapper dark-mode block",
+			input:       "<style>.a{color:red;}" + wrapperBlock + ".b{color:blue;}</style>",
+			wantContain: []string{".a{color:red;}", ".b{color:blue;}"},
+			wantMissing: []string{"force-page-bg", "prefers-color-scheme"},
+		},
+		{
+			name: "preserves other dark-mode blocks without wrapper marker",
+			input: `<style>@media (prefers-color-scheme: dark) {
+      .custom-block { color: #fff; }
+    }</style>`,
+			wantContain: []string{"prefers-color-scheme", ".custom-block"},
+		},
+		{
+			name:        "no dark-mode block leaves html untouched",
+			input:       "<style>.a{color:red;}</style>",
+			wantContain: []string{"<style>.a{color:red;}</style>"},
+		},
+		{
+			name:        "empty input",
+			input:       "",
+			wantContain: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := StripDarkModeCSS(tt.input)
+			for _, s := range tt.wantContain {
+				if !strings.Contains(got, s) {
+					t.Errorf("expected result to contain %q, got %q", s, got)
+				}
+			}
+			for _, s := range tt.wantMissing {
+				if strings.Contains(got, s) {
+					t.Errorf("expected result to NOT contain %q, got %q", s, got)
+				}
+			}
+		})
+	}
+}
+
+func TestRenderHTML_StripsWrapperDarkModeCSS(t *testing.T) {
+	src := `<style>.a{color:#000000;}@media (prefers-color-scheme: dark) {
+      body, .force-page-bg { background-color: #1C1C1E !important; }
+      .email-container [style*="color:#000000"] { color: #E4E4E4 !important; }
+    }</style><p style="color:#000000;">{{Name}}</p>`
+	out, err := RenderHTML("t", src, map[string]any{"Name": "Иван"})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if strings.Contains(out, "prefers-color-scheme") || strings.Contains(out, "#E4E4E4") {
+		t.Errorf("wrapper dark-mode CSS left in output: %s", out)
+	}
+	if !strings.Contains(out, ".a{color:#000000;}") || !strings.Contains(out, "Иван") {
+		t.Errorf("unexpected render: %s", out)
+	}
+}
