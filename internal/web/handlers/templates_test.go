@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/foxzi/sendry/internal/web/models"
 	emailtpl "github.com/foxzi/sendry/internal/web/template"
 )
 
@@ -170,5 +171,41 @@ func TestBuildSampleDataRendersConditionalRange(t *testing.T) {
 	}
 	if !strings.Contains(out, "<b>Sample Title</b><i>Sample Items</i>") {
 		t.Errorf("unexpected render: %s", out)
+	}
+}
+
+func TestRenderTestEmail(t *testing.T) {
+	tpl := &models.Template{
+		Subject:   "Заказ №{{OrderNumber}} & {{.Status}}",
+		Preheader: "{{.Status}}",
+		HTML:      `<style>@media (prefers-color-scheme: dark) { body, .force-page-bg { background-color: #1C1C1E !important; } }</style>{{if .ShowPayment}}<b>{{.PaymentMethod}}</b>{{end}}{{range $i, $s := .Items}}<i>{{$s.Name}}</i>{{end}}<p>{{OrderNumber}}</p>`,
+		Text:      "{{if .ShowPayment}}{{.PaymentMethod}}{{end}}",
+	}
+	data := map[string]any{
+		"OrderNumber":   "12345",
+		"Status":        "new",
+		"ShowPayment":   true,
+		"PaymentMethod": "card",
+		"Items":         []any{map[string]any{"Name": "seed"}},
+	}
+	subject, html, text, err := renderTestEmail(tpl, data)
+	if err != nil {
+		t.Fatalf("renderTestEmail: %v", err)
+	}
+	if subject != "Заказ №12345 & new" {
+		t.Errorf("subject = %q", subject)
+	}
+	if text != "card" {
+		t.Errorf("text = %q", text)
+	}
+	for _, want := range []string{"<b>card</b>", "<i>seed</i>", "<p>12345</p>", "new"} {
+		if !strings.Contains(html, want) {
+			t.Errorf("html missing %q: %s", want, html)
+		}
+	}
+	for _, bad := range []string{"{{", "prefers-color-scheme"} {
+		if strings.Contains(html, bad) {
+			t.Errorf("html contains %q: %s", bad, html)
+		}
 	}
 }

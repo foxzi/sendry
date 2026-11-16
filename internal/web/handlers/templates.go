@@ -720,20 +720,20 @@ func (h *Handlers) TemplateTest(w http.ResponseWriter, r *http.Request) {
 	globalVars, err := h.settings.GetGlobalVariablesMap()
 	if err != nil {
 		h.logger.Error("failed to get global variables", "error", err)
-		globalVars = make(map[string]string)
+	}
+	data := make(map[string]any, len(globalVars)+len(sampleData))
+	for k, v := range globalVars {
+		data[k] = v
 	}
 	for k, v := range sampleData {
-		if s, ok := v.(string); ok {
-			globalVars[k] = s
-		} else {
-			globalVars[k] = fmt.Sprintf("%v", v)
-		}
+		data[k] = v
 	}
 
-	subject := renderTemplateVars(t.Subject, globalVars)
-	html := emailtpl.StripDarkModeCSS(renderTemplateVars(t.HTML, globalVars))
-	html = emailtpl.InsertPreheader(html, renderTemplateVars(t.Preheader, globalVars))
-	text := renderTemplateVars(t.Text, globalVars)
+	subject, html, text, err := renderTestEmail(t, data)
+	if err != nil {
+		h.error(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
 	html = makeAbsoluteURLs(html, h.cfg.Server.PublicURL, h.cfg.Server.PublicUploadURL)
 
 	req := &sendry.SendRequest{
@@ -778,22 +778,11 @@ func (h *Handlers) testSendViaSMTP(w http.ResponseWriter, r *http.Request, t *mo
 		return
 	}
 
-	subject, err := emailtpl.RenderHTML("subject", t.Subject, sampleData)
+	subject, html, _, err := renderTestEmail(t, sampleData)
 	if err != nil {
-		h.error(w, r, http.StatusBadRequest, "Render subject: "+err.Error())
+		h.error(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
-	html, err := emailtpl.RenderHTML("body", t.HTML, sampleData)
-	if err != nil {
-		h.error(w, r, http.StatusBadRequest, "Render HTML: "+err.Error())
-		return
-	}
-	preheader, err := emailtpl.RenderText("preheader", t.Preheader, sampleData)
-	if err != nil {
-		h.error(w, r, http.StatusBadRequest, "Render preheader: "+err.Error())
-		return
-	}
-	html = emailtpl.InsertPreheader(html, preheader)
 	html = makeAbsoluteURLs(html, h.cfg.Server.PublicURL, h.cfg.Server.PublicUploadURL)
 
 	err = smtpclient.Send(smtpclient.Server{
@@ -822,27 +811,21 @@ func (h *Handlers) testSendViaSMTP(w http.ResponseWriter, r *http.Request, t *mo
 	http.Redirect(w, r, "/templates/"+t.ID+"?test_sent=1", http.StatusSeeOther)
 }
 
-// renderTemplateVars replaces {{var}} with values from vars map
-func renderTemplateVars(template string, vars map[string]string) string {
-	result := template
-	for key, value := range vars {
-		result = replaceVar(result, key, value)
+func renderTestEmail(t *models.Template, data map[string]any) (subject, html, text string, err error) {
+	if subject, err = emailtpl.RenderText("subject", t.Subject, data); err != nil {
+		return "", "", "", fmt.Errorf("render subject: %w", err)
 	}
-	return result
-}
-
-// replaceVar replaces {{key}} with value in template
-func replaceVar(template, key, value string) string {
-	placeholder := "{{" + key + "}}"
-	for i := 0; i < len(template); {
-		idx := indexString(template[i:], placeholder)
-		if idx == -1 {
-			break
-		}
-		template = template[:i+idx] + value + template[i+idx+len(placeholder):]
-		i = i + idx + len(value)
+	if html, err = emailtpl.RenderHTML("body", t.HTML, data); err != nil {
+		return "", "", "", fmt.Errorf("render HTML: %w", err)
 	}
-	return template
+	preheader, err := emailtpl.RenderText("preheader", t.Preheader, data)
+	if err != nil {
+		return "", "", "", fmt.Errorf("render preheader: %w", err)
+	}
+	if text, err = emailtpl.RenderText("text", t.Text, data); err != nil {
+		return "", "", "", fmt.Errorf("render text: %w", err)
+	}
+	return subject, emailtpl.InsertPreheader(html, preheader), text, nil
 }
 
 // indexString returns the index of substr in s, or -1 if not found
