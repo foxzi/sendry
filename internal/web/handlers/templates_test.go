@@ -1,8 +1,11 @@
 package handlers
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
+
+	emailtpl "github.com/foxzi/sendry/internal/web/template"
 )
 
 func TestConvertToGoTemplate(t *testing.T) {
@@ -148,5 +151,82 @@ func TestStripDarkModeCSS(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestBuildSampleDataRanges(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "plain range",
+			input:    `{{range .Items}}{{.Name}}{{end}}`,
+			expected: `{"Items":[{"Name":"Sample Name"}]}`,
+		},
+		{
+			name:     "range with element var",
+			input:    `{{range $p := .Products}}{{$p.Title}}{{end}}`,
+			expected: `{"Products":[{"Title":"Sample Title"}]}`,
+		},
+		{
+			name:     "range with index and element vars",
+			input:    `{{range $i, $s := .Sections}}{{if $i}}-{{end}}{{$s.Title}}{{end}}`,
+			expected: `{"Sections":[{"Title":"Sample Title"}]}`,
+		},
+		{
+			name:     "nested ranges over element fields",
+			input:    `{{range $i, $s := .InfoSections}}{{$s.Title}}{{if $s.Items}}{{range $j, $item := $s.Items}}{{$item}}{{end}}{{end}}{{range $s.Notes}}{{.Text}}{{end}}{{end}}`,
+			expected: `{"InfoSections":[{"Items":["Sample Items"],"Notes":[{"Text":"Sample Text"}],"Title":"Sample Title"}]}`,
+		},
+		{
+			name:     "outer var used inside nested range belongs to the outer element",
+			input:    `{{range $i, $s := .Sections}}{{range $j, $item := $s.Items}}{{if $s.Ordered}}{{$j}}{{end}}{{$item}}{{end}}{{end}}`,
+			expected: `{"Sections":[{"Items":["Sample Items"],"Ordered":"Sample Ordered"}]}`,
+		},
+		{
+			name:     "var with a longer name sharing a prefix is not rewritten",
+			input:    `{{range $s := .Sections}}{{$s.Title}}{{range $sx := $s.Rows}}{{$sx.Cell}}{{end}}{{end}}`,
+			expected: `{"Sections":[{"Rows":[{"Cell":"Sample Cell"}],"Title":"Sample Title"}]}`,
+		},
+		{
+			name:     "if before range keeps the list",
+			input:    `{{if .InfoSections}}{{range $i, $s := .InfoSections}}{{$s.Title}}{{end}}{{end}}`,
+			expected: `{"InfoSections":[{"Title":"Sample Title"}]}`,
+		},
+		{
+			name:     "field access on a list does not replace it",
+			input:    `{{range .Items}}{{.Name}}{{end}}{{.Items.Count}}`,
+			expected: `{"Items":[{"Name":"Sample Name"}]}`,
+		},
+		{
+			name:     "scalar if stays scalar",
+			input:    `{{if .ShowPayment}}{{.PaymentMethod}}{{end}}`,
+			expected: `{"PaymentMethod":"Sample PaymentMethod","ShowPayment":"Sample ShowPayment"}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b, err := json.Marshal(buildSampleData(tt.input))
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			if string(b) != tt.expected {
+				t.Errorf("buildSampleData() = %s, want %s", b, tt.expected)
+			}
+		})
+	}
+}
+
+func TestBuildSampleDataRendersConditionalRange(t *testing.T) {
+	src := `{{if .InfoSections}}{{range $i, $s := .InfoSections}}<b>{{$s.Title}}</b>{{range $j, $item := $s.Items}}<i>{{$item}}</i>{{end}}{{end}}{{end}}`
+	out, err := emailtpl.RenderHTML("t", src, buildSampleData(src))
+	if err != nil {
+		t.Fatalf("render with sample data: %v", err)
+	}
+	if !strings.Contains(out, "<b>Sample Title</b><i>Sample Items</i>") {
+		t.Errorf("unexpected render: %s", out)
 	}
 }

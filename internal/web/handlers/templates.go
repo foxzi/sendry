@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -968,7 +969,10 @@ func buildSampleData(body string) map[string]any {
 	return out
 }
 
-const identPathPat = `[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*`
+const (
+	identPat     = `[A-Za-z_][A-Za-z0-9_]*`
+	identPathPat = identPat + `(?:\.` + identPat + `)*`
+)
 
 var (
 	templateIfRE  = regexp.MustCompile(`\{\{\s*if\s+\.?(` + identPathPat + `)\s*\}\}`)
@@ -988,6 +992,9 @@ func setNestedKey(out map[string]any, path string, value any) {
 			if _, exists := cur[p]; !exists {
 				cur[p] = value
 			}
+			return
+		}
+		if _, isList := cur[p].([]any); isList {
 			return
 		}
 		next, ok := cur[p].(map[string]any)
@@ -1041,7 +1048,11 @@ func stripTopLevelRanges(body string, out map[string]any) string {
 			i = end
 			continue
 		}
-		listName := rmatch[1]
+		elemVar := rmatch[2]
+		if elemVar == "" {
+			elemVar = rmatch[1]
+		}
+		listName := rmatch[3]
 		bodyStart := end
 		bodyEnd, blockEnd := findMatchingEnd(body, bodyStart)
 		if bodyEnd < 0 {
@@ -1051,14 +1062,80 @@ func stripTopLevelRanges(body string, out map[string]any) string {
 		}
 		inner := body[bodyStart:bodyEnd]
 		element := map[string]any{}
-		collectIntoMap(inner, element)
-		setNestedKey(out, listName, []any{element})
+		if elemVar != "" {
+			collectIntoMap(rewriteRangeVar(inner, elemVar), element)
+			collectVarFields(inner, elemVar, element)
+		} else {
+			collectIntoMap(inner, element)
+		}
+		if len(element) == 0 && elemVar != "" && usesBareVar(inner, elemVar) {
+			setNestedKey(out, listName, []any{sampleValueFor(lastSegment(listName))})
+		} else {
+			setNestedKey(out, listName, []any{element})
+		}
 		i = blockEnd
 	}
 	return sb.String()
 }
 
-var topRangeStart = regexp.MustCompile(`^\{\{\s*range\s+\.?(` + identPathPat + `)\s*\}\}$`)
+var topRangeStart = regexp.MustCompile(`^\{\{\s*range\s+(?:\$(` + identPat + `)\s*(?:,\s*\$(` + identPat + `)\s*)?:=\s*)?\.?(` + identPathPat + `)\s*\}\}$`)
+
+var (
+	templateActionRE  = regexp.MustCompile(`\{\{[\s\S]*?\}\}`)
+	templateKeywordRE = regexp.MustCompile(`^\{\{-?\s*([a-z]+)\b`)
+	templateVarDotRE  = regexp.MustCompile(`\$(` + identPat + `)\.`)
+	templateVarRefRE  = regexp.MustCompile(`\$(` + identPat + `)\.(` + identPathPat + `)`)
+	templateBareVarRE = regexp.MustCompile(`\{\{\s*\$(` + identPat + `)\s*\}\}`)
+)
+
+func rewriteRangeVar(body, name string) string {
+	var rebinds []bool
+	return templateActionRE.ReplaceAllStringFunc(body, func(action string) string {
+		out := action
+		if !slices.Contains(rebinds, true) {
+			out = templateVarDotRE.ReplaceAllStringFunc(action, func(ref string) string {
+				if ref[1:len(ref)-1] == name {
+					return "."
+				}
+				return ref
+			})
+		}
+		var kw string
+		if m := templateKeywordRE.FindStringSubmatch(action); m != nil {
+			kw = m[1]
+		}
+		switch kw {
+		case "range", "with":
+			rebinds = append(rebinds, true)
+		case "if", "block", "define":
+			rebinds = append(rebinds, false)
+		case "end":
+			if len(rebinds) > 0 {
+				rebinds = rebinds[:len(rebinds)-1]
+			}
+		}
+		return out
+	})
+}
+
+func collectVarFields(body, name string, out map[string]any) {
+	for _, action := range templateActionRE.FindAllString(body, -1) {
+		for _, m := range templateVarRefRE.FindAllStringSubmatch(action, -1) {
+			if m[1] == name {
+				setNestedKey(out, m[2], sampleValueFor(lastSegment(m[2])))
+			}
+		}
+	}
+}
+
+func usesBareVar(body, name string) bool {
+	for _, m := range templateBareVarRE.FindAllStringSubmatch(body, -1) {
+		if m[1] == name {
+			return true
+		}
+	}
+	return false
+}
 
 var (
 	blockOpenRE  = regexp.MustCompile(`\{\{\s*(range|if|with|block|define)\b[^}]*\}\}`)
