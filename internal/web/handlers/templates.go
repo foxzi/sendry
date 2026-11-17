@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -481,7 +482,7 @@ func (h *Handlers) TemplatePreview(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	html = stripDarkModeCSS(html)
+	html = emailtpl.StripDarkModeCSS(html)
 	html = emailtpl.InsertPreheader(html, preheader)
 
 	data := map[string]any{
@@ -495,17 +496,6 @@ func (h *Handlers) TemplatePreview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.render(w, "template_preview", data)
-}
-
-var darkModeBlockRe = regexp.MustCompile(`(?s)@media\s*\(prefers-color-scheme:\s*dark\)\s*\{.*?\}\s*\}`)
-
-func stripDarkModeCSS(html string) string {
-	return darkModeBlockRe.ReplaceAllStringFunc(html, func(m string) string {
-		if strings.Contains(m, ".force-page-bg") {
-			return ""
-		}
-		return m
-	})
 }
 
 // TemplateExportData represents template data for export/import
@@ -730,20 +720,20 @@ func (h *Handlers) TemplateTest(w http.ResponseWriter, r *http.Request) {
 	globalVars, err := h.settings.GetGlobalVariablesMap()
 	if err != nil {
 		h.logger.Error("failed to get global variables", "error", err)
-		globalVars = make(map[string]string)
+	}
+	data := make(map[string]any, len(globalVars)+len(sampleData))
+	for k, v := range globalVars {
+		data[k] = v
 	}
 	for k, v := range sampleData {
-		if s, ok := v.(string); ok {
-			globalVars[k] = s
-		} else {
-			globalVars[k] = fmt.Sprintf("%v", v)
-		}
+		data[k] = v
 	}
 
-	subject := renderTemplateVars(t.Subject, globalVars)
-	html := renderTemplateVars(t.HTML, globalVars)
-	html = emailtpl.InsertPreheader(html, renderTemplateVars(t.Preheader, globalVars))
-	text := renderTemplateVars(t.Text, globalVars)
+	subject, html, text, err := renderTestEmail(t, data)
+	if err != nil {
+		h.error(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
 	html = makeAbsoluteURLs(html, h.cfg.Server.PublicURL, h.cfg.Server.PublicUploadURL)
 
 	req := &sendry.SendRequest{
@@ -788,22 +778,11 @@ func (h *Handlers) testSendViaSMTP(w http.ResponseWriter, r *http.Request, t *mo
 		return
 	}
 
-	subject, err := emailtpl.RenderHTML("subject", t.Subject, sampleData)
+	subject, html, _, err := renderTestEmail(t, sampleData)
 	if err != nil {
-		h.error(w, r, http.StatusBadRequest, "Render subject: "+err.Error())
+		h.error(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
-	html, err := emailtpl.RenderHTML("body", t.HTML, sampleData)
-	if err != nil {
-		h.error(w, r, http.StatusBadRequest, "Render HTML: "+err.Error())
-		return
-	}
-	preheader, err := emailtpl.RenderText("preheader", t.Preheader, sampleData)
-	if err != nil {
-		h.error(w, r, http.StatusBadRequest, "Render preheader: "+err.Error())
-		return
-	}
-	html = emailtpl.InsertPreheader(html, preheader)
 	html = makeAbsoluteURLs(html, h.cfg.Server.PublicURL, h.cfg.Server.PublicUploadURL)
 
 	err = smtpclient.Send(smtpclient.Server{
@@ -832,27 +811,21 @@ func (h *Handlers) testSendViaSMTP(w http.ResponseWriter, r *http.Request, t *mo
 	http.Redirect(w, r, "/templates/"+t.ID+"?test_sent=1", http.StatusSeeOther)
 }
 
-// renderTemplateVars replaces {{var}} with values from vars map
-func renderTemplateVars(template string, vars map[string]string) string {
-	result := template
-	for key, value := range vars {
-		result = replaceVar(result, key, value)
+func renderTestEmail(t *models.Template, data map[string]any) (subject, html, text string, err error) {
+	if subject, err = emailtpl.RenderText("subject", t.Subject, data); err != nil {
+		return "", "", "", fmt.Errorf("render subject: %w", err)
 	}
-	return result
-}
-
-// replaceVar replaces {{key}} with value in template
-func replaceVar(template, key, value string) string {
-	placeholder := "{{" + key + "}}"
-	for i := 0; i < len(template); {
-		idx := indexString(template[i:], placeholder)
-		if idx == -1 {
-			break
-		}
-		template = template[:i+idx] + value + template[i+idx+len(placeholder):]
-		i = i + idx + len(value)
+	if html, err = emailtpl.RenderHTML("body", t.HTML, data); err != nil {
+		return "", "", "", fmt.Errorf("render HTML: %w", err)
 	}
-	return template
+	preheader, err := emailtpl.RenderText("preheader", t.Preheader, data)
+	if err != nil {
+		return "", "", "", fmt.Errorf("render preheader: %w", err)
+	}
+	if text, err = emailtpl.RenderText("text", t.Text, data); err != nil {
+		return "", "", "", fmt.Errorf("render text: %w", err)
+	}
+	return subject, emailtpl.InsertPreheader(html, preheader), text, nil
 }
 
 // indexString returns the index of substr in s, or -1 if not found
@@ -968,7 +941,10 @@ func buildSampleData(body string) map[string]any {
 	return out
 }
 
-const identPathPat = `[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*`
+const (
+	identPat     = `[A-Za-z_][A-Za-z0-9_]*`
+	identPathPat = identPat + `(?:\.` + identPat + `)*`
+)
 
 var (
 	templateIfRE  = regexp.MustCompile(`\{\{\s*if\s+\.?(` + identPathPat + `)\s*\}\}`)
@@ -988,6 +964,9 @@ func setNestedKey(out map[string]any, path string, value any) {
 			if _, exists := cur[p]; !exists {
 				cur[p] = value
 			}
+			return
+		}
+		if _, isList := cur[p].([]any); isList {
 			return
 		}
 		next, ok := cur[p].(map[string]any)
@@ -1041,7 +1020,11 @@ func stripTopLevelRanges(body string, out map[string]any) string {
 			i = end
 			continue
 		}
-		listName := rmatch[1]
+		elemVar := rmatch[2]
+		if elemVar == "" {
+			elemVar = rmatch[1]
+		}
+		listName := rmatch[3]
 		bodyStart := end
 		bodyEnd, blockEnd := findMatchingEnd(body, bodyStart)
 		if bodyEnd < 0 {
@@ -1051,14 +1034,80 @@ func stripTopLevelRanges(body string, out map[string]any) string {
 		}
 		inner := body[bodyStart:bodyEnd]
 		element := map[string]any{}
-		collectIntoMap(inner, element)
-		setNestedKey(out, listName, []any{element})
+		if elemVar != "" {
+			collectIntoMap(rewriteRangeVar(inner, elemVar), element)
+			collectVarFields(inner, elemVar, element)
+		} else {
+			collectIntoMap(inner, element)
+		}
+		if len(element) == 0 && elemVar != "" && usesBareVar(inner, elemVar) {
+			setNestedKey(out, listName, []any{sampleValueFor(lastSegment(listName))})
+		} else {
+			setNestedKey(out, listName, []any{element})
+		}
 		i = blockEnd
 	}
 	return sb.String()
 }
 
-var topRangeStart = regexp.MustCompile(`^\{\{\s*range\s+\.?(` + identPathPat + `)\s*\}\}$`)
+var topRangeStart = regexp.MustCompile(`^\{\{\s*range\s+(?:\$(` + identPat + `)\s*(?:,\s*\$(` + identPat + `)\s*)?:=\s*)?\.?(` + identPathPat + `)\s*\}\}$`)
+
+var (
+	templateActionRE  = regexp.MustCompile(`\{\{[\s\S]*?\}\}`)
+	templateKeywordRE = regexp.MustCompile(`^\{\{-?\s*([a-z]+)\b`)
+	templateVarDotRE  = regexp.MustCompile(`\$(` + identPat + `)\.`)
+	templateVarRefRE  = regexp.MustCompile(`\$(` + identPat + `)\.(` + identPathPat + `)`)
+	templateBareVarRE = regexp.MustCompile(`\{\{\s*\$(` + identPat + `)\s*\}\}`)
+)
+
+func rewriteRangeVar(body, name string) string {
+	var rebinds []bool
+	return templateActionRE.ReplaceAllStringFunc(body, func(action string) string {
+		out := action
+		if !slices.Contains(rebinds, true) {
+			out = templateVarDotRE.ReplaceAllStringFunc(action, func(ref string) string {
+				if ref[1:len(ref)-1] == name {
+					return "."
+				}
+				return ref
+			})
+		}
+		var kw string
+		if m := templateKeywordRE.FindStringSubmatch(action); m != nil {
+			kw = m[1]
+		}
+		switch kw {
+		case "range", "with":
+			rebinds = append(rebinds, true)
+		case "if", "block", "define":
+			rebinds = append(rebinds, false)
+		case "end":
+			if len(rebinds) > 0 {
+				rebinds = rebinds[:len(rebinds)-1]
+			}
+		}
+		return out
+	})
+}
+
+func collectVarFields(body, name string, out map[string]any) {
+	for _, action := range templateActionRE.FindAllString(body, -1) {
+		for _, m := range templateVarRefRE.FindAllStringSubmatch(action, -1) {
+			if m[1] == name {
+				setNestedKey(out, m[2], sampleValueFor(lastSegment(m[2])))
+			}
+		}
+	}
+}
+
+func usesBareVar(body, name string) bool {
+	for _, m := range templateBareVarRE.FindAllStringSubmatch(body, -1) {
+		if m[1] == name {
+			return true
+		}
+	}
+	return false
+}
 
 var (
 	blockOpenRE  = regexp.MustCompile(`\{\{\s*(range|if|with|block|define)\b[^}]*\}\}`)

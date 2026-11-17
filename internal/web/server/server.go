@@ -251,6 +251,7 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("DELETE /domains/{id}", h.CentralDomainsDelete)
 	protected.HandleFunc("POST /domains/{id}/deploy", h.CentralDomainsDeploy)
 	protected.HandleFunc("POST /domains/{id}/sync", h.CentralDomainsSync)
+	protected.HandleFunc("POST /domains/{id}/dns-publish", h.CentralDomainsPublishDNS)
 
 	// Queue overview (all servers)
 	protected.HandleFunc("GET /queue", h.QueueOverview)
@@ -320,7 +321,6 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("GET /servers/{server}/dkim/{id}", h.DKIMView)
 
 	// DNS/IP Checks (per server)
-	protected.HandleFunc("GET /servers/{server}/dns-check", h.DNSCheck)
 	protected.HandleFunc("GET /servers/{server}/ip-check", h.IPCheck)
 
 	// Tracking settings, stop list, click map

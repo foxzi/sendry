@@ -10,6 +10,16 @@ import (
 // Syncer reconciles recommended DNS records with a DNS provider.
 type Syncer struct {
 	Provider dnsprovider.Provider
+	// Zone, when set, is used for every entry instead of resolving the
+	// zone of each record name through the provider.
+	Zone *dnsprovider.Zone
+}
+
+func (s *Syncer) zone(ctx context.Context, name string) (*dnsprovider.Zone, error) {
+	if s.Zone != nil {
+		return s.Zone, nil
+	}
+	return s.Provider.ResolveZone(ctx, name)
 }
 
 // SyncResult describes what was planned or done for one record.
@@ -43,7 +53,7 @@ func (s *Syncer) Plan(ctx context.Context, entries []PlanEntry) ([]SyncResult, e
 			continue
 		}
 
-		zone, err := s.Provider.ResolveZone(ctx, e.Name)
+		zone, err := s.zone(ctx, e.Name)
 		if err != nil {
 			res.Action = ActionSkip
 			res.Reason = fmt.Sprintf("zone lookup failed: %v", err)
@@ -59,7 +69,7 @@ func (s *Syncer) Plan(ctx context.Context, entries []PlanEntry) ([]SyncResult, e
 			continue
 		}
 
-		current := pickMatchingTXT(records, e.Expected)
+		_, current := pickMatchingRecord(records, e)
 		res.Current = current
 		res.Action, res.Reason = DecideAction(e.Expected, current)
 		results = append(results, res)
@@ -85,7 +95,7 @@ func (s *Syncer) Apply(ctx context.Context, entries []PlanEntry) ([]SyncResult, 
 			continue
 		}
 
-		zone, err := s.Provider.ResolveZone(ctx, e.Name)
+		zone, err := s.zone(ctx, e.Name)
 		if err != nil {
 			res.Action = ActionSkip
 			res.Reason = fmt.Sprintf("zone lookup failed: %v", err)
@@ -103,7 +113,7 @@ func (s *Syncer) Apply(ctx context.Context, entries []PlanEntry) ([]SyncResult, 
 			continue
 		}
 
-		existingID, current := pickMatchingRecord(records, e.Expected)
+		existingID, current := pickMatchingRecord(records, e)
 		res.Current = current
 		res.Action, res.Reason = DecideAction(e.Expected, current)
 
@@ -136,22 +146,17 @@ func (s *Syncer) Apply(ctx context.Context, entries []PlanEntry) ([]SyncResult, 
 	return results, nil
 }
 
-// pickMatchingTXT returns the content of the most relevant existing TXT:
-// if any record matches expected normalized form, return it; otherwise
-// pick one starting with the same prefix as expected (e.g. v=spf1, v=DMARC1);
-// if none match by prefix, return the first record's content (or empty).
-func pickMatchingTXT(records []dnsprovider.Record, expected string) string {
-	_, content := pickMatchingRecord(records, expected)
-	return content
-}
-
-// pickMatchingRecord is like pickMatchingTXT but also returns the record ID
-// so it can be used for updates.
-func pickMatchingRecord(records []dnsprovider.Record, expected string) (string, string) {
+// pickMatchingRecord returns the existing record the entry should replace:
+// one equal to the expected value, else one of the same family (v=spf1,
+// v=DMARC1, v=DKIM1). DKIM and DMARC names hold nothing else, so any TXT
+// there counts (a DKIM record may omit v=DKIM1). The apex is shared with
+// unrelated TXT records (site verifications), so for SPF nothing else
+// matches and the record is created next to them. Empty when nothing fits.
+func pickMatchingRecord(records []dnsprovider.Record, e PlanEntry) (string, string) {
 	if len(records) == 0 {
 		return "", ""
 	}
-	normExpected := NormalizeTXT(expected)
+	normExpected := NormalizeTXT(e.Expected)
 	prefix := recordPrefix(normExpected)
 
 	// exact match
@@ -167,6 +172,9 @@ func pickMatchingRecord(records []dnsprovider.Record, expected string) (string, 
 				return r.ID, r.Content
 			}
 		}
+	}
+	if e.Kind == RecordSPF {
+		return "", ""
 	}
 	return records[0].ID, records[0].Content
 }

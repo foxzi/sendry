@@ -149,3 +149,46 @@ func TestSyncer_Apply_CreatesAndUpdates(t *testing.T) {
 		t.Errorf("applied = %d, want 2 (SPF create + DMARC update)", appliedCount)
 	}
 }
+
+func TestSyncer_Apply_KeepsUnrelatedApexTXT(t *testing.T) {
+	fp := &fakeProvider{
+		zoneID:   "zone1",
+		zoneName: "example.com",
+		records: map[string][]dnsprovider.Record{
+			"example.com|TXT": {
+				{ID: "r-verify", Type: "TXT", Name: "example.com", Content: "google-site-verification=x"},
+			},
+			// A DKIM record without the optional v=DKIM1 tag is still replaced.
+			"s1._domainkey.example.com|TXT": {
+				{ID: "r-dkim", Type: "TXT", Name: "s1._domainkey.example.com", Content: "k=rsa; p=OLD"},
+			},
+		},
+	}
+	d := &models.Domain{
+		Domain:       "example.com",
+		DKIMEnabled:  true,
+		DKIMSelector: "s1",
+		DKIMKey:      &models.DKIMKey{DNSRecord: "v=DKIM1; k=rsa; p=NEW"},
+	}
+
+	s := &Syncer{Provider: fp, Zone: &dnsprovider.Zone{ID: "zone1", Name: "example.com"}}
+	if _, err := s.Apply(context.Background(), BuildRecommended(d, "")); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, u := range fp.updateCalls {
+		if u.ID == "r-verify" {
+			t.Fatal("site verification record was overwritten with SPF")
+		}
+	}
+	if len(fp.updateCalls) != 1 || fp.updateCalls[0].ID != "r-dkim" {
+		t.Errorf("updates = %+v, want only the DKIM record", fp.updateCalls)
+	}
+	created := map[string]bool{}
+	for _, c := range fp.createCalls {
+		created[c.Name] = true
+	}
+	if !created["example.com"] || !created["_dmarc.example.com"] {
+		t.Errorf("creates = %+v, want SPF and DMARC", fp.createCalls)
+	}
+}

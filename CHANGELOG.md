@@ -8,12 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- sendry-web: "Publish to namedot" on the domain page: when the domain's zone is in the configured namedot account, the DNS check lists what publishing would do with SPF, DKIM and DMARC (create, replace, up to date, skipped) and the button applies it after a confirmation; the result is shown on the page and each change is logged with the old and new value
+- sendry-web: the domain DNS check shows the domain's name servers (NS, from the parent zone for a subdomain without its own) and whether its zone is in the Cloudflare and namedot accounts set in the new `dns_providers` section of `web.yaml` (or `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_API_EMAIL` + `CLOUDFLARE_API_KEY`, `NAMEDOT_API_URL`, `NAMEDOT_API_TOKEN`)
 - sendry-web: recipient list API with the existing API keys: `GET /api/v1/lists` (lists with live counts), `POST /api/v1/lists/{id}/recipients` (up to 1000 addresses in one transaction; invalid ones reported, duplicates collapsed, existing active ones updated only with `update_existing`, unsubscribed addresses never reactivated), `DELETE /api/v1/lists/{id}/recipients/{email}` (not for unsubscribed ones); every change goes to the audit log
 - sendry-web: template preheader (the preview line after the subject): supports variables, kept in versions, export/import and deployed templates, frozen with the subject at job start, inserted as a hidden block after `<body>`
 - sendry-web: Copy button on the campaign page creates a campaign with the same settings and variants, named with a "(copy)" suffix; launches, schedule and stats are not copied
 - sendry-web: "Add to panel" on a server domain page and list creates the panel domain from the server settings and records it as deployed there; without a matching DKIM key (same domain and selector) the domain is added with DKIM on and no key, and its card warns to link one
 
 ### Changed
+- sendry-web: the domain DNS check runs in the panel instead of on the first MTA in the list, so it works with all servers down; SPF, DKIM and DMARC records that differ from the recommended values (the ones `dns-sync` publishes) are warnings, not OK
 - sendry-web: domain deployment state is checked against the servers: each server domain list is fetched in one API call and cached for a minute; per server a domain is in sync, outdated, not on server, differing (with the differing settings), failed or not checked. Sync redeploys outdated, missing and differing domains. The domain list shows one icon with the number of servers, the domain card shows the state per server with "Check now"
 - sendry-web: server domain pages are titled with the server name, use the same layout as the panel domain card and show whether the panel manages the domain
 - sendry-web: static files are served with a content ETag and `Cache-Control: no-cache` (repeat loads get 304); the page is hidden until translation is applied, so non-English users no longer see an English flash; the UI language is remembered in a cookie
@@ -24,11 +27,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - sendry-web: the dashboard shows sent / total next to the progress bar of a launch; the activity charts draw straight lines between points instead of smoothed curves
 - sendry-web: block page and block form: the appearance inputs (radius, padding, background) line up in one row, the details table has left-aligned labels
 
+### Removed
+- MTA API: `GET /api/v1/dns/check/{domain}`; domain records are checked by the panel. IP checks (`/api/v1/ip/check/{ip}`, `/api/v1/ip/dnsbls`) stay
+- sendry-web: the per-server DNS check page (`/servers/{server}/dns-check`); the domain page has the same check
+
 ### Security
 - sendry-web: API keys have permissions: `send` (send email and check its status) and `lists` (recipient list API). A new key gets `send` by default, `lists` is off; a key cannot be saved without a permission; existing keys keep only `send` (old `template` and `status` values count as `send`). Before, any active key could read and change every recipient list. Requests outside the key's permissions get `403 PERMISSION_DENIED`
 - MTA API: addresses in send and template-send requests must have one `@` and no spaces, brackets or quotes; a quoted local part like `"x> NOTIFY=SUCCESS"@example.com` was unquoted by `net/mail` and smuggled SMTP parameters into MAIL FROM / RCPT TO
 
 ### Fixed
+- sendry-web `dns-sync`: a domain without SPF but with another TXT record at the apex (e.g. `google-site-verification`) had that record overwritten with SPF; now SPF is added next to it. With namedot an update replaced every TXT value at the name and a create on a name that already had TXT values made a second RRSet; now only the one value changes
 - sendry-web: the server key page offered to deploy a DKIM key to servers that already had it and did not list the current server
 - sendry-web: DELETE `/api/v1/lists/{id}/recipients/{email}` missed an address with a literal `%` in the local part (the path was unescaped twice)
 - sendry-web: the campaign test send rendered without the preheader; sample variables of the template page and test page include variables used only in the preheader

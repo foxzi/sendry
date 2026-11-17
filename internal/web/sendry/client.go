@@ -236,19 +236,6 @@ func (c *Client) DeleteDKIM(ctx context.Context, domain, selector string) error 
 	return c.request(ctx, http.MethodDelete, "/api/v1/dkim/"+domain+"/"+selector, nil, nil)
 }
 
-// CheckDNS checks DNS records for a domain
-func (c *Client) CheckDNS(ctx context.Context, domain, selector string) (*DNSCheckResult, error) {
-	path := "/api/v1/dns/check/" + url.PathEscape(domain)
-	if selector != "" {
-		path += "?selector=" + url.QueryEscape(selector)
-	}
-	var resp DNSCheckResult
-	if err := c.request(ctx, http.MethodGet, path, nil, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
-
 // CheckIP checks an IP address against DNSBL services
 func (c *Client) CheckIP(ctx context.Context, ip string) (*IPCheckResult, error) {
 	var resp IPCheckResult

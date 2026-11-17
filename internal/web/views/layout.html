@@ -35,20 +35,48 @@
             <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>
             <span>Sendry</span>
         </a>
-        <nav class="sidebar-nav">
+        <nav class="sidebar-nav" id="sidebar-nav">
             <a href="/" class="nav-item{{if eq $section "overview"}} active{{end}}"{{if eq $section "overview"}} aria-current="page"{{end}}>
                 <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
                 <span class="nav-label" data-i18n="nav.overview">Overview</span>
             </a>
             <div class="nav-group-label" data-i18n="nav.group_email">Email</div>
-            <a href="/campaigns" class="nav-item{{if eq $section "campaigns"}} active{{end}}"{{if eq $section "campaigns"}} aria-current="page"{{end}}>
+            <div class="nav-section{{if eq $section "campaigns"}} current open{{end}}" data-section="campaigns">
+            <a href="/campaigns" class="nav-item">
                 <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg>
                 <span class="nav-label" data-i18n="nav.campaigns">Campaigns</span>
             </a>
-            <a href="/templates" class="nav-item{{if eq $section "templates"}} active{{end}}"{{if eq $section "templates"}} aria-current="page"{{end}}>
+            <button type="button" class="nav-sub-toggle" aria-controls="nav-sub-campaigns" aria-expanded="{{if eq $section "campaigns"}}true{{else}}false{{end}}" aria-label="Section pages" data-i18n-aria="nav.section_pages">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+            </button>
+            <div class="nav-sub-wrap" id="nav-sub-campaigns">
+            <ul class="nav-sub">
+                <li><a href="/campaigns" class="nav-sub-item{{if eq .Active "campaigns"}} active{{end}}"{{if eq .Active "campaigns"}} aria-current="page"{{end}}><span class="nav-label" data-i18n="sub.campaigns">Campaigns</span></a></li>
+                <li><a href="/jobs" class="nav-sub-item{{if eq .Active "jobs"}} active{{end}}"{{if eq .Active "jobs"}} aria-current="page"{{end}}><span class="nav-label" data-i18n="sub.runs">Runs</span></a></li>
+            </ul>
+            </div>
+            </ul>
+            </div>
+            <div class="nav-section{{if eq $section "templates"}} current open{{end}}" data-section="templates">
+            <a href="/templates" class="nav-item">
                 <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
                 <span class="nav-label" data-i18n="nav.templates">Templates</span>
             </a>
+            <button type="button" class="nav-sub-toggle" aria-controls="nav-sub-templates" aria-expanded="{{if eq $section "templates"}}true{{else}}false{{end}}" aria-label="Section pages" data-i18n-aria="nav.section_pages">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+            </button>
+            <div class="nav-sub-wrap" id="nav-sub-templates">
+            <ul class="nav-sub">
+                <li><a href="/templates" class="nav-sub-item{{if eq .Active "templates"}} active{{end}}"{{if eq .Active "templates"}} aria-current="page"{{end}}><span class="nav-label" data-i18n="sub.templates">Templates</span></a></li>
+                <li><a href="/blocks" class="nav-sub-item{{if eq .Active "blocks"}} active{{end}}"{{if eq .Active "blocks"}} aria-current="page"{{end}}><span class="nav-label" data-i18n="sub.blocks">Blocks</span></a></li>
+                <li><a href="/media" class="nav-sub-item{{if eq .Active "media"}} active{{end}}"{{if eq .Active "media"}} aria-current="page"{{end}}><span class="nav-label" data-i18n="sub.media">Media</span></a></li>
+                {{if .User.IsAdmin}}
+                <li><a href="/settings/variables" class="nav-sub-item{{if eq .Active "variables"}} active{{end}}"{{if eq .Active "variables"}} aria-current="page"{{end}}><span class="nav-label" data-i18n="sub.variables">Variables</span></a></li>
+                {{end}}
+            </ul>
+            </div>
+            </ul>
+            </div>
             <a href="/recipients" class="nav-item{{if eq $section "audience"}} active{{end}}"{{if eq $section "audience"}} aria-current="page"{{end}}>
                 <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                 <span class="nav-label" data-i18n="nav.audience">Audience</span>
@@ -58,18 +86,62 @@
                 <span class="nav-label" data-i18n="nav.sends">API sends</span>
             </a>
             <div class="nav-group-label" data-i18n="nav.group_system">System</div>
-            <a href="/servers" class="nav-item{{if eq $section "infra"}} active{{end}}"{{if eq $section "infra"}} aria-current="page"{{end}}>
+            <div class="nav-section{{if eq $section "infra"}} current open{{end}}" data-section="infra">
+            <a href="/servers" class="nav-item">
                 <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/><path d="M6 7h.01"/><path d="M6 17h.01"/></svg>
                 <span class="nav-label" data-i18n="nav.infra">Infrastructure</span>
-                <span class="nav-badge" id="nav-queue-badge" style="display:none;" data-i18n-title="nav.queue_badge" title="Messages waiting in the queue">0</span>
+                <span class="nav-badge nav-badge-parent" id="nav-queue-badge" style="display:none;" data-i18n-title="nav.queue_badge" title="Messages waiting in the queue">0</span>
             </a>
+            <button type="button" class="nav-sub-toggle" aria-controls="nav-sub-infra" aria-expanded="{{if eq $section "infra"}}true{{else}}false{{end}}" aria-label="Section pages" data-i18n-aria="nav.section_pages">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+            </button>
+            <div class="nav-sub-wrap" id="nav-sub-infra">
+            <ul class="nav-sub">
+                <li><a href="/servers" class="nav-sub-item{{if eq .Active "servers"}} active{{end}}"{{if eq .Active "servers"}} aria-current="page"{{end}}><span class="nav-label" data-i18n="sub.servers">Servers</span></a></li>
+                <li><a href="/queue" class="nav-sub-item{{if eq .Active "queue"}} active{{end}}"{{if eq .Active "queue"}} aria-current="page"{{end}}><span class="nav-label" data-i18n="sub.queue">Queue</span><span class="nav-badge" id="nav-queue-badge-sub" style="display:none;" data-i18n-title="nav.queue_badge" title="Messages waiting in the queue">0</span></a></li>
+                <li><a href="/domains" class="nav-sub-item{{if eq .Active "domains"}} active{{end}}"{{if eq .Active "domains"}} aria-current="page"{{end}}><span class="nav-label" data-i18n="sub.domains">Domains</span></a></li>
+                <li><a href="/dkim" class="nav-sub-item{{if eq .Active "dkim"}} active{{end}}"{{if eq .Active "dkim"}} aria-current="page"{{end}}><span class="nav-label" data-i18n="sub.dkim">DKIM</span></a></li>
+                <li><a href="/monitoring" class="nav-sub-item{{if eq .Active "monitoring"}} active{{end}}"{{if eq .Active "monitoring"}} aria-current="page"{{end}}><span class="nav-label" data-i18n="sub.monitoring">Monitoring</span></a></li>
+                {{if .User.IsAdmin}}
+                <li><a href="/settings/test-email" class="nav-sub-item{{if eq .Active "test_email"}} active{{end}}"{{if eq .Active "test_email"}} aria-current="page"{{end}}><span class="nav-label" data-i18n="sub.test_email">Test email</span></a></li>
+                {{end}}
+            </ul>
+            </div>
+            </ul>
+            </div>
             {{if .User.IsAdmin}}
-            <a href="/settings" class="nav-item{{if eq $section "admin"}} active{{end}}"{{if eq $section "admin"}} aria-current="page"{{end}}>
+            <div class="nav-section{{if eq $section "admin"}} current open{{end}}" data-section="admin">
+            <a href="/settings" class="nav-item">
                 <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
                 <span class="nav-label" data-i18n="nav.admin">Administration</span>
             </a>
+            <button type="button" class="nav-sub-toggle" aria-controls="nav-sub-admin" aria-expanded="{{if eq $section "admin"}}true{{else}}false{{end}}" aria-label="Section pages" data-i18n-aria="nav.section_pages">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+            </button>
+            <div class="nav-sub-wrap" id="nav-sub-admin">
+            <ul class="nav-sub">
+                <li><a href="/settings" class="nav-sub-item{{if eq .Active "settings"}} active{{end}}"{{if eq .Active "settings"}} aria-current="page"{{end}}><span class="nav-label" data-i18n="sub.settings">Settings</span></a></li>
+                <li><a href="/settings/users" class="nav-sub-item{{if eq .Active "users"}} active{{end}}"{{if eq .Active "users"}} aria-current="page"{{end}}><span class="nav-label" data-i18n="sub.users">Users</span></a></li>
+                <li><a href="/settings/api-keys" class="nav-sub-item{{if eq .Active "apikeys"}} active{{end}}"{{if eq .Active "apikeys"}} aria-current="page"{{end}}><span class="nav-label" data-i18n="sub.api_keys">API keys</span></a></li>
+                <li><a href="/settings/tracking" class="nav-sub-item{{if eq .Active "tracking"}} active{{end}}"{{if eq .Active "tracking"}} aria-current="page"{{end}}><span class="nav-label" data-i18n="sub.tracking">Tracking</span></a></li>
+                <li><a href="/settings/audit" class="nav-sub-item{{if eq .Active "audit"}} active{{end}}"{{if eq .Active "audit"}} aria-current="page"{{end}}><span class="nav-label" data-i18n="sub.audit">Audit log</span></a></li>
+            </ul>
+            </div>
+            </ul>
+            </div>
             {{end}}
         </nav>
+        <script>
+            (function() {
+                var open = [];
+                try { open = JSON.parse(localStorage.getItem('navOpen') || '[]'); } catch (e) {}
+                document.querySelectorAll('#sidebar-nav .nav-section').forEach(function(sec) {
+                    if (open.indexOf(sec.getAttribute('data-section')) === -1) return;
+                    sec.classList.add('open');
+                    sec.querySelector('.nav-sub-toggle').setAttribute('aria-expanded', 'true');
+                });
+            })();
+        </script>
         <div class="sidebar-user">
             <span class="user-email" title="{{.User.Email}}">{{.User.Email}}</span>
             <div class="sidebar-user-row">
@@ -167,7 +239,7 @@
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     var total = data.queue || 0;
-                    ['nav-queue-badge', 'subnav-queue-badge'].forEach(function(id) {
+                    ['nav-queue-badge', 'nav-queue-badge-sub', 'subnav-queue-badge'].forEach(function(id) {
                         var badge = document.getElementById(id);
                         if (!badge) return;
                         // Only shown when something is actually waiting

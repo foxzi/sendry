@@ -78,11 +78,6 @@ func (m *ManagementServer) RegisterRoutes(r chi.Router) {
 		r.Put("/{domain}", m.handleRateLimitsUpdate)
 	})
 
-	// DNS checking
-	r.Route("/dns", func(r chi.Router) {
-		r.Get("/check/{domain}", m.handleDNSCheck)
-	})
-
 	// IP/DNSBL checking
 	r.Route("/ip", func(r chi.Router) {
 		r.Get("/check/{ip}", m.handleIPCheck)
@@ -1019,41 +1014,6 @@ func sanitizeSelectorForPath(selector string) string {
 }
 
 // DNS Check Handlers
-
-// handleDNSCheck handles GET /api/v1/dns/check/{domain}
-func (m *ManagementServer) handleDNSCheck(w http.ResponseWriter, r *http.Request) {
-	domainName := chi.URLParam(r, "domain")
-	if domainName == "" {
-		sendError(w, http.StatusBadRequest, "domain is required")
-		return
-	}
-
-	// Parse query parameters for check options
-	opts := dnscheck.CheckOptions{
-		MX:       r.URL.Query().Get("mx") == "true",
-		SPF:      r.URL.Query().Get("spf") == "true",
-		DKIM:     r.URL.Query().Get("dkim") == "true",
-		DMARC:    r.URL.Query().Get("dmarc") == "true",
-		MTASTS:   r.URL.Query().Get("mta_sts") == "true",
-		Selector: r.URL.Query().Get("selector"),
-	}
-
-	// Default selector
-	if opts.Selector == "" {
-		opts.Selector = "sendry"
-	}
-
-	// Use 30 second timeout
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
-	defer cancel()
-
-	result, err := dnscheck.CheckDomain(ctx, domainName, opts)
-	if err != nil {
-		sendError(w, http.StatusBadRequest, "invalid domain or selector")
-		return
-	}
-	sendJSON(w, http.StatusOK, result)
-}
 
 // handleIPCheck handles GET /api/v1/ip/check/{ip}
 func (m *ManagementServer) handleIPCheck(w http.ResponseWriter, r *http.Request) {

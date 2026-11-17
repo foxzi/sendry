@@ -133,12 +133,12 @@
     </div>
 </div>
 
-<div class="card">
+<div class="card" id="deployments">
     <div class="card-header">
         <h3 data-i18n="infra.server_deployments">Server Deployments</h3>
         <div style="display:flex; gap: 0.5rem; align-items:center;">
             {{if not .CheckedAt.IsZero}}<span class="text-muted"><span data-i18n="infra.checked_at">Checked at</span> {{.CheckedAt.Format "15:04:05"}}</span>{{end}}
-            <a href="/domains/{{.Domain.ID}}?refresh=1" class="btn btn-sm btn-secondary" data-i18n="infra.check_now">Check now</a>
+            <a href="/domains/{{.Domain.ID}}?refresh=1#deployments" class="btn btn-sm btn-secondary" data-i18n="infra.check_now">Check now</a>
         </div>
     </div>
     <div class="card-body">
@@ -205,16 +205,97 @@
     </div>
 </div>
 
-<div class="card">
+<div class="card" id="dns-check">
     <div class="card-header">
         <h3 data-i18n="infra.dns_check_2">DNS Check</h3>
         <div style="display:flex; gap: 0.5rem; align-items:center;">
-            <a href="/domains/{{.Domain.ID}}?check=true" class="btn btn-sm btn-primary" data-i18n="infra.run_check">Run check</a>
+            <a href="/domains/{{.Domain.ID}}?check=true#dns-check" class="btn btn-sm btn-primary" data-i18n="infra.run_check">Run check</a>
             <a href="#dns-recommended" class="btn btn-sm btn-secondary" data-i18n="infra.dns_setup">DNS Setup</a>
         </div>
     </div>
     <div class="card-body">
+        {{with .Published}}
+            {{if .Error}}
+            <div class="alert alert-danger"><span data-i18n="infra.dns_publish_failed">Publishing to</span> {{.Provider}}: <span data-i18n="infra.dns_publish_done_count">records changed</span> {{.Count}}. <span data-i18n="common.error">Error</span>: {{.Error}}</div>
+            {{else}}
+            <div class="alert alert-success"><span data-i18n="infra.dns_published_to">Published to</span> {{.Provider}}: <span data-i18n="infra.dns_publish_done_count">records changed</span> {{.Count}}. <span data-i18n="infra.dns_publish_cache_note">Resolvers may show the old values for a while (TTL).</span></div>
+            {{end}}
+        {{end}}
         {{if .DNSCheckRan}}
+            {{with .DNSHosting}}
+            <div class="table-scroll" style="margin-bottom: 1rem;">
+            <table class="table table-details">
+                <tr>
+                    <th data-i18n="infra.name_servers">Name servers (NS)</th>
+                    <td>
+                        {{if .NSError}}
+                        <span class="badge badge-draft" data-i18n="infra.not_found">Not Found</span> <span class="text-muted">{{.NSError}}</span>
+                        {{else}}
+                        {{range .NS}}<div><code>{{.}}</code></div>{{end}}
+                        {{if ne .NSZone $.Domain.Domain}}<div class="text-muted"><span data-i18n="infra.ns_of_parent_zone">From the parent zone</span> <code>{{.NSZone}}</code></div>{{end}}
+                        {{end}}
+                    </td>
+                </tr>
+                {{range .Providers}}
+                <tr>
+                    <th>{{.Provider}}</th>
+                    <td>
+                        {{if .Error}}<span class="badge badge-failed" data-i18n="common.error">Error</span> <span class="text-muted" style="word-break: break-all;">{{.Error}}</span>
+                        {{else if .Found}}<span class="badge badge-success" data-i18n="infra.zone_in_account">Zone in account</span> <code>{{.Zone}}</code>
+                        {{if .Plan}}
+                        <table class="table" style="margin-top: 0.75rem;">
+                            <thead>
+                                <tr>
+                                    <th data-i18n="infra.dns_record">Record</th>
+                                    <th data-i18n="infra.dns_now">Now</th>
+                                    <th data-i18n="infra.dns_will_be">Will be</th>
+                                    <th data-i18n="infra.dns_action">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {{range .Plan}}
+                                <tr>
+                                    <td><strong>{{.Kind}}</strong>{{if .Name}}<div class="text-muted"><code>{{.Name}}</code></div>{{end}}</td>
+                                    <td><code style="word-break: break-all; font-size: 0.85em;">{{if .Current}}{{.Current}}{{else}}-{{end}}</code></td>
+                                    <td><code style="word-break: break-all; font-size: 0.85em;">{{if .Expected}}{{.Expected}}{{else}}-{{end}}</code></td>
+                                    <td>
+                                        {{if eq .Action "create"}}<span class="badge badge-warning" data-i18n="infra.dns_action_create">Create</span>
+                                        {{else if eq .Action "update"}}<span class="badge badge-failed" data-i18n="infra.dns_action_update">Replace</span>
+                                        {{else if eq .Action "noop"}}<span class="badge badge-success" data-i18n="infra.dns_action_noop">Up to date</span>
+                                        {{else}}<span class="badge badge-draft" data-i18n="infra.dns_action_skip">Skipped</span> <div class="text-muted">{{.Reason}}</div>{{end}}
+                                    </td>
+                                </tr>
+                                {{end}}
+                            </tbody>
+                        </table>
+                        <div class="dns-publish-row">
+                        {{if .HasChanges}}
+                        <form method="POST" action="/domains/{{$.Domain.ID}}/dns-publish">
+                            <input type="hidden" name="provider" value="{{.Key}}">
+                            <button type="submit" class="btn btn-primary" onclick="return confirm(I18n.t('infra.dns_publish_confirm'))"><span data-i18n="infra.dns_publish_to">Publish to</span> {{.Provider}}</button>
+                        </form>
+                        <span class="text-muted" data-i18n="infra.dns_publish_hint">Creates and replaces the records marked above. Other records in the zone stay as they are.</span>
+                        {{else}}
+                        <span class="text-muted" data-i18n="infra.dns_publish_nothing">All records are up to date, nothing to publish.</span>
+                        {{end}}
+                        </div>
+                        {{else}}
+                        <div class="text-muted" style="margin-top: 0.5rem;" data-i18n="infra.dns_publish_unsupported">The panel does not publish records here, add them by hand.</div>
+                        {{end}}
+                        {{else}}<span class="badge badge-draft" data-i18n="infra.zone_not_in_account">Not in account</span>
+                        {{if eq .Key "namedot"}}<div class="text-muted" style="margin-top: 0.5rem;" data-i18n="infra.dns_publish_no_zone">Create the zone in namedot, then run the check again to publish the records.</div>{{end}}
+                        {{end}}
+                    </td>
+                </tr>
+                {{else}}
+                <tr>
+                    <th data-i18n="infra.dns_providers">DNS providers</th>
+                    <td class="text-muted"><span data-i18n="infra.dns_providers_not_configured">Not configured. Add Cloudflare or namedot credentials to</span> <code>dns_providers</code> (web.yaml)</td>
+                </tr>
+                {{end}}
+            </table>
+            </div>
+            {{end}}
             {{if .DNSCheckError}}
             <div class="alert alert-danger"><span data-i18n="common.error">Error</span>: {{.DNSCheckError}}</div>
             {{else if .DNSCheck}}
@@ -254,6 +335,7 @@
             {{end}}
         {{else}}
         <p class="text-muted" data-i18n="infra.click_run_check_to_verify_spf_dkim_dmarc_and_mx">Click "Run Check" to verify SPF, DKIM, DMARC and MX records for this domain.</p>
+        <p class="text-muted" data-i18n="infra.dns_check_publish_note">If the domain zone is in namedot, the check also shows what will change there and a button to publish the records.</p>
         {{end}}
     </div>
 </div>

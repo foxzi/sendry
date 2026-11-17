@@ -11,6 +11,7 @@ import (
 	"github.com/foxzi/sendry/internal/web/config"
 	"github.com/foxzi/sendry/internal/web/crypto"
 	"github.com/foxzi/sendry/internal/web/db"
+	"github.com/foxzi/sendry/internal/web/dnsprovider"
 	"github.com/foxzi/sendry/internal/web/middleware"
 	"github.com/foxzi/sendry/internal/web/models"
 	"github.com/foxzi/sendry/internal/web/repository"
@@ -44,6 +45,8 @@ type Handlers struct {
 	tracking   *repository.TrackingRepository
 	unsubs     *repository.UnsubscribeRepository
 	proxies    tracking.TrustedProxies // reverse proxies allowed to set the client IP
+
+	dnsProviders []dnsprovider.Provider // DNS hosting accounts from dns_providers
 
 	serverDomainsCache *serverDomainsCache // per-MTA domain lists for drift checks
 }
@@ -112,6 +115,8 @@ func New(cfg *config.Config, db *db.DB, logger *slog.Logger, v *views.Engine, oi
 		tracking:   repository.NewTrackingRepository(db.DB),
 		unsubs:     repository.NewUnsubscribeRepository(db.DB),
 		proxies:    proxies,
+
+		dnsProviders: dnsprovider.FromConfig(cfg.DNSProviders),
 
 		serverDomainsCache: newServerDomainsCache(),
 	}

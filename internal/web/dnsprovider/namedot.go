@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -20,12 +21,10 @@ import (
 //   - An RRSet can contain multiple Record entries (e.g. multiple TXT values).
 //   - Updating a record means PUTting a new RRSet representation for a given ID.
 //
-// The provider abstraction in this package treats each individual record as
-// independent (ID == rrset ID). For TXT-based records this is acceptable
-// because SPF/DMARC/DKIM names normally have exactly one value; when multiple
-// values exist, the provider replaces the entire RRSet with the new value
-// during UpdateRecord. This matches how the Cloudflare provider behaves for
-// the same use case.
+// The provider abstraction in this package treats each value as a record
+// (ID "<rrset id>/<index>"). Creating and updating a value rewrites its
+// RRSet with the other values kept, so the apex TXT set (SPF next to site
+// verifications) survives.
 type NamedotProvider struct {
 	Token   string
 	BaseURL string
@@ -164,14 +163,38 @@ func (p *NamedotProvider) lookupZone(ctx context.Context, name string) (*Zone, e
 	return nil, nil
 }
 
-// ListRecords fetches all RRSets in a zone and returns records matching the
-// requested name and type. Each returned Record ID is the namedot RRSet ID.
-func (p *NamedotProvider) ListRecords(ctx context.Context, zoneID, name, recordType string) ([]Record, error) {
+func (p *NamedotProvider) listRRSets(ctx context.Context, zoneID string) ([]namedotRRSet, error) {
 	var rrsets []namedotRRSet
 	if err := p.do(ctx, http.MethodGet, "/zones/"+zoneID+"/rrsets", nil, &rrsets); err != nil {
 		if _, ok := err.(errNotFound); ok {
 			return nil, nil
 		}
+		return nil, err
+	}
+	return rrsets, nil
+}
+
+func (p *NamedotProvider) findRRSet(ctx context.Context, zoneID, name, recordType string) (*namedotRRSet, error) {
+	rrsets, err := p.listRRSets(ctx, zoneID)
+	if err != nil {
+		return nil, err
+	}
+	name = strings.TrimSuffix(strings.ToLower(name), ".")
+	for i := range rrsets {
+		rs := &rrsets[i]
+		if strings.EqualFold(rs.Type, recordType) && strings.TrimSuffix(strings.ToLower(rs.Name), ".") == name {
+			return rs, nil
+		}
+	}
+	return nil, nil
+}
+
+// ListRecords fetches all RRSets in a zone and returns records matching the
+// requested name and type. A record ID is "<rrset id>/<index in the rrset>",
+// so an update replaces that one value and keeps the others.
+func (p *NamedotProvider) ListRecords(ctx context.Context, zoneID, name, recordType string) ([]Record, error) {
+	rrsets, err := p.listRRSets(ctx, zoneID)
+	if err != nil {
 		return nil, err
 	}
 
@@ -185,9 +208,9 @@ func (p *NamedotProvider) ListRecords(ctx context.Context, zoneID, name, recordT
 		if rsName != targetName {
 			continue
 		}
-		for _, rec := range rs.Records {
+		for i, rec := range rs.Records {
 			out = append(out, Record{
-				ID:      fmt.Sprintf("%d", rs.ID),
+				ID:      fmt.Sprintf("%d/%d", rs.ID, i),
 				Type:    rs.Type,
 				Name:    rsName,
 				Content: unquoteTXT(rec.Data, rs.Type),
@@ -198,27 +221,68 @@ func (p *NamedotProvider) ListRecords(ctx context.Context, zoneID, name, recordT
 	return out, nil
 }
 
-// CreateRecord creates a new RRSet with a single record.
+// CreateRecord adds the value to the RRSet of that name and type, or
+// creates the RRSet when there is none.
 func (p *NamedotProvider) CreateRecord(ctx context.Context, zoneID string, r Record) error {
+	rec := namedotRecord{Data: quoteTXT(r.Content, r.Type)}
+	existing, err := p.findRRSet(ctx, zoneID, r.Name, r.Type)
+	if err != nil {
+		return err
+	}
+	if existing != nil {
+		existing.Records = append(existing.Records, rec)
+		return p.putRRSet(ctx, zoneID, *existing)
+	}
 	rs := namedotRRSet{
 		Name:    strings.TrimSuffix(strings.ToLower(r.Name), "."),
 		Type:    r.Type,
 		TTL:     r.TTL,
-		Records: []namedotRecord{{Data: quoteTXT(r.Content, r.Type)}},
+		Records: []namedotRecord{rec},
 	}
 	return p.do(ctx, http.MethodPost, "/zones/"+zoneID+"/rrsets", rs, nil)
 }
 
-// UpdateRecord replaces the RRSet identified by recordID with a single record
-// containing the new value.
+// UpdateRecord replaces one value of an RRSet; recordID comes from
+// ListRecords. The other values of the RRSet are kept.
 func (p *NamedotProvider) UpdateRecord(ctx context.Context, zoneID, recordID string, r Record) error {
-	rs := namedotRRSet{
-		Name:    strings.TrimSuffix(strings.ToLower(r.Name), "."),
-		Type:    r.Type,
-		TTL:     r.TTL,
-		Records: []namedotRecord{{Data: quoteTXT(r.Content, r.Type)}},
+	rrsetID, idx, err := parseNamedotRecordID(recordID)
+	if err != nil {
+		return err
 	}
-	return p.do(ctx, http.MethodPut, "/zones/"+zoneID+"/rrsets/"+recordID, rs, nil)
+	rrsets, err := p.listRRSets(ctx, zoneID)
+	if err != nil {
+		return err
+	}
+	for i := range rrsets {
+		rs := &rrsets[i]
+		if rs.ID != rrsetID {
+			continue
+		}
+		if idx >= len(rs.Records) {
+			return fmt.Errorf("namedot: rrset %d has no value #%d (changed meanwhile?)", rrsetID, idx)
+		}
+		rs.Records[idx] = namedotRecord{Data: quoteTXT(r.Content, r.Type)}
+		return p.putRRSet(ctx, zoneID, *rs)
+	}
+	return fmt.Errorf("namedot: rrset %d not found", rrsetID)
+}
+
+// putRRSet replaces an RRSet; the ID goes in the path, not the body, as
+// with the original single-value update.
+func (p *NamedotProvider) putRRSet(ctx context.Context, zoneID string, rs namedotRRSet) error {
+	id := rs.ID
+	rs.ID = 0
+	return p.do(ctx, http.MethodPut, fmt.Sprintf("/zones/%s/rrsets/%d", zoneID, id), rs, nil)
+}
+
+func parseNamedotRecordID(id string) (uint64, int, error) {
+	rs, i, ok := strings.Cut(id, "/")
+	rrsetID, err1 := strconv.ParseUint(rs, 10, 64)
+	idx, err2 := strconv.Atoi(i)
+	if !ok || err1 != nil || err2 != nil || idx < 0 {
+		return 0, 0, fmt.Errorf("namedot: bad record id %q", id)
+	}
+	return rrsetID, idx, nil
 }
 
 // quoteTXT wraps TXT content in quotes as required by namedot's BIND-style

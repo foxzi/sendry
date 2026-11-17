@@ -82,6 +82,21 @@ sendry:
       enabled: true
       max_retries: 2
 
+# DNS hosting accounts. On "Run check" the domain page shows whether the
+# domain's zone is in these accounts. Each value may also come from the
+# environment: CLOUDFLARE_API_TOKEN, CLOUDFLARE_API_EMAIL + CLOUDFLARE_API_KEY,
+# NAMEDOT_API_URL, NAMEDOT_API_TOKEN.
+# dns_providers:
+#   cloudflare:
+#     # Scoped API token (recommended): Zone:Read, plus DNS:Edit to publish records
+#     api_token: ""
+#     # Or the legacy Global API Key (full account access)
+#     # email: "admin@example.com"
+#     # api_key: ""
+#   namedot:
+#     url: "https://dns.example.com"
+#     token: ""
+
 logging:
   level: info
   format: json

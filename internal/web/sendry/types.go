@@ -235,29 +235,6 @@ type DKIMResponse struct {
 	KeyFile   string `json:"key_file"`
 }
 
-// DNSCheckResult represents DNS check result for a domain
-type DNSCheckResult struct {
-	Domain  string          `json:"domain"`
-	Results []DNSCheckItem  `json:"results"`
-	Summary DNSCheckSummary `json:"summary"`
-}
-
-// DNSCheckItem represents a single DNS check result
-type DNSCheckItem struct {
-	Type    string `json:"type"`
-	Status  string `json:"status"` // ok, warning, error, not_found
-	Value   string `json:"value,omitempty"`
-	Message string `json:"message,omitempty"`
-}
-
-// DNSCheckSummary represents DNS check summary
-type DNSCheckSummary struct {
-	OK       int `json:"ok"`
-	Warnings int `json:"warnings"`
-	Errors   int `json:"errors"`
-	NotFound int `json:"not_found"`
-}
-
 // IPCheckResult represents IP DNSBL check result
 type IPCheckResult struct {
 	IP      string         `json:"ip"`

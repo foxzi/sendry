@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -15,6 +16,28 @@ type Config struct {
 	Auth     AuthConfig     `yaml:"auth"`
 	Sendry   SendryConfig   `yaml:"sendry"`
 	Logging  LoggingConfig  `yaml:"logging"`
+	// DNSProviders are API credentials of DNS hosting accounts. The panel
+	// uses them to find out whether a domain's zone is hosted there.
+	DNSProviders DNSProvidersConfig `yaml:"dns_providers"`
+}
+
+type DNSProvidersConfig struct {
+	Cloudflare CloudflareDNSConfig `yaml:"cloudflare"`
+	Namedot    NamedotDNSConfig    `yaml:"namedot"`
+}
+
+// CloudflareDNSConfig takes either a scoped API token (recommended; needs
+// Zone:Read, plus DNS:Edit to publish records) or the legacy email + Global
+// API Key pair.
+type CloudflareDNSConfig struct {
+	APIToken string `yaml:"api_token"`
+	Email    string `yaml:"email"`
+	APIKey   string `yaml:"api_key"`
+}
+
+type NamedotDNSConfig struct {
+	URL   string `yaml:"url"` // REST API base URL, e.g. https://dns.example.com
+	Token string `yaml:"token"`
 }
 
 type ServerConfig struct {
@@ -121,6 +144,7 @@ func Load(path string) (*Config, error) {
 	}
 
 	setDefaults(cfg)
+	applyDNSProviderEnv(&cfg.DNSProviders)
 
 	if err := validate(cfg); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
@@ -157,6 +181,24 @@ func setDefaults(cfg *Config) {
 	if cfg.Server.TrustedProxies == nil {
 		cfg.Server.TrustedProxies = DefaultTrustedProxies
 	}
+}
+
+// applyDNSProviderEnv fills DNS provider credentials missing from the file
+// from the same environment variables the dns-sync command reads.
+func applyDNSProviderEnv(c *DNSProvidersConfig) {
+	fill := func(dst *string, env string) {
+		if strings.TrimSpace(*dst) == "" {
+			*dst = strings.TrimSpace(os.Getenv(env))
+		}
+	}
+	cf := &c.Cloudflare
+	if cf.APIToken == "" && cf.APIKey == "" {
+		fill(&cf.APIToken, "CLOUDFLARE_API_TOKEN")
+		fill(&cf.Email, "CLOUDFLARE_API_EMAIL")
+		fill(&cf.APIKey, "CLOUDFLARE_API_KEY")
+	}
+	fill(&c.Namedot.URL, "NAMEDOT_API_URL")
+	fill(&c.Namedot.Token, "NAMEDOT_API_TOKEN")
 }
 
 func validate(cfg *Config) error {

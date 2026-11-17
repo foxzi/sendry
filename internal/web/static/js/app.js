@@ -148,6 +148,32 @@
             b.addEventListener('click', function() { apply(root.hasAttribute('data-nav')); });
         });
         apply(root.hasAttribute('data-nav'));
+
+        // Sections fold; the ones opened by hand are remembered per browser.
+        // The current section stays open, it is not stored.
+        document.querySelectorAll('.nav-sub-toggle').forEach(function(t) {
+            t.addEventListener('click', function() {
+                var sec = t.closest('.nav-section');
+                var isOpen = sec.classList.toggle('open');
+                t.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                if (sec.classList.contains('current')) return;
+                var name = sec.getAttribute('data-section'), list = [];
+                try { list = JSON.parse(localStorage.getItem('navOpen') || '[]'); } catch (e) {}
+                list = list.filter(function(n) { return n !== name; });
+                if (isOpen) list.push(name);
+                try { localStorage.setItem('navOpen', JSON.stringify(list)); } catch (e) {}
+            });
+        });
+
+        // A long menu scrolls; bring the current page into view on load
+        var nav = document.getElementById('sidebar-nav');
+        var current = nav && nav.querySelector('.nav-sub-item.active');
+        if (current) {
+            var navBox = nav.getBoundingClientRect(), itemBox = current.getBoundingClientRect();
+            if (itemBox.bottom > navBox.bottom || itemBox.top < navBox.top) {
+                nav.scrollTop += itemBox.top - navBox.top - (navBox.height - itemBox.height) / 2;
+            }
+        }
     }
 
     // Theme Toggle
