@@ -2,8 +2,8 @@
 // Strips only the wrapper's dark-mode block from preview HTML so previews
 // stay readable on a forced white background. Wrapper block is identified
 // by the .force-page-bg selector; block/template-specific dark-mode CSS
-// is preserved. Keep this in sync with internal/web/handlers/templates.go
-// (stripDarkModeCSS) — both must match the wrapper CSS in
+// is preserved. Keep this in sync with internal/web/template/render.go
+// (StripDarkModeCSS) — both must match the wrapper CSS in
 // internal/web/blocks/wrapper.html.
 (function(global) {
     var darkBlockRe = /@media\s*\(prefers-color-scheme:\s*dark\)\s*\{[\s\S]*?\}\s*\}/g;

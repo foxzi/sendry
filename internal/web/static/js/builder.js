@@ -774,7 +774,8 @@
         var cur = out;
         for (var i = 0; i < parts.length - 1; i++) {
             var p = parts[i];
-            if (typeof cur[p] !== 'object' || cur[p] === null || Array.isArray(cur[p])) {
+            if (Array.isArray(cur[p])) return;
+            if (typeof cur[p] !== 'object' || cur[p] === null) {
                 cur[p] = {};
             }
             cur = cur[p];
@@ -803,8 +804,36 @@
         }
     }
 
+    function rewriteRangeVar(body, name) {
+        var fieldRE = new RegExp('\\$' + name + '\\.', 'g');
+        var rebinds = [];
+        return body.replace(/\{\{[\s\S]*?\}\}/g, function(action) {
+            var out = rebinds.indexOf(true) === -1 ? action.replace(fieldRE, '.') : action;
+            var m = action.match(/^\{\{-?\s*([a-z]+)\b/);
+            var kw = m ? m[1] : '';
+            if (kw === 'range' || kw === 'with') rebinds.push(true);
+            else if (kw === 'if' || kw === 'block' || kw === 'define') rebinds.push(false);
+            else if (kw === 'end') rebinds.pop();
+            return out;
+        });
+    }
+
+    function collectVarFields(body, name, out) {
+        var refRE = new RegExp('\\$' + name + '\\.(' + IDENT_PATH + ')', 'g');
+        (body.match(/\{\{[\s\S]*?\}\}/g) || []).forEach(function(action) {
+            var m;
+            while ((m = refRE.exec(action)) !== null) {
+                setNestedKey(out, m[1], sampleValueFor(lastSegment(m[1])));
+            }
+        });
+    }
+
+    function usesBareVar(body, name) {
+        return new RegExp('\\{\\{\\s*\\$' + name + '\\s*\\}\\}').test(body);
+    }
+
     function stripTopLevelRangesJS(body, out) {
-        var rangeOpenRE = new RegExp('^\\{\\{\\s*range\\s+\\.?(' + IDENT_PATH + ')\\s*\\}\\}$');
+        var rangeOpenRE = new RegExp('^\\{\\{\\s*range\\s+(?:\\$(' + IDENT + ')\\s*(?:,\\s*\\$(' + IDENT + ')\\s*)?:=\\s*)?\\.?(' + IDENT_PATH + ')\\s*\\}\\}$');
         var anyOpenRE  = /\{\{\s*(range|if|with|block|define)\b[^}]*\}\}/g;
         var endRE      = /\{\{\s*end\s*\}\}/g;
         var sb = '';
@@ -832,10 +861,21 @@
                 } else {
                     depth--;
                     if (depth === 0) {
+                        var elemVar = rm[2] || rm[1] || '';
+                        var listName = rm[3];
                         var inner = body.slice(close, nextEnd.index);
                         var element = {};
-                        collectVars(inner, element);
-                        setNestedKey(out, rm[1], [element]);
+                        if (elemVar) {
+                            collectVars(rewriteRangeVar(inner, elemVar), element);
+                            collectVarFields(inner, elemVar, element);
+                        } else {
+                            collectVars(inner, element);
+                        }
+                        if (elemVar && Object.keys(element).length === 0 && usesBareVar(inner, elemVar)) {
+                            setNestedKey(out, listName, [sampleValueFor(lastSegment(listName))]);
+                        } else {
+                            setNestedKey(out, listName, [element]);
+                        }
                         i = nextEnd.index + nextEnd[0].length;
                         break;
                     }
