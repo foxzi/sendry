@@ -20,14 +20,17 @@ import (
 
 // SendRequest is the request body for POST /send
 type SendRequest struct {
-	From    string            `json:"from"`
-	To      []string          `json:"to"`
-	CC      []string          `json:"cc,omitempty"`
-	BCC     []string          `json:"bcc,omitempty"`
-	Subject string            `json:"subject"`
-	Body    string            `json:"body"`
-	HTML    string            `json:"html,omitempty"`
-	Headers map[string]string `json:"headers,omitempty"`
+	From string `json:"from"`
+	// FromName is the sender display name shown next to the address. It
+	// overrides a name given inside From.
+	FromName string            `json:"from_name,omitempty"`
+	To       []string          `json:"to"`
+	CC       []string          `json:"cc,omitempty"`
+	BCC      []string          `json:"bcc,omitempty"`
+	Subject  string            `json:"subject"`
+	Body     string            `json:"body"`
+	HTML     string            `json:"html,omitempty"`
+	Headers  map[string]string `json:"headers,omitempty"`
 }
 
 // SendResponse is the response for POST /send
@@ -221,6 +224,7 @@ func (s *Server) buildMessageFromRequest(req *SendRequest, remoteAddr string) (*
 	if err != nil {
 		return nil, http.StatusBadRequest, "invalid from address"
 	}
+	applyFromName(from, req.FromName)
 	if len(req.To) == 0 {
 		return nil, http.StatusBadRequest, "to is required"
 	}
@@ -379,7 +383,7 @@ func (s *Server) buildEmailData(req *SendRequest, from *mail.Address) []byte {
 	}
 	buf.WriteString(fmt.Sprintf("Subject: %s\r\n", encodeHeader(req.Subject)))
 	buf.WriteString(fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z)))
-	buf.WriteString(fmt.Sprintf("Message-ID: <%s@%s>\r\n", uuid.New().String(), email.ExtractDomainOrDefault(req.From, "localhost")))
+	buf.WriteString(fmt.Sprintf("Message-ID: <%s@%s>\r\n", uuid.New().String(), email.ExtractDomainOrDefault(from.Address, "localhost")))
 
 	// Custom headers (sanitize to prevent header injection)
 	for k, v := range req.Headers {
@@ -457,6 +461,14 @@ func headerAddress(addr *mail.Address) string {
 		return addr.Address
 	}
 	return addr.String()
+}
+
+// applyFromName sets the display name of the sender from the from_name
+// request field. An empty value keeps the name parsed from the address.
+func applyFromName(from *mail.Address, name string) {
+	if name = sanitizeHeaderValue(name); name != "" {
+		from.Name = name
+	}
 }
 
 // headerAddressList formats a list of validated addresses for a To/Cc header.

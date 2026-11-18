@@ -107,6 +107,7 @@ type SendTemplateRequest struct {
 	TemplateID   string                 `json:"template_id,omitempty"`
 	TemplateName string                 `json:"template_name,omitempty"`
 	From         string                 `json:"from"`
+	FromName     string                 `json:"from_name,omitempty"`
 	To           []string               `json:"to"`
 	CC           []string               `json:"cc,omitempty"`
 	BCC          []string               `json:"bcc,omitempty"`
@@ -385,6 +386,7 @@ func (s *TemplateServer) handleSendTemplate(w http.ResponseWriter, r *http.Reque
 		sendError(w, http.StatusBadRequest, "invalid from address")
 		return
 	}
+	applyFromName(from, req.FromName)
 
 	if len(req.To) == 0 {
 		sendError(w, http.StatusBadRequest, "to is required")

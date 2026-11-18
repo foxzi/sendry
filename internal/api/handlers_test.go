@@ -542,6 +542,65 @@ func TestSendPlainFromUnchanged(t *testing.T) {
 	}
 }
 
+func TestSendFromName(t *testing.T) {
+	tests := []struct {
+		name     string
+		from     string
+		fromName string
+		want     string
+	}{
+		{"ascii", "shop@example.com", "Shop", `From: "Shop" <shop@example.com>`},
+		{"specials", "shop@example.com", "Shop, Inc. (EU) @ home", `From: "Shop, Inc. (EU) @ home" <shop@example.com>`},
+		{"non-ascii", "shop@example.com", "Семянычъ", "From: =?utf-8?q?"},
+		{"overrides name in from", "Old <shop@example.com>", "New", `From: "New" <shop@example.com>`},
+		{"header injection", "shop@example.com", "Shop\r\nBcc: evil@example.com", `From: "ShopBcc: evil@example.com" <shop@example.com>`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			server, q := setupTestServer("test-api-key")
+			body, err := json.Marshal(SendRequest{From: tc.from, FromName: tc.fromName, To: []string{"to@example.com"}, Subject: "s", Body: "b"})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			req := httptest.NewRequest("POST", "/api/v1/send", bytes.NewBuffer(body))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer test-api-key")
+			w := httptest.NewRecorder()
+			server.router.ServeHTTP(w, req)
+
+			if w.Code != http.StatusAccepted {
+				t.Fatalf("Status = %d, want %d. Body: %s", w.Code, http.StatusAccepted, w.Body.String())
+			}
+			if len(q.messages) != 1 {
+				t.Fatalf("queued %d messages, want 1", len(q.messages))
+			}
+			for _, msg := range q.messages {
+				if msg.From != "shop@example.com" {
+					t.Errorf("Envelope From = %q, want bare address", msg.From)
+				}
+				data := string(msg.Data)
+				headers := data[:strings.Index(data, "\r\n\r\n")]
+				var fromLine string
+				for _, l := range strings.Split(headers, "\r\n") {
+					if strings.HasPrefix(l, "From: ") {
+						fromLine = l
+					}
+					if strings.HasPrefix(l, "Bcc:") {
+						t.Errorf("injected header present:\n%s", headers)
+					}
+				}
+				if !strings.HasPrefix(fromLine, tc.want) || !strings.HasSuffix(fromLine, "<shop@example.com>") {
+					t.Errorf("From header = %q, want prefix %q", fromLine, tc.want)
+				}
+				if !strings.Contains(headers, "@example.com>\r\n") {
+					t.Errorf("Message-ID should use sender domain:\n%s", headers)
+				}
+			}
+		})
+	}
+}
+
 func TestParseAddress(t *testing.T) {
 	ok := []string{"user@example.com", "first.last+tag@sub.example.com", "Name <user@example.com>", "\"Doe, John\" <j@example.com>"}
 	bad := []string{
