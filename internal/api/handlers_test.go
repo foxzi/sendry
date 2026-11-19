@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/mail"
 	"strings"
 	"testing"
 
@@ -542,20 +543,84 @@ func TestSendPlainFromUnchanged(t *testing.T) {
 	}
 }
 
-func TestSendFromName(t *testing.T) {
-	tests := []struct {
-		name     string
-		from     string
-		fromName string
-		want     string
-	}{
-		{"ascii", "shop@example.com", "Shop", `From: "Shop" <shop@example.com>`},
-		{"specials", "shop@example.com", "Shop, Inc. (EU) @ home", `From: "Shop, Inc. (EU) @ home" <shop@example.com>`},
-		{"non-ascii", "shop@example.com", "Семянычъ", "From: =?utf-8?q?"},
-		{"overrides name in from", "Old <shop@example.com>", "New", `From: "New" <shop@example.com>`},
-		{"header injection", "shop@example.com", "Shop\r\nBcc: evil@example.com", `From: "ShopBcc: evil@example.com" <shop@example.com>`},
+// fromNameCases are shared by /send and /send/template: both set the sender
+// display name through applyFromName.
+var fromNameCases = []struct {
+	name     string
+	from     string
+	fromName string
+	wantRaw  string // prefix of the raw From header line
+	wantName string // display name a mail client decodes from the header
+}{
+	{"ascii", "shop@example.com", "Shop", `From: "Shop" <shop@example.com>`, "Shop"},
+	{"specials", "shop@example.com", "Shop, Inc. (EU) @ home", `From: "Shop, Inc. (EU) @ home" <shop@example.com>`, "Shop, Inc. (EU) @ home"},
+	{"quotes and backslash", "shop@example.com", `He said "hi" \ back`, `From: "He said \"hi\" \\ back" <shop@example.com>`, `He said "hi" \ back`},
+	{"non-ascii", "shop@example.com", "Семянычъ", "From: =?utf-8?q?", "Семянычъ"},
+	{"non-ascii with specials", "shop@example.com", `Иванов, Иван "ИП"`, "From: =?utf-8?b?", `Иванов, Иван "ИП"`},
+	{"overrides name in from", "Old <shop@example.com>", "New", `From: "New" <shop@example.com>`, "New"},
+	{"empty keeps name in from", "Old <shop@example.com>", "", `From: "Old" <shop@example.com>`, "Old"},
+	{"whitespace keeps name in from", "Old <shop@example.com>", "   ", `From: "Old" <shop@example.com>`, "Old"},
+	{"only crlf keeps name in from", "Old <shop@example.com>", "\r\n", `From: "Old" <shop@example.com>`, "Old"},
+	{"empty without name in from", "shop@example.com", "", "From: shop@example.com", ""},
+	{"header injection", "shop@example.com", "Shop\r\nBcc: evil@example.com", `From: "ShopBcc: evil@example.com" <shop@example.com>`, "ShopBcc: evil@example.com"},
+	{"lone cr", "shop@example.com", "A\rB", `From: "AB" <shop@example.com>`, "AB"},
+	{"lone lf", "shop@example.com", "A\nB", `From: "AB" <shop@example.com>`, "AB"},
+	{"looks like another address", "shop@example.com", "Evil <evil@example.org>", `From: "Evil <evil@example.org>" <shop@example.com>`, "Evil <evil@example.org>"},
+}
+
+// checkFromHeaders verifies the sender of a queued message: bare envelope
+// address, the expected From header, no injected headers and a Message-ID in
+// the sender domain.
+func checkFromHeaders(t *testing.T, msg *queue.Message, wantRaw, wantName string) {
+	t.Helper()
+	if msg.From != "shop@example.com" {
+		t.Errorf("Envelope From = %q, want bare address", msg.From)
 	}
-	for _, tc := range tests {
+	data := string(msg.Data)
+	headers := data[:strings.Index(data, "\r\n\r\n")]
+	var fromLines, messageIDs []string
+	for _, l := range strings.Split(headers, "\r\n") {
+		switch {
+		case strings.HasPrefix(l, "From: "):
+			fromLines = append(fromLines, l)
+		case strings.HasPrefix(l, "Message-ID: "):
+			messageIDs = append(messageIDs, l)
+		case strings.HasPrefix(l, "Bcc:"):
+			t.Errorf("injected header present:\n%s", headers)
+		}
+		for _, r := range l {
+			if r > 127 {
+				t.Errorf("header line contains non-ASCII characters: %q", l)
+				break
+			}
+		}
+	}
+	if len(fromLines) != 1 {
+		t.Fatalf("got %d From headers, want 1:\n%s", len(fromLines), headers)
+	}
+	if !strings.HasPrefix(fromLines[0], wantRaw) || !strings.HasSuffix(fromLines[0], "shop@example.com>") && fromLines[0] != "From: shop@example.com" {
+		t.Errorf("From header = %q, want prefix %q", fromLines[0], wantRaw)
+	}
+	if len(messageIDs) != 1 || !strings.HasSuffix(messageIDs[0], "@example.com>") {
+		t.Errorf("Message-ID should use the sender domain, got %q", messageIDs)
+	}
+
+	// What a mail client sees after decoding the header.
+	parsed, err := mail.ReadMessage(strings.NewReader(data))
+	if err != nil {
+		t.Fatalf("message does not parse: %v", err)
+	}
+	addrs, err := parsed.Header.AddressList("From")
+	if err != nil {
+		t.Fatalf("From header does not parse: %v", err)
+	}
+	if len(addrs) != 1 || addrs[0].Address != "shop@example.com" || addrs[0].Name != wantName {
+		t.Errorf("parsed From = %+v, want name %q and address shop@example.com", addrs, wantName)
+	}
+}
+
+func TestSendFromName(t *testing.T) {
+	for _, tc := range fromNameCases {
 		t.Run(tc.name, func(t *testing.T) {
 			server, q := setupTestServer("test-api-key")
 			body, err := json.Marshal(SendRequest{From: tc.from, FromName: tc.fromName, To: []string{"to@example.com"}, Subject: "s", Body: "b"})
@@ -576,28 +641,44 @@ func TestSendFromName(t *testing.T) {
 				t.Fatalf("queued %d messages, want 1", len(q.messages))
 			}
 			for _, msg := range q.messages {
-				if msg.From != "shop@example.com" {
-					t.Errorf("Envelope From = %q, want bare address", msg.From)
-				}
-				data := string(msg.Data)
-				headers := data[:strings.Index(data, "\r\n\r\n")]
-				var fromLine string
-				for _, l := range strings.Split(headers, "\r\n") {
-					if strings.HasPrefix(l, "From: ") {
-						fromLine = l
-					}
-					if strings.HasPrefix(l, "Bcc:") {
-						t.Errorf("injected header present:\n%s", headers)
-					}
-				}
-				if !strings.HasPrefix(fromLine, tc.want) || !strings.HasSuffix(fromLine, "<shop@example.com>") {
-					t.Errorf("From header = %q, want prefix %q", fromLine, tc.want)
-				}
-				if !strings.Contains(headers, "@example.com>\r\n") {
-					t.Errorf("Message-ID should use sender domain:\n%s", headers)
-				}
+				checkFromHeaders(t, msg, tc.wantRaw, tc.wantName)
 			}
 		})
+	}
+}
+
+// from_name of each batch item is applied to that item only.
+func TestSendBatchFromName(t *testing.T) {
+	server, q := setupTestServer("test-api-key")
+	body, err := json.Marshal(map[string]any{"messages": []SendRequest{
+		{From: "shop@example.com", FromName: "First", To: []string{"a@example.com"}, Subject: "s", Body: "b"},
+		{From: "Old <shop@example.com>", To: []string{"b@example.com"}, Subject: "s", Body: "b"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("POST", "/api/v1/send/batch", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer test-api-key")
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("Status = %d, want %d. Body: %s", w.Code, http.StatusAccepted, w.Body.String())
+	}
+	if len(q.messages) != 2 {
+		t.Fatalf("queued %d messages, want 2", len(q.messages))
+	}
+	for _, msg := range q.messages {
+		switch msg.To[0] {
+		case "a@example.com":
+			checkFromHeaders(t, msg, `From: "First" <shop@example.com>`, "First")
+		case "b@example.com":
+			checkFromHeaders(t, msg, `From: "Old" <shop@example.com>`, "Old")
+		default:
+			t.Errorf("unexpected recipient %v", msg.To)
+		}
 	}
 }
 
