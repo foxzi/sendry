@@ -72,6 +72,7 @@ POST /api/v1/send
 ```json
 {
   "from": "sender@example.com",
+  "from_name": "Example Shop",
   "to": ["recipient@example.com"],
   "subject": "Привет",
   "body": "Текстовое содержимое",
@@ -85,6 +86,7 @@ POST /api/v1/send
 | Поле | Тип | Обязательно | Описание |
 |------|-----|-------------|----------|
 | `from` | string | Да | Email отправителя |
+| `from_name` | string | Нет | Имя отправителя, которое почтовая программа показывает рядом с адресом. Любые символы, кодируется автоматически. Заменяет имя, указанное внутри `from` |
 | `to` | array | Да | Email адреса получателей |
 | `subject` | string | Да* | Тема письма |
 | `body` | string | Да* | Текстовое тело |
@@ -426,6 +428,7 @@ POST /api/v1/send/template
   "template_id": "...",
   "template_name": "welcome",
   "from": "noreply@example.com",
+  "from_name": "Example Shop",
   "to": ["user@example.com"],
   "cc": [],
   "bcc": [],
@@ -437,6 +440,8 @@ POST /api/v1/send/template
 ```
 
 Примечание: Укажите либо `template_id`, либо `template_name`.
+
+Имя отправителя задаётся необязательным полем `from_name`, как в `/send`.
 
 **Ответ (202 Accepted):**
 ```json

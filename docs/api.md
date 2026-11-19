@@ -72,6 +72,7 @@ POST /api/v1/send
 ```json
 {
   "from": "sender@example.com",
+  "from_name": "Example Shop",
   "to": ["recipient@example.com"],
   "subject": "Hello",
   "body": "Plain text content",
@@ -85,6 +86,7 @@ POST /api/v1/send
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `from` | string | Yes | Sender email address |
+| `from_name` | string | No | Sender display name shown next to the address. Any characters, encoded automatically. Overrides a name given inside `from` |
 | `to` | array | Yes | Recipient email addresses |
 | `subject` | string | Yes* | Email subject |
 | `body` | string | Yes* | Plain text body |
@@ -426,6 +428,7 @@ POST /api/v1/send/template
   "template_id": "...",
   "template_name": "welcome",
   "from": "noreply@example.com",
+  "from_name": "Example Shop",
   "to": ["user@example.com"],
   "cc": [],
   "bcc": [],
@@ -437,6 +440,8 @@ POST /api/v1/send/template
 ```
 
 Note: Provide either `template_id` or `template_name`.
+
+The sender display name is set with the optional `from_name` field, same as in `/send`.
 
 **Response (202 Accepted):**
 ```json

@@ -2,7 +2,7 @@
 <div class="page-header">
     <div>
         <h1 data-i18n="infra.dkim_keys">DKIM keys</h1>
-        <p class="text-muted" data-i18n="infra.signing_keys_managed_centrally_and_deployed_to">Signing keys managed centrally and deployed to servers</p>
+        <p class="text-muted" data-i18n="infra.signing_keys_managed_centrally_and_deployed_to">Signing keys managed centrally and deployed to servers together with their domains</p>
     </div>
     <div class="header-actions">
         <a href="/dkim/new" class="btn btn-primary" data-i18n="infra.new_dkim_key">New DKIM key</a>
@@ -19,7 +19,6 @@
                     <th data-i18n="common.domain">Domain</th>
                     <th data-i18n="infra.selector">Selector</th>
                     <th data-i18n="infra.dns_name">DNS Name</th>
-                    <th data-i18n="infra.deployments">Deployments</th>
                     <th data-i18n="common.created">Created</th>
                     <th data-i18n="actions">Actions</th>
                 </tr>
@@ -30,13 +29,6 @@
                     <td>{{.Domain}}</td>
                     <td>{{.Selector}}</td>
                     <td><code>{{.DNSName}}</code></td>
-                    <td>
-                        {{if .DeploymentCount}}
-                        <span class="badge badge-running">{{.DeploymentCount}} <span data-i18n="infra.server_s">server(s)</span></span>
-                        {{else}}
-                        <span class="badge badge-draft" data-i18n="infra.not_deployed">Not deployed</span>
-                        {{end}}
-                    </td>
                     <td>{{.CreatedAt.Format "2006-01-02"}}</td>
                     <td>
                         <a href="/dkim/{{.ID}}" class="btn btn-sm btn-secondary" data-i18n="view">View</a>
