@@ -19,6 +19,7 @@ const (
 const (
 	UnsubSourceLink     = "link"      // confirmed on the unsubscribe page
 	UnsubSourceOneClick = "one_click" // RFC 8058 POST from the mail client
+	UnsubSourceManual   = "manual"    // set by a panel user on the recipient card
 )
 
 // RecipientStatusUnsubscribed is the recipients.status value of an address
@@ -60,8 +61,8 @@ type TrackingSource struct {
 
 // Unsubscribe is a row of the unsubscribes journal: when, from which campaign
 // and how an address unsubscribed from one address book (recipient list).
-// The journal is write-only for now (nothing reads it back); whether an
-// address gets mail is decided by recipients.status alone.
+// The journal is shown on the recipient card; whether an address gets mail
+// is decided by recipients.status alone.
 type Unsubscribe struct {
 	ID          int64     `json:"id"`
 	ListID      string    `json:"list_id"`

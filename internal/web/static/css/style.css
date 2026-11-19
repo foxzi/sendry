@@ -3427,3 +3427,314 @@ label.cf-list:has(input:focus-visible) {
 }
 .srv-status-tip-name { min-width: 4.5rem; font-weight: 500; }
 .srv-status-tip-row--idle .srv-status-tip-name { color: var(--text-muted); font-weight: 400; }
+
+/* Recipient card (views/recipient_view.html): the address, its record in the
+   list on the left, every campaign message with its track on the right */
+.rc-header {
+    align-items: flex-start;
+    gap: 1rem;
+}
+
+.rc-back {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+}
+
+.page-header h1.rc-address {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.75rem;
+    margin-top: 0.25rem;
+    font-size: 1.75rem;
+    letter-spacing: -0.01em;
+    overflow-wrap: anywhere;
+}
+
+.rc-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1.75rem;
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+}
+
+.rc-summary div {
+    display: flex;
+    gap: 0.4rem;
+}
+
+.rc-summary dt {
+    color: var(--text-muted);
+}
+
+.rc-summary dd {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.rc-layout {
+    display: grid;
+    grid-template-columns: minmax(280px, 22rem) minmax(0, 1fr);
+    gap: 1.5rem;
+    align-items: start;
+}
+
+.rc-side {
+    display: grid;
+    gap: 1.5rem;
+}
+
+.rc-name label {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+}
+
+.rc-name-row {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.rc-name-row .input {
+    flex: 1;
+    min-width: 0;
+}
+
+.rc-name-row .btn {
+    flex: none;
+}
+
+.rc-facts {
+    display: grid;
+    grid-template-columns: minmax(5.5rem, auto) minmax(0, 1fr);
+    gap: 0.5rem 1rem;
+    margin-top: 1.25rem;
+    font-size: 0.875rem;
+}
+
+.rc-facts dt {
+    color: var(--text-muted);
+}
+
+.rc-facts dd {
+    overflow-wrap: anywhere;
+}
+
+.rc-subhead {
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.rc-subhead + .rc-facts {
+    margin-top: 0.75rem;
+}
+
+.rc-lists {
+    list-style: none;
+}
+
+.rc-lists li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1.5rem;
+}
+
+.rc-lists li + li {
+    border-top: 1px solid var(--border);
+}
+
+.rc-mails {
+    list-style: none;
+}
+
+.rc-mail {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    gap: 0.5rem 1.5rem;
+    padding: 1.1rem 1.5rem;
+}
+
+.rc-mail + .rc-mail {
+    border-top: 1px solid var(--border);
+}
+
+.rc-mail-what {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.rc-mail-campaign {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.rc-mail-what .text-muted a {
+    color: inherit;
+}
+
+.rc-mail-note {
+    align-self: center;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+}
+
+/* What happened to one message, left to right. A step is a dot on a line;
+   the line up to a reached step is coloured */
+.rc-track {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    list-style: none;
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+}
+
+.rc-track li {
+    position: relative;
+    padding: 1.1rem 0.75rem 0 0;
+}
+
+.rc-track li::before {
+    content: "";
+    position: absolute;
+    top: 0.3rem;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--border);
+}
+
+.rc-track li:last-child::before {
+    display: none;
+}
+
+.rc-track li::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0.7rem;
+    height: 0.7rem;
+    border: 2px solid var(--border);
+    border-radius: 50%;
+    background: var(--bg-card);
+}
+
+.rc-track li > span {
+    display: block;
+}
+
+.rc-track li small {
+    font-size: 0.75rem;
+}
+
+.rc-track .is-done {
+    color: var(--text);
+}
+
+.rc-track .is-done::after {
+    border-color: var(--success);
+    background: var(--success);
+}
+
+.rc-track .is-done:has(+ .is-done)::before {
+    background: var(--success);
+}
+
+.rc-track .is-done small {
+    color: var(--text-muted);
+}
+
+.rc-track .is-failed {
+    color: var(--error);
+}
+
+.rc-track .is-failed::after {
+    border-color: var(--error);
+    background: var(--error);
+}
+
+.rc-track .is-unsub {
+    color: var(--text);
+}
+
+.rc-track .is-unsub::after {
+    border-color: var(--warning);
+    background: var(--warning);
+}
+
+.rc-events {
+    grid-column: 1 / -1;
+    font-size: 0.875rem;
+}
+
+.rc-events summary {
+    width: fit-content;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.rc-events summary:hover {
+    color: var(--text);
+}
+
+.rc-events .table-scroll {
+    margin-top: 0.5rem;
+}
+
+.rc-events .cell-truncate {
+    max-width: 220px;
+}
+
+.rc-header .header-actions {
+    flex: none;
+}
+
+.rc-header .header-actions .btn {
+    white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+    .rc-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 640px) {
+    .rc-header {
+        flex-direction: column;
+    }
+
+    .rc-mail {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* On a phone the track runs top to bottom: four steps do not fit in a row */
+@media (max-width: 480px) {
+    .rc-track {
+        grid-auto-flow: row;
+        gap: 0.4rem;
+    }
+
+    .rc-track li {
+        padding: 0 0 0 1.25rem;
+    }
+
+    .rc-track li::before {
+        display: none;
+    }
+
+    .rc-track li::after {
+        top: 0.3rem;
+    }
+}

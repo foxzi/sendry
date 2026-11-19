@@ -65,7 +65,7 @@
                 <tbody>
                     {{range .Items}}
                     <tr>
-                        <td>{{.Email}}{{if .UnsubscribedAt}} <span class="badge badge-secondary" data-i18n="trk.unsub_badge">unsubscribed</span>{{end}}</td>
+                        <td>{{if .Email}}<a href="/recipients/{{$.Job.RecipientListID}}/recipients/{{.RecipientID}}">{{.Email}}</a>{{end}}{{if .UnsubscribedAt}} <span class="badge badge-secondary" data-i18n="trk.unsub_badge">unsubscribed</span>{{end}}</td>
                         <td>{{if .VariantName}}{{.VariantName}}{{else}}<span class="text-muted">-</span>{{end}}</td>
                         <td>{{.ServerName}}</td>
                         <td><span class="badge badge-{{.Status}}" data-i18n="status.{{.Status}}"{{if eq .Status "queued"}} data-i18n-title="cmp.queued_hint"{{end}}>{{.Status}}</span></td>

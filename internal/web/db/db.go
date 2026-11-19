@@ -151,6 +151,9 @@ func (db *DB) Migrate() error {
 		"DROP INDEX IF EXISTS idx_unsubscribes_created",
 		"CREATE INDEX IF NOT EXISTS idx_email_events_job_stats ON email_events(job_id, type, is_machine)",
 		"CREATE INDEX IF NOT EXISTS idx_email_events_dedup ON email_events(source_type, source_id, type, created_at)",
+		// the recipient card: one address in all lists and the messages sent to it
+		"CREATE INDEX IF NOT EXISTS idx_recipients_email ON recipients(lower(email))",
+		"CREATE INDEX IF NOT EXISTS idx_send_job_items_recipient ON send_job_items(recipient_id)",
 	}
 	for _, m := range indexMigrations {
 		if _, err := db.Exec(m); err != nil {

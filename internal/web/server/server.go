@@ -201,6 +201,10 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("POST /recipients/{id}/import", h.RecipientImport)
 	protected.HandleFunc("GET /recipients/{id}/export", h.RecipientListExport)
 	protected.HandleFunc("POST /recipients/{id}/add", h.RecipientAdd)
+	protected.HandleFunc("GET /recipients/{id}/recipients/{recipientId}", h.RecipientView)
+	protected.HandleFunc("PUT /recipients/{id}/recipients/{recipientId}", h.RecipientUpdate)
+	protected.HandleFunc("POST /recipients/{id}/recipients/{recipientId}/unsubscribe", h.RecipientUnsubscribe)
+	protected.HandleFunc("POST /recipients/{id}/recipients/{recipientId}/resubscribe", h.RecipientResubscribe)
 	protected.HandleFunc("DELETE /recipients/{id}/recipients/{recipientId}", h.RecipientDelete)
 
 	// Campaigns

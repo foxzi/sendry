@@ -1,0 +1,170 @@
+{{define "content"}}
+<div class="page-header rc-header">
+    <div>
+        <a href="/recipients/{{.List.ID}}" class="rc-back">&larr; {{.List.Name}}</a>
+        <h1 class="rc-address">{{emailBreak .Recipient.Email}} {{template "recipient_status" .Recipient.Status}}</h1>
+        <dl class="rc-summary">
+            <div><dt data-i18n="cmp.rc_sent">Messages sent</dt><dd>{{.Totals.Sent}}</dd></div>
+            <div><dt data-i18n="cmp.rc_opened">Opened</dt><dd>{{.Totals.Opened}}</dd></div>
+            <div><dt data-i18n="cmp.rc_clicked">Clicked</dt><dd>{{.Totals.Clicked}}</dd></div>
+            {{if .Totals.LastSent}}<div><dt data-i18n="cmp.rc_last_sent">Last message</dt><dd>{{template "local_time" .Totals.LastSent}}</dd></div>{{end}}
+        </dl>
+    </div>
+    <div class="header-actions">
+        {{if eq .Recipient.Status "active"}}
+        <form method="post" action="/recipients/{{.List.ID}}/recipients/{{.Recipient.ID}}/unsubscribe" onsubmit="return confirm(I18n.t('cmp.rc_confirm_unsub'))">
+            <button type="submit" class="btn" data-i18n="cmp.rc_unsubscribe">Unsubscribe</button>
+        </form>
+        {{else if eq .Recipient.Status "unsubscribed"}}
+        <form method="post" action="/recipients/{{.List.ID}}/recipients/{{.Recipient.ID}}/resubscribe" onsubmit="return confirm(I18n.t('cmp.rc_confirm_resub'))">
+            <button type="submit" class="btn" data-i18n="cmp.rc_resubscribe">Resubscribe</button>
+        </form>
+        {{end}}
+        {{/* an address campaigns were sent to cannot be deleted, only unsubscribed */}}
+        {{if not .HasMessages}}
+        <form method="post" action="/recipients/{{.List.ID}}/recipients/{{.Recipient.ID}}" onsubmit="return confirm(I18n.t('cmp.confirm_delete_recipient'))">
+            <input type="hidden" name="_method" value="DELETE">
+            <button type="submit" class="btn btn-danger" data-i18n="cmp.rc_delete">Delete from list</button>
+        </form>
+        {{end}}
+    </div>
+</div>
+
+{{if .Saved}}<div class="alert alert-success" data-i18n="cmp.rc_saved">Name saved</div>{{end}}
+
+<div class="rc-layout">
+    <div class="rc-side">
+        <div class="card">
+            <div class="card-header">
+                <h2><span data-i18n="cmp.rc_in_list">In the list</span> &laquo;{{.List.Name}}&raquo;</h2>
+            </div>
+            <div class="card-body">
+                <form method="post" action="/recipients/{{.List.ID}}/recipients/{{.Recipient.ID}}" class="rc-name">
+                    <input type="hidden" name="_method" value="PUT">
+                    <label for="rc-name" data-i18n="name">Name</label>
+                    <div class="rc-name-row">
+                        <input type="text" id="rc-name" name="name" value="{{.Recipient.Name}}" class="input" maxlength="200">
+                        <button type="submit" class="btn" data-i18n="cmp.rc_save_name">Save name</button>
+                    </div>
+                </form>
+
+                <dl class="rc-facts">
+                    <dt data-i18n="status">Status</dt>
+                    <dd>{{template "recipient_status" .Recipient.Status}}</dd>
+                    {{if .Unsub}}
+                    <dt data-i18n="cmp.rc_unsub_at">Unsubscribed</dt>
+                    <dd>
+                        {{template "local_time" .Unsub.CreatedAt}},
+                        {{if eq .Unsub.SourceType "manual"}}<span data-i18n="cmp.rc_unsub_manual">by hand in the panel</span>
+                        {{else if eq .Unsub.SourceType "one_click"}}<span data-i18n="cmp.rc_unsub_one_click">with the button in the mail client</span>
+                        {{else}}<span data-i18n="cmp.rc_unsub_link">with the link in the message</span>{{end}}{{if .UnsubCampaign}},
+                        <span data-i18n="cmp.rc_unsub_from">campaign</span> <a href="/campaigns/{{.Unsub.CampaignID}}">{{.UnsubCampaign}}</a>{{end}}
+                    </dd>
+                    {{end}}
+                    <dt data-i18n="cmp.rc_added">Added</dt>
+                    <dd>{{template "local_time" .Recipient.CreatedAt}}</dd>
+                    {{if .Tags}}
+                    <dt data-i18n="cmp.rc_tags">Tags</dt>
+                    <dd>{{range .Tags}}<span class="badge">{{.}}</span> {{end}}</dd>
+                    {{end}}
+                </dl>
+
+                {{if .Variables}}
+                <h3 class="rc-subhead" data-i18n="cmp.rc_variables">Variables</h3>
+                <dl class="rc-facts">
+                    {{range .Variables}}
+                    <dt><code>{{.Key}}</code></dt>
+                    <dd>{{.Value}}</dd>
+                    {{end}}
+                </dl>
+                {{end}}
+            </div>
+        </div>
+
+        {{if .OtherLists}}
+        <div class="card">
+            <div class="card-header">
+                <h2 data-i18n="cmp.rc_other_lists">Other lists</h2>
+            </div>
+            <ul class="rc-lists">
+                {{range .OtherLists}}
+                <li>
+                    <a href="/recipients/{{.ListID}}/recipients/{{.RecipientID}}">{{.ListName}}</a>
+                    {{template "recipient_status" .Status}}
+                </li>
+                {{end}}
+            </ul>
+        </div>
+        {{end}}
+    </div>
+
+    <div class="card rc-history">
+        <div class="card-header">
+            <h2><span data-i18n="cmp.rc_messages">Messages</span> ({{.Totals.Messages}})</h2>
+            {{if gt .Totals.Messages .MessagesLimit}}<span class="text-muted"><span data-i18n="cmp.rc_shown_last">latest shown:</span> {{.MessagesLimit}}</span>{{end}}
+        </div>
+        {{if .Messages}}
+        <ul class="rc-mails">
+            {{range .Messages}}
+            <li class="rc-mail">
+                <div class="rc-mail-what">
+                    <a href="/campaigns/{{.CampaignID}}" class="rc-mail-campaign">{{if .CampaignName}}{{.CampaignName}}{{else}}{{slice .CampaignID 0 8}}{{end}}</a>
+                    <span class="text-muted"><a href="/jobs/{{.JobID}}">{{template "local_time" .At}}</a>{{if .ListName}}, {{.ListName}}{{end}}{{if .VariantName}}, {{.VariantName}}{{end}}</span>
+                </div>
+
+                {{if eq .Status "skipped"}}
+                <p class="rc-mail-note"><span data-i18n="cmp.rc_skipped">Not sent:</span> {{.Error}}</p>
+                {{else}}
+                <ol class="rc-track">
+                    {{if eq .Status "sent"}}
+                    <li class="is-done"><span data-i18n="cmp.rc_step_sent">Sent</span></li>
+                    {{else if eq .Status "failed"}}
+                    <li class="is-failed"><span data-i18n="cmp.rc_step_failed">Not delivered</span>{{if .Error}} <small title="{{.Error}}" data-i18n="error_type.{{errorType .Error}}">{{(errorType .Error).Label}}</small>{{end}}</li>
+                    {{else if eq .Status "queued"}}
+                    <li><span data-i18n="status.queued" data-i18n-title="cmp.queued_hint">queued</span></li>
+                    {{else}}
+                    <li><span data-i18n="cmp.rc_step_waiting">Waiting to be sent</span></li>
+                    {{end}}
+                    <li{{if .OpenedAt}} class="is-done"{{end}}><span><span data-i18n="cmp.rc_step_opened">Opened</span>{{if gt .OpenCount 1}} &times;{{.OpenCount}}{{end}}</span>{{if .OpenedAt}} <small>{{template "local_time" .OpenedAt}}</small>{{end}}</li>
+                    <li{{if .ClickedAt}} class="is-done"{{end}}><span><span data-i18n="cmp.rc_step_clicked">Clicked</span>{{if gt .ClickCount 1}} &times;{{.ClickCount}}{{end}}</span>{{if .ClickedAt}} <small>{{template "local_time" .ClickedAt}}</small>{{end}}</li>
+                    {{if .UnsubscribedAt}}<li class="is-unsub"><span data-i18n="cmp.rc_step_unsub">Unsubscribed</span> <small>{{template "local_time" .UnsubscribedAt}}</small></li>{{end}}
+                </ol>
+                {{end}}
+
+                {{if .Events}}
+                <details class="rc-events">
+                    <summary><span data-i18n="cmp.rc_events">Events:</span> {{len .Events}}</summary>
+                    <div class="table-scroll">
+                    <table class="table">
+                        <tbody>
+                            {{range .Events}}
+                            <tr>
+                                <td class="nowrap">{{template "local_time" .CreatedAt}}</td>
+                                <td class="nowrap">
+                                    {{if eq .Type "open"}}<span data-i18n="trk.ev_open">Open</span>
+                                    {{else if eq .Type "click"}}<span data-i18n="trk.ev_click">Click</span>
+                                    {{else if eq .Type "unsubscribe"}}<span data-i18n="trk.ev_unsub">Unsubscribe</span>
+                                    {{else}}{{.Type}}{{end}}
+                                    {{if .IsMachine}}<span class="badge badge-secondary" data-i18n="trk.machine">machine</span>{{end}}
+                                </td>
+                                <td>{{if .URL}}<span class="cell-truncate" title="{{.URL}}">{{.URL}}</span>{{end}}</td>
+                                <td class="text-muted">{{.IP}}</td>
+                                <td>{{if .UserAgent}}<span class="cell-truncate text-muted" title="{{.UserAgent}}">{{.UserAgent}}</span>{{end}}</td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                    </div>
+                </details>
+                {{end}}
+            </li>
+            {{end}}
+        </ul>
+        {{else}}
+        <div class="empty-state"><p data-i18n="cmp.rc_no_messages">No campaign has been sent to this address yet</p></div>
+        {{end}}
+    </div>
+</div>
+{{end}}
+
+{{define "recipient_status"}}{{if eq . "active"}}<span class="badge badge-success" data-i18n="status.active">active</span>{{else if eq . "unsubscribed"}}<span class="badge badge-secondary" data-i18n="status.unsubscribed">unsubscribed</span>{{else if eq . "bounced"}}<span class="badge badge-danger" data-i18n="status.bounced">bounced</span>{{else}}<span class="badge" data-i18n="status.{{.}}">{{.}}</span>{{end}}{{end}}

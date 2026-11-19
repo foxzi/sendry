@@ -176,6 +176,7 @@ sendry-web cleanup --days 90 --dry-run    # preview what would be deleted
 - Export to CSV
 - Per-recipient variables for personalization
 - Status tracking (active, unsubscribed, bounced)
+- Address card (click an email in a list or in the recipients of a run): name, status, variables, other lists with the address, every campaign message to it with opens, clicks and events; unsubscribe by hand or resubscribe
 
 ### Campaigns
 
