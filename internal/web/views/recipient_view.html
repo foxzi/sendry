@@ -65,7 +65,7 @@
                     <dd>{{template "local_time" .Recipient.CreatedAt}}</dd>
                     {{if .Tags}}
                     <dt data-i18n="cmp.rc_tags">Tags</dt>
-                    <dd>{{range .Tags}}<span class="badge">{{.}}</span> {{end}}</dd>
+                    <dd class="rc-tags">{{range .Tags}}<span class="badge">{{.}}</span>{{end}}</dd>
                     {{end}}
                 </dl>
 

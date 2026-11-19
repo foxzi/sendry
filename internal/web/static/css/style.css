@@ -3530,6 +3530,12 @@ label.cf-list:has(input:focus-visible) {
     font-weight: 600;
 }
 
+.rc-facts dd.rc-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
 .rc-subhead + .rc-facts {
     margin-top: 0.75rem;
 }
