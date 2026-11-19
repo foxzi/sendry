@@ -36,5 +36,4 @@ type DKIMKeyListItem struct {
 	CreatedAt       time.Time        `json:"created_at"`
 	DeploymentCount int              `json:"deployment_count"`
 	Deployments     []DKIMDeployment `json:"deployments,omitempty"`
-	IsDeployed      bool             `json:"is_deployed"` // For server-specific views
 }

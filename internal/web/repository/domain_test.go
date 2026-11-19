@@ -414,3 +414,31 @@ func TestDomainRepository_UpdateMarksDeploymentsOutdated(t *testing.T) {
 		t.Errorf("GetDeployments() = %+v, want one outdated after domain update", deployments)
 	}
 }
+
+func TestDomainRepository_ListByDKIMKey(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewDomainRepository(db)
+
+	// The key is made for one domain name and linked to another: the lookup
+	// goes by the link, not by the name.
+	key := &models.DKIMKey{Domain: "key-domain.com", Selector: "sendry", PrivateKey: "k", DNSRecord: "r"}
+	if err := NewDKIMRepository(db).Create(key); err != nil {
+		t.Fatalf("Create() key error = %v", err)
+	}
+
+	linked := &models.Domain{Domain: "other-name.com", Mode: "production", DKIMEnabled: true, DKIMKeyID: key.ID}
+	sameName := &models.Domain{Domain: "key-domain.com", Mode: "production"}
+	for _, d := range []*models.Domain{linked, sameName} {
+		if err := repo.Create(d); err != nil {
+			t.Fatalf("Create() error = %v", err)
+		}
+	}
+
+	got, err := repo.ListByDKIMKey(key.ID)
+	if err != nil {
+		t.Fatalf("ListByDKIMKey() error = %v", err)
+	}
+	if len(got) != 1 || got[0].ID != linked.ID || got[0].Domain != "other-name.com" {
+		t.Errorf("ListByDKIMKey() = %+v, want only other-name.com", got)
+	}
+}

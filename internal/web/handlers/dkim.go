@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -12,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/foxzi/sendry/internal/web/models"
-	"github.com/foxzi/sendry/internal/web/sendry"
 )
 
 // DKIMList shows all DKIM keys for a server
@@ -30,17 +28,6 @@ func (h *Handlers) DKIMList(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("failed to list DKIM keys", "error", err)
 		h.error(w, r, http.StatusInternalServerError, "Failed to load DKIM keys")
 		return
-	}
-
-	// Compute IsDeployed for each key
-	for i := range keys {
-		deployments, _ := h.dkim.GetDeployments(keys[i].ID)
-		for _, d := range deployments {
-			if d.ServerName == serverName && d.Status == "deployed" {
-				keys[i].IsDeployed = true
-				break
-			}
-		}
 	}
 
 	data := map[string]any{
@@ -76,8 +63,6 @@ func (h *Handlers) DKIMNew(w http.ResponseWriter, r *http.Request) {
 
 // DKIMCreate creates a new DKIM key
 func (h *Handlers) DKIMCreate(w http.ResponseWriter, r *http.Request) {
-	serverName := r.PathValue("server")
-
 	if err := r.ParseForm(); err != nil {
 		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
@@ -85,7 +70,6 @@ func (h *Handlers) DKIMCreate(w http.ResponseWriter, r *http.Request) {
 
 	domain := strings.TrimSpace(r.FormValue("domain"))
 	selector := strings.TrimSpace(r.FormValue("selector"))
-	autoDeploy := r.FormValue("auto_deploy") == "on"
 
 	if domain == "" || selector == "" {
 		h.error(w, r, http.StatusBadRequest, "Domain and selector are required")
@@ -145,21 +129,9 @@ func (h *Handlers) DKIMCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Auto-deploy to current server if requested
-	if autoDeploy {
-		client, err := h.sendry.GetClient(serverName)
-		if err == nil {
-			resp, err := client.UploadDKIM(r.Context(), key.Domain, key.Selector, key.PrivateKey)
-			if err != nil {
-				h.dkim.CreateDeployment(key.ID, serverName, "failed", err.Error())
-			} else {
-				// Update domain config with DKIM settings
-				h.updateDomainDKIM(r.Context(), client, key.Domain, key.Selector, resp.KeyFile)
-				h.dkim.CreateDeployment(key.ID, serverName, "deployed", "")
-			}
-		}
-	}
-
+	// The key reaches a server only together with a domain that uses it
+	// (see deployDomainToServer): uploading it here would switch the domain
+	// to the new selector before its DNS record exists.
 	http.Redirect(w, r, fmt.Sprintf("/dkim/%s", key.ID), http.StatusSeeOther)
 }
 
@@ -182,12 +154,6 @@ func (h *Handlers) CentralDKIMList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Load deployments for each key
-	for i := range keys {
-		deployments, _ := h.dkim.GetDeployments(keys[i].ID)
-		keys[i].Deployments = deployments
-	}
-
 	data := map[string]any{
 		"Title":   "DKIM Keys",
 		"Active":  "dkim",
@@ -202,10 +168,9 @@ func (h *Handlers) CentralDKIMList(w http.ResponseWriter, r *http.Request) {
 // CentralDKIMNew shows the new DKIM key form (central management)
 func (h *Handlers) CentralDKIMNew(w http.ResponseWriter, r *http.Request) {
 	data := map[string]any{
-		"Title":   "New DKIM Key",
-		"Active":  "dkim",
-		"User":    h.getUserFromContext(r),
-		"Servers": h.getServersStatus(),
+		"Title":  "New DKIM Key",
+		"Active": "dkim",
+		"User":   h.getUserFromContext(r),
 	}
 
 	h.render(w, "central_dkim_new", data)
@@ -220,7 +185,6 @@ func (h *Handlers) CentralDKIMCreate(w http.ResponseWriter, r *http.Request) {
 
 	domain := strings.TrimSpace(r.FormValue("domain"))
 	selector := strings.TrimSpace(r.FormValue("selector"))
-	deployServers := r.Form["servers"]
 
 	if domain == "" || selector == "" {
 		h.error(w, r, http.StatusBadRequest, "Domain and selector are required")
@@ -280,24 +244,7 @@ func (h *Handlers) CentralDKIMCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Deploy to selected servers
-	for _, srvName := range deployServers {
-		client, err := h.sendry.GetClient(srvName)
-		if err != nil {
-			h.dkim.CreateDeployment(key.ID, srvName, "failed", err.Error())
-			continue
-		}
-
-		resp, err := client.UploadDKIM(r.Context(), key.Domain, key.Selector, key.PrivateKey)
-		if err != nil {
-			h.dkim.CreateDeployment(key.ID, srvName, "failed", err.Error())
-		} else {
-			// Update domain config with DKIM settings
-			h.updateDomainDKIM(r.Context(), client, key.Domain, key.Selector, resp.KeyFile)
-			h.dkim.CreateDeployment(key.ID, srvName, "deployed", "")
-		}
-	}
-
+	// Not uploaded to servers here: see DKIMCreate.
 	http.Redirect(w, r, fmt.Sprintf("/dkim/%s", key.ID), http.StatusSeeOther)
 }
 
@@ -316,23 +263,26 @@ func (h *Handlers) CentralDKIMView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get all servers
-	servers := h.getServersStatus()
-
-	// Mark which servers have this key deployed
-	deployedMap := make(map[string]models.DKIMDeployment)
-	for _, d := range key.Deployments {
-		deployedMap[d.ServerName] = d
+	// The key is uploaded to servers by deploying a domain that uses it, so
+	// point at those domains. A key may be linked to a domain with another
+	// name; with no link yet, suggest the domain the key was made for.
+	linkedDomains, err := h.domains.ListByDKIMKey(key.ID)
+	if err != nil {
+		h.logger.Error("failed to list domains of DKIM key", "error", err)
+	}
+	var panelDomain *models.Domain
+	if len(linkedDomains) == 0 {
+		panelDomain, _ = h.domains.GetByDomain(key.Domain)
 	}
 
 	data := map[string]any{
-		"Title":       fmt.Sprintf("DKIM: %s._domainkey.%s", key.Selector, key.Domain),
-		"Active":      "dkim",
-		"User":        h.getUserFromContext(r),
-		"Key":         key,
-		"DNSName":     key.Selector + "._domainkey." + key.Domain,
-		"Servers":     servers,
-		"DeployedMap": deployedMap,
+		"LinkedDomains": linkedDomains,
+		"PanelDomain":   panelDomain,
+		"Title":         fmt.Sprintf("DKIM: %s._domainkey.%s", key.Selector, key.Domain),
+		"Active":        "dkim",
+		"User":          h.getUserFromContext(r),
+		"Key":           key,
+		"DNSName":       key.Selector + "._domainkey." + key.Domain,
 	}
 
 	h.render(w, "central_dkim_view", data)
@@ -363,108 +313,4 @@ func (h *Handlers) CentralDKIMDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, "/dkim", http.StatusSeeOther)
-}
-
-// CentralDKIMDeploy deploys a DKIM key to selected servers (central management)
-func (h *Handlers) CentralDKIMDeploy(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-
-	if err := r.ParseForm(); err != nil {
-		h.error(w, r, http.StatusBadRequest, "Invalid form data")
-		return
-	}
-
-	key, err := h.dkim.GetByID(id)
-	if err != nil || key == nil {
-		h.error(w, r, http.StatusNotFound, "DKIM key not found")
-		return
-	}
-
-	servers := r.Form["servers"]
-	if len(servers) == 0 {
-		h.error(w, r, http.StatusBadRequest, "No servers selected")
-		return
-	}
-
-	var deployErrors []string
-	for _, srvName := range servers {
-		client, err := h.sendry.GetClient(srvName)
-		if err != nil {
-			deployErrors = append(deployErrors, fmt.Sprintf("%s: %v", srvName, err))
-			h.dkim.CreateDeployment(key.ID, srvName, "failed", err.Error())
-			continue
-		}
-
-		resp, err := client.UploadDKIM(r.Context(), key.Domain, key.Selector, key.PrivateKey)
-		if err != nil {
-			deployErrors = append(deployErrors, fmt.Sprintf("%s: %v", srvName, err))
-			h.dkim.CreateDeployment(key.ID, srvName, "failed", err.Error())
-		} else {
-			// Update domain config with DKIM settings
-			h.updateDomainDKIM(r.Context(), client, key.Domain, key.Selector, resp.KeyFile)
-			h.dkim.CreateDeployment(key.ID, srvName, "deployed", "")
-		}
-	}
-
-	if len(deployErrors) > 0 {
-		h.logger.Error("some deployments failed", "errors", deployErrors)
-	}
-
-	http.Redirect(w, r, fmt.Sprintf("/dkim/%s", id), http.StatusSeeOther)
-}
-
-// CentralDKIMDeploymentDelete removes a deployment from a specific server (central management)
-func (h *Handlers) CentralDKIMDeploymentDelete(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	serverName := r.PathValue("server")
-
-	key, err := h.dkim.GetByID(id)
-	if err != nil || key == nil {
-		h.error(w, r, http.StatusNotFound, "DKIM key not found")
-		return
-	}
-
-	// Try to delete from server
-	client, err := h.sendry.GetClient(serverName)
-	if err == nil {
-		_ = client.DeleteDKIM(r.Context(), key.Domain, key.Selector)
-	}
-
-	// Remove deployment record
-	if err := h.dkim.DeleteDeployment(key.ID, serverName); err != nil {
-		h.logger.Error("failed to delete deployment", "error", err)
-	}
-
-	http.Redirect(w, r, fmt.Sprintf("/dkim/%s", id), http.StatusSeeOther)
-}
-
-// updateDomainDKIM updates domain configuration with DKIM settings after key upload
-func (h *Handlers) updateDomainDKIM(ctx context.Context, client *sendry.Client, domain, selector, keyFile string) {
-	h.logger.Info("updateDomainDKIM called", "domain", domain, "selector", selector, "keyFile", keyFile)
-
-	// Get current domain config or create new
-	existingDomain, err := client.GetDomain(ctx, domain)
-
-	var mode string
-	if err == nil && existingDomain != nil {
-		mode = existingDomain.Mode
-	}
-	if mode == "" {
-		mode = "production"
-	}
-
-	// Update domain with DKIM config
-	resp, err := client.UpdateDomain(ctx, domain, &sendry.DomainUpdateRequest{
-		Mode: mode,
-		DKIM: &sendry.DKIMConfig{
-			Enabled:  true,
-			Selector: selector,
-			KeyFile:  keyFile,
-		},
-	})
-	if err != nil {
-		h.logger.Error("failed to update domain DKIM config", "domain", domain, "error", err)
-	} else {
-		h.logger.Info("domain DKIM config updated", "domain", domain, "response_dkim", resp.DKIM)
-	}
 }
