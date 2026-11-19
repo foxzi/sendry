@@ -114,7 +114,7 @@
                 </div>
 
                 {{if eq .Status "skipped"}}
-                <p class="rc-mail-note"><span data-i18n="cmp.rc_skipped">Not sent:</span> {{.Error}}</p>
+                <p class="rc-mail-note"><span data-i18n="cmp.rc_skipped">Not sent:</span> {{template "skip_reason" .Error}}</p>
                 {{else}}
                 <ol class="rc-track">
                     {{if eq .Status "sent"}}

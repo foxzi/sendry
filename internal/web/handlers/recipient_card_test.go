@@ -61,6 +61,26 @@ func TestRecipientCard(t *testing.T) {
 		t.Error("name is not saved")
 	}
 
+	// spaces around the name are dropped, a name over the limit is refused
+	rec = httptest.NewRecorder()
+	h.RecipientUpdate(rec, cardRequest(http.MethodPut, "/recipients/l1/recipients/ra", url.Values{"name": {"  Anna B  "}}))
+	if body = view(); rec.Code != http.StatusSeeOther || !strings.Contains(body, `value="Anna B"`) {
+		t.Errorf("trimmed name: status %d, not saved trimmed", rec.Code)
+	}
+	rec = httptest.NewRecorder()
+	h.RecipientUpdate(rec, cardRequest(http.MethodPut, "/recipients/l1/recipients/ra", url.Values{"name": {strings.Repeat("я", 201)}}))
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("long name: status %d, want 400", rec.Code)
+	}
+	if body = view(); !strings.Contains(body, `value="Anna B"`) {
+		t.Error("long name replaced the saved one")
+	}
+	rec = httptest.NewRecorder()
+	h.RecipientUpdate(rec, cardRequest(http.MethodPut, "/recipients/l1/recipients/ra", url.Values{"name": {strings.Repeat("я", 200)}}))
+	if rec.Code != http.StatusSeeOther {
+		t.Errorf("name of 200 characters: status %d", rec.Code)
+	}
+
 	// unsubscribe by hand: this list only, with a journal row
 	rec = httptest.NewRecorder()
 	h.RecipientUnsubscribe(rec, cardRequest(http.MethodPost, "/recipients/l1/recipients/ra/unsubscribe", nil))

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/foxzi/sendry/internal/web/models"
 	"github.com/foxzi/sendry/internal/web/repository"
@@ -16,6 +18,10 @@ const (
 	recipientCardMessages = 100
 	recipientCardEvents   = 500
 )
+
+// recipientNameMax is the longest name saved from the card, in characters;
+// the same as maxlength of the name field
+const recipientNameMax = 200
 
 // cardMessage is a campaign message on the recipient card with its
 // engagement events, newest first
@@ -184,7 +190,13 @@ func (h *Handlers) RecipientUpdate(w http.ResponseWriter, r *http.Request) {
 		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
-	if err := h.recipients.UpdateRecipientName(list.ID, rec.ID, r.FormValue("name")); err != nil {
+	// the form limits the length too, but a direct request does not
+	name := strings.TrimSpace(r.FormValue("name"))
+	if utf8.RuneCountInString(name) > recipientNameMax {
+		h.error(w, r, http.StatusBadRequest, fmt.Sprintf("Name is too long (max %d characters)", recipientNameMax))
+		return
+	}
+	if err := h.recipients.UpdateRecipientName(list.ID, rec.ID, name); err != nil {
 		h.logger.Error("failed to update recipient", "error", err)
 		h.error(w, r, http.StatusInternalServerError, "Failed to update recipient")
 		return
