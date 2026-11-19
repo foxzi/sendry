@@ -187,6 +187,58 @@ func (h *Handlers) APIDeleteRecipient(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// APIUnsubscribeRecipient handles POST /api/v1/lists/{id}/recipients/{email}/unsubscribe:
+// the address stays in the list but no campaign is sent to it any more. The
+// same address in other lists is untouched. Repeating the call is safe.
+func (h *Handlers) APIUnsubscribeRecipient(w http.ResponseWriter, r *http.Request) {
+	listID := r.PathValue("id")
+	email := repository.NormalizeEmail(r.PathValue("email")) // already unescaped by the mux
+
+	status, err := h.recipients.RecipientStatusByEmail(listID, email)
+	switch {
+	case errors.Is(err, repository.ErrRecipientNotInList):
+		h.apiError(w, http.StatusNotFound, "Recipient not found in this list", "NOT_FOUND")
+		return
+	case err != nil:
+		h.logger.Error("api: failed to load recipient", "list", listID, "error", err)
+		h.apiError(w, http.StatusInternalServerError, "Internal server error", "INTERNAL_ERROR")
+		return
+	}
+
+	resp := map[string]any{"email": email, "status": models.RecipientStatusUnsubscribed, "changed": false}
+	switch status {
+	case models.RecipientStatusUnsubscribed:
+		// keep the journal row of the first unsubscribe (who, when, which campaign)
+		h.apiJSON(w, http.StatusOK, resp)
+		return
+	case "", "active":
+	default:
+		// e.g. bounced: turning it into unsubscribed would let it be resubscribed to active
+		h.apiError(w, http.StatusConflict, "Recipient is not active (status: "+status+")", "RECIPIENT_NOT_ACTIVE")
+		return
+	}
+
+	u := &models.Unsubscribe{ListID: listID, Email: email, SourceType: models.UnsubSourceAPI}
+	if k := middleware.GetAPIKeyFromContext(r); k != nil {
+		u.SourceID = k.ID
+	}
+	changed, err := h.unsubs.Add(u)
+	switch {
+	case errors.Is(err, repository.ErrRecipientNotInList): // deleted in between
+		h.apiError(w, http.StatusNotFound, "Recipient not found in this list", "NOT_FOUND")
+		return
+	case err != nil:
+		h.logger.Error("api: failed to unsubscribe recipient", "list", listID, "error", err)
+		h.apiError(w, http.StatusInternalServerError, "Internal server error", "INTERNAL_ERROR")
+		return
+	}
+	if changed {
+		h.auditAPI(r, "api_recipient_unsubscribe", listID, "email="+email)
+	}
+	resp["changed"] = changed
+	h.apiJSON(w, http.StatusOK, resp)
+}
+
 // auditAPI writes an audit entry for an API-key action.
 func (h *Handlers) auditAPI(r *http.Request, action, listID, details string) {
 	keyID := ""

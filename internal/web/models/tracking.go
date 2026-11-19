@@ -20,6 +20,7 @@ const (
 	UnsubSourceLink     = "link"      // confirmed on the unsubscribe page
 	UnsubSourceOneClick = "one_click" // RFC 8058 POST from the mail client
 	UnsubSourceManual   = "manual"    // set by a panel user on the recipient card
+	UnsubSourceAPI      = "api"       // set through the panel API (source_id is the API key)
 )
 
 // RecipientStatusUnsubscribed is the recipients.status value of an address

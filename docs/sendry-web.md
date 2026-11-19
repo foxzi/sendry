@@ -241,6 +241,7 @@ GET    /api/v1/send/{id}/status                   # permission: send
 GET    /api/v1/lists                              # permission: lists
 POST   /api/v1/lists/{id}/recipients              # permission: lists
 DELETE /api/v1/lists/{id}/recipients/{email}      # permission: lists
+POST   /api/v1/lists/{id}/recipients/{email}/unsubscribe   # permission: lists
 ```
 
 Each key has permissions, set in Settings → API keys:
@@ -248,7 +249,9 @@ Each key has permissions, set in Settings → API keys:
 | Permission | Allows |
 |------------|--------|
 | `send` | Sending email (plain and by template) and checking its status. On by default for a new key |
-| `lists` | Reading recipient lists, adding and removing recipients. Off by default |
+| `lists` | Reading recipient lists, adding, removing and unsubscribing recipients. Off by default |
+
+`POST .../unsubscribe` marks the address as unsubscribed in that list only: it stays in the list, campaigns skip it. The answer is `{"email": "...", "status": "unsubscribed", "changed": true}`; a repeated call returns `"changed": false`. `404` if the address is not in the list, `409` (`RECIPIENT_NOT_ACTIVE`) if it has another status such as bounced. There is no API call to subscribe it back — that is done on the address card in the panel.
 
 A key needs at least one permission. A request outside the key's permissions gets `403` with `"code": "PERMISSION_DENIED"`. Keys created before permissions existed have only `send` (the old values `template` and `status` count as `send`).
 

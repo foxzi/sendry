@@ -56,6 +56,7 @@
                     <dd>
                         {{template "local_time" .Unsub.CreatedAt}},
                         {{if eq .Unsub.SourceType "manual"}}<span data-i18n="cmp.rc_unsub_manual">by hand in the panel</span>
+                        {{else if eq .Unsub.SourceType "api"}}<span data-i18n="cmp.rc_unsub_api">through the API</span>
                         {{else if eq .Unsub.SourceType "one_click"}}<span data-i18n="cmp.rc_unsub_one_click">with the button in the mail client</span>
                         {{else}}<span data-i18n="cmp.rc_unsub_link">with the link in the message</span>{{end}}{{if .UnsubCampaign}},
                         <span data-i18n="cmp.rc_unsub_from">campaign</span> <a href="/campaigns/{{.Unsub.CampaignID}}">{{.UnsubCampaign}}</a>{{end}}

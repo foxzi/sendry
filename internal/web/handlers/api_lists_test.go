@@ -37,6 +37,7 @@ func apiListsMux(h *Handlers, keys *repository.APIKeyRepository) http.Handler {
 	mux.HandleFunc("GET /api/v1/lists", lists(h.APIListLists))
 	mux.HandleFunc("POST /api/v1/lists/{id}/recipients", lists(h.APIAddRecipients))
 	mux.HandleFunc("DELETE /api/v1/lists/{id}/recipients/{email}", lists(h.APIDeleteRecipient))
+	mux.HandleFunc("POST /api/v1/lists/{id}/recipients/{email}/unsubscribe", lists(h.APIUnsubscribeRecipient))
 	return middleware.APIAuth(keys, h.logger)(mux)
 }
 
@@ -284,6 +285,71 @@ func TestAPIDeleteRecipient(t *testing.T) {
 	}
 	var n int
 	d.QueryRow(`SELECT COUNT(*) FROM audit_log WHERE action='api_recipient_delete'`).Scan(&n)
+	if n != 1 {
+		t.Errorf("audit rows = %d", n)
+	}
+}
+
+func TestAPIUnsubscribeRecipient(t *testing.T) {
+	srv, d, key := newAPIListsServer(t)
+	type resp struct {
+		Email, Status string
+		Changed       bool
+	}
+	do := func(path string, want int) resp {
+		t.Helper()
+		rec := apiDo(srv, key, "POST", path, "")
+		if rec.Code != want {
+			t.Fatalf("%s: %d %s", path, rec.Code, rec.Body.String())
+		}
+		var r resp
+		json.Unmarshal(rec.Body.Bytes(), &r)
+		return r
+	}
+
+	r := do("/api/v1/lists/l1/recipients/C%40Example.org/unsubscribe", 200)
+	if r.Email != "c@example.org" || r.Status != "unsubscribed" || !r.Changed {
+		t.Errorf("first call: %+v", r)
+	}
+	if _, _, st, _ := recipientRow(t, d, "c@example.org"); st != "unsubscribed" {
+		t.Errorf("status = %q", st)
+	}
+	var src string
+	var srcID sql.NullString
+	if err := d.QueryRow(`SELECT source_type, source_id FROM unsubscribes WHERE list_id='l1' AND email='c@example.org'`).Scan(&src, &srcID); err != nil {
+		t.Fatal(err)
+	}
+	if src != "api" || srcID.String == "" {
+		t.Errorf("journal = %q / %q", src, srcID.String)
+	}
+	var active int
+	d.QueryRow(`SELECT active_count FROM recipient_lists WHERE id='l1'`).Scan(&active)
+	if active != 2 {
+		t.Errorf("active_count = %d", active)
+	}
+
+	// repeat: fine, nothing changes, the journal row is kept
+	d.Exec(`UPDATE unsubscribes SET source_type='link' WHERE list_id='l1' AND email='c@example.org'`)
+	if r := do("/api/v1/lists/l1/recipients/c@example.org/unsubscribe", 200); r.Changed {
+		t.Errorf("repeat: %+v", r)
+	}
+	d.QueryRow(`SELECT source_type FROM unsubscribes WHERE list_id='l1' AND email='c@example.org'`).Scan(&src)
+	if src != "link" {
+		t.Errorf("journal overwritten: %q", src)
+	}
+
+	do("/api/v1/lists/l1/recipients/nobody@example.org/unsubscribe", 404)
+	do("/api/v1/lists/nope/recipients/a@example.org/unsubscribe", 404)
+
+	// a bounced address must not become one that can be resubscribed
+	d.Exec(`UPDATE recipients SET status='bounced' WHERE list_id='l1' AND email='d@example.org'`)
+	do("/api/v1/lists/l1/recipients/d@example.org/unsubscribe", 409)
+	if _, _, st, _ := recipientRow(t, d, "d@example.org"); st != "bounced" {
+		t.Errorf("bounced became %q", st)
+	}
+
+	var n int
+	d.QueryRow(`SELECT COUNT(*) FROM audit_log WHERE action='api_recipient_unsubscribe'`).Scan(&n)
 	if n != 1 {
 		t.Errorf("audit rows = %d", n)
 	}
