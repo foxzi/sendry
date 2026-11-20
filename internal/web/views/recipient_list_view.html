@@ -105,10 +105,12 @@
                     </td>
                     <td>{{.CreatedAt.Format "2006-01-02"}}</td>
                     <td>
+                        {{if ne .Status "unsubscribed"}}
                         <form method="post" action="/recipients/{{$.List.ID}}/recipients/{{.ID}}" style="display:inline" onsubmit="return confirm(I18n.t('cmp.confirm_delete_recipient'))">
                             <input type="hidden" name="_method" value="DELETE">
                             <button type="submit" class="btn btn-sm btn-danger" data-i18n="delete">Delete</button>
                         </form>
+                        {{end}}
                     </td>
                 </tr>
                 {{end}}

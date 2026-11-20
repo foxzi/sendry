@@ -143,6 +143,26 @@ func recipientTags(raw string) []string {
 	return tags
 }
 
+// cardTags is the tags of a recipient as the card shows them: an array with
+// other values than strings (from an API call) shows them as JSON, so that the
+// field is not empty and the first typed tag does not drop them silently.
+func cardTags(raw string) []string {
+	if tags := recipientTags(raw); tags != nil {
+		return tags
+	}
+	dec := json.NewDecoder(strings.NewReader(raw))
+	dec.UseNumber()
+	var items []any
+	if err := dec.Decode(&items); err != nil {
+		return nil
+	}
+	tags := make([]string, 0, len(items))
+	for _, v := range items {
+		tags = append(tags, variableText(v))
+	}
+	return tags
+}
+
 // cardFormError is a refused field of the card form: the translation key of
 // the message and its English text.
 type cardFormError struct {
@@ -310,7 +330,7 @@ type cardForm struct {
 func storedCardForm(rec *models.Recipient) cardForm {
 	return cardForm{
 		Name:      rec.Name,
-		Tags:      strings.Join(recipientTags(rec.Tags), ", "),
+		Tags:      strings.Join(cardTags(rec.Tags), ", "),
 		Variables: recipientVariables(rec.Variables),
 	}
 }
@@ -422,9 +442,11 @@ func (h *Handlers) RecipientUpdate(w http.ResponseWriter, r *http.Request) {
 			changed = append(changed, "name")
 		}
 	}
-	if r.Form.Has("tags") {
+	// tags left as shown are not parsed again: a stored tag with a comma
+	// would be split in two
+	if r.Form.Has("tags") && !sameText(r.FormValue("tags"), form.Tags) {
 		form.Tags = r.FormValue("tags")
-		stored, tags, ferr := parseCardTags(form.Tags, recipientTags(rec.Tags))
+		stored, tags, ferr := parseCardTags(form.Tags, cardTags(rec.Tags))
 		switch {
 		case ferr != nil:
 			if form.Error == nil {

@@ -541,3 +541,49 @@ func TestRecipientDelete_OwnListOnly(t *testing.T) {
 		t.Error("not deleted through its own list")
 	}
 }
+
+// An unsubscribed recipient is not deleted: an import would add it back as active
+func TestRecipientDelete_KeepsUnsubscribed(t *testing.T) {
+	h, d := newCampaignTestHandlers(t, "")
+	if _, err := d.Exec(`UPDATE recipients SET status = 'unsubscribed' WHERE id = 'ra'`); err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	h.RecipientDelete(rec, cardRequest(http.MethodDelete, "/recipients/l1/recipients/ra", nil))
+	if rec.Code != http.StatusConflict {
+		t.Errorf("status %d, want 409", rec.Code)
+	}
+	var n int
+	if err := d.QueryRow(`SELECT COUNT(*) FROM recipients WHERE id = 'ra'`).Scan(&n); err != nil || n != 1 {
+		t.Errorf("recipient deleted: %d, %v", n, err)
+	}
+}
+
+// Tags left as the card shows them are not split again: a stored tag may hold
+// a comma, and an array of other values than strings is shown, not dropped
+func TestRecipientCard_TagsLeftAsShown(t *testing.T) {
+	h, d := newCampaignTestHandlers(t, "")
+	for _, stored := range []string{`["a,b","vip"]`, `[1,"x"]`} {
+		if _, err := d.Exec(`UPDATE recipients SET tags = ? WHERE id = 'ra'`, stored); err != nil {
+			t.Fatal(err)
+		}
+		view := httptest.NewRecorder()
+		h.RecipientView(view, cardRequest(http.MethodGet, "/recipients/l1/recipients/ra", nil))
+		shown := strings.Join(cardTags(stored), ", ")
+		if shown == "" || !strings.Contains(view.Body.String(), `value="`+shown+`"`) {
+			t.Errorf("%s: the tags field does not show %q", stored, shown)
+		}
+		rec := httptest.NewRecorder()
+		h.RecipientUpdate(rec, cardRequest(http.MethodPut, "/recipients/l1/recipients/ra", url.Values{"name": {"Ann"}, "tags": {shown}}))
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("%s: status %d", stored, rec.Code)
+		}
+		var tags string
+		if err := d.QueryRow(`SELECT tags FROM recipients WHERE id = 'ra'`).Scan(&tags); err != nil {
+			t.Fatal(err)
+		}
+		if tags != stored {
+			t.Errorf("tags = %s, want %s", tags, stored)
+		}
+	}
+}

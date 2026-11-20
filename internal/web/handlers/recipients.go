@@ -312,14 +312,27 @@ func (h *Handlers) RecipientAdd(w http.ResponseWriter, r *http.Request) {
 	recipient := &models.Recipient{
 		ListID:    id,
 		Email:     repository.NormalizeEmail(r.FormValue("email")),
-		Name:      r.FormValue("name"),
-		Variables: r.FormValue("variables"),
-		Tags:      r.FormValue("tags"),
+		Name:      strings.TrimSpace(plainText(r.FormValue("name"))),
+		Variables: strings.TrimSpace(r.FormValue("variables")),
+		Tags:      strings.TrimSpace(r.FormValue("tags")),
 		Status:    "active",
 	}
 
 	if recipient.Email == "" {
 		h.error(w, r, http.StatusBadRequest, "Email is required")
+		return
+	}
+	if utf8.RuneCountInString(recipient.Name) > recipientNameMax {
+		h.error(w, r, http.StatusBadRequest, fmt.Sprintf("Name is too long (max %d characters)", recipientNameMax))
+		return
+	}
+	// broken JSON here would break the tag filter and the segment hints of the whole list
+	if recipient.Variables != "" && storedVariables(recipient.Variables) == nil {
+		h.error(w, r, http.StatusBadRequest, "Variables must be a JSON object")
+		return
+	}
+	if recipient.Tags != "" && recipientTags(recipient.Tags) == nil {
+		h.error(w, r, http.StatusBadRequest, "Tags must be a JSON array of strings")
 		return
 	}
 
@@ -337,15 +350,33 @@ func (h *Handlers) RecipientDelete(w http.ResponseWriter, r *http.Request) {
 	listID := r.PathValue("id")
 	recipientID := r.PathValue("recipientId")
 
-	if err := h.recipients.DeleteRecipient(recipientID, listID); errors.Is(err, repository.ErrInUse) {
+	rec, err := h.recipients.GetRecipient(listID, recipientID)
+	if err != nil {
+		h.logger.Error("failed to get recipient", "error", err)
+		h.error(w, r, http.StatusInternalServerError, "Failed to load recipient")
+		return
+	}
+	if rec == nil {
+		h.error(w, r, http.StatusNotFound, "Recipient not found")
+		return
+	}
+
+	err = h.recipients.DeleteRecipient(recipientID, listID)
+	switch {
+	case errors.Is(err, repository.ErrRecipientUnsubscribed):
+		h.error(w, r, http.StatusConflict, "Cannot delete an unsubscribed recipient: "+
+			"the address would be added back as active by the next import.")
+		return
+	case errors.Is(err, repository.ErrInUse):
 		h.error(w, r, http.StatusConflict, "Cannot delete the recipient: campaigns were sent to this address. "+
 			"Set the status to unsubscribed to stop sending to it.")
 		return
-	} else if err != nil {
+	case err != nil:
 		h.logger.Error("failed to delete recipient", "error", err)
 		h.error(w, r, http.StatusInternalServerError, "Failed to delete recipient")
 		return
 	}
+	h.auditRecipient(r, "recipient_delete", listID, "email="+repository.NormalizeEmail(rec.Email))
 
 	http.Redirect(w, r, "/recipients/"+listID, http.StatusSeeOther)
 }

@@ -262,12 +262,25 @@ func (r *RecipientRepository) ListRecipients(filter models.RecipientFilter) ([]m
 	return recipients, total, nil
 }
 
-// DeleteRecipient deletes a recipient
+// DeleteRecipient deletes a recipient. An unsubscribed one is kept
+// (ErrRecipientUnsubscribed): deleting it would let the address be added back
+// as active, losing the suppression.
 func (r *RecipientRepository) DeleteRecipient(id string, listID string) error {
 	// the list is part of the key: a recipient is deleted only through its own list
-	_, err := r.db.Exec("DELETE FROM recipients WHERE id = ? AND list_id = ?", id, listID)
+	res, err := r.db.Exec("DELETE FROM recipients WHERE id = ? AND list_id = ? AND COALESCE(status, '') != ?",
+		id, listID, models.RecipientStatusUnsubscribed)
 	if err != nil {
 		return inUse(err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		var status sql.NullString
+		err := r.db.QueryRow("SELECT status FROM recipients WHERE id = ? AND list_id = ?", id, listID).Scan(&status)
+		if err == nil && status.String == models.RecipientStatusUnsubscribed {
+			return ErrRecipientUnsubscribed
+		}
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
 	}
 	return r.UpdateListCounts(listID)
 }
@@ -376,8 +389,8 @@ func (r *RecipientRepository) ScanRecipient(rows *sql.Rows) (*models.Recipient, 
 func (r *RecipientRepository) GetTags(listID string) ([]string, error) {
 	rows, err := r.db.Query(`
 		SELECT DISTINCT json_each.value
-		FROM recipients, json_each(recipients.tags)
-		WHERE recipients.list_id = ? AND recipients.tags IS NOT NULL AND recipients.tags != ''
+		FROM recipients, json_each(CASE WHEN json_valid(recipients.tags) THEN recipients.tags ELSE '[]' END)
+		WHERE recipients.list_id = ? AND json_each.type = 'text'
 		ORDER BY json_each.value`, listID,
 	)
 	if err != nil {
@@ -393,5 +406,5 @@ func (r *RecipientRepository) GetTags(listID string) ([]string, error) {
 		}
 		tags = append(tags, tag)
 	}
-	return tags, nil
+	return tags, rows.Err()
 }

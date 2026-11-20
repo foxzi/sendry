@@ -153,7 +153,7 @@ func (r *RecipientRepository) UpsertRecipients(listID string, items []RecipientU
 func (r *RecipientRepository) RecipientStatusByEmail(listID, email string) (string, error) {
 	var status string
 	err := r.db.QueryRow(
-		`SELECT status FROM recipients WHERE list_id = ? AND lower(email) = ? ORDER BY created_at LIMIT 1`,
+		`SELECT COALESCE(status, '') FROM recipients WHERE list_id = ? AND lower(email) = ? ORDER BY created_at LIMIT 1`,
 		listID, NormalizeEmail(email),
 	).Scan(&status)
 	if err == sql.ErrNoRows {
@@ -169,7 +169,7 @@ func (r *RecipientRepository) RecipientStatusByEmail(listID, email string) (stri
 func (r *RecipientRepository) DeleteRecipientByEmail(listID, email string) error {
 	var id, status string
 	err := r.db.QueryRow(
-		`SELECT id, status FROM recipients WHERE list_id = ? AND lower(email) = ? LIMIT 1`,
+		`SELECT id, COALESCE(status, '') FROM recipients WHERE list_id = ? AND lower(email) = ? LIMIT 1`,
 		listID, NormalizeEmail(email),
 	).Scan(&id, &status)
 	if err == sql.ErrNoRows {

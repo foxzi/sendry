@@ -161,6 +161,11 @@
                 <dt data-i18n="cmp.recipient_list">Recipient List</dt>
                 <dd><a href="/recipients/{{.Job.RecipientListID}}">{{.Job.ListName}}</a></dd>
 
+                {{if .Job.Segment}}
+                <dt data-i18n="cmp.segment">Segment</dt>
+                <dd data-segment="{{.Job.Segment}}"></dd>
+                {{end}}
+
                 <dt data-i18n="cmp.strategy_short">Strategy</dt>
                 <dd data-i18n="strategy.{{.Job.Strategy}}">{{.Job.Strategy}}</dd>
 

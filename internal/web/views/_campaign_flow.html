@@ -281,6 +281,9 @@ domain. Template cards carry what the review reads (name, subject, unsubscribe).
         <div class="cf-body" id="cf-to-body" hidden>
             <div class="cf-fields">
                 {{if .RecipientLists}}
+                {{if gt (len .RecipientLists) 5}}
+                <input type="search" id="cf-list-search" class="input cf-search" placeholder="Find a list" data-i18n-placeholder="cmp.cf_list_search" aria-label="Find a list" autocomplete="off">
+                {{end}}
                 <div class="cf-lists" id="cf-lists" role="radiogroup" aria-labelledby="cf-to-h">
                     {{range .RecipientLists}}
                     <label class="cf-list{{if not .ActiveCount}} cf-list-empty{{end}}" data-active="{{.ActiveCount}}" data-total="{{.TotalCount}}" data-name="{{.Name}}">
@@ -290,6 +293,7 @@ domain. Template cards carry what the review reads (name, subject, unsubscribe).
                     </label>
                     {{end}}
                 </div>
+                <p class="cf-empty" id="cf-lists-empty" data-i18n="cmp.cf_list_none" hidden>Nothing found</p>
                 {{else}}
                 <div class="alert alert-warning">
                     <span data-i18n="cmp.wz_no_lists">There are no recipient lists yet.</span>
@@ -297,6 +301,29 @@ domain. Template cards carry what the review reads (name, subject, unsubscribe).
                 </div>
                 {{end}}
                 <small class="cf-err" data-err="recipient_list_id" role="alert" hidden></small>
+                {{if .RecipientLists}}
+                <div class="cf-segm" id="cf-segm">
+                    <label class="checkbox-label"><input type="checkbox" id="cf-segm-on"> <span data-i18n="cmp.cf_segm_on">Segment the list</span></label>
+                    <small class="form-help" data-i18n="cmp.cf_segm_help">Send only to the addresses of the list that match the conditions.</small>
+                    <div class="cf-segm-box" id="cf-segm-box" hidden>
+                        <div class="cf-segm-match">
+                            <label for="cf-segm-match" data-i18n="cmp.cf_segm_match_pre">Addresses match</label>
+                            <select id="cf-segm-match" class="input">
+                                <option value="all" data-i18n="cmp.cf_segm_all">all</option>
+                                <option value="any" data-i18n="cmp.cf_segm_any">any</option>
+                            </select>
+                            <span data-i18n="cmp.cf_segm_match_post">of the conditions</span>
+                        </div>
+                        <div class="cf-segm-conds" id="cf-segm-conds"></div>
+                        <button type="button" class="cf-link" data-act="segm-add" data-i18n="cmp.cf_segm_add">+ Add a condition</button>
+                        <p class="cf-segm-count" id="cf-segm-count" role="status" hidden></p>
+                    </div>
+                    <input type="hidden" id="segment" name="segment" value="{{.Pick.Segment}}">
+                    <small class="cf-err" data-err="segment" role="alert" hidden></small>
+                    <datalist id="cf-segm-tags"></datalist>
+                    <datalist id="cf-segm-vars"></datalist>
+                </div>
+                {{end}}
             </div>
             <p class="cf-error" role="alert" hidden></p>
             <div class="cf-foot">

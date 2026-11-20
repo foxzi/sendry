@@ -91,6 +91,12 @@
                                 <button type="button" class="rc-var-remove" data-rc-remove aria-label="Remove variable" data-i18n-aria="cmp.rc_var_remove" title="Remove variable" data-i18n-title="cmp.rc_var_remove">&times;</button>
                             </div>
                         </div>
+                        {{/* the blank row "Add a variable" copies; disabled, so it is not sent */}}
+                        <div class="rc-var" id="rc-var-blank" hidden>
+                            <input type="text" name="var_key" value="" class="input rc-var-key" maxlength="{{.VarNameMax}}" spellcheck="false" autocapitalize="off" placeholder="name" data-i18n-placeholder="cmp.rc_var_name_ph" aria-label="Variable name" data-i18n-aria="cmp.rc_var_name" disabled>
+                            <input type="text" name="var_value" value="" class="input" maxlength="{{.VarValueMax}}" placeholder="value" data-i18n-placeholder="cmp.rc_var_value_ph" aria-label="Variable value" data-i18n-aria="cmp.rc_var_value" disabled>
+                            <button type="button" class="rc-var-remove" data-rc-remove aria-label="Remove variable" data-i18n-aria="cmp.rc_var_remove" title="Remove variable" data-i18n-title="cmp.rc_var_remove">&times;</button>
+                        </div>
                         <button type="button" class="rc-var-add" id="rc-var-add" data-i18n="cmp.rc_var_add">Add a variable</button>
                         <p class="rc-hint" data-i18n="cmp.rc_vars_hint">In a message template a variable is written as {{"{{"}}name}}</p>
                     </fieldset>
@@ -141,6 +147,8 @@
                     <li class="is-failed"><span data-i18n="cmp.rc_step_failed">Not delivered</span>{{if .Error}} <small title="{{.Error}}" data-i18n="error_type.{{errorType .Error}}">{{(errorType .Error).Label}}</small>{{end}}</li>
                     {{else if eq .Status "queued"}}
                     <li><span data-i18n="status.queued" data-i18n-title="cmp.queued_hint">queued</span></li>
+                    {{else if eq .Status "cancelled"}}
+                    <li class="is-failed"><span data-i18n="cmp.rc_step_cancelled">Launch cancelled, not sent</span></li>
                     {{else}}
                     <li><span data-i18n="cmp.rc_step_waiting">Waiting to be sent</span></li>
                     {{end}}
@@ -189,14 +197,18 @@
 (function () {
     var rows = document.getElementById('rc-var-rows');
     var add = document.getElementById('rc-var-add');
-    if (!rows || !add) return;
+    var blank = document.getElementById('rc-var-blank');
+    if (!rows || !add || !blank) return;
 
-    function clear(row) {
-        row.querySelectorAll('input').forEach(function (i) { i.value = ''; });
+    function newRow() {
+        var row = blank.cloneNode(true);
+        row.removeAttribute('id');
+        row.hidden = false;
+        row.querySelectorAll('input').forEach(function (i) { i.disabled = false; });
+        return row;
     }
     add.addEventListener('click', function () {
-        var row = rows.lastElementChild.cloneNode(true);
-        clear(row);
+        var row = newRow();
         rows.appendChild(row);
         row.querySelector('input').focus();
     });
@@ -210,8 +222,10 @@
             row.remove();
             next.querySelector('input').focus();
         } else {
-            clear(row);
-            row.querySelector('input').focus();
+            // a multiline value is in a text area: the row is replaced, not cleared
+            var fresh = newRow();
+            row.replaceWith(fresh);
+            fresh.querySelector('input').focus();
         }
     });
 })();

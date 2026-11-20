@@ -5,6 +5,7 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/foxzi/sendry/internal/web/middleware"
@@ -190,6 +191,8 @@ func (h *Handlers) CampaignLaunch(w http.ResponseWriter, r *http.Request) {
 	pick := h.defaultPick()
 	if job != nil {
 		pick = h.pickFromJob(job)
+	} else {
+		h.pickAfterPilot(c.ID, &pick)
 	}
 	h.launchPage(w, r, c, job, pick, http.StatusOK, "")
 }
@@ -199,6 +202,7 @@ func (h *Handlers) CampaignLaunch(w http.ResponseWriter, r *http.Request) {
 // back with an error. ScheduledUTC is RFC 3339 or "" for "now".
 type launchPick struct {
 	ListID       string
+	Segment      string // JSON of the segment, "" for the whole list
 	Servers      map[string]bool
 	Strategy     string
 	DryRun       bool
@@ -215,6 +219,22 @@ func (h *Handlers) defaultPick() launchPick {
 	return launchPick{Servers: servers, DryRunLimit: defaultDryRunLimit}
 }
 
+// pickAfterPilot fills the list and the segment of the last pilot of the
+// campaign when it is the latest launch: the full send after a pilot goes to
+// the same audience, and a segment left out would send to the whole list.
+func (h *Handlers) pickAfterPilot(campaignID string, pick *launchPick) {
+	jobs, _, err := h.jobs.List(models.JobListFilter{CampaignID: campaignID, Limit: 1})
+	if err != nil {
+		h.logger.Error("failed to load the last launch", "campaign_id", campaignID, "error", err)
+		return
+	}
+	if len(jobs) == 0 || !jobs[0].DryRun {
+		return
+	}
+	pick.ListID = jobs[0].RecipientListID
+	pick.Segment = jobs[0].Segment
+}
+
 // pickFromJob is the form filled with a scheduled launch
 func (h *Handlers) pickFromJob(job *models.SendJob) launchPick {
 	var names []string
@@ -223,6 +243,7 @@ func (h *Handlers) pickFromJob(job *models.SendJob) launchPick {
 	}
 	pick := launchPick{
 		ListID:      job.RecipientListID,
+		Segment:     job.Segment,
 		Servers:     make(map[string]bool, len(names)),
 		Strategy:    job.Strategy,
 		DryRun:      job.DryRun,
@@ -241,10 +262,15 @@ func (h *Handlers) pickFromJob(job *models.SendJob) launchPick {
 func pickFromParams(p jobParams) launchPick {
 	pick := launchPick{
 		ListID:      p.RecipientListID,
+		Segment:     p.Segment.JSON(),
 		Servers:     make(map[string]bool, len(p.Servers)),
 		Strategy:    p.Strategy,
 		DryRun:      p.DryRun,
 		DryRunLimit: p.DryRunLimit,
+	}
+	if p.Segment == nil {
+		// a refused segment comes back as typed, not as "the whole list"
+		pick.Segment = p.SegmentRaw
 	}
 	if pick.DryRunLimit <= 0 {
 		pick.DryRunLimit = defaultDryRunLimit
@@ -373,25 +399,37 @@ type statusError struct {
 // jobParams are the send settings of a campaign send form
 type jobParams struct {
 	RecipientListID string
-	Servers         []string
-	Strategy        string
-	DryRun          bool
-	DryRunLimit     int
-	ScheduledAt     *time.Time
+	// Segment narrows the list to the recipients matching its conditions;
+	// nil sends to the whole list
+	Segment *models.Segment
+	// SegmentRaw is the segment field as posted, shown again when the form
+	// is refused before the segment is parsed or because of it
+	SegmentRaw  string
+	Servers     []string
+	Strategy    string
+	DryRun      bool
+	DryRunLimit int
+	ScheduledAt *time.Time
 }
 
 // parseJobParams reads and validates the send settings of a parsed form:
-// recipient_list_id, servers, strategy, dry_run, dry_run_limit, scheduled_at,
-// tz and tz_offset.
+// recipient_list_id, segment, servers, strategy, dry_run, dry_run_limit,
+// scheduled_at, tz and tz_offset.
 func parseJobParams(r *http.Request) (jobParams, *statusError) {
 	p := jobParams{
 		RecipientListID: r.FormValue("recipient_list_id"),
+		SegmentRaw:      strings.TrimSpace(r.FormValue("segment")),
 		Servers:         r.Form["servers"],
 		Strategy:        r.FormValue("strategy"),
 	}
 	if p.RecipientListID == "" {
 		return p, &statusError{http.StatusBadRequest, "Recipient list is required"}
 	}
+	seg, err := models.ParseSegment(r.FormValue("segment"))
+	if err != nil {
+		return p, &statusError{http.StatusBadRequest, "Invalid segment: " + err.Error()}
+	}
+	p.Segment = seg
 	if len(p.Servers) == 0 {
 		return p, &statusError{http.StatusBadRequest, "At least one server is required"}
 	}
@@ -442,6 +480,7 @@ func (h *Handlers) startJob(r *http.Request, c *models.Campaign, variants []mode
 	job := &models.SendJob{
 		CampaignID:      c.ID,
 		RecipientListID: p.RecipientListID,
+		Segment:         p.Segment.JSON(),
 		Servers:         string(serversJSON),
 		Strategy:        p.Strategy,
 		DryRun:          p.DryRun,
@@ -483,20 +522,24 @@ func (h *Handlers) startJob(r *http.Request, c *models.Campaign, variants []mode
 	return job, nil
 }
 
-// buildJobItems builds the items of a launch from the recipient list: one per
+// buildJobItems builds the items of a launch from the recipient list (narrowed
+// by the segment, if any): one per
 // active recipient (up to the dry-run limit) with the variant and server
 // assigned, and skipped items for the unsubscribed ones passed over. The items
 // have no JobID yet. It returns them with the number of active and of
 // unsubscribed recipients; a list without active recipients is a 400.
 func (h *Handlers) buildJobItems(variants []models.CampaignVariant, p jobParams) ([]models.SendJobItem, int, int, *statusError) {
 	// Get recipients: active ones up to the dry-run limit (all without it)
-	recipients, unsubscribed, err := h.jobRecipients(p.RecipientListID, p.DryRunLimit)
+	recipients, unsubscribed, err := h.jobRecipients(p.RecipientListID, p.Segment, p.DryRunLimit)
 	if err != nil {
 		h.logger.Error("failed to get recipients", "error", err)
 		return nil, 0, 0, &statusError{http.StatusInternalServerError, "Failed to get recipients"}
 	}
 	if len(recipients) == 0 {
 		// Nobody to send to: an empty run would only show up as "completed"
+		if p.Segment != nil {
+			return nil, 0, 0, &statusError{http.StatusBadRequest, "No active recipients of the list match the segment"}
+		}
 		return nil, 0, 0, &statusError{http.StatusBadRequest, "The recipient list has no active recipients"}
 	}
 
@@ -555,10 +598,11 @@ func (h *Handlers) CampaignJobs(w http.ResponseWriter, r *http.Request) {
 
 // jobRecipients returns the active recipients of a list to send a job to, in
 // list order, at most limit of them (0 = all), and the recipients unsubscribed
-// in the list that were passed over to get them. With a dry-run limit only the
+// in the list that were passed over to get them. With a segment only the
+// recipients matching it are looked at. With a dry-run limit only the
 // unsubscribed recipients met before the limit is reached are returned.
-func (h *Handlers) jobRecipients(listID string, limit int) ([]models.Recipient, []models.Recipient, error) {
-	rows, err := h.recipients.StreamRecipients(listID)
+func (h *Handlers) jobRecipients(listID string, seg *models.Segment, limit int) ([]models.Recipient, []models.Recipient, error) {
+	rows, err := h.recipients.StreamSegment(listID, seg)
 	if err != nil {
 		return nil, nil, err
 	}

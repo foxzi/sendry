@@ -165,7 +165,10 @@ func (r *RecipientRepository) MessageTotals(email string) (models.RecipientTotal
 func (r *RecipientRepository) Messages(email string, limit int) ([]models.RecipientMessage, error) {
 	rows, err := r.db.Query(`
 		SELECT i.id, i.job_id, j.campaign_id, COALESCE(c.name, ''), r.list_id, COALESCE(l.name, ''),
-			COALESCE(v.name, ''), COALESCE(i.status, ''), COALESCE(i.error, ''),
+			COALESCE(v.name, ''),
+			-- a message of a cancelled launch that was never sent stays pending
+			CASE WHEN j.status = 'cancelled' AND COALESCE(i.status, 'pending') = 'pending' THEN 'cancelled' ELSE COALESCE(i.status, '') END,
+			COALESCE(i.error, ''),
 			i.sent_at, i.queued_at, i.created_at,
 			i.opened_at, COALESCE(i.open_count, 0), i.clicked_at, COALESCE(i.click_count, 0), i.unsubscribed_at,
 			(SELECT COUNT(*) FROM email_events e WHERE e.source_type = ? AND e.source_id = i.id)
