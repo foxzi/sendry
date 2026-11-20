@@ -17,7 +17,7 @@ func (r *RecipientRepository) GetRecipient(listID, id string) (*models.Recipient
 	rec := &models.Recipient{}
 	var name, variables, tags, status sql.NullString
 	err := r.db.QueryRow(`
-		SELECT id, list_id, email, name, variables, tags, status, created_at
+		SELECT id, list_id, email, name, variables, tags, COALESCE(NULLIF(status, ''), 'active'), created_at
 		FROM recipients WHERE id = ? AND list_id = ?`, id, listID,
 	).Scan(&rec.ID, &rec.ListID, &rec.Email, &name, &variables, &tags, &status, &rec.CreatedAt)
 	if err == sql.ErrNoRows {
@@ -80,7 +80,7 @@ func (r *RecipientRepository) GetRecipientByEmail(listID, email string) (*models
 // contain the query, with the list of each; at most limit rows.
 func (r *RecipientRepository) FindByEmail(query string, limit int) ([]models.RecipientMembership, error) {
 	rows, err := r.db.Query(`
-		SELECT r.id, r.list_id, COALESCE(l.name, ''), r.email, COALESCE(r.name, ''), COALESCE(r.status, ''), r.created_at
+		SELECT r.id, r.list_id, COALESCE(l.name, ''), r.email, COALESCE(r.name, ''), COALESCE(NULLIF(r.status, ''), 'active'), r.created_at
 		FROM recipients r
 		LEFT JOIN recipient_lists l ON l.id = r.list_id
 		WHERE ulower(r.email) LIKE ? ESCAPE '\'
@@ -105,7 +105,7 @@ func (r *RecipientRepository) FindByEmail(query string, limit int) ([]models.Rec
 // Memberships returns every list the address is in, newest record first.
 func (r *RecipientRepository) Memberships(email string) ([]models.RecipientMembership, error) {
 	rows, err := r.db.Query(`
-		SELECT r.id, r.list_id, COALESCE(l.name, ''), COALESCE(r.status, ''), r.created_at
+		SELECT r.id, r.list_id, COALESCE(l.name, ''), COALESCE(NULLIF(r.status, ''), 'active'), r.created_at
 		FROM recipients r
 		LEFT JOIN recipient_lists l ON l.id = r.list_id
 		WHERE lower(r.email) = ?

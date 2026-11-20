@@ -403,3 +403,29 @@ func TestCampaignLaunch_AfterPilot(t *testing.T) {
 		t.Error("the segment of the pilot is not offered")
 	}
 }
+
+// A form refused for another field comes back with the time and the pilot:
+// a submit with the time lost would send the launch at once
+func TestCampaignSend_RejectedKeepsTimeAndPilot(t *testing.T) {
+	h, _ := newCampaignTestHandlers(t, "https://panel.example.com")
+	for name, form := range map[string]url.Values{
+		"no servers":      {"recipient_list_id": {"l1"}},
+		"invalid segment": {"recipient_list_id": {"l1"}, "servers": {"mx1"}, "segment": {`{"conditions":[{"field":"tag","op":"nope"}]}`}},
+	} {
+		form.Set("scheduled_at", "2031-03-10T09:00")
+		form.Set("tz", "Europe/Moscow")
+		form.Set("dry_run", "on")
+		form.Set("dry_run_limit", "7")
+		rec := postCampaignSend(h, form)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("%s: status %d", name, rec.Code)
+		}
+		body := rec.Body.String()
+		if !strings.Contains(body, `data-utc="2031-03-10T06:00:00Z"`) {
+			t.Errorf("%s: the time is not in the returned form", name)
+		}
+		if !strings.Contains(body, `name="dry_run" id="dry_run" value="on" checked`) || !strings.Contains(body, `value="7"`) {
+			t.Errorf("%s: the pilot is not in the returned form", name)
+		}
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	webdb "github.com/foxzi/sendry/internal/web/db"
 	"github.com/foxzi/sendry/internal/web/models"
 )
 
@@ -210,5 +211,52 @@ func TestSegmentVariableValues(t *testing.T) {
 		if strings.Join(got, " ") != c.want {
 			t.Errorf("%s %s %q: got %v, want %q", c.key, c.op, c.value, got, c.want)
 		}
+	}
+}
+
+// A recipient without a status is active: it is listed and sent to, and the
+// migration writes the status down
+func TestRecipientWithoutStatus(t *testing.T) {
+	db := setupTestDB(t)
+	mustExec(t, db, `INSERT INTO recipient_lists (id, name, source_type) VALUES ('l1', 'subs', 'manual')`)
+	mustExec(t, db, `INSERT INTO recipients (id, list_id, email, name, variables, tags, status) VALUES
+		('r1', 'l1', 'a@x.com', NULL, NULL, NULL, NULL), ('r2', 'l1', 'b@x.com', 'B', '{}', '[]', '')`)
+	repo := NewRecipientRepository(db)
+
+	list, total, err := repo.ListRecipients(models.RecipientFilter{ListID: "l1", Limit: 10})
+	if err != nil || total != 2 || len(list) != 2 {
+		t.Fatalf("ListRecipients = %d of %d, %v", len(list), total, err)
+	}
+	for _, rec := range list {
+		if rec.Status != "active" {
+			t.Errorf("%s: status %q", rec.ID, rec.Status)
+		}
+	}
+	rows, err := repo.StreamSegment("l1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for rows.Next() {
+		if _, err := repo.ScanRecipient(rows); err != nil {
+			t.Fatal(err)
+		}
+		n++
+	}
+	rows.Close()
+	if n != 2 {
+		t.Errorf("StreamSegment = %d recipients", n)
+	}
+	if rec, err := repo.GetRecipient("l1", "r1"); err != nil || rec.Status != "active" {
+		t.Errorf("GetRecipient = %+v, %v", rec, err)
+	}
+
+	if err := (&webdb.DB{DB: db}).Migrate(); err != nil {
+		t.Fatal(err)
+	}
+	var left int
+	db.QueryRow(`SELECT COUNT(*) FROM recipients WHERE status IS NULL OR status = ''`).Scan(&left)
+	if left != 0 {
+		t.Errorf("%d recipients still without a status", left)
 	}
 }

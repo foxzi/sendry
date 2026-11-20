@@ -215,8 +215,8 @@ func (r *RecipientRepository) ListRecipients(filter models.RecipientFilter) ([]m
 
 	// Get recipients
 	query := `
-		SELECT id, list_id, email, name, variables, tags, status, created_at
-		FROM recipients WHERE list_id = ?`
+		SELECT ` + recipientColumns + `
+		FROM recipients r WHERE list_id = ?`
 
 	args = []any{filter.ListID}
 	if filter.Search != "" {
@@ -367,12 +367,18 @@ func (r *RecipientRepository) ImportCSV(listID string, reader io.Reader) (*model
 	return result, nil
 }
 
+// recipientColumns are the columns ScanRecipient reads, for a query over
+// "recipients r". The nullable text columns come as "", and a status that was
+// never set is "active" (the column default), as everywhere else.
+const recipientColumns = `r.id, r.list_id, r.email, COALESCE(r.name, ''), COALESCE(r.variables, ''),
+		COALESCE(r.tags, ''), COALESCE(NULLIF(r.status, ''), 'active'), r.created_at`
+
 // StreamRecipients returns an iterator for recipients to avoid loading all into memory.
 // Caller must call Close() on returned rows when done.
 func (r *RecipientRepository) StreamRecipients(listID string) (*sql.Rows, error) {
 	return r.db.Query(`
-		SELECT id, list_id, email, name, variables, tags, status, created_at
-		FROM recipients WHERE list_id = ?
+		SELECT `+recipientColumns+`
+		FROM recipients r WHERE list_id = ?
 		ORDER BY created_at DESC`, listID)
 }
 

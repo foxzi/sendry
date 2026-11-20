@@ -146,6 +146,9 @@ func (db *DB) Migrate() error {
 		"ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'",
 		"ALTER TABLE users ADD COLUMN password_hash TEXT",
 		"UPDATE users SET role = 'admin' WHERE id = (SELECT id FROM users ORDER BY created_at ASC LIMIT 1)",
+		// A recipient without a status (written around the column default) is
+		// active: the counts, the filters and the jobs compare status = 'active'
+		"UPDATE recipients SET status = 'active' WHERE status IS NULL OR status = ''",
 		"ALTER TABLE templates ADD COLUMN use_blocks INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE template_block_refs ADD COLUMN gap_height INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE template_block_refs ADD COLUMN gap_color TEXT NOT NULL DEFAULT ''",

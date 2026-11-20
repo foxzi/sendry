@@ -152,7 +152,7 @@ func (r *RecipientRepository) StreamSegment(listID string, seg *models.Segment) 
 		return nil, err
 	}
 	return r.db.Query(`
-		SELECT r.id, r.list_id, r.email, r.name, r.variables, r.tags, r.status, r.created_at
+		SELECT `+recipientColumns+`
 		FROM recipients r WHERE r.list_id = ?`+where+`
 		ORDER BY r.created_at DESC`, append([]any{listID}, args...)...)
 }

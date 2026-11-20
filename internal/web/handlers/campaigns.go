@@ -422,6 +422,26 @@ func parseJobParams(r *http.Request) (jobParams, *statusError) {
 		Servers:         r.Form["servers"],
 		Strategy:        r.FormValue("strategy"),
 	}
+	// The pilot and the time are read first: a form refused for another field
+	// must come back with them, or a scheduled launch would be sent at once on
+	// the next submit
+	p.DryRun = r.FormValue("dry_run") == "on"
+	if p.DryRun {
+		p.DryRunLimit, _ = strconv.Atoi(r.FormValue("dry_run_limit"))
+		if p.DryRunLimit <= 0 {
+			p.DryRunLimit = defaultDryRunLimit
+		}
+	}
+	if scheduledAt := r.FormValue("scheduled_at"); scheduledAt != "" {
+		t, err := parseScheduledAt(scheduledAt, r.FormValue("tz"), r.FormValue("tz_offset"))
+		if err != nil {
+			// Never fall back to sending right away; this error goes first,
+			// as the form comes back without the time
+			return p, &statusError{http.StatusBadRequest, "Invalid schedule time"}
+		}
+		p.ScheduledAt = &t
+	}
+
 	if p.RecipientListID == "" {
 		return p, &statusError{http.StatusBadRequest, "Recipient list is required"}
 	}
@@ -441,26 +461,8 @@ func parseJobParams(r *http.Request) (jobParams, *statusError) {
 		return p, &statusError{http.StatusBadRequest, "Unknown distribution strategy"}
 	}
 
-	// Handle dry-run mode
-	p.DryRun = r.FormValue("dry_run") == "on"
-	if p.DryRun {
-		p.DryRunLimit, _ = strconv.Atoi(r.FormValue("dry_run_limit"))
-		if p.DryRunLimit <= 0 {
-			p.DryRunLimit = defaultDryRunLimit
-		}
-		if p.DryRunLimit > maxDryRunLimit {
-			return p, &statusError{http.StatusBadRequest, "The pilot sends to at most " + strconv.Itoa(maxDryRunLimit) + " recipients"}
-		}
-	}
-
-	// Handle scheduled_at
-	if scheduledAt := r.FormValue("scheduled_at"); scheduledAt != "" {
-		t, err := parseScheduledAt(scheduledAt, r.FormValue("tz"), r.FormValue("tz_offset"))
-		if err != nil {
-			// Never fall back to sending right away
-			return p, &statusError{http.StatusBadRequest, "Invalid schedule time"}
-		}
-		p.ScheduledAt = &t
+	if p.DryRun && p.DryRunLimit > maxDryRunLimit {
+		return p, &statusError{http.StatusBadRequest, "The pilot sends to at most " + strconv.Itoa(maxDryRunLimit) + " recipients"}
 	}
 	return p, nil
 }
