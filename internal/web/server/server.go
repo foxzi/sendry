@@ -130,6 +130,9 @@ func (s *Server) setupRoutes() http.Handler {
 	apiMux.HandleFunc("GET /api/v1/lists", lists(h.APIListLists))
 	apiMux.HandleFunc("POST /api/v1/lists/{id}/recipients", lists(h.APIAddRecipients))
 	apiMux.HandleFunc("DELETE /api/v1/lists/{id}/recipients/{email}", lists(h.APIDeleteRecipient))
+	apiMux.HandleFunc("GET /api/v1/lists/{id}/recipients/{email}", lists(h.APIGetRecipient))
+	apiMux.HandleFunc("POST /api/v1/lists/{id}/recipients/{email}/unsubscribe", lists(h.APIUnsubscribeRecipient))
+	apiMux.HandleFunc("POST /api/v1/lists/{id}/recipients/{email}/resubscribe", lists(h.APIResubscribeRecipient))
 
 	apiKeysRepo := repository.NewAPIKeyRepository(s.db.DB)
 	apiAuth := middleware.APIAuth(apiKeysRepo, s.logger)
@@ -200,7 +203,12 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("GET /recipients/{id}/import", h.RecipientImportPage)
 	protected.HandleFunc("POST /recipients/{id}/import", h.RecipientImport)
 	protected.HandleFunc("GET /recipients/{id}/export", h.RecipientListExport)
+	protected.HandleFunc("GET /recipients/{id}/segment-fields", h.RecipientSegmentFields)
 	protected.HandleFunc("POST /recipients/{id}/add", h.RecipientAdd)
+	protected.HandleFunc("GET /recipients/{id}/recipients/{recipientId}", h.RecipientView)
+	protected.HandleFunc("PUT /recipients/{id}/recipients/{recipientId}", h.RecipientUpdate)
+	protected.HandleFunc("POST /recipients/{id}/recipients/{recipientId}/unsubscribe", h.RecipientUnsubscribe)
+	protected.HandleFunc("POST /recipients/{id}/recipients/{recipientId}/resubscribe", h.RecipientResubscribe)
 	protected.HandleFunc("DELETE /recipients/{id}/recipients/{recipientId}", h.RecipientDelete)
 
 	// Campaigns
@@ -208,6 +216,7 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("GET /campaigns/new", h.CampaignNew)
 	protected.HandleFunc("POST /campaigns", h.CampaignCreate)
 	protected.HandleFunc("POST /campaigns/wizard/preview", h.CampaignWizardPreview)
+	protected.HandleFunc("POST /campaigns/segment/count", h.CampaignSegmentCount)
 	protected.HandleFunc("POST /campaigns/wizard/test", h.CampaignWizardTest)
 	protected.HandleFunc("GET /campaigns/{id}", h.CampaignView)
 	protected.HandleFunc("POST /campaigns/{id}/section/{row}", h.CampaignSection)

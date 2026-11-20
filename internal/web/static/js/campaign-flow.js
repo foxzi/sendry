@@ -439,6 +439,258 @@
             });
         }
 
+        // Search over the lists (shown when there are many). The chosen list stays visible.
+        var listSearch = $('cf-list-search');
+        function filterLists() {
+            if (!listsBox || !listSearch) return;
+            var q = listSearch.value.trim().toLowerCase();
+            var shown = 0;
+            all(listsBox, '.cf-list').forEach(function (card) {
+                var inp = card.querySelector('input');
+                var ok = !q || (inp && inp.checked) || (card.getAttribute('data-name') || '').toLowerCase().indexOf(q) !== -1;
+                card.hidden = !ok;
+                if (ok) shown++;
+            });
+            var empty = $('cf-lists-empty');
+            if (empty) empty.hidden = shown > 0;
+        }
+        if (listSearch) listSearch.addEventListener('input', filterLists);
+
+        // The lists scroll inside their box: bring the chosen one into it
+        function showSelectedList() {
+            var r = listsBox ? listsBox.querySelector('input[type="radio"]:checked') : null;
+            if (!r) return;
+            var card = r.closest('.cf-list');
+            var top = card.offsetTop - listsBox.offsetTop;
+            if (top < listsBox.scrollTop || top + card.offsetHeight > listsBox.scrollTop + listsBox.clientHeight) {
+                listsBox.scrollTop = Math.max(top - 8, 0);
+            }
+        }
+
+        // ---------- segment of the list (row "to") ----------
+
+        var SG = window.SendrySegment;
+        var segmToggle = SG ? $('cf-segm-on') : null;
+        var segmBox = $('cf-segm-box');
+        var segmConds = $('cf-segm-conds');
+        var segmMatch = $('cf-segm-match');
+        var segmHidden = $('segment');
+        var segmCount = null; // active addresses of the list that match the segment; null = not known
+        var segmState = 'off'; // what the line under the conditions says: off, pick, fill, loading, failed, done
+        var segmSeq = 0;
+        var segmTimer = null;
+        var segmFieldsFor = null; // list whose tags and variables are suggested
+
+        function segmentOn() { return !!segmToggle && segmToggle.checked; }
+
+        function option(value, text) {
+            var o = el('option', '', text);
+            o.value = value;
+            return o;
+        }
+
+        // Value input of a condition row for its operator: days, date, number, text or nothing
+        function segmValueSync(row) {
+            var field = row._field.value;
+            var kind = SG.valueKind(row._op.value);
+            var v = row._val;
+            if (row._kind !== kind) v.value = '';
+            row._kind = kind;
+            v.hidden = kind === 'none';
+            v.type = kind === 'days' ? 'number' : kind === 'date' ? 'date' : 'text';
+            if (kind === 'days') { v.min = '1'; v.max = '36500'; } else { v.removeAttribute('min'); v.removeAttribute('max'); }
+            if (kind === 'number') v.setAttribute('inputmode', 'decimal'); else v.removeAttribute('inputmode');
+            var ph = kind === 'days' ? t('cf.sg_ph_days') : field === 'tag' ? t('cf.sg_ph_tag') : t('cf.sg_ph_value');
+            v.placeholder = kind === 'date' ? '' : ph;
+            v.setAttribute('aria-label', ph);
+            if (field === 'tag') v.setAttribute('list', 'cf-segm-tags'); else v.removeAttribute('list');
+        }
+
+        // Operators and the variable name of a condition row for its field
+        function segmFieldSync(row, op) {
+            var field = row._field.value;
+            row._op.textContent = '';
+            SG.FIELDS[field].forEach(function (o) { row._op.appendChild(option(o, t('cf.sg_o_' + o))); });
+            if (op && SG.FIELDS[field].indexOf(op) !== -1) row._op.value = op;
+            row._key.hidden = field !== 'var';
+            if (field !== 'var') row._key.value = '';
+            segmValueSync(row);
+        }
+
+        function segmRow(c) {
+            c = c || { field: 'added', op: 'last_days' };
+            var row = el('div', 'cf-segm-row');
+            row._field = el('select', 'input cf-segm-field');
+            row._field.setAttribute('aria-label', t('cf.sg_field'));
+            SG.ORDER.forEach(function (f) { row._field.appendChild(option(f, t('cf.sg_f_' + f))); });
+            if (SG.FIELDS[c.field]) row._field.value = c.field;
+            row._key = el('input', 'input cf-segm-key');
+            row._key.type = 'text';
+            row._key.placeholder = t('cf.sg_key');
+            row._key.setAttribute('aria-label', t('cf.sg_key'));
+            row._key.setAttribute('list', 'cf-segm-vars');
+            row._op = el('select', 'input cf-segm-op');
+            row._op.setAttribute('aria-label', t('cf.sg_op'));
+            row._val = el('input', 'input cf-segm-val');
+            var del = el('button', 'cf-kv-del', '×');
+            del.type = 'button';
+            del.setAttribute('data-act', 'segm-del');
+            del.setAttribute('aria-label', t('cf.sg_del'));
+            [row._field, row._key, row._op, row._val, del].forEach(function (e) { row.appendChild(e); });
+            segmFieldSync(row, c.op);
+            row._key.value = c.key || '';
+            row._val.value = c.value || '';
+            return row;
+        }
+
+        function segmRows() { return segmConds ? all(segmConds, '.cf-segm-row') : []; }
+
+        function segmConditions() {
+            return segmRows().map(function (row) {
+                var c = { field: row._field.value, op: row._op.value };
+                if (c.field === 'var') c.key = row._key.value.trim();
+                if (row._kind !== 'none') c.value = row._val.value.trim();
+                return c;
+            });
+        }
+
+        function segmComplete(c) {
+            if (c.field === 'var' && !c.key) return false;
+            var kind = SG.valueKind(c.op);
+            if (kind === 'none') return true;
+            // the same limits as the server (models/segment.go)
+            if (kind === 'days') return /^\d+$/.test(c.value) && parseInt(c.value, 10) >= 1 && parseInt(c.value, 10) <= 36500;
+            if (kind === 'number') return /^[+-]?(\d+([.,]\d*)?|[.,]\d+)([eE][+-]?\d+)?$/.test(c.value);
+            return c.value !== '';
+        }
+
+        // The segment as the server takes it, or null when it is off or has no conditions
+        function segmentValue() {
+            if (!segmentOn()) return null;
+            var conds = segmConditions();
+            return conds.length ? { match: segmMatch.value === 'any' ? 'any' : 'all', conditions: conds } : null;
+        }
+
+        function segmentText() {
+            var seg = segmentValue();
+            return seg && seg.conditions.every(segmComplete) ? SG.describe(seg) : '';
+        }
+
+        function renderSegmCount() {
+            var p = $('cf-segm-count');
+            if (!p) return;
+            var list = selectedList();
+            var text = '';
+            if (segmState === 'pick') text = t('cf.sg_pick_list');
+            else if (segmState === 'fill') text = t('cf.sg_fill');
+            else if (segmState === 'loading') text = t('cf.sg_counting');
+            else if (segmState === 'failed') text = t('cf.sg_count_failed');
+            else if (segmState === 'done') {
+                text = segmCount ? t('cf.sg_count', { n: segmCount, total: list ? list.active : segmCount }) : t('cf.sg_count_none');
+            }
+            p.textContent = text;
+            p.hidden = !text;
+            p.classList.toggle('is-none', segmState === 'done' && !segmCount);
+            p.classList.toggle('is-ok', segmState === 'done' && segmCount > 0);
+        }
+
+        // Everything that shows the number of recipients follows the count
+        function segmCountChanged() {
+            renderSegmCount();
+            if (built.to && rowMap.to) fill(rowMap.to);
+            if (open && rowName(open) === 'check') renderRecap();
+            renderFinal();
+        }
+
+        // The conditions or the list have changed: store the segment in the form and count again
+        function segmSync() {
+            if (!segmHidden || !SG) return;
+            var seg = segmentValue();
+            segmHidden.value = seg ? JSON.stringify(seg) : '';
+            setErr('segment', '');
+            if (segmBox) segmBox.hidden = !segmentOn();
+            clearTimeout(segmTimer);
+            var seq = ++segmSeq;
+            segmCount = null;
+            var list = selectedList();
+            if (!segmentOn()) segmState = 'off';
+            else if (!list) segmState = 'pick';
+            else if (!seg || !seg.conditions.every(segmComplete)) segmState = 'fill';
+            else segmState = 'loading';
+            segmCountChanged();
+            if (segmState !== 'loading') return;
+            segmTimer = setTimeout(function () {
+                fetch('/campaigns/segment/count', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ list_id: list.id, segment: seg })
+                }).then(function (r) {
+                    return r.json().catch(function () { return {}; }).then(function (data) { return { ok: r.ok, data: data }; });
+                }).then(function (res) {
+                    if (seq !== segmSeq) return;
+                    if (res.ok && typeof res.data.count === 'number') { segmCount = res.data.count; segmState = 'done'; }
+                    else segmState = 'failed';
+                    segmCountChanged();
+                }).catch(function () {
+                    if (seq !== segmSeq) return;
+                    segmState = 'failed';
+                    segmCountChanged();
+                });
+            }, 300);
+        }
+
+        // Tags and variable names of the chosen list, offered in the condition fields
+        function loadSegmFields() {
+            var list = selectedList();
+            var id = list ? list.id : '';
+            if (!segmentOn() || id === segmFieldsFor) return;
+            segmFieldsFor = id;
+            var boxes = { tags: $('cf-segm-tags'), variables: $('cf-segm-vars') };
+            function put(data) {
+                ['tags', 'variables'].forEach(function (k) {
+                    if (!boxes[k]) return;
+                    boxes[k].textContent = '';
+                    ((data && data[k]) || []).forEach(function (v) { boxes[k].appendChild(option(v)); });
+                });
+            }
+            put(null);
+            if (!id) return;
+            fetch('/recipients/' + encodeURIComponent(id) + '/segment-fields', { credentials: 'same-origin' })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (data) { if (segmFieldsFor === id) put(data); })
+                .catch(function () { /* suggestions only */ });
+        }
+
+        function setSegmConditions(conds) {
+            if (!segmConds) return;
+            segmConds.textContent = '';
+            conds.forEach(function (c) { segmConds.appendChild(segmRow(c)); });
+        }
+
+        if (segmToggle && segmHidden) {
+            // A scheduled launch or a form that came back with an error brings its segment
+            var segmInit = SG.parse(segmHidden.value);
+            if (segmInit) {
+                segmToggle.checked = true;
+                segmMatch.value = segmInit.match === 'any' ? 'any' : 'all';
+                setSegmConditions(segmInit.conditions);
+            }
+            var segmRoot = $('cf-segm');
+            var onSegmEdit = function (e) {
+                var row = e.target.closest('.cf-segm-row');
+                if (e.type === 'change' && row) {
+                    if (e.target === row._field) segmFieldSync(row);
+                    else if (e.target === row._op) segmValueSync(row);
+                }
+                if (e.target === segmToggle && segmToggle.checked && !segmRows().length) setSegmConditions([null]);
+                loadSegmFields();
+                segmSync();
+            };
+            segmRoot.addEventListener('input', onSegmEdit);
+            segmRoot.addEventListener('change', onSegmEdit);
+        }
+
         // ---------- when: schedule, pilot, time zone (row "when") ----------
 
         var whenRadios = all(root, 'input[name="cf_when"]');
@@ -505,11 +757,17 @@
             return n >= 1 ? Math.min(n, 100) : null;
         }
 
-        function recipientCount() {
+        // Active addresses the launch goes to before the pilot limit: the list, or its segment once counted
+        function audienceCount() {
             var list = selectedList();
             if (!list) return 0;
+            return segmentOn() && segmCount !== null ? segmCount : list.active;
+        }
+
+        function recipientCount() {
+            var n = audienceCount();
             var pilot = pilotCount();
-            return pilot === null ? list.active : Math.min(pilot, list.active);
+            return pilot === null ? n : Math.min(pilot, n);
         }
 
         // Russian wants "1 получателю" but "5 получателям"; English "1 recipient" / "5 recipients"
@@ -607,7 +865,12 @@
                 if (!list) return;
                 o.appendChild(document.createTextNode(list.name));
                 o.appendChild(document.createElement('br'));
-                o.appendChild(sub(t('cf.will_get', { n: list.active })));
+                o.appendChild(sub(t('cf.will_get', { n: audienceCount() })));
+                var segText = segmentText();
+                if (segText) {
+                    o.appendChild(document.createElement('br'));
+                    o.appendChild(sub(t('cf.sg_segment', { text: segText })));
+                }
             },
             when: function (o) {
                 o.appendChild(document.createTextNode(whenText(true)));
@@ -803,6 +1066,7 @@
             var name = rowName(row);
             if (name === 'content') { showVer(curVer); updateScale(); }
             if (name === 'check') enterReview();
+            if (name === 'to') showSelectedList();
             if (focus !== false) focusFirstField(row);
         }
 
@@ -909,6 +1173,13 @@
                 var sel = selectedList();
                 if (!sel) fail('recipient_list_id', 'cmp.wz_err_list');
                 else if (!sel.active) fail('recipient_list_id', 'cmp.wz_err_list_empty');
+                else if (segmentOn()) {
+                    var seg = segmentValue();
+                    if (!seg) fail('segment', 'cf.sg_err_empty');
+                    else if (!seg.conditions.every(segmComplete)) fail('segment', 'cf.sg_err_incomplete');
+                    else if (segmState === 'loading') fail('segment', 'cf.sg_err_wait');
+                    else if (segmState === 'done' && !segmCount) fail('segment', 'cf.sg_err_nobody');
+                }
                 break;
             case 'when':
                 if (isLater()) {
@@ -1152,6 +1423,8 @@
             }
             var list = selectedList();
             item(t('cmp.cf_to'), list ? list.name : '—', list ? t('cf.will_get', { n: recipientCount() }) : '');
+            var segText = segmentText();
+            if (segText) item(t('cmp.segment'), segText);
             item(t('cmp.cf_when'), whenText(true));
             var pilot = pilotCount();
             item(t('cf.recap_pilot'), pilot === null ? t('cf.recap_pilot_off') : t('cf.recap_pilot_on', { n: pilot }));
@@ -1263,6 +1536,15 @@
                 var kr = btn.closest('.cf-kv-row');
                 if (kr) kr.parentNode.removeChild(kr);
                 if (!kv.querySelector('.cf-kv-row')) kv.appendChild(kvRow('', ''));
+            } else if (act === 'segm-add') {
+                var sr = segmRow();
+                segmConds.appendChild(sr);
+                sr._field.focus();
+                segmSync();
+            } else if (act === 'segm-del') {
+                var sdel = btn.closest('.cf-segm-row');
+                if (sdel) sdel.parentNode.removeChild(sdel);
+                segmSync();
             } else if (act === 'kv-json') {
                 toggleJson();
             } else if (act === 'ver-del') {
@@ -1291,7 +1573,7 @@
         });
 
         root.addEventListener('change', function (e) {
-            if (e.target.closest('#cf-lists')) renderLists();
+            if (e.target.closest('#cf-lists')) { renderLists(); loadSegmFields(); segmSync(); }
             if (e.target.name === 'cf_when') { renderWhen(); }
             if (e.target.id === 'dry_run') renderPilot();
             renderFinal();
@@ -1340,7 +1622,7 @@
         var touched = false;
         if (form && mode !== 'edit') {
             // the test email address is not part of what is saved
-            var touch = function (e) { if (e.target.id !== 'cf-test-to') touched = true; };
+            var touch = function (e) { if (e.target.id !== 'cf-test-to' && e.target.id !== 'cf-list-search') touched = true; };
             form.addEventListener('input', touch);
             form.addEventListener('change', touch);
         }
@@ -1366,6 +1648,9 @@
             b.addEventListener('click', function () {
                 setTimeout(function () {
                     renderLists();
+                    // the condition rows carry translated labels: build them again
+                    if (segmentOn()) setSegmConditions(segmConditions());
+                    renderSegmCount();
                     refillBuilt();
                     renderAB();
                     renderTitle();
@@ -1386,6 +1671,8 @@
             schedEl.value = at.toISOString().slice(0, 16);
         }
         renderLists();
+        loadSegmFields();
+        segmSync();
         renderWhen();
         renderPilot();
         renderTitle();

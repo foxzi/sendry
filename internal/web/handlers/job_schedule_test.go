@@ -210,3 +210,68 @@ func TestCampaignView_ScheduledCard(t *testing.T) {
 		}
 	}
 }
+
+// A scheduled launch keeps its segment: the pages show it, the launch form
+// comes back filled with it, and an edit replaces it.
+func TestJobSchedule_Segment(t *testing.T) {
+	h, d := newCampaignTestHandlers(t, "https://panel.example.com")
+	mustExec(t, d, `UPDATE recipients SET tags = '["vip"]' WHERE id IN ('ra', 'rc')`)
+	segment := `{"match":"all","conditions":[{"field":"tag","op":"has","value":"vip"}]}`
+	rec := postCampaignSend(h, url.Values{"recipient_list_id": {"l1"}, "servers": {"mx1"}, "segment": {segment},
+		"scheduled_at": {"2099-03-10T09:00"}, "tz": {"UTC"}})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("send: %d %s", rec.Code, rec.Body.String())
+	}
+	var id string
+	if err := d.QueryRow(`SELECT id FROM send_jobs`).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	escaped := strings.ReplaceAll(segment, `"`, "&#34;")
+
+	page := func(name, target string, handler http.HandlerFunc, values map[string]string) string {
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		for k, v := range values {
+			req.SetPathValue(k, v)
+		}
+		rec := httptest.NewRecorder()
+		handler(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: status %d", name, rec.Code)
+		}
+		return rec.Body.String()
+	}
+	if body := page("launch", "/campaigns/c1/launch?job="+id, h.CampaignLaunch, map[string]string{"id": "c1"}); !strings.Contains(body, `name="segment" value="`+escaped+`"`) {
+		t.Error("launch form without the segment of the job")
+	}
+	if body := page("campaign", "/campaigns/c1", h.CampaignView, map[string]string{"id": "c1"}); !strings.Contains(body, `data-segment="`+escaped+`"`) ||
+		!strings.Contains(body, "&middot; 2 <span") {
+		t.Error("scheduled card without the segment or with a wrong count")
+	}
+	if body := page("job", "/jobs/"+id, h.JobView, map[string]string{"id": id}); !strings.Contains(body, `data-segment="`+escaped+`"`) {
+		t.Error("job page without the segment")
+	}
+
+	// the edit without a segment sends to the whole list again
+	rec = postJobSchedule(h, id, url.Values{"recipient_list_id": {"l1"}, "servers": {"mx1"},
+		"scheduled_at": {"2099-04-01T10:30"}, "tz": {"UTC"}})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("reschedule: %d %s", rec.Code, rec.Body.String())
+	}
+	var stored string
+	d.QueryRow(`SELECT segment FROM send_jobs`).Scan(&stored)
+	if n := countRows(t, d, `SELECT COUNT(*) FROM send_job_items WHERE job_id = ? AND status = 'pending'`, id); stored != "" || n != 3 {
+		t.Errorf("after the edit: segment %q, %d pending items", stored, n)
+	}
+
+	// and an edit with another segment narrows it
+	other := `{"match":"all","conditions":[{"field":"email","op":"contains","value":"a@"}]}`
+	rec = postJobSchedule(h, id, url.Values{"recipient_list_id": {"l1"}, "servers": {"mx1"}, "segment": {other},
+		"scheduled_at": {"2099-04-01T10:30"}, "tz": {"UTC"}})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("reschedule with a segment: %d %s", rec.Code, rec.Body.String())
+	}
+	d.QueryRow(`SELECT segment FROM send_jobs`).Scan(&stored)
+	if n := countRows(t, d, `SELECT COUNT(*) FROM send_job_items WHERE job_id = ?`, id); stored != other || n != 1 {
+		t.Errorf("after the second edit: segment %q, %d items", stored, n)
+	}
+}

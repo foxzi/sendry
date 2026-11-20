@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"html"
 	"io"
 	"log/slog"
 	"net/http"
@@ -181,7 +182,7 @@ func TestJobRecipients_DryRunSkipped(t *testing.T) {
 		{0, 3, 1},
 	}
 	for _, c := range cases {
-		recs, skipped, err := h.jobRecipients("l1", c.limit)
+		recs, skipped, err := h.jobRecipients("l1", nil, c.limit)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -295,6 +296,136 @@ func TestServerPicker(t *testing.T) {
 	for _, c := range seq(jobStrategyRandom) {
 		if c != 'a' && c != 'b' {
 			t.Fatalf("random picked %q", c)
+		}
+	}
+}
+
+func TestCampaignSend_Segment(t *testing.T) {
+	h, d := newCampaignTestHandlers(t, "https://panel.example.com")
+	if _, err := d.Exec(`UPDATE recipients SET tags = '["vip"]' WHERE id IN ('ra', 'rb', 'rd')`); err != nil {
+		t.Fatal(err)
+	}
+	segment := `{"match":"all","conditions":[{"field":"tag","op":"has","value":"vip"}]}`
+
+	rec := postCampaignSend(h, url.Values{"recipient_list_id": {"l1"}, "servers": {"mx1"}, "segment": {segment}})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	rows, err := d.Query(`SELECT recipient_id || ':' || status FROM send_job_items ORDER BY recipient_id`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var got []string
+	for rows.Next() {
+		var s string
+		rows.Scan(&s)
+		got = append(got, s)
+	}
+	// "c" has no tag and gets no item at all; unsubscribed "b" matches and is skipped
+	if want := "ra:pending rb:skipped rd:pending"; strings.Join(got, " ") != want {
+		t.Errorf("items %v, want %s", got, want)
+	}
+	var stored string
+	d.QueryRow(`SELECT segment FROM send_jobs`).Scan(&stored)
+	if stored != segment {
+		t.Errorf("stored segment %q", stored)
+	}
+}
+
+func TestCampaignSend_SegmentRejected(t *testing.T) {
+	h, d := newCampaignTestHandlers(t, "https://panel.example.com")
+	for name, segment := range map[string]string{
+		"invalid":        `{"conditions":[{"field":"tag","op":"nope","value":"x"}]}`,
+		"nobody matches": `{"conditions":[{"field":"tag","op":"has","value":"vip"}]}`,
+	} {
+		rec := postCampaignSend(h, url.Values{"recipient_list_id": {"l1"}, "servers": {"mx1"}, "segment": {segment}})
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: status %d, want 400", name, rec.Code)
+		}
+		// the form comes back with the segment as typed, not as "the whole list"
+		if !strings.Contains(rec.Body.String(), html.EscapeString(`"conditions":[{"field":"tag","op":`)) {
+			t.Errorf("%s: the segment is not in the returned form", name)
+		}
+	}
+	var jobs int
+	d.QueryRow(`SELECT COUNT(*) FROM send_jobs`).Scan(&jobs)
+	if jobs != 0 {
+		t.Errorf("%d jobs created", jobs)
+	}
+}
+
+func TestCampaignSegmentCount(t *testing.T) {
+	h, d := newCampaignTestHandlers(t, "https://panel.example.com")
+	if _, err := d.Exec(`UPDATE recipients SET tags = '["vip"]' WHERE id IN ('ra', 'rb')`); err != nil {
+		t.Fatal(err)
+	}
+	post := func(body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/campaigns/segment/count", strings.NewReader(body))
+		rec := httptest.NewRecorder()
+		h.CampaignSegmentCount(rec, req)
+		return rec
+	}
+	rec := post(`{"list_id":"l1","segment":{"match":"all","conditions":[{"field":"tag","op":"has","value":"vip"}]}}`)
+	// unsubscribed "b" is not counted
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"count":1`) {
+		t.Errorf("count: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := post(`{"list_id":"l1","segment":{"conditions":[{"field":"tag","op":"has"}]}}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("invalid segment: status %d", rec.Code)
+	}
+	if rec := post(`{"list_id":"nope","segment":{"conditions":[{"field":"tag","op":"has","value":"vip"}]}}`); rec.Code != http.StatusNotFound {
+		t.Errorf("unknown list: status %d", rec.Code)
+	}
+}
+
+// After a pilot the launch page offers the full send to the same list and
+// segment: a segment left out would send to the whole list
+func TestCampaignLaunch_AfterPilot(t *testing.T) {
+	h, d := newCampaignTestHandlers(t, "https://panel.example.com")
+	if _, err := d.Exec(`UPDATE recipients SET tags = '["vip"]' WHERE id IN ('ra', 'rd')`); err != nil {
+		t.Fatal(err)
+	}
+	segment := `{"match":"all","conditions":[{"field":"tag","op":"has","value":"vip"}]}`
+	rec := postCampaignSend(h, url.Values{"recipient_list_id": {"l1"}, "servers": {"mx1"}, "segment": {segment},
+		"dry_run": {"on"}, "dry_run_limit": {"1"}})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("pilot: status %d: %s", rec.Code, rec.Body.String())
+	}
+	req := httptest.NewRequest(http.MethodGet, "/campaigns/c1/launch", nil)
+	req.SetPathValue("id", "c1")
+	page := httptest.NewRecorder()
+	h.CampaignLaunch(page, req)
+	if page.Code != http.StatusOK {
+		t.Fatalf("launch page: status %d", page.Code)
+	}
+	if !strings.Contains(page.Body.String(), html.EscapeString(segment)) {
+		t.Error("the segment of the pilot is not offered")
+	}
+}
+
+// A form refused for another field comes back with the time and the pilot:
+// a submit with the time lost would send the launch at once
+func TestCampaignSend_RejectedKeepsTimeAndPilot(t *testing.T) {
+	h, _ := newCampaignTestHandlers(t, "https://panel.example.com")
+	for name, form := range map[string]url.Values{
+		"no servers":      {"recipient_list_id": {"l1"}},
+		"invalid segment": {"recipient_list_id": {"l1"}, "servers": {"mx1"}, "segment": {`{"conditions":[{"field":"tag","op":"nope"}]}`}},
+	} {
+		form.Set("scheduled_at", "2031-03-10T09:00")
+		form.Set("tz", "Europe/Moscow")
+		form.Set("dry_run", "on")
+		form.Set("dry_run_limit", "7")
+		rec := postCampaignSend(h, form)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("%s: status %d", name, rec.Code)
+		}
+		body := rec.Body.String()
+		if !strings.Contains(body, `data-utc="2031-03-10T06:00:00Z"`) {
+			t.Errorf("%s: the time is not in the returned form", name)
+		}
+		if !strings.Contains(body, `name="dry_run" id="dry_run" value="on" checked`) || !strings.Contains(body, `value="7"`) {
+			t.Errorf("%s: the pilot is not in the returned form", name)
 		}
 	}
 }

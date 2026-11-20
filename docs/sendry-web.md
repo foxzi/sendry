@@ -176,6 +176,8 @@ sendry-web cleanup --days 90 --dry-run    # preview what would be deleted
 - Export to CSV
 - Per-recipient variables for personalization
 - Status tracking (active, unsubscribed, bounced)
+- Address card (click an email in a list or in the recipients of a run): status, other lists with the address, every campaign message to it with opens, clicks and events (the latest 50 events of a message are listed, the count is of all); edit the name, tags and variables; unsubscribe by hand or resubscribe. These actions are written to the audit log
+- The search on the Audience page finds lists by name and, from three characters, addresses in all lists
 
 ### Campaigns
 
@@ -240,6 +242,9 @@ GET    /api/v1/send/{id}/status                   # permission: send
 GET    /api/v1/lists                              # permission: lists
 POST   /api/v1/lists/{id}/recipients              # permission: lists
 DELETE /api/v1/lists/{id}/recipients/{email}      # permission: lists
+GET    /api/v1/lists/{id}/recipients/{email}      # permission: lists
+POST   /api/v1/lists/{id}/recipients/{email}/unsubscribe   # permission: lists
+POST   /api/v1/lists/{id}/recipients/{email}/resubscribe   # permission: lists
 ```
 
 Each key has permissions, set in Settings → API keys:
@@ -247,7 +252,28 @@ Each key has permissions, set in Settings → API keys:
 | Permission | Allows |
 |------------|--------|
 | `send` | Sending email (plain and by template) and checking its status. On by default for a new key |
-| `lists` | Reading recipient lists, adding and removing recipients. Off by default |
+| `lists` | Reading recipient lists and recipients, adding, removing, unsubscribing and resubscribing recipients. Off by default |
+
+`POST .../unsubscribe` marks the address as unsubscribed in that list only: it stays in the list, campaigns skip it. The answer is `{"email": "...", "status": "unsubscribed", "changed": true}`; a repeated call returns `"changed": false`. `404` if the address is not in the list, `409` (`RECIPIENT_NOT_ACTIVE`) if it has another status such as bounced.
+
+`POST .../resubscribe` makes an unsubscribed address active again and answers `{"email": "...", "status": "active", "changed": true}`; for an address that is already active `"changed": false`. It undoes only an unsubscribe made through the API. If the reader unsubscribed themselves (the link in a message, the button of the mail client) or a panel user unsubscribed the address by hand, the answer is `409` (`NOT_UNSUBSCRIBED_BY_API`): such a subscription is returned only by a person on the address card. `409` (`RECIPIENT_NOT_UNSUBSCRIBED`) for another status such as bounced, `404` if the address is not in the list.
+
+`GET /api/v1/lists/{id}/recipients/{email}` returns the record of the address in the list:
+
+```json
+{
+  "email": "user@example.com",
+  "name": "Ann",
+  "status": "unsubscribed",
+  "variables": {"city": "Moscow"},
+  "tags": ["vip"],
+  "created_at": "2026-01-04T00:00:00Z",
+  "unsubscribed_at": "2026-02-01T10:00:00Z",
+  "unsubscribed_by": "link"
+}
+```
+
+`unsubscribed_at` and `unsubscribed_by` (`link`, `one_click`, `manual`, `api`) are present only for an unsubscribed address.
 
 A key needs at least one permission. A request outside the key's permissions gets `403` with `"code": "PERMISSION_DENIED"`. Keys created before permissions existed have only `send` (the old values `template` and `status` count as `send`).
 

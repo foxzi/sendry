@@ -31,9 +31,9 @@ func (r *JobRepository) Create(job *models.SendJob) error {
 	job.UpdatedAt = job.CreatedAt
 
 	_, err := r.db.Exec(`
-		INSERT INTO send_jobs (id, campaign_id, recipient_list_id, status, scheduled_at, servers, strategy, stats, dry_run, dry_run_limit, track_opens, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		job.ID, job.CampaignID, job.RecipientListID, job.Status, job.ScheduledAt, job.Servers, job.Strategy, job.Stats, job.DryRun, job.DryRunLimit, job.TrackOpens, job.CreatedAt, job.UpdatedAt,
+		INSERT INTO send_jobs (id, campaign_id, recipient_list_id, status, scheduled_at, servers, strategy, stats, dry_run, dry_run_limit, track_opens, segment, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		job.ID, job.CampaignID, job.RecipientListID, job.Status, job.ScheduledAt, job.Servers, job.Strategy, job.Stats, job.DryRun, job.DryRunLimit, job.TrackOpens, job.Segment, job.CreatedAt, job.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create job: %w", err)
@@ -51,14 +51,14 @@ func (r *JobRepository) GetByID(id string) (*models.SendJob, error) {
 		SELECT j.id, j.campaign_id, c.name, j.recipient_list_id, rl.name, j.status,
 			j.scheduled_at, j.started_at, j.completed_at, j.servers, j.strategy, j.stats,
 			COALESCE(j.dry_run, 0), COALESCE(j.dry_run_limit, 0), j.created_at, j.updated_at,
-			COALESCE(j.skipped_unsubscribed, 0)
+			COALESCE(j.skipped_unsubscribed, 0), COALESCE(j.segment, '')
 		FROM send_jobs j
 		LEFT JOIN campaigns c ON j.campaign_id = c.id
 		LEFT JOIN recipient_lists rl ON j.recipient_list_id = rl.id
 		WHERE j.id = ?`, id,
 	).Scan(&job.ID, &job.CampaignID, &campaignName, &job.RecipientListID, &listName, &job.Status,
 		&scheduledAt, &startedAt, &completedAt, &job.Servers, &job.Strategy, &job.Stats,
-		&job.DryRun, &job.DryRunLimit, &job.CreatedAt, &job.UpdatedAt, &job.SkippedUnsubscribed)
+		&job.DryRun, &job.DryRunLimit, &job.CreatedAt, &job.UpdatedAt, &job.SkippedUnsubscribed, &job.Segment)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -111,7 +111,7 @@ func (r *JobRepository) List(filter models.JobListFilter) ([]models.SendJob, int
 		SELECT j.id, j.campaign_id, c.name, j.recipient_list_id, rl.name, j.status,
 			j.scheduled_at, j.started_at, j.completed_at, j.servers, j.strategy, j.stats,
 			COALESCE(j.dry_run, 0), COALESCE(j.dry_run_limit, 0), j.created_at, j.updated_at,
-			COALESCE(j.skipped_unsubscribed, 0)
+			COALESCE(j.skipped_unsubscribed, 0), COALESCE(j.segment, '')
 		FROM send_jobs j
 		LEFT JOIN campaigns c ON j.campaign_id = c.id
 		LEFT JOIN recipient_lists rl ON j.recipient_list_id = rl.id
@@ -152,7 +152,7 @@ func (r *JobRepository) List(filter models.JobListFilter) ([]models.SendJob, int
 
 		err := rows.Scan(&job.ID, &job.CampaignID, &campaignName, &job.RecipientListID, &listName, &job.Status,
 			&scheduledAt, &startedAt, &completedAt, &job.Servers, &job.Strategy, &job.Stats,
-			&job.DryRun, &job.DryRunLimit, &job.CreatedAt, &job.UpdatedAt, &job.SkippedUnsubscribed)
+			&job.DryRun, &job.DryRunLimit, &job.CreatedAt, &job.UpdatedAt, &job.SkippedUnsubscribed, &job.Segment)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -295,7 +295,7 @@ var ErrJobNotScheduled = errors.New("job is not scheduled")
 // it has just started is not touched (ErrJobNotScheduled). A nil scheduledAt
 // starts the job (status running). trackOpens is the campaign's open
 // tracking as of now, the snapshot the statistics of the job use.
-func (r *JobRepository) RescheduleJob(id, listID, servers, strategy string, scheduledAt *time.Time, trackOpens bool, items []models.SendJobItem, skipped int) error {
+func (r *JobRepository) RescheduleJob(id, listID, segment, servers, strategy string, scheduledAt *time.Time, trackOpens bool, items []models.SendJobItem, skipped int) error {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return err
@@ -310,10 +310,10 @@ func (r *JobRepository) RescheduleJob(id, listID, servers, strategy string, sche
 		startedAt = &now
 	}
 	res, err := tx.Exec(`
-		UPDATE send_jobs SET recipient_list_id = ?, servers = ?, strategy = ?, scheduled_at = ?, track_opens = ?,
+		UPDATE send_jobs SET recipient_list_id = ?, segment = ?, servers = ?, strategy = ?, scheduled_at = ?, track_opens = ?,
 			status = ?, started_at = COALESCE(started_at, ?), skipped_unsubscribed = ?, updated_at = ?
 		WHERE id = ? AND status = 'scheduled'`,
-		listID, servers, strategy, scheduledAt, trackOpens, status, startedAt, skipped, now, id)
+		listID, segment, servers, strategy, scheduledAt, trackOpens, status, startedAt, skipped, now, id)
 	if err != nil {
 		return err
 	}
