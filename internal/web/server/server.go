@@ -130,7 +130,9 @@ func (s *Server) setupRoutes() http.Handler {
 	apiMux.HandleFunc("GET /api/v1/lists", lists(h.APIListLists))
 	apiMux.HandleFunc("POST /api/v1/lists/{id}/recipients", lists(h.APIAddRecipients))
 	apiMux.HandleFunc("DELETE /api/v1/lists/{id}/recipients/{email}", lists(h.APIDeleteRecipient))
+	apiMux.HandleFunc("GET /api/v1/lists/{id}/recipients/{email}", lists(h.APIGetRecipient))
 	apiMux.HandleFunc("POST /api/v1/lists/{id}/recipients/{email}/unsubscribe", lists(h.APIUnsubscribeRecipient))
+	apiMux.HandleFunc("POST /api/v1/lists/{id}/recipients/{email}/resubscribe", lists(h.APIResubscribeRecipient))
 
 	apiKeysRepo := repository.NewAPIKeyRepository(s.db.DB)
 	apiAuth := middleware.APIAuth(apiKeysRepo, s.logger)

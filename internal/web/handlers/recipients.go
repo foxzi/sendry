@@ -6,9 +6,18 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/foxzi/sendry/internal/web/models"
 	"github.com/foxzi/sendry/internal/web/repository"
+)
+
+// The audience search also looks for addresses in all lists: from this many
+// characters, at most this many rows.
+const (
+	addressSearchMin   = 3
+	addressSearchLimit = 50
 )
 
 func (h *Handlers) RecipientListList(w http.ResponseWriter, r *http.Request) {
@@ -35,15 +44,31 @@ func (h *Handlers) RecipientListList(w http.ResponseWriter, r *http.Request) {
 
 	totalPages := (total + limit - 1) / limit
 
+	// The same query also finds addresses in all lists, on the first page only
+	var addresses []models.RecipientMembership
+	addressesMore := false
+	if q := strings.TrimSpace(search); page == 1 && utf8.RuneCountInString(q) >= addressSearchMin {
+		addresses, err = h.recipients.FindByEmail(q, addressSearchLimit+1)
+		if err != nil {
+			h.logger.Error("failed to search addresses", "error", err)
+		}
+		if len(addresses) > addressSearchLimit {
+			addresses, addressesMore = addresses[:addressSearchLimit], true
+		}
+	}
+
 	data := map[string]any{
-		"Title":      "Audience",
-		"Active":     "recipients",
-		"User":       h.getUserFromContext(r),
-		"Lists":      lists,
-		"Total":      total,
-		"Page":       page,
-		"TotalPages": totalPages,
-		"Search":     search,
+		"Title":          "Audience",
+		"Active":         "recipients",
+		"User":           h.getUserFromContext(r),
+		"Lists":          lists,
+		"Total":          total,
+		"Page":           page,
+		"TotalPages":     totalPages,
+		"Search":         search,
+		"Addresses":      addresses,
+		"AddressesMore":  addressesMore,
+		"AddressesLimit": addressSearchLimit,
 	}
 
 	h.render(w, "recipients", data)

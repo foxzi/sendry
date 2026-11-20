@@ -2,6 +2,7 @@ package repository
 
 import (
 	"database/sql"
+	"strings"
 	"time"
 
 	"github.com/foxzi/sendry/internal/web/models"
@@ -29,10 +30,76 @@ func (r *RecipientRepository) GetRecipient(listID, id string) (*models.Recipient
 	return rec, nil
 }
 
-// UpdateRecipientName renames a recipient of a list.
-func (r *RecipientRepository) UpdateRecipientName(listID, id, name string) error {
-	_, err := r.db.Exec(`UPDATE recipients SET name = ? WHERE id = ? AND list_id = ?`, name, id, listID)
+// RecipientFields are the fields of a recipient edited on its card; a nil
+// field is left as it is. Variables is a JSON object, Tags a JSON array.
+type RecipientFields struct {
+	Name      *string
+	Variables *string
+	Tags      *string
+}
+
+// UpdateRecipientFields saves the given fields of a recipient of a list.
+func (r *RecipientRepository) UpdateRecipientFields(listID, id string, f RecipientFields) error {
+	var set []string
+	var args []any
+	for _, c := range []struct {
+		col string
+		val *string
+	}{{"name", f.Name}, {"variables", f.Variables}, {"tags", f.Tags}} {
+		if c.val != nil {
+			set = append(set, c.col+" = ?")
+			args = append(args, *c.val)
+		}
+	}
+	if len(set) == 0 {
+		return nil
+	}
+	args = append(args, id, listID)
+	_, err := r.db.Exec(`UPDATE recipients SET `+strings.Join(set, ", ")+` WHERE id = ? AND list_id = ?`, args...)
 	return err
+}
+
+// GetRecipientByEmail returns the record of an address in a list (the oldest
+// one if the list has duplicates), (nil, nil) if it is not there.
+func (r *RecipientRepository) GetRecipientByEmail(listID, email string) (*models.Recipient, error) {
+	var id string
+	err := r.db.QueryRow(
+		`SELECT id FROM recipients WHERE list_id = ? AND lower(email) = ? ORDER BY created_at LIMIT 1`,
+		listID, NormalizeEmail(email),
+	).Scan(&id)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return r.GetRecipient(listID, id)
+}
+
+// FindByEmail returns the records, in all lists, of the addresses that
+// contain the query, with the list of each; at most limit rows.
+func (r *RecipientRepository) FindByEmail(query string, limit int) ([]models.RecipientMembership, error) {
+	rows, err := r.db.Query(`
+		SELECT r.id, r.list_id, COALESCE(l.name, ''), r.email, COALESCE(r.name, ''), COALESCE(r.status, ''), r.created_at
+		FROM recipients r
+		LEFT JOIN recipient_lists l ON l.id = r.list_id
+		WHERE ulower(r.email) LIKE ? ESCAPE '\'
+		ORDER BY lower(r.email), r.created_at DESC, r.id
+		LIMIT ?`, searchPattern(strings.TrimSpace(query)), limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := []models.RecipientMembership{}
+	for rows.Next() {
+		var m models.RecipientMembership
+		if err := rows.Scan(&m.RecipientID, &m.ListID, &m.ListName, &m.Email, &m.Name, &m.Status, &m.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
 }
 
 // Memberships returns every list the address is in, newest record first.
@@ -100,7 +167,8 @@ func (r *RecipientRepository) Messages(email string, limit int) ([]models.Recipi
 		SELECT i.id, i.job_id, j.campaign_id, COALESCE(c.name, ''), r.list_id, COALESCE(l.name, ''),
 			COALESCE(v.name, ''), COALESCE(i.status, ''), COALESCE(i.error, ''),
 			i.sent_at, i.queued_at, i.created_at,
-			i.opened_at, COALESCE(i.open_count, 0), i.clicked_at, COALESCE(i.click_count, 0), i.unsubscribed_at
+			i.opened_at, COALESCE(i.open_count, 0), i.clicked_at, COALESCE(i.click_count, 0), i.unsubscribed_at,
+			(SELECT COUNT(*) FROM email_events e WHERE e.source_type = ? AND e.source_id = i.id)
 		FROM send_job_items i
 		JOIN recipients r ON r.id = i.recipient_id
 		JOIN send_jobs j ON j.id = i.job_id
@@ -109,7 +177,7 @@ func (r *RecipientRepository) Messages(email string, limit int) ([]models.Recipi
 		LEFT JOIN campaign_variants v ON v.id = i.variant_id
 		WHERE lower(r.email) = ?
 		ORDER BY COALESCE(i.sent_at, i.queued_at, i.created_at) DESC, i.id
-		LIMIT ?`, NormalizeEmail(email), limit)
+		LIMIT ?`, models.SourceJobItem, NormalizeEmail(email), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +190,7 @@ func (r *RecipientRepository) Messages(email string, limit int) ([]models.Recipi
 		var createdAt time.Time
 		if err := rows.Scan(&m.ItemID, &m.JobID, &m.CampaignID, &m.CampaignName, &m.ListID, &m.ListName,
 			&m.VariantName, &m.Status, &m.Error, &sentAt, &queuedAt, &createdAt,
-			&openedAt, &m.OpenCount, &clickedAt, &m.ClickCount, &unsubAt); err != nil {
+			&openedAt, &m.OpenCount, &clickedAt, &m.ClickCount, &unsubAt, &m.EventTotal); err != nil {
 			return nil, err
 		}
 		switch {
@@ -147,19 +215,31 @@ func (r *RecipientRepository) Messages(email string, limit int) ([]models.Recipi
 	return out, rows.Err()
 }
 
-// Events returns the opens, clicks and unsubscribes of the campaign messages
-// addressed to the address in all lists, newest first.
-func (r *RecipientRepository) Events(email string, limit int) ([]models.RecipientEvent, error) {
+// Events returns the opens, clicks and unsubscribes of the given campaign
+// messages (job item ids), newest first: at most perMessage latest events of
+// each message, so a busy message does not push out the events of the others.
+func (r *RecipientRepository) Events(itemIDs []string, perMessage int) ([]models.RecipientEvent, error) {
+	if len(itemIDs) == 0 {
+		return []models.RecipientEvent{}, nil
+	}
+	args := make([]any, 0, len(itemIDs)+2)
+	args = append(args, models.SourceJobItem)
+	for _, id := range itemIDs {
+		args = append(args, id)
+	}
+	args = append(args, perMessage)
 	rows, err := r.db.Query(`
 		SELECT e.id, e.type, e.source_type, e.source_id, COALESCE(e.campaign_id, ''), COALESCE(c.name, ''),
 			COALESCE(e.job_id, ''), e.email, e.link_id, COALESCE(e.url, ''), COALESCE(e.ip, ''),
 			COALESCE(e.user_agent, ''), e.is_machine, e.created_at
-		FROM email_events e
+		FROM (
+			SELECT ev.*, ROW_NUMBER() OVER (PARTITION BY ev.source_id ORDER BY ev.created_at DESC, ev.id DESC) AS rn
+			FROM email_events ev
+			WHERE ev.source_type = ? AND ev.source_id IN (?`+strings.Repeat(`, ?`, len(itemIDs)-1)+`)
+		) e
 		LEFT JOIN campaigns c ON c.id = e.campaign_id
-		WHERE e.source_type = ? AND e.source_id IN (
-			SELECT i.id FROM send_job_items i JOIN recipients r ON r.id = i.recipient_id WHERE lower(r.email) = ?)
-		ORDER BY e.created_at DESC, e.id DESC
-		LIMIT ?`, models.SourceJobItem, NormalizeEmail(email), limit)
+		WHERE e.rn <= ?
+		ORDER BY e.created_at DESC, e.id DESC`, args...)
 	if err != nil {
 		return nil, err
 	}

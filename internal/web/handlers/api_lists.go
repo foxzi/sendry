@@ -7,6 +7,7 @@ import (
 	"net/mail"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/foxzi/sendry/internal/web/middleware"
 	"github.com/foxzi/sendry/internal/web/models"
@@ -222,7 +223,9 @@ func (h *Handlers) APIUnsubscribeRecipient(w http.ResponseWriter, r *http.Reques
 	if k := middleware.GetAPIKeyFromContext(r); k != nil {
 		u.SourceID = k.ID
 	}
-	changed, err := h.unsubs.Add(u)
+	// the status is checked again together with the write: a reader may have
+	// unsubscribed in between, and their journal row must stay
+	changed, err := h.unsubs.AddIfActive(u)
 	switch {
 	case errors.Is(err, repository.ErrRecipientNotInList): // deleted in between
 		h.apiError(w, http.StatusNotFound, "Recipient not found in this list", "NOT_FOUND")
@@ -232,10 +235,129 @@ func (h *Handlers) APIUnsubscribeRecipient(w http.ResponseWriter, r *http.Reques
 		h.apiError(w, http.StatusInternalServerError, "Internal server error", "INTERNAL_ERROR")
 		return
 	}
-	if changed {
-		h.auditAPI(r, "api_recipient_unsubscribe", listID, "email="+email)
+	if !changed {
+		// lost a race: answer by what the address is now
+		if now, _ := h.recipients.RecipientStatusByEmail(listID, email); now != models.RecipientStatusUnsubscribed {
+			h.apiError(w, http.StatusConflict, "Recipient is not active (status: "+now+")", "RECIPIENT_NOT_ACTIVE")
+			return
+		}
+		h.apiJSON(w, http.StatusOK, resp)
+		return
 	}
-	resp["changed"] = changed
+	h.auditAPI(r, "api_recipient_unsubscribe", listID, "email="+email)
+	resp["changed"] = true
+	h.apiJSON(w, http.StatusOK, resp)
+}
+
+// APIGetRecipient handles GET /api/v1/lists/{id}/recipients/{email}: the
+// record of the address in the list with its status.
+func (h *Handlers) APIGetRecipient(w http.ResponseWriter, r *http.Request) {
+	listID := r.PathValue("id")
+	rec, err := h.recipients.GetRecipientByEmail(listID, r.PathValue("email"))
+	if err != nil {
+		h.logger.Error("api: failed to load recipient", "list", listID, "error", err)
+		h.apiError(w, http.StatusInternalServerError, "Internal server error", "INTERNAL_ERROR")
+		return
+	}
+	if rec == nil {
+		h.apiError(w, http.StatusNotFound, "Recipient not found in this list", "NOT_FOUND")
+		return
+	}
+
+	status := rec.Status
+	if status == "" {
+		status = "active"
+	}
+	// decoded so that a long number keeps its digits
+	variables := storedVariables(rec.Variables)
+	if variables == nil {
+		variables = map[string]any{}
+	}
+	tags := recipientTags(rec.Tags)
+	if tags == nil {
+		tags = []string{}
+	}
+	resp := map[string]any{
+		"email":      repository.NormalizeEmail(rec.Email),
+		"name":       rec.Name,
+		"status":     status,
+		"variables":  variables,
+		"tags":       tags,
+		"created_at": rec.CreatedAt.UTC().Format(time.RFC3339),
+	}
+	if status == models.RecipientStatusUnsubscribed {
+		u, err := h.unsubs.Get(listID, rec.Email)
+		if err != nil {
+			h.logger.Error("api: failed to load unsubscribe", "list", listID, "error", err)
+		}
+		if u != nil {
+			resp["unsubscribed_at"] = u.CreatedAt.UTC().Format(time.RFC3339)
+			resp["unsubscribed_by"] = u.SourceType
+		}
+	}
+	h.apiJSON(w, http.StatusOK, resp)
+}
+
+const apiNotUnsubscribedByAPI = "The address was not unsubscribed through the API; resubscribe it on the address card in the panel"
+
+// APIResubscribeRecipient handles POST /api/v1/lists/{id}/recipients/{email}/resubscribe:
+// an address unsubscribed through the API becomes active again. Any other
+// unsubscribe is not undone through the API: the reader's own (the link in
+// a message, the button of the mail client) and one made by hand in the
+// panel, which is often an operator acting on the reader's request. Those
+// take a person on the address card. Repeating the call is safe.
+func (h *Handlers) APIResubscribeRecipient(w http.ResponseWriter, r *http.Request) {
+	listID := r.PathValue("id")
+	email := repository.NormalizeEmail(r.PathValue("email"))
+
+	status, err := h.recipients.RecipientStatusByEmail(listID, email)
+	switch {
+	case errors.Is(err, repository.ErrRecipientNotInList):
+		h.apiError(w, http.StatusNotFound, "Recipient not found in this list", "NOT_FOUND")
+		return
+	case err != nil:
+		h.logger.Error("api: failed to load recipient", "list", listID, "error", err)
+		h.apiError(w, http.StatusInternalServerError, "Internal server error", "INTERNAL_ERROR")
+		return
+	}
+
+	resp := map[string]any{"email": email, "status": "active", "changed": false}
+	switch status {
+	case "", "active":
+		h.apiJSON(w, http.StatusOK, resp)
+		return
+	case models.RecipientStatusUnsubscribed:
+	default:
+		h.apiError(w, http.StatusConflict, "Recipient is not unsubscribed (status: "+status+")", "RECIPIENT_NOT_UNSUBSCRIBED")
+		return
+	}
+
+	u, err := h.unsubs.Get(listID, email)
+	if err != nil {
+		h.logger.Error("api: failed to load unsubscribe", "list", listID, "error", err)
+		h.apiError(w, http.StatusInternalServerError, "Internal server error", "INTERNAL_ERROR")
+		return
+	}
+	// without a journal row nobody knows who unsubscribed: not the API's to undo
+	if u == nil || u.SourceType != models.UnsubSourceAPI {
+		h.apiError(w, http.StatusConflict, apiNotUnsubscribedByAPI, "NOT_UNSUBSCRIBED_BY_API")
+		return
+	}
+
+	// the source is checked again together with the write: the reader may
+	// have unsubscribed in between
+	removed, err := h.unsubs.RemoveIfSource(listID, email, models.UnsubSourceAPI)
+	if err != nil {
+		h.logger.Error("api: failed to resubscribe recipient", "list", listID, "error", err)
+		h.apiError(w, http.StatusInternalServerError, "Internal server error", "INTERNAL_ERROR")
+		return
+	}
+	if !removed {
+		h.apiError(w, http.StatusConflict, apiNotUnsubscribedByAPI, "NOT_UNSUBSCRIBED_BY_API")
+		return
+	}
+	h.auditAPI(r, "api_recipient_resubscribe", listID, "email="+email+" unsubscribed_by="+u.SourceType)
+	resp["changed"] = true
 	h.apiJSON(w, http.StatusOK, resp)
 }
 

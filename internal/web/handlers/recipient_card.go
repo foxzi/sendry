@@ -5,29 +5,51 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"sort"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
+	"github.com/foxzi/sendry/internal/web/middleware"
 	"github.com/foxzi/sendry/internal/web/models"
 	"github.com/foxzi/sendry/internal/web/repository"
 )
 
 // Rows shown on the recipient card; the totals above them count everything
 const (
-	recipientCardMessages = 100
-	recipientCardEvents   = 500
+	recipientCardMessages         = 100
+	recipientCardEventsPerMessage = 50
 )
 
-// recipientNameMax is the longest name saved from the card, in characters;
-// the same as maxlength of the name field
-const recipientNameMax = 200
+// Limits of the fields edited on the card, in characters. The form fields
+// carry the same maxlength, but a direct request does not pass through them.
+const (
+	recipientNameMax     = 200
+	recipientTagMax      = 50
+	recipientTagsMax     = 30
+	recipientVarNameMax  = 64
+	recipientVarValueMax = 2000
+	recipientVarsMax     = 50
+)
+
+// A variable is used in templates as {{Name}}, so a new one must be a name
+// the template engine can read. Names that came from an import are kept.
+var recipientVarNameRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // cardMessage is a campaign message on the recipient card with its
 // engagement events, newest first
 type cardMessage struct {
 	models.RecipientMessage
 	Events []models.RecipientEvent
+}
+
+// EventsHidden tells how many older events of the message are not shown.
+func (m cardMessage) EventsHidden() int {
+	if n := m.EventTotal - len(m.Events); n > 0 {
+		return n
+	}
+	return 0
 }
 
 // cardMessages attaches each event to the message it belongs to.
@@ -49,21 +71,64 @@ type recipientVariable struct {
 	Value string
 }
 
+// Multiline tells the form to edit the value in a text area: a one-line
+// field would drop the line breaks on any save.
+func (v recipientVariable) Multiline() bool {
+	return strings.ContainsAny(v.Value, "\r\n")
+}
+
+// sameText compares a typed value with a stored one; a browser sends every
+// line break as CRLF whatever was stored.
+func sameText(typed, stored string) bool {
+	norm := strings.NewReplacer("\r\n", "\n", "\r", "\n")
+	return norm.Replace(typed) == norm.Replace(stored)
+}
+
+// variableText is how a variable value is shown and edited: a string as it
+// is, anything else as JSON.
+func variableText(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	b, _ := marshalPlain(v)
+	return b
+}
+
+// storedVariables decodes the variables JSON object of a recipient; nil for
+// anything that is not an object. Numbers keep their digits (a long id or
+// "10.00" would not survive a float).
+func storedVariables(raw string) map[string]any {
+	dec := json.NewDecoder(strings.NewReader(raw))
+	dec.UseNumber()
+	var v any
+	if err := dec.Decode(&v); err != nil || dec.More() {
+		return nil
+	}
+	obj, _ := v.(map[string]any)
+	return obj
+}
+
+// plainText drops what a one-line field must not hold: control characters
+// and bytes that are not text.
+func plainText(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r == utf8.RuneError || unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, s)
+}
+
 // recipientVariables decodes the variables JSON object of a recipient into
 // rows sorted by key. Anything that is not an object gives no rows.
 func recipientVariables(raw string) []recipientVariable {
-	var obj map[string]any
-	if err := json.Unmarshal([]byte(raw), &obj); err != nil {
+	obj := storedVariables(raw)
+	if obj == nil {
 		return nil
 	}
 	out := make([]recipientVariable, 0, len(obj))
 	for k, v := range obj {
-		val, ok := v.(string)
-		if !ok {
-			b, _ := json.Marshal(v)
-			val = string(b)
-		}
-		out = append(out, recipientVariable{Key: k, Value: val})
+		out = append(out, recipientVariable{Key: k, Value: variableText(v)})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
 	return out
@@ -76,6 +141,114 @@ func recipientTags(raw string) []string {
 		return nil
 	}
 	return tags
+}
+
+// cardFormError is a refused field of the card form: the translation key of
+// the message and its English text.
+type cardFormError struct {
+	Key  string
+	Text string
+}
+
+// parseCardTags reads the comma-separated tags field into a JSON array.
+// The limits apply to what the user changes: tags the record already has
+// (from an import or the API) are kept as they are.
+func parseCardTags(raw string, stored []string) (string, []string, *cardFormError) {
+	had := map[string]bool{}
+	for _, t := range stored {
+		had[t] = true
+	}
+	tags := []string{}
+	seen := map[string]bool{}
+	for _, t := range strings.Split(raw, ",") {
+		t = strings.TrimSpace(t)
+		if !had[t] {
+			t = strings.TrimSpace(plainText(t))
+		}
+		if t == "" || seen[t] {
+			continue
+		}
+		if !had[t] && utf8.RuneCountInString(t) > recipientTagMax {
+			return "", nil, &cardFormError{"cmp.rc_err_tag_long", fmt.Sprintf("A tag is too long (max %d characters)", recipientTagMax)}
+		}
+		seen[t] = true
+		tags = append(tags, t)
+	}
+	if len(tags) > recipientTagsMax && len(tags) > len(stored) {
+		return "", nil, &cardFormError{"cmp.rc_err_tags_many", fmt.Sprintf("Too many tags (max %d)", recipientTagsMax)}
+	}
+	b, _ := marshalPlain(tags)
+	return b, tags, nil
+}
+
+// marshalPlain encodes JSON without the HTML escaping of json.Marshal, so
+// that "R&D" is stored as typed.
+func marshalPlain(v any) (string, error) {
+	var buf strings.Builder
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return "", err
+	}
+	return strings.TrimSuffix(buf.String(), "\n"), nil
+}
+
+// parseCardVariables reads the name/value rows of the card form into a JSON
+// object. A row without a name and a value is skipped. A value that was not
+// a string (a number from an API call) and is left as shown keeps its type.
+// The limits apply to what the user changes: a stored variable left as it is
+// passes whatever its name and length.
+func parseCardVariables(keys, values []string, stored string) (string, []recipientVariable, *cardFormError) {
+	orig := storedVariables(stored)
+
+	rows := []recipientVariable{}
+	obj := map[string]any{}
+	var bad *cardFormError
+	for i, typed := range keys {
+		// a stored name is kept to the letter, spaces around it included
+		k := strings.TrimSpace(typed)
+		if _, ok := orig[typed]; ok {
+			k = typed
+		}
+		v := ""
+		if i < len(values) {
+			v = values[i]
+		}
+		o, known := orig[k]
+		untouched := known && sameText(v, variableText(o))
+		if k == "" && strings.TrimSpace(v) == "" && !untouched {
+			continue
+		}
+		rows = append(rows, recipientVariable{Key: k, Value: v})
+		_, dup := obj[k]
+		switch {
+		case bad != nil:
+		case dup:
+			bad = &cardFormError{"cmp.rc_err_var_dup", "Two variables have the same name"}
+		case untouched:
+		case k == "":
+			bad = &cardFormError{"cmp.rc_err_var_noname", "A variable has a value but no name"}
+		case !known && utf8.RuneCountInString(k) > recipientVarNameMax:
+			bad = &cardFormError{"cmp.rc_err_var_name", "A variable name is too long"}
+		case !known && !recipientVarNameRe.MatchString(k):
+			bad = &cardFormError{"cmp.rc_err_var_name", "A variable name may contain Latin letters, digits and underscores, and cannot start with a digit"}
+		case utf8.RuneCountInString(v) > recipientVarValueMax:
+			bad = &cardFormError{"cmp.rc_err_var_value", fmt.Sprintf("A variable value is too long (max %d characters)", recipientVarValueMax)}
+		}
+		if untouched {
+			obj[k] = o
+		} else {
+			obj[k] = v
+		}
+	}
+	if bad == nil && len(obj) > recipientVarsMax && len(obj) > len(orig) {
+		bad = &cardFormError{"cmp.rc_err_vars_many", fmt.Sprintf("Too many variables (max %d)", recipientVarsMax)}
+	}
+	if bad != nil {
+		return "", rows, bad
+	}
+	b, _ := marshalPlain(obj)
+	return b, rows, nil
 }
 
 // cardRecipient loads the list and the recipient named in the path and
@@ -119,6 +292,29 @@ func recipientCardURL(listID, recipientID string) string {
 	return fmt.Sprintf("/recipients/%s/recipients/%s", listID, recipientID)
 }
 
+// auditRecipient writes an audit entry for an action of a panel user on a
+// recipient, in the same shape as the API ones (the list and the address).
+func (h *Handlers) auditRecipient(r *http.Request, action, listID, details string) {
+	h.settings.LogAction(r, middleware.GetUserID(r), middleware.GetUserEmail(r), action, "recipient_list", listID, details)
+}
+
+// cardForm is what the edit form of the card shows: the stored fields or,
+// after a refused save, what the user typed.
+type cardForm struct {
+	Name      string
+	Tags      string // comma-separated
+	Variables []recipientVariable
+	Error     *cardFormError
+}
+
+func storedCardForm(rec *models.Recipient) cardForm {
+	return cardForm{
+		Name:      rec.Name,
+		Tags:      strings.Join(recipientTags(rec.Tags), ", "),
+		Variables: recipientVariables(rec.Variables),
+	}
+}
+
 // RecipientView is the card of an email address: its record in the list it
 // was opened from, the other lists the address is in, and the campaign
 // messages and engagement events of the address in all lists.
@@ -127,7 +323,10 @@ func (h *Handlers) RecipientView(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	h.renderRecipientCard(w, r, http.StatusOK, list, rec, storedCardForm(rec))
+}
 
+func (h *Handlers) renderRecipientCard(w http.ResponseWriter, r *http.Request, status int, list *models.RecipientList, rec *models.Recipient, form cardForm) {
 	// The sections below are independent: a failed one is logged and shown empty
 	memberships, err := h.recipients.Memberships(rec.Email)
 	if err != nil {
@@ -141,7 +340,11 @@ func (h *Handlers) RecipientView(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.Error("failed to load recipient messages", "error", err)
 	}
-	events, err := h.recipients.Events(rec.Email, recipientCardEvents)
+	itemIDs := make([]string, 0, len(messages))
+	for _, m := range messages {
+		itemIDs = append(itemIDs, m.ItemID)
+	}
+	events, err := h.recipients.Events(itemIDs, recipientCardEventsPerMessage)
 	if err != nil {
 		h.logger.Error("failed to load recipient events", "error", err)
 	}
@@ -165,22 +368,31 @@ func (h *Handlers) RecipientView(w http.ResponseWriter, r *http.Request) {
 		"User":          h.getUserFromContext(r),
 		"List":          list,
 		"Recipient":     rec,
-		"Variables":     recipientVariables(rec.Variables),
-		"Tags":          recipientTags(rec.Tags),
+		"Form":          form,
+		"NameMax":       recipientNameMax,
+		"VarNameMax":    recipientVarNameMax,
+		"VarValueMax":   recipientVarValueMax,
 		"OtherLists":    otherLists(memberships, rec.ID),
 		"Totals":        totals,
 		"Messages":      cardMessages(messages, events),
 		"MessagesLimit": recipientCardMessages,
 		"HasMessages":   totals.Messages > 0 || len(messages) > 0,
 		"Unsub":         unsub,
+		"UnsubByReader": rec.Status == models.RecipientStatusUnsubscribed &&
+			(unsub == nil || (unsub.SourceType != models.UnsubSourceManual && unsub.SourceType != models.UnsubSourceAPI)),
 		"UnsubCampaign": unsubCampaign,
-		"Saved":         r.URL.Query().Get("saved") == "1",
+		"Saved":         form.Error == nil && r.URL.Query().Get("saved") == "1",
 	}
 
+	if status != http.StatusOK {
+		w.WriteHeader(status)
+	}
 	h.render(w, "recipient_view", data)
 }
 
-// RecipientUpdate saves the name of a recipient from the card.
+// RecipientUpdate saves the fields edited on the card: the name and, when
+// the form sends them, the tags and the variables. A refused field shows the
+// card again with what was typed.
 func (h *Handlers) RecipientUpdate(w http.ResponseWriter, r *http.Request) {
 	list, rec, ok := h.cardRecipient(w, r)
 	if !ok {
@@ -190,18 +402,83 @@ func (h *Handlers) RecipientUpdate(w http.ResponseWriter, r *http.Request) {
 		h.error(w, r, http.StatusBadRequest, "Invalid form data")
 		return
 	}
-	// the form limits the length too, but a direct request does not
-	name := strings.TrimSpace(r.FormValue("name"))
-	if utf8.RuneCountInString(name) > recipientNameMax {
-		h.error(w, r, http.StatusBadRequest, fmt.Sprintf("Name is too long (max %d characters)", recipientNameMax))
+
+	form := storedCardForm(rec)
+	var fields repository.RecipientFields
+	var changed []string
+
+	if r.Form.Has("name") {
+		name := r.FormValue("name")
+		if name != rec.Name {
+			name = strings.TrimSpace(plainText(name))
+		}
+		form.Name = name
+		if name == rec.Name || name == strings.TrimSpace(rec.Name) {
+			// left as it is, whatever its length
+		} else if utf8.RuneCountInString(name) > recipientNameMax {
+			form.Error = &cardFormError{"cmp.rc_err_name_long", fmt.Sprintf("Name is too long (max %d characters)", recipientNameMax)}
+		} else {
+			fields.Name = &name
+			changed = append(changed, "name")
+		}
+	}
+	if r.Form.Has("tags") {
+		form.Tags = r.FormValue("tags")
+		stored, tags, ferr := parseCardTags(form.Tags, recipientTags(rec.Tags))
+		switch {
+		case ferr != nil:
+			if form.Error == nil {
+				form.Error = ferr
+			}
+		case strings.Join(tags, "\x00") != strings.Join(recipientTags(rec.Tags), "\x00"):
+			fields.Tags = &stored
+			changed = append(changed, "tags")
+		}
+	}
+	// the marker tells an emptied variables block from a form without one
+	if r.Form.Has("vars") {
+		stored, rows, ferr := parseCardVariables(r.Form["var_key"], r.Form["var_value"], rec.Variables)
+		form.Variables = rows
+		switch {
+		case ferr != nil:
+			if form.Error == nil {
+				form.Error = ferr
+			}
+		case !sameVariables(stored, rec.Variables):
+			fields.Variables = &stored
+			changed = append(changed, "variables")
+		}
+	}
+
+	if form.Error != nil {
+		h.renderRecipientCard(w, r, http.StatusBadRequest, list, rec, form)
 		return
 	}
-	if err := h.recipients.UpdateRecipientName(list.ID, rec.ID, name); err != nil {
-		h.logger.Error("failed to update recipient", "error", err)
-		h.error(w, r, http.StatusInternalServerError, "Failed to update recipient")
-		return
+	if len(changed) > 0 {
+		if err := h.recipients.UpdateRecipientFields(list.ID, rec.ID, fields); err != nil {
+			h.logger.Error("failed to update recipient", "error", err)
+			h.error(w, r, http.StatusInternalServerError, "Failed to update recipient")
+			return
+		}
+		h.auditRecipient(r, "recipient_update", list.ID, "email="+repository.NormalizeEmail(rec.Email)+" fields="+strings.Join(changed, ","))
 	}
 	http.Redirect(w, r, recipientCardURL(list.ID, rec.ID)+"?saved=1", http.StatusSeeOther)
+}
+
+// sameVariables tells whether two variables texts hold the same object. A
+// stored text that is not a JSON object (empty, broken, an array) has no
+// variables for the form, so it equals an empty object: saving the card
+// without adding a variable leaves such a text as it is.
+func sameVariables(a, b string) bool {
+	norm := func(s string) string {
+		obj := storedVariables(s)
+		if obj == nil {
+			return "{}"
+		}
+		out, _ := marshalPlain(obj)
+		return out
+	}
+	return norm(a) == norm(b)
 }
 
 // RecipientUnsubscribe unsubscribes the address in this list by hand: no
@@ -218,15 +495,19 @@ func (h *Handlers) RecipientUnsubscribe(w http.ResponseWriter, r *http.Request) 
 		http.Redirect(w, r, recipientCardURL(list.ID, rec.ID), http.StatusSeeOther)
 		return
 	}
-	_, err := h.unsubs.Add(&models.Unsubscribe{
+	changed, err := h.unsubs.AddIfActive(&models.Unsubscribe{
 		ListID:     list.ID,
 		Email:      rec.Email,
 		SourceType: models.UnsubSourceManual,
+		SourceID:   middleware.GetUserID(r),
 	})
 	if err != nil && !errors.Is(err, repository.ErrRecipientNotInList) {
 		h.logger.Error("failed to unsubscribe recipient", "error", err)
 		h.error(w, r, http.StatusInternalServerError, "Failed to unsubscribe recipient")
 		return
+	}
+	if changed {
+		h.auditRecipient(r, "recipient_unsubscribe", list.ID, "email="+repository.NormalizeEmail(rec.Email))
 	}
 	http.Redirect(w, r, recipientCardURL(list.ID, rec.ID), http.StatusSeeOther)
 }
@@ -241,10 +522,16 @@ func (h *Handlers) RecipientResubscribe(w http.ResponseWriter, r *http.Request) 
 		http.Redirect(w, r, recipientCardURL(list.ID, rec.ID), http.StatusSeeOther)
 		return
 	}
+	// what is being undone goes to the audit log: the journal row is deleted
+	undone := "unknown"
+	if u, err := h.unsubs.Get(list.ID, rec.Email); err == nil && u != nil {
+		undone = u.SourceType
+	}
 	if err := h.unsubs.Remove(list.ID, rec.Email); err != nil {
 		h.logger.Error("failed to resubscribe recipient", "error", err)
 		h.error(w, r, http.StatusInternalServerError, "Failed to resubscribe recipient")
 		return
 	}
+	h.auditRecipient(r, "recipient_resubscribe", list.ID, "email="+repository.NormalizeEmail(rec.Email)+" unsubscribed_by="+undone)
 	http.Redirect(w, r, recipientCardURL(list.ID, rec.ID), http.StatusSeeOther)
 }

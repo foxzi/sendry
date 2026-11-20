@@ -3485,32 +3485,112 @@ label.cf-list:has(input:focus-visible) {
     gap: 1.5rem;
 }
 
-.rc-name label {
+/* The edit form of the card sits under the read-only facts */
+.rc-edit {
+    display: grid;
+    gap: 1.1rem;
+    margin-top: 1.25rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+}
+
+.rc-edit .alert {
+    margin: 0;
+}
+
+.rc-field {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.rc-field label,
+.rc-field legend {
     display: block;
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.3rem;
+    padding: 0;
     font-size: 0.875rem;
     color: var(--text-muted);
 }
 
-.rc-name-row {
-    display: flex;
-    gap: 0.5rem;
+.rc-hint {
+    margin-top: 0.3rem;
+    font-size: 0.8125rem;
+    color: var(--text-muted);
 }
 
-.rc-name-row .input {
-    flex: 1;
-    min-width: 0;
+.rc-var-rows {
+    display: grid;
+    gap: 0.4rem;
 }
 
-.rc-name-row .btn {
-    flex: none;
+/* name, value, remove: the name is the narrow column, as in a template it is a short word */
+.rc-var {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) 2rem;
+    gap: 0.4rem;
+    align-items: center;
+}
+
+.rc-var textarea.input {
+    resize: vertical;
+}
+
+.rc-var:has(textarea) {
+    align-items: start;
+}
+
+.rc-var .rc-var-key {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.rc-var-remove {
+    width: 2rem;
+    height: 2rem;
+    border: 0;
+    border-radius: var(--radius);
+    background: none;
+    color: var(--text-muted);
+    font-size: 1.125rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.rc-var-remove:hover {
+    background: var(--bg);
+    color: var(--danger);
+}
+
+.rc-var-add {
+    margin-top: 0.5rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--primary);
+    font: inherit;
+    font-size: 0.875rem;
+    cursor: pointer;
+}
+
+.rc-var-add:hover {
+    text-decoration: underline;
+}
+
+.rc-var-remove:focus-visible,
+.rc-var-add:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.rc-edit > .btn {
+    justify-self: start;
 }
 
 .rc-facts {
     display: grid;
     grid-template-columns: minmax(5.5rem, auto) minmax(0, 1fr);
     gap: 0.5rem 1rem;
-    margin-top: 1.25rem;
     font-size: 0.875rem;
 }
 
@@ -3520,24 +3600,6 @@ label.cf-list:has(input:focus-visible) {
 
 .rc-facts dd {
     overflow-wrap: anywhere;
-}
-
-.rc-subhead {
-    margin-top: 1.5rem;
-    padding-top: 1.25rem;
-    border-top: 1px solid var(--border);
-    font-size: 0.875rem;
-    font-weight: 600;
-}
-
-.rc-facts dd.rc-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-}
-
-.rc-subhead + .rc-facts {
-    margin-top: 0.75rem;
 }
 
 .rc-lists {
@@ -3695,6 +3757,30 @@ label.cf-list:has(input:focus-visible) {
 
 .rc-events .table-scroll {
     margin-top: 0.5rem;
+}
+
+.rc-events-cut {
+    font-size: 0.8125rem;
+}
+
+/* Addresses found by the audience search, above the lists */
+.aud-found + .card-body {
+    border-top: 1px solid var(--border);
+}
+
+.aud-found-title {
+    margin-bottom: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.aud-found-title .text-muted {
+    font-weight: 400;
+}
+
+.aud-found-more {
+    margin-top: 0.75rem;
+    font-size: 0.875rem;
 }
 
 .rc-events .cell-truncate {

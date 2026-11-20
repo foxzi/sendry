@@ -57,6 +57,8 @@ type RecipientMembership struct {
 	RecipientID string
 	ListID      string
 	ListName    string
+	Email       string // filled by the search over all lists
+	Name        string // same
 	Status      string
 	CreatedAt   time.Time
 }
@@ -79,6 +81,7 @@ type RecipientMessage struct {
 	ClickedAt      *time.Time
 	ClickCount     int
 	UnsubscribedAt *time.Time
+	EventTotal     int // all engagement events of the message, shown or not
 }
 
 // RecipientTotals sums the campaign messages addressed to an email address.

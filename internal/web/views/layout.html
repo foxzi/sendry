@@ -323,4 +323,6 @@ failed emails is marked so, it is not a plain success. Takes .Job and .Stats. */
 {{/* A time shown in the browser's time zone (app.js); the server text is UTC. */}}
 {{/* reason a job item was skipped (models.SkipReason...), translated when known */}}
 {{define "skip_reason"}}{{if eq . "recipient unsubscribed"}}<span data-i18n="cmp.skip_unsubscribed">recipient unsubscribed</span>{{else if eq . "recipient deleted"}}<span data-i18n="cmp.skip_deleted">recipient deleted</span>{{else if eq . "recipient bounced"}}<span data-i18n="cmp.skip_bounced">recipient bounced</span>{{else}}{{.}}{{end}}{{end}}
+{{/* status badge of a recipient in a list */}}
+{{define "recipient_status"}}{{if eq . "active"}}<span class="badge badge-success" data-i18n="status.active">active</span>{{else if eq . "unsubscribed"}}<span class="badge badge-secondary" data-i18n="status.unsubscribed">unsubscribed</span>{{else if eq . "bounced"}}<span class="badge badge-danger" data-i18n="status.bounced">bounced</span>{{else}}<span class="badge" data-i18n="status.{{.}}">{{.}}</span>{{end}}{{end}}
 {{define "local_time"}}<time class="local-time" datetime="{{.UTC.Format "2006-01-02T15:04:05Z"}}">{{.UTC.Format "2006-01-02 15:04"}} UTC</time>{{end}}

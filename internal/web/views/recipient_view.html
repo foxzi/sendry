@@ -16,12 +16,13 @@
             <button type="submit" class="btn" data-i18n="cmp.rc_unsubscribe">Unsubscribe</button>
         </form>
         {{else if eq .Recipient.Status "unsubscribed"}}
-        <form method="post" action="/recipients/{{.List.ID}}/recipients/{{.Recipient.ID}}/resubscribe" onsubmit="return confirm(I18n.t('cmp.rc_confirm_resub'))">
+        <form method="post" action="/recipients/{{.List.ID}}/recipients/{{.Recipient.ID}}/resubscribe" onsubmit="return confirm(I18n.t('{{if .UnsubByReader}}cmp.rc_confirm_resub_reader{{else}}cmp.rc_confirm_resub{{end}}'))">
             <button type="submit" class="btn" data-i18n="cmp.rc_resubscribe">Resubscribe</button>
         </form>
         {{end}}
-        {{/* an address campaigns were sent to cannot be deleted, only unsubscribed */}}
-        {{if not .HasMessages}}
+        {{/* an address campaigns were sent to cannot be deleted, only unsubscribed;
+             an unsubscribed one is kept so that it is not added back as active */}}
+        {{if and (not .HasMessages) (ne .Recipient.Status "unsubscribed")}}
         <form method="post" action="/recipients/{{.List.ID}}/recipients/{{.Recipient.ID}}" onsubmit="return confirm(I18n.t('cmp.confirm_delete_recipient'))">
             <input type="hidden" name="_method" value="DELETE">
             <button type="submit" class="btn btn-danger" data-i18n="cmp.rc_delete">Delete from list</button>
@@ -30,7 +31,7 @@
     </div>
 </div>
 
-{{if .Saved}}<div class="alert alert-success" data-i18n="cmp.rc_saved">Name saved</div>{{end}}
+{{if .Saved}}<div class="alert alert-success" data-i18n="cmp.rc_saved">Changes saved</div>{{end}}
 
 <div class="rc-layout">
     <div class="rc-side">
@@ -39,15 +40,6 @@
                 <h2><span data-i18n="cmp.rc_in_list">In the list</span> &laquo;{{.List.Name}}&raquo;</h2>
             </div>
             <div class="card-body">
-                <form method="post" action="/recipients/{{.List.ID}}/recipients/{{.Recipient.ID}}" class="rc-name">
-                    <input type="hidden" name="_method" value="PUT">
-                    <label for="rc-name" data-i18n="name">Name</label>
-                    <div class="rc-name-row">
-                        <input type="text" id="rc-name" name="name" value="{{.Recipient.Name}}" class="input" maxlength="200">
-                        <button type="submit" class="btn" data-i18n="cmp.rc_save_name">Save name</button>
-                    </div>
-                </form>
-
                 <dl class="rc-facts">
                     <dt data-i18n="status">Status</dt>
                     <dd>{{template "recipient_status" .Recipient.Status}}</dd>
@@ -64,21 +56,47 @@
                     {{end}}
                     <dt data-i18n="cmp.rc_added">Added</dt>
                     <dd>{{template "local_time" .Recipient.CreatedAt}}</dd>
-                    {{if .Tags}}
-                    <dt data-i18n="cmp.rc_tags">Tags</dt>
-                    <dd class="rc-tags">{{range .Tags}}<span class="badge">{{.}}</span>{{end}}</dd>
-                    {{end}}
                 </dl>
 
-                {{if .Variables}}
-                <h3 class="rc-subhead" data-i18n="cmp.rc_variables">Variables</h3>
-                <dl class="rc-facts">
-                    {{range .Variables}}
-                    <dt><code>{{.Key}}</code></dt>
-                    <dd>{{.Value}}</dd>
-                    {{end}}
-                </dl>
-                {{end}}
+                <form method="post" action="/recipients/{{.List.ID}}/recipients/{{.Recipient.ID}}" class="rc-edit">
+                    <input type="hidden" name="_method" value="PUT">
+                    <input type="hidden" name="vars" value="1">
+                    {{if .Form.Error}}<div class="alert alert-error" role="alert" data-i18n="{{.Form.Error.Key}}">{{.Form.Error.Text}}</div>{{end}}
+
+                    <div class="rc-field">
+                        <label for="rc-name" data-i18n="name">Name</label>
+                        <input type="text" id="rc-name" name="name" value="{{.Form.Name}}" class="input" maxlength="{{.NameMax}}">
+                    </div>
+
+                    <div class="rc-field">
+                        <label for="rc-tags" data-i18n="cmp.rc_tags">Tags</label>
+                        <input type="text" id="rc-tags" name="tags" value="{{.Form.Tags}}" class="input" aria-describedby="rc-tags-hint">
+                        <p class="rc-hint" id="rc-tags-hint" data-i18n="cmp.rc_tags_hint">Separate with commas</p>
+                    </div>
+
+                    <fieldset class="rc-field rc-vars">
+                        <legend data-i18n="cmp.rc_variables">Variables</legend>
+                        <div class="rc-var-rows" id="rc-var-rows">
+                            {{range .Form.Variables}}
+                            <div class="rc-var">
+                                <input type="text" name="var_key" value="{{.Key}}" class="input rc-var-key" maxlength="{{$.VarNameMax}}" spellcheck="false" autocapitalize="off" placeholder="name" data-i18n-placeholder="cmp.rc_var_name_ph" aria-label="Variable name" data-i18n-aria="cmp.rc_var_name">
+                                {{if .Multiline}}<textarea name="var_value" class="input" rows="3" aria-label="Variable value" data-i18n-aria="cmp.rc_var_value">{{.Value}}</textarea>
+                                {{else}}<input type="text" name="var_value" value="{{.Value}}" class="input" maxlength="{{$.VarValueMax}}" placeholder="value" data-i18n-placeholder="cmp.rc_var_value_ph" aria-label="Variable value" data-i18n-aria="cmp.rc_var_value">{{end}}
+                                <button type="button" class="rc-var-remove" data-rc-remove aria-label="Remove variable" data-i18n-aria="cmp.rc_var_remove" title="Remove variable" data-i18n-title="cmp.rc_var_remove">&times;</button>
+                            </div>
+                            {{end}}
+                            <div class="rc-var">
+                                <input type="text" name="var_key" value="" class="input rc-var-key" maxlength="{{.VarNameMax}}" spellcheck="false" autocapitalize="off" placeholder="name" data-i18n-placeholder="cmp.rc_var_name_ph" aria-label="Variable name" data-i18n-aria="cmp.rc_var_name">
+                                <input type="text" name="var_value" value="" class="input" maxlength="{{.VarValueMax}}" placeholder="value" data-i18n-placeholder="cmp.rc_var_value_ph" aria-label="Variable value" data-i18n-aria="cmp.rc_var_value">
+                                <button type="button" class="rc-var-remove" data-rc-remove aria-label="Remove variable" data-i18n-aria="cmp.rc_var_remove" title="Remove variable" data-i18n-title="cmp.rc_var_remove">&times;</button>
+                            </div>
+                        </div>
+                        <button type="button" class="rc-var-add" id="rc-var-add" data-i18n="cmp.rc_var_add">Add a variable</button>
+                        <p class="rc-hint" data-i18n="cmp.rc_vars_hint">In a message template a variable is written as {{"{{"}}name}}</p>
+                    </fieldset>
+
+                    <button type="submit" class="btn btn-primary" data-i18n="cmp.rc_save">Save changes</button>
+                </form>
             </div>
         </div>
 
@@ -134,7 +152,7 @@
 
                 {{if .Events}}
                 <details class="rc-events">
-                    <summary><span data-i18n="cmp.rc_events">Events:</span> {{len .Events}}</summary>
+                    <summary><span data-i18n="cmp.rc_events">Events:</span> {{.EventTotal}}{{if .EventsHidden}} <span class="rc-events-cut">(<span data-i18n="cmp.rc_events_latest">latest shown:</span> {{len .Events}})</span>{{end}}</summary>
                     <div class="table-scroll">
                     <table class="table">
                         <tbody>
@@ -166,6 +184,36 @@
         {{end}}
     </div>
 </div>
-{{end}}
 
-{{define "recipient_status"}}{{if eq . "active"}}<span class="badge badge-success" data-i18n="status.active">active</span>{{else if eq . "unsubscribed"}}<span class="badge badge-secondary" data-i18n="status.unsubscribed">unsubscribed</span>{{else if eq . "bounced"}}<span class="badge badge-danger" data-i18n="status.bounced">bounced</span>{{else}}<span class="badge" data-i18n="status.{{.}}">{{.}}</span>{{end}}{{end}}
+<script>
+(function () {
+    var rows = document.getElementById('rc-var-rows');
+    var add = document.getElementById('rc-var-add');
+    if (!rows || !add) return;
+
+    function clear(row) {
+        row.querySelectorAll('input').forEach(function (i) { i.value = ''; });
+    }
+    add.addEventListener('click', function () {
+        var row = rows.lastElementChild.cloneNode(true);
+        clear(row);
+        rows.appendChild(row);
+        row.querySelector('input').focus();
+    });
+    // the last row stays as the template for new ones
+    rows.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-rc-remove]');
+        if (!btn) return;
+        var row = btn.closest('.rc-var');
+        if (rows.children.length > 1) {
+            var next = row.nextElementSibling || row.previousElementSibling;
+            row.remove();
+            next.querySelector('input').focus();
+        } else {
+            clear(row);
+            row.querySelector('input').focus();
+        }
+    });
+})();
+</script>
+{{end}}
