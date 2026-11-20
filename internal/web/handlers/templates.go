@@ -264,7 +264,7 @@ func (h *Handlers) TemplateDelete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	if err := h.templates.Delete(id); errors.Is(err, repository.ErrInUse) {
-		h.error(w, r, http.StatusConflict, "Cannot delete the template: campaign variants use it. Remove those variants first.")
+		h.errorKey(w, r, http.StatusConflict, "err.template_in_use", "Cannot delete the template: campaign variants use it. Remove those variants first.")
 		return
 	} else if err != nil {
 		h.logger.Error("failed to delete template", "error", err)

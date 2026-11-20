@@ -228,3 +228,24 @@ func TestNamedot_Do_URLEncodesName(t *testing.T) {
 		t.Fatalf("name query param missing")
 	}
 }
+
+func TestUnquoteTXT(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{`"v=spf1 a mx ~all"`, "v=spf1 a mx ~all"},
+		// A long value stored as several strings is one value.
+		{`"v=spf1 include:a.example ip4:198.51.100.0/24" " include:b.example -all"`, "v=spf1 include:a.example ip4:198.51.100.0/24 include:b.example -all"},
+		{`"v=DKIM1; k=rsa; p=AAAA" "BBBB"`, "v=DKIM1; k=rsa; p=AAAABBBB"},
+		{`"say \"hi\" \\ ok"`, `say "hi" \ ok`},
+		{`plain value`, "plain value"},
+		{`"open`, `"open`},
+		{`"a" junk "b"`, `"a" junk "b"`},
+	}
+	for _, c := range cases {
+		if got := unquoteTXT(c.in, "TXT"); got != c.want {
+			t.Errorf("unquoteTXT(%s) = %q, want %q", c.in, got, c.want)
+		}
+	}
+	if got := unquoteTXT(`"x"`, "A"); got != `"x"` {
+		t.Errorf("non-TXT data must stay as is, got %q", got)
+	}
+}

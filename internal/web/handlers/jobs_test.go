@@ -136,4 +136,14 @@ func TestDeleteInUse_Conflict(t *testing.T) {
 			t.Errorf("%s: %d %s", name, rec.Code, rec.Body.String())
 		}
 	}
+
+	// On a page load the explanation is translated by its key.
+	req := httptest.NewRequest(http.MethodDelete, "/recipients/l1", nil)
+	req.Header.Set("Accept", "text/html")
+	req.SetPathValue("id", "l1")
+	rec := httptest.NewRecorder()
+	h.RecipientListDelete(rec, req)
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), `data-i18n="err.list_in_use"`) {
+		t.Errorf("error page: %d, no translation key for the message", rec.Code)
+	}
 }

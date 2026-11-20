@@ -295,8 +295,65 @@
         }, true);
     }
 
+    // Name of an icon-only button (.btn-icon-sm) shown at once on hover or
+    // keyboard focus, taken from its aria-label. One shared element with
+    // position: fixed, so scrolling tables do not clip it. The native title
+    // is taken off the button so the browser does not show a second tip.
+    function initIconHints() {
+        var hint = document.createElement('div');
+        hint.className = 'icon-hint';
+        hint.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(hint);
+        var shownFor = null;
+
+        function label(el) {
+            if (el.title) {
+                if (!el.getAttribute('aria-label')) el.setAttribute('aria-label', el.title);
+                el.removeAttribute('title');
+            }
+            return el.getAttribute('aria-label');
+        }
+        function show(el) {
+            var text = label(el);
+            if (!text) return;
+            shownFor = el;
+            hint.textContent = text;
+            hint.classList.add('is-open');
+            var r = el.getBoundingClientRect();
+            var top = r.top - hint.offsetHeight - 6;
+            if (top < 8) top = r.bottom + 6;
+            var left = r.left + r.width / 2 - hint.offsetWidth / 2;
+            hint.style.top = top + 'px';
+            hint.style.left = Math.max(8, Math.min(left, window.innerWidth - hint.offsetWidth - 8)) + 'px';
+        }
+        function hide() {
+            shownFor = null;
+            hint.classList.remove('is-open');
+        }
+        function target(e) {
+            return e.target.closest ? e.target.closest('.btn-icon-sm') : null;
+        }
+        document.addEventListener('mouseover', function(e) {
+            var el = target(e);
+            if (el && el !== shownFor) show(el);
+        });
+        document.addEventListener('mouseout', function(e) {
+            var el = target(e);
+            if (el && !el.contains(e.relatedTarget)) hide();
+        });
+        document.addEventListener('focusin', function(e) {
+            var el = target(e);
+            if (el && el.matches(':focus-visible')) show(el);
+        });
+        document.addEventListener('focusout', hide);
+        document.addEventListener('click', hide, true);
+        document.addEventListener('keydown', function(e) { if (e.key === 'Escape') hide(); });
+        window.addEventListener('scroll', hide, true);
+    }
+
     // Initialize everything
     function init() {
+        initIconHints();
         initLocalTimes();
         initThemeToggle();
         initNavToggle();

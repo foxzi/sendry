@@ -360,6 +360,29 @@ func TestRecipientListList_FindsAddresses(t *testing.T) {
 	}
 }
 
+// A list row offers import, edit and delete as labelled icon buttons; delete
+// posts to the list itself and asks for confirmation.
+func TestRecipientListList_RowIconActions(t *testing.T) {
+	h, _ := newCampaignTestHandlers(t, "")
+	rec := httptest.NewRecorder()
+	h.RecipientListList(rec, httptest.NewRequest(http.MethodGet, "/recipients", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d", rec.Code)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`<a href="/recipients/l1/import" class="btn-icon-sm" title="Import" data-i18n-title="cmp.import" aria-label="Import" data-i18n-aria="cmp.import">`,
+		`<a href="/recipients/l1/edit" class="btn-icon-sm" title="Edit" data-i18n-title="edit" aria-label="Edit" data-i18n-aria="edit">`,
+		`<form method="post" action="/recipients/l1" onsubmit="return confirm(I18n.t('cmp.confirm_delete_list'))">`,
+		`<input type="hidden" name="_method" value="DELETE">`,
+		`class="btn-icon-sm btn-icon-danger" title="Delete List" data-i18n-title="cmp.delete_list" aria-label="Delete List" data-i18n-aria="cmp.delete_list"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("list row: no %s", want)
+		}
+	}
+}
+
 // Data that came from an import or the API may break the limits of the card
 // form. Editing another field must not be refused because of it, nor change it.
 func TestRecipientCard_StoredDataOverLimits(t *testing.T) {

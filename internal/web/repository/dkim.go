@@ -76,15 +76,26 @@ func (r *DKIMRepository) GetByDomainSelector(domain, selector string) (*models.D
 	return key, nil
 }
 
-// List returns all DKIM keys with deployment counts
+// List returns all DKIM keys with deployment counts, ordered by domain and
+// selector (used by form selects).
 func (r *DKIMRepository) List() ([]models.DKIMKeyListItem, error) {
+	return r.list("k.domain, k.selector")
+}
+
+// ListNewestFirst returns all DKIM keys with deployment counts, newest first;
+// keys created at the same time are ordered by id descending.
+func (r *DKIMRepository) ListNewestFirst() ([]models.DKIMKeyListItem, error) {
+	return r.list("k.created_at DESC, k.id DESC")
+}
+
+func (r *DKIMRepository) list(orderBy string) ([]models.DKIMKeyListItem, error) {
 	rows, err := r.db.Query(`
 		SELECT k.id, k.domain, k.selector, k.dns_record, k.created_at,
 			COUNT(d.id) as deployment_count
 		FROM dkim_keys k
 		LEFT JOIN dkim_deployments d ON k.id = d.dkim_key_id
 		GROUP BY k.id
-		ORDER BY k.domain, k.selector`)
+		ORDER BY ` + orderBy)
 	if err != nil {
 		return nil, err
 	}

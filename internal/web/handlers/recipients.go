@@ -225,7 +225,7 @@ func (h *Handlers) RecipientListDelete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	if err := h.recipients.DeleteList(id); errors.Is(err, repository.ErrInUse) {
-		h.error(w, r, http.StatusConflict, "Cannot delete the list: campaigns were sent to it. "+
+		h.errorKey(w, r, http.StatusConflict, "err.list_in_use", "Cannot delete the list: campaigns were sent to it. "+
 			"Delete those campaigns first (their statistics are deleted too).")
 		return
 	} else if err != nil {
@@ -364,11 +364,11 @@ func (h *Handlers) RecipientDelete(w http.ResponseWriter, r *http.Request) {
 	err = h.recipients.DeleteRecipient(recipientID, listID)
 	switch {
 	case errors.Is(err, repository.ErrRecipientUnsubscribed):
-		h.error(w, r, http.StatusConflict, "Cannot delete an unsubscribed recipient: "+
+		h.errorKey(w, r, http.StatusConflict, "err.recipient_unsubscribed", "Cannot delete an unsubscribed recipient: "+
 			"the address would be added back as active by the next import.")
 		return
 	case errors.Is(err, repository.ErrInUse):
-		h.error(w, r, http.StatusConflict, "Cannot delete the recipient: campaigns were sent to this address. "+
+		h.errorKey(w, r, http.StatusConflict, "err.recipient_in_use", "Cannot delete the recipient: campaigns were sent to this address. "+
 			"Set the status to unsubscribed to stop sending to it.")
 		return
 	case err != nil:

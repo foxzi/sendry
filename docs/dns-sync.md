@@ -28,6 +28,20 @@ The SPF `include:` part is driven by the `spf_include` global variable
 DKIM is checked only when DKIM is enabled on the domain **and** a DKIM key
 is linked.
 
+How changes are applied:
+
+- SPF: the existing record is kept and only the missing recommended terms are
+  added (before `all`); the `all` qualifier stays as it was. A name with
+  several SPF records is skipped: leave one by hand.
+- DKIM: records are compared by the public key (`p=`). The same key counts as
+  up to date, another key under the same selector is replaced. A selector with
+  several TXT records is skipped: leave one by hand.
+- DMARC: a record that differs from the recommended one is replaced.
+
+In the panel (domain page → DNS check → "Choose records and publish") the same plan is shown
+as a preview, and replacing another DKIM key or the domain's own DMARC policy
+happens only when that record is ticked.
+
 ## Cloudflare authentication
 
 Two modes are supported:
@@ -83,9 +97,10 @@ Notes:
 
 - TXT values are automatically wrapped in quotes for namedot (and unwrapped on
   read) so comparisons are consistent with other providers.
-- Updates replace the matching RRSet in namedot with a single record entry, so
-  do not point this command at namedot zones that require multiple TXT values
-  on the same name for SPF/DMARC/DKIM.
+- A value stored as several quoted strings (long SPF and DKIM records) is read
+  as one value; an update writes it back as one string.
+- An update changes only that one value, other TXT values on the same name
+  stay.
 
 ## Usage
 

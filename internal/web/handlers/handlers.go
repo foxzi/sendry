@@ -182,7 +182,19 @@ func (h *Handlers) error(w http.ResponseWriter, r *http.Request, status int, mes
 		http.Error(w, message, status)
 		return
 	}
-	h.errorPage(w, r, status, message)
+	h.errorPage(w, r, status, message, "")
+}
+
+// errorKey is error for a message the user is meant to read and act on:
+// the error page shows the translation under the i18n key, with message
+// (English) as the fallback and as the text for scripts and logs.
+func (h *Handlers) errorKey(w http.ResponseWriter, r *http.Request, status int, key, message string) {
+	h.logger.Error("request error", "status", status, "message", message)
+	if !wantsHTMLPage(r) {
+		http.Error(w, message, status)
+		return
+	}
+	h.errorPage(w, r, status, message, key)
 }
 
 // Forbidden answers a non-admin who opened an admin-only page.
@@ -191,14 +203,15 @@ func (h *Handlers) Forbidden(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	h.errorPage(w, r, http.StatusForbidden, "")
+	h.errorPage(w, r, http.StatusForbidden, "", "")
 }
 
-func (h *Handlers) errorPage(w http.ResponseWriter, r *http.Request, status int, message string) {
+func (h *Handlers) errorPage(w http.ResponseWriter, r *http.Request, status int, message, messageKey string) {
 	data := map[string]any{
-		"Title":   http.StatusText(status),
-		"Status":  status,
-		"Message": message,
+		"Title":      http.StatusText(status),
+		"Status":     status,
+		"Message":    message,
+		"MessageKey": messageKey,
 	}
 	if middleware.GetUserEmail(r) != "" {
 		data["User"] = h.getUserFromContext(r)

@@ -43,7 +43,9 @@ func compareWithRecommended(ctx context.Context, res *dnscheck.DomainCheckResult
 			}
 		}
 		r := &res.Results[i]
-		if action, _ := dnssync.DecideAction(e.Expected, pickTXT(records, e.Expected)); action == dnssync.ActionNoop {
+		// Same rules as publishing: an SPF record that has every recommended
+		// term and a DKIM record with the same key are fine as they are.
+		if d := dnssync.Evaluate(e.Kind, e.Expected, pickTXT(records, e.Expected)); d.Action == dnssync.ActionNoop {
 			r.Message = "Matches the recommended value"
 		} else {
 			r.Status = "warning"

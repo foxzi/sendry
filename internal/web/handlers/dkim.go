@@ -25,7 +25,7 @@ func (h *Handlers) DKIMList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	keys, err := h.dkim.List()
+	keys, err := h.dkim.ListNewestFirst()
 	if err != nil {
 		h.logger.Error("failed to list DKIM keys", "error", err)
 		h.error(w, r, http.StatusInternalServerError, "Failed to load DKIM keys")
@@ -175,7 +175,7 @@ func (h *Handlers) DKIMView(w http.ResponseWriter, r *http.Request) {
 
 // CentralDKIMList shows all DKIM keys (central management)
 func (h *Handlers) CentralDKIMList(w http.ResponseWriter, r *http.Request) {
-	keys, err := h.dkim.List()
+	keys, err := h.dkim.ListNewestFirst()
 	if err != nil {
 		h.logger.Error("failed to list DKIM keys", "error", err)
 		h.error(w, r, http.StatusInternalServerError, "Failed to load DKIM keys")
