@@ -6,9 +6,18 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/foxzi/sendry/internal/web/models"
 	"github.com/foxzi/sendry/internal/web/repository"
+)
+
+// The audience search also looks for addresses in all lists: from this many
+// characters, at most this many rows.
+const (
+	addressSearchMin   = 3
+	addressSearchLimit = 50
 )
 
 func (h *Handlers) RecipientListList(w http.ResponseWriter, r *http.Request) {
@@ -35,15 +44,31 @@ func (h *Handlers) RecipientListList(w http.ResponseWriter, r *http.Request) {
 
 	totalPages := (total + limit - 1) / limit
 
+	// The same query also finds addresses in all lists, on the first page only
+	var addresses []models.RecipientMembership
+	addressesMore := false
+	if q := strings.TrimSpace(search); page == 1 && utf8.RuneCountInString(q) >= addressSearchMin {
+		addresses, err = h.recipients.FindByEmail(q, addressSearchLimit+1)
+		if err != nil {
+			h.logger.Error("failed to search addresses", "error", err)
+		}
+		if len(addresses) > addressSearchLimit {
+			addresses, addressesMore = addresses[:addressSearchLimit], true
+		}
+	}
+
 	data := map[string]any{
-		"Title":      "Audience",
-		"Active":     "recipients",
-		"User":       h.getUserFromContext(r),
-		"Lists":      lists,
-		"Total":      total,
-		"Page":       page,
-		"TotalPages": totalPages,
-		"Search":     search,
+		"Title":          "Audience",
+		"Active":         "recipients",
+		"User":           h.getUserFromContext(r),
+		"Lists":          lists,
+		"Total":          total,
+		"Page":           page,
+		"TotalPages":     totalPages,
+		"Search":         search,
+		"Addresses":      addresses,
+		"AddressesMore":  addressesMore,
+		"AddressesLimit": addressSearchLimit,
 	}
 
 	h.render(w, "recipients", data)
@@ -200,7 +225,7 @@ func (h *Handlers) RecipientListDelete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	if err := h.recipients.DeleteList(id); errors.Is(err, repository.ErrInUse) {
-		h.error(w, r, http.StatusConflict, "Cannot delete the list: campaigns were sent to it. "+
+		h.errorKey(w, r, http.StatusConflict, "err.list_in_use", "Cannot delete the list: campaigns were sent to it. "+
 			"Delete those campaigns first (their statistics are deleted too).")
 		return
 	} else if err != nil {
@@ -287,14 +312,27 @@ func (h *Handlers) RecipientAdd(w http.ResponseWriter, r *http.Request) {
 	recipient := &models.Recipient{
 		ListID:    id,
 		Email:     repository.NormalizeEmail(r.FormValue("email")),
-		Name:      r.FormValue("name"),
-		Variables: r.FormValue("variables"),
-		Tags:      r.FormValue("tags"),
+		Name:      strings.TrimSpace(plainText(r.FormValue("name"))),
+		Variables: strings.TrimSpace(r.FormValue("variables")),
+		Tags:      strings.TrimSpace(r.FormValue("tags")),
 		Status:    "active",
 	}
 
 	if recipient.Email == "" {
 		h.error(w, r, http.StatusBadRequest, "Email is required")
+		return
+	}
+	if utf8.RuneCountInString(recipient.Name) > recipientNameMax {
+		h.error(w, r, http.StatusBadRequest, fmt.Sprintf("Name is too long (max %d characters)", recipientNameMax))
+		return
+	}
+	// broken JSON here would break the tag filter and the segment hints of the whole list
+	if recipient.Variables != "" && storedVariables(recipient.Variables) == nil {
+		h.error(w, r, http.StatusBadRequest, "Variables must be a JSON object")
+		return
+	}
+	if recipient.Tags != "" && recipientTags(recipient.Tags) == nil {
+		h.error(w, r, http.StatusBadRequest, "Tags must be a JSON array of strings")
 		return
 	}
 
@@ -312,15 +350,33 @@ func (h *Handlers) RecipientDelete(w http.ResponseWriter, r *http.Request) {
 	listID := r.PathValue("id")
 	recipientID := r.PathValue("recipientId")
 
-	if err := h.recipients.DeleteRecipient(recipientID, listID); errors.Is(err, repository.ErrInUse) {
-		h.error(w, r, http.StatusConflict, "Cannot delete the recipient: campaigns were sent to this address. "+
+	rec, err := h.recipients.GetRecipient(listID, recipientID)
+	if err != nil {
+		h.logger.Error("failed to get recipient", "error", err)
+		h.error(w, r, http.StatusInternalServerError, "Failed to load recipient")
+		return
+	}
+	if rec == nil {
+		h.error(w, r, http.StatusNotFound, "Recipient not found")
+		return
+	}
+
+	err = h.recipients.DeleteRecipient(recipientID, listID)
+	switch {
+	case errors.Is(err, repository.ErrRecipientUnsubscribed):
+		h.errorKey(w, r, http.StatusConflict, "err.recipient_unsubscribed", "Cannot delete an unsubscribed recipient: "+
+			"the address would be added back as active by the next import.")
+		return
+	case errors.Is(err, repository.ErrInUse):
+		h.errorKey(w, r, http.StatusConflict, "err.recipient_in_use", "Cannot delete the recipient: campaigns were sent to this address. "+
 			"Set the status to unsubscribed to stop sending to it.")
 		return
-	} else if err != nil {
+	case err != nil:
 		h.logger.Error("failed to delete recipient", "error", err)
 		h.error(w, r, http.StatusInternalServerError, "Failed to delete recipient")
 		return
 	}
+	h.auditRecipient(r, "recipient_delete", listID, "email="+repository.NormalizeEmail(rec.Email))
 
 	http.Redirect(w, r, "/recipients/"+listID, http.StatusSeeOther)
 }

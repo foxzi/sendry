@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/foxzi/sendry/internal/web/models"
@@ -40,6 +41,20 @@ func (r *UnsubscribeRepository) updateListCounts(listID string) error {
 // Returns ErrRecipientNotInList if the list has no such address.
 // CreatedAt defaults to now; RecipientID is filled from the recipients row.
 func (r *UnsubscribeRepository) Add(u *models.Unsubscribe) (changed bool, err error) {
+	return r.add(u, false)
+}
+
+// AddIfActive is Add for an unsubscribe made by somebody else than the
+// reader (by hand in the panel, through the API): it unsubscribes only an
+// active address and otherwise changes nothing at all. The status is checked
+// in the same transaction as the write, so a reader who unsubscribed a
+// moment earlier keeps the journal row of their own unsubscribe, and another
+// status (bounced) does not become one that can be resubscribed.
+func (r *UnsubscribeRepository) AddIfActive(u *models.Unsubscribe) (changed bool, err error) {
+	return r.add(u, true)
+}
+
+func (r *UnsubscribeRepository) add(u *models.Unsubscribe, onlyActive bool) (changed bool, err error) {
 	email := NormalizeEmail(u.Email)
 	if u.CreatedAt.IsZero() {
 		u.CreatedAt = time.Now().UTC()
@@ -65,8 +80,12 @@ func (r *UnsubscribeRepository) Add(u *models.Unsubscribe) (changed bool, err er
 	u.RecipientID = recipientID
 	u.Email = email
 
+	guard := `status != ?`
+	if onlyActive {
+		guard = `COALESCE(status, '') != ? AND COALESCE(status, '') IN ('', 'active')`
+	}
 	res, err := tx.Exec(
-		`UPDATE recipients SET status = ? WHERE list_id = ? AND lower(email) = ? AND status != ?`,
+		`UPDATE recipients SET status = ? WHERE list_id = ? AND lower(email) = ? AND `+guard,
 		models.RecipientStatusUnsubscribed, u.ListID, email, models.RecipientStatusUnsubscribed,
 	)
 	if err != nil {
@@ -77,6 +96,9 @@ func (r *UnsubscribeRepository) Add(u *models.Unsubscribe) (changed bool, err er
 		return false, err
 	}
 	changed = n > 0
+	if onlyActive && !changed {
+		return false, nil
+	}
 
 	_, err = tx.Exec(`
 		INSERT INTO unsubscribes (list_id, recipient_id, email, campaign_id, job_id, source_type, source_id, created_at)
@@ -106,22 +128,54 @@ func (r *UnsubscribeRepository) Add(u *models.Unsubscribe) (changed bool, err er
 // cleared, list counters refreshed after commit.
 // No error if the address is not unsubscribed.
 func (r *UnsubscribeRepository) Remove(listID, email string) error {
+	_, err := r.remove(listID, email, nil)
+	return err
+}
+
+// RemoveIfSource is Remove for an unsubscribe whose journal row has one of
+// the given sources; removed is false, and nothing changes, when the address
+// is not unsubscribed, has no journal row or was unsubscribed another way.
+// The source is checked in the same transaction as the write.
+func (r *UnsubscribeRepository) RemoveIfSource(listID, email string, sources ...string) (removed bool, err error) {
+	return r.remove(listID, email, sources)
+}
+
+func (r *UnsubscribeRepository) remove(listID, email string, sources []string) (bool, error) {
 	email = NormalizeEmail(email)
 
 	tx, err := r.db.Begin()
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer tx.Rollback()
 
-	if _, err := tx.Exec(
+	del := `DELETE FROM unsubscribes WHERE list_id = ? AND email = ?`
+	args := []any{listID, email}
+	if len(sources) > 0 {
+		del += ` AND source_type IN (?` + strings.Repeat(`, ?`, len(sources)-1) + `)`
+		for _, s := range sources {
+			args = append(args, s)
+		}
+	}
+	res, err := tx.Exec(del, args...)
+	if err != nil {
+		return false, fmt.Errorf("failed to delete unsubscribe journal row: %w", err)
+	}
+	if len(sources) > 0 {
+		if n, err := res.RowsAffected(); err != nil || n == 0 {
+			return false, err
+		}
+	}
+	res, err = tx.Exec(
 		`UPDATE recipients SET status = 'active' WHERE list_id = ? AND lower(email) = ? AND status = ?`,
 		listID, email, models.RecipientStatusUnsubscribed,
-	); err != nil {
-		return fmt.Errorf("failed to restore recipient status: %w", err)
+	)
+	if err != nil {
+		return false, fmt.Errorf("failed to restore recipient status: %w", err)
 	}
-	if _, err := tx.Exec(`DELETE FROM unsubscribes WHERE list_id = ? AND email = ?`, listID, email); err != nil {
-		return fmt.Errorf("failed to delete unsubscribe journal row: %w", err)
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
 	}
 	// The campaign statistics count messages followed by an unsubscribe: a
 	// reader who came back is no longer one
@@ -131,12 +185,12 @@ func (r *UnsubscribeRepository) Remove(listID, email string) error {
 			SELECT id FROM recipients WHERE list_id = ? AND lower(email) = ?)`,
 		listID, email,
 	); err != nil {
-		return fmt.Errorf("failed to clear unsubscribe marks: %w", err)
+		return false, fmt.Errorf("failed to clear unsubscribe marks: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
-		return err
+		return false, err
 	}
-	return r.updateListCounts(listID)
+	return n > 0, r.updateListCounts(listID)
 }
 
 // IsUnsubscribed reports whether email has status unsubscribed in listID.

@@ -50,3 +50,52 @@ type RecipientImportResult struct {
 	Skipped  int      `json:"skipped"`
 	Errors   []string `json:"errors,omitempty"`
 }
+
+// RecipientMembership is one address book (recipient list) an email address
+// is in, with its status there.
+type RecipientMembership struct {
+	RecipientID string
+	ListID      string
+	ListName    string
+	Email       string // filled by the search over all lists
+	Name        string // same
+	Status      string
+	CreatedAt   time.Time
+}
+
+// RecipientMessage is one campaign message addressed to an email address
+// (a send job item), with the campaign and the address book it went through.
+type RecipientMessage struct {
+	ItemID         string
+	JobID          string
+	CampaignID     string
+	CampaignName   string
+	ListID         string
+	ListName       string
+	VariantName    string
+	Status         string // job item status: pending, queued, sent, failed, skipped
+	Error          string
+	At             time.Time // sent, else queued, else created
+	OpenedAt       *time.Time
+	OpenCount      int
+	ClickedAt      *time.Time
+	ClickCount     int
+	UnsubscribedAt *time.Time
+	EventTotal     int // all engagement events of the message, shown or not
+}
+
+// RecipientTotals sums the campaign messages addressed to an email address.
+type RecipientTotals struct {
+	Messages int        // job items in any state, skipped ones included
+	Sent     int        // handed over to the recipient's server
+	Opened   int        // messages opened at least once
+	Clicked  int        // messages clicked at least once
+	LastSent *time.Time // latest sent_at
+}
+
+// RecipientEvent is an engagement event of an email address with the name of
+// the campaign it came from.
+type RecipientEvent struct {
+	EmailEvent
+	CampaignName string
+}

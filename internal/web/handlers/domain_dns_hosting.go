@@ -35,10 +35,20 @@ type providerZone struct {
 	Plan []dnssync.SyncResult
 }
 
+// NeedsManualFix tells whether some record has to be repaired by hand.
+func (p providerZone) NeedsManualFix() bool {
+	for _, r := range p.Plan {
+		if r.NeedsManualFix() {
+			return true
+		}
+	}
+	return false
+}
+
 // HasChanges tells whether publishing would create or replace a record.
 func (p providerZone) HasChanges() bool {
 	for _, r := range p.Plan {
-		if r.Action == dnssync.ActionCreate || r.Action == dnssync.ActionUpdate {
+		if r.Changes() {
 			return true
 		}
 	}

@@ -3,6 +3,7 @@ package repository
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/foxzi/sendry/internal/web/models"
 )
@@ -413,6 +414,66 @@ func TestDomainRepository_UpdateMarksDeploymentsOutdated(t *testing.T) {
 
 	if len(deployments) != 1 || deployments[0].Status != "outdated" {
 		t.Errorf("GetDeployments() = %+v, want one outdated after domain update", deployments)
+	}
+}
+
+func TestDomainRepository_List_NewestFirst(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewDomainRepository(db)
+
+	// Names are deliberately not in creation order; "tie-a" and "tie-b" share
+	// a timestamp, so the id decides.
+	base := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	created := map[string]time.Time{
+		"mid.com":   base.Add(time.Hour),
+		"old.com":   base,
+		"new.com":   base.Add(2 * time.Hour),
+		"tie-a.com": base.Add(30 * time.Minute),
+		"tie-b.com": base.Add(30 * time.Minute),
+	}
+	ids := map[string]string{}
+	for name, ts := range created {
+		d := &models.Domain{Domain: name, Mode: "production"}
+		if err := repo.Create(d); err != nil {
+			t.Fatalf("Create() error = %v", err)
+		}
+		if _, err := db.Exec("UPDATE domains SET created_at = ? WHERE id = ?", ts, d.ID); err != nil {
+			t.Fatalf("set created_at: %v", err)
+		}
+		ids[name] = d.ID
+	}
+
+	list, err := repo.List(models.DomainFilter{NewestFirst: true})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	tieFirst, tieSecond := "tie-a.com", "tie-b.com"
+	if ids[tieFirst] < ids[tieSecond] {
+		tieFirst, tieSecond = tieSecond, tieFirst // larger id comes first
+	}
+	want := []string{"new.com", "mid.com", tieFirst, tieSecond, "old.com"}
+	if len(list) != len(want) {
+		t.Fatalf("List() returned %d domains, want %d", len(list), len(want))
+	}
+	for i, w := range want {
+		if list[i].Domain != w {
+			t.Errorf("List()[%d] = %s, want %s", i, list[i].Domain, w)
+		}
+	}
+
+	// Default order stays by name.
+	list, err = repo.List(models.DomainFilter{})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if list[0].Domain != "mid.com" || list[4].Domain != "tie-b.com" {
+		t.Errorf("default order should be by name, got %s ... %s", list[0].Domain, list[4].Domain)
+	}
+
+	// Limit applies after ordering.
+	list, err = repo.List(models.DomainFilter{NewestFirst: true, Limit: 1})
+	if err != nil || len(list) != 1 || list[0].Domain != "new.com" {
+		t.Errorf("List() with limit = %v, %v", list, err)
 	}
 }
 

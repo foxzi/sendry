@@ -300,17 +300,47 @@ func quoteTXT(data, recordType string) string {
 	return "\"" + escaped + "\""
 }
 
-// unquoteTXT strips surrounding quotes on TXT values so that comparisons in
-// the sync layer (which also normalizes) work naturally.
+// unquoteTXT returns the value of a TXT record without the BIND-style
+// quoting. A value longer than 255 bytes is stored as several quoted strings
+// ("part one" "part two"); they are one value and are joined with nothing in
+// between, as resolvers do. Data that is not a sequence of quoted strings is
+// returned as it is.
 func unquoteTXT(data, recordType string) string {
 	if !strings.EqualFold(recordType, "TXT") {
 		return data
 	}
 	s := strings.TrimSpace(data)
-	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
-		s = s[1 : len(s)-1]
-		s = strings.ReplaceAll(s, "\\\"", "\"")
-		s = strings.ReplaceAll(s, "\\\\", "\\")
+	if !strings.HasPrefix(s, "\"") {
+		return s
 	}
-	return s
+	var out strings.Builder
+	for i := 0; i < len(s); {
+		switch s[i] {
+		case ' ', '\t', '\r', '\n':
+			i++
+			continue
+		case '"':
+		default:
+			return s // something outside the quotes
+		}
+		i++
+		closed := false
+		for i < len(s) && !closed {
+			switch {
+			case s[i] == '\\' && i+1 < len(s):
+				out.WriteByte(s[i+1])
+				i += 2
+			case s[i] == '"':
+				closed = true
+				i++
+			default:
+				out.WriteByte(s[i])
+				i++
+			}
+		}
+		if !closed {
+			return s
+		}
+	}
+	return out.String()
 }

@@ -468,7 +468,7 @@ func (h *Handlers) DomainsImport(w http.ResponseWriter, r *http.Request) {
 
 // CentralDomainsList shows all locally stored domains
 func (h *Handlers) CentralDomainsList(w http.ResponseWriter, r *http.Request) {
-	domains, err := h.domains.List(models.DomainFilter{})
+	domains, err := h.domains.List(models.DomainFilter{NewestFirst: true})
 	if err != nil {
 		h.logger.Error("failed to list domains", "error", err)
 		h.error(w, r, http.StatusInternalServerError, "Failed to load domains")
@@ -663,10 +663,19 @@ func (h *Handlers) CentralDomainsView(w http.ResponseWriter, r *http.Request) {
 		"SPFInclude":  spfInclude,
 	}
 	if q := r.URL.Query(); q.Has("published") {
-		data["Published"] = map[string]string{
+		// Only the known record kinds are shown back from the address.
+		var stale []string
+		for _, kind := range strings.Split(q.Get("stale"), ",") {
+			switch dnssync.RecordType(kind) {
+			case dnssync.RecordSPF, dnssync.RecordDKIM, dnssync.RecordDMARC:
+				stale = append(stale, kind)
+			}
+		}
+		data["Published"] = map[string]any{
 			"Provider": q.Get("published"),
 			"Count":    q.Get("count"),
 			"Error":    q.Get("publish_error"),
+			"Stale":    strings.Join(stale, ", "),
 		}
 	}
 
@@ -706,9 +715,10 @@ func (h *Handlers) CentralDomainsView(w http.ResponseWriter, r *http.Request) {
 	h.render(w, "central_domain_view", data)
 }
 
-// CentralDomainsPublishDNS creates or replaces the domain's recommended
-// SPF, DKIM and DMARC records in the zone at the chosen DNS provider
-// (namedot only, see dnsPublishProviders).
+// CentralDomainsPublishDNS publishes the records chosen in the preview
+// (form values "record") to the zone at the chosen DNS provider (namedot
+// only, see dnsPublishProviders): missing ones are created, SPF gets the
+// missing terms added, DKIM and DMARC are replaced.
 func (h *Handlers) CentralDomainsPublishDNS(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	domain, err := h.domains.GetByID(id)
@@ -729,8 +739,13 @@ func (h *Handlers) CentralDomainsPublishDNS(w http.ResponseWriter, r *http.Reque
 		display = provider.Name()
 	}
 
+	// stale lists the kinds of the records that changed after the preview.
+	var stale []string
 	back := func(count int, errMsg string) {
 		q := url.Values{"check": {"true"}, "published": {display}, "count": {strconv.Itoa(count)}}
+		if len(stale) > 0 {
+			q.Set("stale", strings.Join(stale, ","))
+		}
 		if errMsg != "" {
 			if len(errMsg) > 300 {
 				errMsg = errMsg[:300] + "..."
@@ -753,24 +768,47 @@ func (h *Handlers) CentralDomainsPublishDNS(w http.ResponseWriter, r *http.Reque
 		back(0, err.Error())
 		return
 	}
-	results, _ := (&dnssync.Syncer{Provider: provider, Zone: zone}).Apply(ctx, recommended)
 
-	applied, firstErr := 0, ""
+	// Only the records ticked in the preview are published, and only if
+	// they still hold the value the preview was built from.
+	selected := make(map[string]bool)
+	for _, kind := range r.Form["record"] {
+		selected[kind] = true
+	}
+	syncer := &dnssync.Syncer{Provider: provider, Zone: zone}
+	syncer.Confirm = func(res dnssync.SyncResult) (bool, string) {
+		if !selected[string(res.Kind)] {
+			return false, ""
+		}
+		if dnssync.NormalizeTXT(r.FormValue("seen_"+string(res.Kind))) != dnssync.NormalizeTXT(res.Current) {
+			return false, dnsPreviewStale
+		}
+		return true, ""
+	}
+	results, _ := syncer.Apply(ctx, recommended)
+
+	applied := 0
+	var errs []string
 	for _, res := range results {
 		switch {
+		case res.Error == dnsPreviewStale:
+			h.logger.Warn("dns record changed after the preview, not published", "domain", domain.Domain, "provider", provider.Name(), "record", res.Name)
+			stale = append(stale, string(res.Kind))
 		case res.Error != "":
 			h.logger.Error("dns publish failed", "domain", domain.Domain, "provider", provider.Name(), "record", res.Name, "error", res.Error)
-			if firstErr == "" {
-				firstErr = fmt.Sprintf("%s: %s", res.Kind, res.Error)
-			}
+			errs = append(errs, fmt.Sprintf("%s: %s", res.Kind, res.Error))
 		case res.Applied:
 			applied++
 			h.logger.Info("dns record published", "domain", domain.Domain, "provider", provider.Name(),
-				"record", res.Name, "action", res.Action, "old", res.Current, "new", res.Expected)
+				"record", res.Name, "action", res.Action, "old", res.Current, "new", res.Proposed)
 		}
 	}
-	back(applied, firstErr)
+	back(applied, strings.Join(errs, "; "))
 }
+
+// dnsPreviewStale is the reason a ticked record is not published: its value
+// is no longer the one the preview showed. The page shows it translated.
+const dnsPreviewStale = "the record changed after the preview was opened, check the changes again"
 
 // CentralDomainsEdit shows domain edit form
 func (h *Handlers) CentralDomainsEdit(w http.ResponseWriter, r *http.Request) {

@@ -37,6 +37,9 @@ func apiListsMux(h *Handlers, keys *repository.APIKeyRepository) http.Handler {
 	mux.HandleFunc("GET /api/v1/lists", lists(h.APIListLists))
 	mux.HandleFunc("POST /api/v1/lists/{id}/recipients", lists(h.APIAddRecipients))
 	mux.HandleFunc("DELETE /api/v1/lists/{id}/recipients/{email}", lists(h.APIDeleteRecipient))
+	mux.HandleFunc("GET /api/v1/lists/{id}/recipients/{email}", lists(h.APIGetRecipient))
+	mux.HandleFunc("POST /api/v1/lists/{id}/recipients/{email}/unsubscribe", lists(h.APIUnsubscribeRecipient))
+	mux.HandleFunc("POST /api/v1/lists/{id}/recipients/{email}/resubscribe", lists(h.APIResubscribeRecipient))
 	return middleware.APIAuth(keys, h.logger)(mux)
 }
 
@@ -289,6 +292,71 @@ func TestAPIDeleteRecipient(t *testing.T) {
 	}
 }
 
+func TestAPIUnsubscribeRecipient(t *testing.T) {
+	srv, d, key := newAPIListsServer(t)
+	type resp struct {
+		Email, Status string
+		Changed       bool
+	}
+	do := func(path string, want int) resp {
+		t.Helper()
+		rec := apiDo(srv, key, "POST", path, "")
+		if rec.Code != want {
+			t.Fatalf("%s: %d %s", path, rec.Code, rec.Body.String())
+		}
+		var r resp
+		json.Unmarshal(rec.Body.Bytes(), &r)
+		return r
+	}
+
+	r := do("/api/v1/lists/l1/recipients/C%40Example.org/unsubscribe", 200)
+	if r.Email != "c@example.org" || r.Status != "unsubscribed" || !r.Changed {
+		t.Errorf("first call: %+v", r)
+	}
+	if _, _, st, _ := recipientRow(t, d, "c@example.org"); st != "unsubscribed" {
+		t.Errorf("status = %q", st)
+	}
+	var src string
+	var srcID sql.NullString
+	if err := d.QueryRow(`SELECT source_type, source_id FROM unsubscribes WHERE list_id='l1' AND email='c@example.org'`).Scan(&src, &srcID); err != nil {
+		t.Fatal(err)
+	}
+	if src != "api" || srcID.String == "" {
+		t.Errorf("journal = %q / %q", src, srcID.String)
+	}
+	var active int
+	d.QueryRow(`SELECT active_count FROM recipient_lists WHERE id='l1'`).Scan(&active)
+	if active != 2 {
+		t.Errorf("active_count = %d", active)
+	}
+
+	// repeat: fine, nothing changes, the journal row is kept
+	d.Exec(`UPDATE unsubscribes SET source_type='link' WHERE list_id='l1' AND email='c@example.org'`)
+	if r := do("/api/v1/lists/l1/recipients/c@example.org/unsubscribe", 200); r.Changed {
+		t.Errorf("repeat: %+v", r)
+	}
+	d.QueryRow(`SELECT source_type FROM unsubscribes WHERE list_id='l1' AND email='c@example.org'`).Scan(&src)
+	if src != "link" {
+		t.Errorf("journal overwritten: %q", src)
+	}
+
+	do("/api/v1/lists/l1/recipients/nobody@example.org/unsubscribe", 404)
+	do("/api/v1/lists/nope/recipients/a@example.org/unsubscribe", 404)
+
+	// a bounced address must not become one that can be resubscribed
+	d.Exec(`UPDATE recipients SET status='bounced' WHERE list_id='l1' AND email='d@example.org'`)
+	do("/api/v1/lists/l1/recipients/d@example.org/unsubscribe", 409)
+	if _, _, st, _ := recipientRow(t, d, "d@example.org"); st != "bounced" {
+		t.Errorf("bounced became %q", st)
+	}
+
+	var n int
+	d.QueryRow(`SELECT COUNT(*) FROM audit_log WHERE action='api_recipient_unsubscribe'`).Scan(&n)
+	if n != 1 {
+		t.Errorf("audit rows = %d", n)
+	}
+}
+
 // The mux already unescapes {email}; a second unescape turned a literal
 // "%41" in the local part into "A" and missed the address.
 func TestAPIDeleteRecipient_PercentInLocalPart(t *testing.T) {
@@ -317,6 +385,8 @@ func TestAPILists_RequiresListsPermission(t *testing.T) {
 		{"GET", "/api/v1/lists", ""},
 		{"POST", "/api/v1/lists/l1/recipients", `{"recipients":[{"email":"new@example.org"}]}`},
 		{"DELETE", "/api/v1/lists/l1/recipients/a@example.org", ""},
+		{"GET", "/api/v1/lists/l1/recipients/a@example.org", ""},
+		{"POST", "/api/v1/lists/l1/recipients/b@example.org/resubscribe", ""},
 	} {
 		rec := apiDo(srv, res.Key, c[0], c[1], c[2])
 		if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "PERMISSION_DENIED") {
@@ -325,5 +395,123 @@ func TestAPILists_RequiresListsPermission(t *testing.T) {
 	}
 	if _, _, _, found := recipientRow(t, d, "a@example.org"); !found {
 		t.Error("recipient was deleted by a send-only key")
+	}
+}
+
+func TestAPIGetRecipient(t *testing.T) {
+	srv, d, key := newAPIListsServer(t)
+	d.Exec(`UPDATE recipients SET name='Ann', variables='{"city":"Moscow","orders":3}', tags='["vip"]' WHERE id='ra'`)
+	d.Exec(`INSERT INTO unsubscribes (list_id, recipient_id, email, source_type, created_at) VALUES ('l1', 'rb', 'b@example.org', 'link', '2026-02-01 10:00:00')`)
+
+	get := func(path string, want int) map[string]any {
+		t.Helper()
+		rec := apiDo(srv, key, "GET", path, "")
+		if rec.Code != want {
+			t.Fatalf("GET %s: %d %s", path, rec.Code, rec.Body.String())
+		}
+		var out map[string]any
+		json.Unmarshal(rec.Body.Bytes(), &out)
+		return out
+	}
+
+	r := get("/api/v1/lists/l1/recipients/A@Example.org", 200)
+	vars, _ := r["variables"].(map[string]any)
+	tags, _ := r["tags"].([]any)
+	if r["email"] != "a@example.org" || r["name"] != "Ann" || r["status"] != "active" || vars["city"] != "Moscow" || vars["orders"] != float64(3) ||
+		len(tags) != 1 || tags[0] != "vip" || r["created_at"] != "2026-01-04T00:00:00Z" {
+		t.Errorf("recipient = %v", r)
+	}
+	if _, has := r["unsubscribed_at"]; has {
+		t.Errorf("active recipient has unsubscribed_at: %v", r)
+	}
+
+	// empty variables and tags come as an empty object and array
+	r = get("/api/v1/lists/l1/recipients/b@example.org", 200)
+	if r["status"] != "unsubscribed" || r["unsubscribed_by"] != "link" || r["unsubscribed_at"] != "2026-02-01T10:00:00Z" {
+		t.Errorf("unsubscribed recipient = %v", r)
+	}
+	if v, ok := r["variables"].(map[string]any); !ok || len(v) != 0 {
+		t.Errorf("variables = %v", r["variables"])
+	}
+	if v, ok := r["tags"].([]any); !ok || len(v) != 0 {
+		t.Errorf("tags = %v", r["tags"])
+	}
+
+	get("/api/v1/lists/l1/recipients/nobody@example.org", 404)
+	get("/api/v1/lists/nope/recipients/a@example.org", 404)
+}
+
+func TestAPIResubscribeRecipient(t *testing.T) {
+	srv, d, key := newAPIListsServer(t)
+	type resp struct {
+		Email, Status, Code string
+		Changed             bool
+	}
+	do := func(path string, want int) resp {
+		t.Helper()
+		rec := apiDo(srv, key, "POST", path, "")
+		if rec.Code != want {
+			t.Fatalf("POST %s: %d %s", path, rec.Code, rec.Body.String())
+		}
+		var out resp
+		json.Unmarshal(rec.Body.Bytes(), &out)
+		return out
+	}
+	status := func(email string) string {
+		_, _, st, _ := recipientRow(t, d, email)
+		return st
+	}
+
+	// unsubscribed through the API: comes back, the journal row and the mark on the message go
+	d.Exec(`INSERT INTO send_jobs (id, campaign_id, recipient_list_id, status) VALUES ('j1', 'c1', 'l1', 'completed')`)
+	d.Exec(`INSERT INTO send_job_items (id, job_id, recipient_id, variant_id, status, unsubscribed_at) VALUES ('i1', 'j1', 'rc', 'v1', 'sent', '2026-02-01 10:00:00')`)
+	do("/api/v1/lists/l1/recipients/c@example.org/unsubscribe", 200)
+	if r := do("/api/v1/lists/l1/recipients/C@Example.org/resubscribe", 200); !r.Changed || r.Status != "active" || r.Email != "c@example.org" {
+		t.Errorf("resubscribe: %+v", r)
+	}
+	var journal, marked int
+	d.QueryRow(`SELECT COUNT(*) FROM unsubscribes WHERE list_id='l1' AND email='c@example.org'`).Scan(&journal)
+	d.QueryRow(`SELECT COUNT(*) FROM send_job_items WHERE id='i1' AND unsubscribed_at IS NOT NULL`).Scan(&marked)
+	if status("c@example.org") != "active" || journal != 0 || marked != 0 {
+		t.Errorf("after resubscribe: status %q, journal rows %d, marked items %d", status("c@example.org"), journal, marked)
+	}
+
+	// repeat and an address that never unsubscribed: fine, nothing changes
+	if r := do("/api/v1/lists/l1/recipients/c@example.org/resubscribe", 200); r.Changed || r.Status != "active" {
+		t.Errorf("repeat: %+v", r)
+	}
+
+	// only an unsubscribe made through the API is undone through it: not the
+	// reader's own, not one made by hand in the panel, nor one nobody
+	// recorded (b@ has no journal row yet)
+	if r := do("/api/v1/lists/l1/recipients/b@example.org/resubscribe", 409); r.Code != "NOT_UNSUBSCRIBED_BY_API" {
+		t.Errorf("no journal row: %+v", r)
+	}
+	for _, source := range []string{"link", "one_click", "manual"} {
+		d.Exec(`DELETE FROM unsubscribes`)
+		if _, err := d.Exec(`INSERT INTO unsubscribes (list_id, recipient_id, email, source_type, created_at) VALUES ('l1', 'rb', 'b@example.org', ?, '2026-02-01 10:00:00')`, source); err != nil {
+			t.Fatal(err)
+		}
+		if r := do("/api/v1/lists/l1/recipients/b@example.org/resubscribe", 409); r.Code != "NOT_UNSUBSCRIBED_BY_API" {
+			t.Errorf("%s: %+v", source, r)
+		}
+	}
+	if status("b@example.org") != "unsubscribed" {
+		t.Errorf("an unsubscribe not made through the API was undone: %q", status("b@example.org"))
+	}
+
+	d.Exec(`UPDATE recipients SET status='bounced' WHERE list_id='l1' AND email='d@example.org'`)
+	if r := do("/api/v1/lists/l1/recipients/d@example.org/resubscribe", 409); r.Code != "RECIPIENT_NOT_UNSUBSCRIBED" || status("d@example.org") != "bounced" {
+		t.Errorf("bounced: %+v, status %q", r, status("d@example.org"))
+	}
+	do("/api/v1/lists/l1/recipients/nobody@example.org/resubscribe", 404)
+	do("/api/v1/lists/nope/recipients/a@example.org/resubscribe", 404)
+
+	var n int
+	var details string
+	d.QueryRow(`SELECT COUNT(*) FROM audit_log WHERE action='api_recipient_resubscribe'`).Scan(&n)
+	d.QueryRow(`SELECT details FROM audit_log WHERE action='api_recipient_resubscribe' ORDER BY id LIMIT 1`).Scan(&details)
+	if n != 1 || details != "api_key=shop email=c@example.org unsubscribed_by=api" {
+		t.Errorf("audit: %d rows, first %q", n, details)
 	}
 }

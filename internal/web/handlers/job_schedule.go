@@ -14,7 +14,7 @@ import (
 )
 
 // JobSchedule changes a scheduled launch (POST /jobs/{id}/schedule): list,
-// servers, strategy and time, from the same form as the send. The items are
+// segment, servers, strategy and time, from the same form as the send. The items are
 // built again, so the list is read now. An empty scheduled_at starts the
 // launch right away.
 func (h *Handlers) JobSchedule(w http.ResponseWriter, r *http.Request) {
@@ -77,7 +77,7 @@ func (h *Handlers) JobSchedule(w http.ResponseWriter, r *http.Request) {
 
 	serversJSON, _ := json.Marshal(params.Servers)
 	trackOpens := c.TrackOpens && h.hasPublicOrigin() // no pixel without the public origin
-	err = h.jobs.RescheduleJob(id, params.RecipientListID, string(serversJSON), params.Strategy, params.ScheduledAt, trackOpens, items, unsubscribed)
+	err = h.jobs.RescheduleJob(id, params.RecipientListID, params.Segment.JSON(), string(serversJSON), params.Strategy, params.ScheduledAt, trackOpens, items, unsubscribed)
 	if errors.Is(err, repository.ErrJobNotScheduled) {
 		h.error(w, r, http.StatusBadRequest, "The launch has already started or was cancelled")
 		return

@@ -158,7 +158,9 @@ func NormalizeEmail(email string) string {
 }
 
 // AddRecipient adds a single recipient to a list. An address already in the
-// list (in any case) gets its name, variables and tags updated; its status is kept.
+// list (in any case) gets its name, variables and tags updated; its status is
+// kept. An empty field keeps what is stored: an import of a file without
+// those columns must not erase what was set on the address card.
 func (r *RecipientRepository) AddRecipient(recipient *models.Recipient) error {
 	recipient.ID = uuid.New().String()
 	recipient.Email = NormalizeEmail(recipient.Email)
@@ -171,9 +173,9 @@ func (r *RecipientRepository) AddRecipient(recipient *models.Recipient) error {
 		INSERT INTO recipients (id, list_id, email, name, variables, tags, status, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(list_id, email) DO UPDATE SET
-			name = excluded.name,
-			variables = excluded.variables,
-			tags = excluded.tags`,
+			name = CASE WHEN excluded.name = '' THEN name ELSE excluded.name END,
+			variables = CASE WHEN excluded.variables = '' THEN variables ELSE excluded.variables END,
+			tags = CASE WHEN excluded.tags = '' THEN tags ELSE excluded.tags END`,
 		recipient.ID, recipient.ListID, recipient.Email, recipient.Name, recipient.Variables, recipient.Tags, recipient.Status, recipient.CreatedAt,
 	)
 	if err != nil {
@@ -182,6 +184,10 @@ func (r *RecipientRepository) AddRecipient(recipient *models.Recipient) error {
 
 	return r.UpdateListCounts(recipient.ListID)
 }
+
+// tagFilterSQL keeps the recipients that have exactly this tag. The tags
+// column is a JSON array; text that is not JSON has no tags.
+const tagFilterSQL = ` AND EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(tags) THEN tags ELSE '[]' END) WHERE value = ?)`
 
 // ListRecipients returns recipients with filtering
 func (r *RecipientRepository) ListRecipients(filter models.RecipientFilter) ([]models.Recipient, int, error) {
@@ -198,8 +204,8 @@ func (r *RecipientRepository) ListRecipients(filter models.RecipientFilter) ([]m
 		args = append(args, filter.Status)
 	}
 	if filter.Tag != "" {
-		countQuery += " AND tags LIKE ?"
-		args = append(args, "%\""+filter.Tag+"\"%")
+		countQuery += tagFilterSQL
+		args = append(args, filter.Tag)
 	}
 
 	var total int
@@ -209,8 +215,8 @@ func (r *RecipientRepository) ListRecipients(filter models.RecipientFilter) ([]m
 
 	// Get recipients
 	query := `
-		SELECT id, list_id, email, name, variables, tags, status, created_at
-		FROM recipients WHERE list_id = ?`
+		SELECT ` + recipientColumns + `
+		FROM recipients r WHERE list_id = ?`
 
 	args = []any{filter.ListID}
 	if filter.Search != "" {
@@ -222,8 +228,8 @@ func (r *RecipientRepository) ListRecipients(filter models.RecipientFilter) ([]m
 		args = append(args, filter.Status)
 	}
 	if filter.Tag != "" {
-		query += " AND tags LIKE ?"
-		args = append(args, "%\""+filter.Tag+"\"%")
+		query += tagFilterSQL
+		args = append(args, filter.Tag)
 	}
 
 	query += " ORDER BY created_at DESC"
@@ -256,11 +262,25 @@ func (r *RecipientRepository) ListRecipients(filter models.RecipientFilter) ([]m
 	return recipients, total, nil
 }
 
-// DeleteRecipient deletes a recipient
+// DeleteRecipient deletes a recipient. An unsubscribed one is kept
+// (ErrRecipientUnsubscribed): deleting it would let the address be added back
+// as active, losing the suppression.
 func (r *RecipientRepository) DeleteRecipient(id string, listID string) error {
-	_, err := r.db.Exec("DELETE FROM recipients WHERE id = ?", id)
+	// the list is part of the key: a recipient is deleted only through its own list
+	res, err := r.db.Exec("DELETE FROM recipients WHERE id = ? AND list_id = ? AND COALESCE(status, '') != ?",
+		id, listID, models.RecipientStatusUnsubscribed)
 	if err != nil {
 		return inUse(err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		var status sql.NullString
+		err := r.db.QueryRow("SELECT status FROM recipients WHERE id = ? AND list_id = ?", id, listID).Scan(&status)
+		if err == nil && status.String == models.RecipientStatusUnsubscribed {
+			return ErrRecipientUnsubscribed
+		}
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
 	}
 	return r.UpdateListCounts(listID)
 }
@@ -347,12 +367,18 @@ func (r *RecipientRepository) ImportCSV(listID string, reader io.Reader) (*model
 	return result, nil
 }
 
+// recipientColumns are the columns ScanRecipient reads, for a query over
+// "recipients r". The nullable text columns come as "", and a status that was
+// never set is "active" (the column default), as everywhere else.
+const recipientColumns = `r.id, r.list_id, r.email, COALESCE(r.name, ''), COALESCE(r.variables, ''),
+		COALESCE(r.tags, ''), COALESCE(NULLIF(r.status, ''), 'active'), r.created_at`
+
 // StreamRecipients returns an iterator for recipients to avoid loading all into memory.
 // Caller must call Close() on returned rows when done.
 func (r *RecipientRepository) StreamRecipients(listID string) (*sql.Rows, error) {
 	return r.db.Query(`
-		SELECT id, list_id, email, name, variables, tags, status, created_at
-		FROM recipients WHERE list_id = ?
+		SELECT `+recipientColumns+`
+		FROM recipients r WHERE list_id = ?
 		ORDER BY created_at DESC`, listID)
 }
 
@@ -369,8 +395,8 @@ func (r *RecipientRepository) ScanRecipient(rows *sql.Rows) (*models.Recipient, 
 func (r *RecipientRepository) GetTags(listID string) ([]string, error) {
 	rows, err := r.db.Query(`
 		SELECT DISTINCT json_each.value
-		FROM recipients, json_each(recipients.tags)
-		WHERE recipients.list_id = ? AND recipients.tags IS NOT NULL AND recipients.tags != ''
+		FROM recipients, json_each(CASE WHEN json_valid(recipients.tags) THEN recipients.tags ELSE '[]' END)
+		WHERE recipients.list_id = ? AND json_each.type = 'text'
 		ORDER BY json_each.value`, listID,
 	)
 	if err != nil {
@@ -386,5 +412,5 @@ func (r *RecipientRepository) GetTags(listID string) ([]string, error) {
 		}
 		tags = append(tags, tag)
 	}
-	return tags, nil
+	return tags, rows.Err()
 }

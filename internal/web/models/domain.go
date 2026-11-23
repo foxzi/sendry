@@ -59,6 +59,9 @@ type DomainFilter struct {
 	Mode   string
 	Limit  int
 	Offset int
+	// NewestFirst orders by creation time descending (id descending on ties)
+	// instead of by domain name.
+	NewestFirst bool
 }
 
 // ConfigHash calculates a hash of the domain configuration for change detection

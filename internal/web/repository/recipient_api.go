@@ -148,6 +148,20 @@ func (r *RecipientRepository) UpsertRecipients(listID string, items []RecipientU
 	return res, r.UpdateListCounts(listID)
 }
 
+// RecipientStatusByEmail returns the status of an address in a list,
+// ErrRecipientNotInList if it is not there.
+func (r *RecipientRepository) RecipientStatusByEmail(listID, email string) (string, error) {
+	var status string
+	err := r.db.QueryRow(
+		`SELECT COALESCE(status, '') FROM recipients WHERE list_id = ? AND lower(email) = ? ORDER BY created_at LIMIT 1`,
+		listID, NormalizeEmail(email),
+	).Scan(&status)
+	if err == sql.ErrNoRows {
+		return "", ErrRecipientNotInList
+	}
+	return status, err
+}
+
 // DeleteRecipientByEmail removes an address from a list.
 // ErrRecipientNotInList if it is not there; ErrRecipientUnsubscribed if it is
 // unsubscribed (deleting it would let it be added back as active, losing the
@@ -155,7 +169,7 @@ func (r *RecipientRepository) UpsertRecipients(listID string, items []RecipientU
 func (r *RecipientRepository) DeleteRecipientByEmail(listID, email string) error {
 	var id, status string
 	err := r.db.QueryRow(
-		`SELECT id, status FROM recipients WHERE list_id = ? AND lower(email) = ? LIMIT 1`,
+		`SELECT id, COALESCE(status, '') FROM recipients WHERE list_id = ? AND lower(email) = ? LIMIT 1`,
 		listID, NormalizeEmail(email),
 	).Scan(&id, &status)
 	if err == sql.ErrNoRows {

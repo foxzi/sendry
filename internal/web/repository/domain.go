@@ -170,7 +170,11 @@ func (r *DomainRepository) List(filter models.DomainFilter) ([]models.DomainList
 		args = append(args, filter.Mode)
 	}
 
-	query += " GROUP BY d.id ORDER BY d.domain"
+	orderBy := "d.domain"
+	if filter.NewestFirst {
+		orderBy = "d.created_at DESC, d.id DESC"
+	}
+	query += " GROUP BY d.id ORDER BY " + orderBy
 
 	if filter.Limit > 0 {
 		query += fmt.Sprintf(" LIMIT %d", filter.Limit)

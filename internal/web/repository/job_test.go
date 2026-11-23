@@ -392,7 +392,7 @@ func TestJobRepository_StartDueJob(t *testing.T) {
 	if ok, _ := repo.StartDueJob(jobID); ok {
 		t.Error("cancelled job started")
 	}
-	if err := repo.RescheduleJob(jobID, "l1", `["mx1"]`, "round-robin", nil, false, nil, 0); !errors.Is(err, ErrJobNotScheduled) {
+	if err := repo.RescheduleJob(jobID, "l1", "", `["mx1"]`, "round-robin", nil, false, nil, 0); !errors.Is(err, ErrJobNotScheduled) {
 		t.Errorf("reschedule of a cancelled job: %v", err)
 	}
 }
@@ -414,7 +414,7 @@ func TestJobRepository_ScheduledTrackOpens(t *testing.T) {
 
 	mustExec(t, db, `UPDATE send_jobs SET status = 'scheduled', scheduled_at = datetime('now', '+1 hour'), track_opens = 0 WHERE id = ?`, jobID)
 	later := time.Now().Add(2 * time.Hour)
-	if err := repo.RescheduleJob(jobID, "l1", `["mx1"]`, "round-robin", &later, true, nil, 0); err != nil {
+	if err := repo.RescheduleJob(jobID, "l1", "", `["mx1"]`, "round-robin", &later, true, nil, 0); err != nil {
 		t.Fatal(err)
 	}
 	if trackOpens(jobID) != 1 {

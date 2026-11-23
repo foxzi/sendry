@@ -215,8 +215,8 @@
     </div>
     <div class="card-body">
         {{with .Published}}
-            {{if .Error}}
-            <div class="alert alert-danger"><span data-i18n="infra.dns_publish_failed">Publishing to</span> {{.Provider}}: <span data-i18n="infra.dns_publish_done_count">records changed</span> {{.Count}}. <span data-i18n="common.error">Error</span>: {{.Error}}</div>
+            {{if or .Error .Stale}}
+            <div class="alert alert-error"><span data-i18n="infra.dns_publish_failed">Publishing to</span> {{.Provider}}: <span data-i18n="infra.dns_publish_done_count">records changed</span> {{.Count}}.{{if .Stale}} <span data-i18n="infra.dns_publish_stale">Not published, because the value changed while the preview was open:</span> <strong>{{.Stale}}</strong>. <span data-i18n="infra.dns_publish_stale_next">Open the preview again and check the changes.</span>{{end}}{{if .Error}} <span data-i18n="common.error">Error</span>: {{.Error}}{{end}}</div>
             {{else}}
             <div class="alert alert-success"><span data-i18n="infra.dns_published_to">Published to</span> {{.Provider}}: <span data-i18n="infra.dns_publish_done_count">records changed</span> {{.Count}}. <span data-i18n="infra.dns_publish_cache_note">Resolvers may show the old values for a while (TTL).</span></div>
             {{end}}
@@ -246,39 +246,75 @@
                         <table class="table" style="margin-top: 0.75rem;">
                             <thead>
                                 <tr>
-                                    <th data-i18n="infra.dns_record">Record</th>
+                                    <th data-i18n="infra.dns_col_record">Record</th>
                                     <th data-i18n="infra.dns_now">Now</th>
-                                    <th data-i18n="infra.dns_will_be">Will be</th>
-                                    <th data-i18n="infra.dns_action">Action</th>
+                                    <th data-i18n="infra.dns_state">State</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {{range .Plan}}
                                 <tr>
                                     <td><strong>{{.Kind}}</strong>{{if .Name}}<div class="text-muted"><code>{{.Name}}</code></div>{{end}}</td>
-                                    <td><code style="word-break: break-all; font-size: 0.85em;">{{if .Current}}{{.Current}}{{else}}-{{end}}</code></td>
-                                    <td><code style="word-break: break-all; font-size: 0.85em;">{{if .Expected}}{{.Expected}}{{else}}-{{end}}</code></td>
-                                    <td>
-                                        {{if eq .Action "create"}}<span class="badge badge-warning" data-i18n="infra.dns_action_create">Create</span>
-                                        {{else if eq .Action "update"}}<span class="badge badge-failed" data-i18n="infra.dns_action_update">Replace</span>
-                                        {{else if eq .Action "noop"}}<span class="badge badge-success" data-i18n="infra.dns_action_noop">Up to date</span>
-                                        {{else}}<span class="badge badge-draft" data-i18n="infra.dns_action_skip">Skipped</span> <div class="text-muted">{{.Reason}}</div>{{end}}
-                                    </td>
+                                    <td><code class="dns-value">{{if .Current}}{{.Current}}{{else}}-{{end}}</code></td>
+                                    <td>{{template "dns_plan_badge" .}}{{if .NeedsManualFix}}<div class="text-muted" data-i18n="infra.dns_note_{{.Note}}">{{.Hint}}</div>{{end}}</td>
                                 </tr>
                                 {{end}}
                             </tbody>
                         </table>
                         <div class="dns-publish-row">
                         {{if .HasChanges}}
-                        <form method="POST" action="/domains/{{$.Domain.ID}}/dns-publish">
-                            <input type="hidden" name="provider" value="{{.Key}}">
-                            <button type="submit" class="btn btn-primary" onclick="return confirm(I18n.t('infra.dns_publish_confirm'))"><span data-i18n="infra.dns_publish_to">Publish to</span> {{.Provider}}</button>
-                        </form>
-                        <span class="text-muted" data-i18n="infra.dns_publish_hint">Creates and replaces the records marked above. Other records in the zone stay as they are.</span>
+                        <button type="button" class="btn btn-primary" data-dns-open="dns-publish-{{.Key}}" data-i18n="infra.dns_preview_open">Choose records and publish</button>
+                        <span class="text-muted" data-i18n="infra.dns_publish_hint">Opens a preview: you see what changes in each record and tick the ones to publish. Nothing is published until you confirm.</span>
+                        {{else if .NeedsManualFix}}
+                        <span class="text-muted" data-i18n="infra.dns_publish_manual">Nothing to publish, but a record marked "Skipped" has to be fixed by hand, see its note above.</span>
                         {{else}}
                         <span class="text-muted" data-i18n="infra.dns_publish_nothing">All records are up to date, nothing to publish.</span>
                         {{end}}
                         </div>
+                        {{if .HasChanges}}
+                        <dialog class="dns-dialog" id="dns-publish-{{.Key}}" aria-labelledby="dns-publish-title-{{.Key}}">
+                            <form method="POST" action="/domains/{{$.Domain.ID}}/dns-publish">
+                                <input type="hidden" name="provider" value="{{.Key}}">
+                                <header class="dns-dialog-head">
+                                    <div>
+                                        <h2 id="dns-publish-title-{{.Key}}"><span data-i18n="infra.dns_preview_title">Changes in</span> {{.Provider}}</h2>
+                                        <p class="text-muted"><span data-i18n="infra.dns_preview_zone">Zone</span> <code>{{.Zone}}</code>. <span data-i18n="infra.dns_preview_lead">Only the ticked records are published. Everything else in the zone stays as it is.</span></p>
+                                    </div>
+                                    <button type="button" class="dns-dialog-close" data-dns-close aria-label="Close" data-i18n-aria="common.close">&times;</button>
+                                </header>
+                                <div class="dns-dialog-body">
+                                    {{range .Plan}}
+                                    <section class="dns-rec{{if .Optional}} dns-rec-optional{{end}}">
+                                        {{if .Changes}}
+                                        <label class="dns-rec-head">
+                                            <input type="checkbox" name="record" value="{{.Kind}}"{{if not .Optional}} checked{{end}}>
+                                            <strong>{{.Kind}}</strong>
+                                            <code>{{.Name}}</code>
+                                            {{template "dns_plan_badge" .}}
+                                        </label>
+                                        <input type="hidden" name="seen_{{.Kind}}" value="{{.Current}}">
+                                        <p class="dns-rec-hint"{{if .Note}} data-i18n="infra.dns_note_{{.Note}}"{{end}}>{{.Hint}}</p>
+                                        <div class="dns-diff">{{range .Diff}}{{if eq .Op "add"}}<ins{{if .Full}} title="{{.Full}}"{{end}}>{{.Text}}</ins>{{else if eq .Op "del"}}<del{{if .Full}} title="{{.Full}}"{{end}}>{{.Text}}</del>{{else}}<span{{if .Full}} title="{{.Full}}"{{end}}>{{.Text}}</span>{{end}} {{end}}</div>
+                                        {{else}}
+                                        <div class="dns-rec-head">
+                                            <span class="dns-rec-mark" aria-hidden="true">{{if eq .Action "noop"}}&#10003;{{else}}&ndash;{{end}}</span>
+                                            <strong>{{.Kind}}</strong>
+                                            {{if .Name}}<code>{{.Name}}</code>{{end}}
+                                            {{template "dns_plan_badge" .}}
+                                        </div>
+                                        <p class="dns-rec-hint"{{if .Note}} data-i18n="infra.dns_note_{{.Note}}"{{end}}>{{.Hint}}</p>
+                                        {{end}}
+                                    </section>
+                                    {{end}}
+                                </div>
+                                <footer class="dns-dialog-foot">
+                                    <span class="dns-diff-legend"><ins data-i18n="infra.dns_diff_added">will be added</ins> <del data-i18n="infra.dns_diff_removed">will be removed</del></span>
+                                    <button type="button" class="btn btn-secondary" data-dns-close data-i18n="cancel">Cancel</button>
+                                    <button type="submit" class="btn btn-primary"><span><span data-i18n="infra.dns_publish_to">Publish to</span> {{.Provider}} (<span data-dns-count>0</span>)</span></button>
+                                </footer>
+                            </form>
+                        </dialog>
+                        {{end}}
                         {{else}}
                         <div class="text-muted" style="margin-top: 0.5rem;" data-i18n="infra.dns_publish_unsupported">The panel does not publish records here, add them by hand.</div>
                         {{end}}
@@ -295,9 +331,31 @@
                 {{end}}
             </table>
             </div>
+            <script>
+            (function () {
+                function sync(dialog) {
+                    var n = dialog.querySelectorAll('input[name="record"]:checked').length;
+                    dialog.querySelector('[data-dns-count]').textContent = n;
+                    dialog.querySelector('button[type="submit"]').disabled = n === 0;
+                }
+                document.querySelectorAll('dialog.dns-dialog').forEach(function (dialog) {
+                    sync(dialog);
+                    dialog.addEventListener('change', function () { sync(dialog); });
+                    dialog.addEventListener('click', function (e) {
+                        // a click on the backdrop lands on the dialog itself
+                        if (e.target === dialog || e.target.closest('[data-dns-close]')) dialog.close();
+                    });
+                });
+                document.querySelectorAll('[data-dns-open]').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        document.getElementById(btn.getAttribute('data-dns-open')).showModal();
+                    });
+                });
+            })();
+            </script>
             {{end}}
             {{if .DNSCheckError}}
-            <div class="alert alert-danger"><span data-i18n="common.error">Error</span>: {{.DNSCheckError}}</div>
+            <div class="alert alert-error"><span data-i18n="common.error">Error</span>: {{.DNSCheckError}}</div>
             {{else if .DNSCheck}}
             <div class="dns-check-summary" style="margin-bottom: 1rem;">
                 <span class="badge badge-success">OK: {{.DNSCheck.Summary.OK}}</span>
@@ -406,3 +464,9 @@
     </div>
 </div>
 {{end}}
+
+{{define "dns_plan_badge"}}{{if eq .Action "create"}}<span class="badge badge-warning" data-i18n="infra.dns_action_create">Create</span>
+{{else if eq .Note "spf_merge"}}<span class="badge badge-warning" data-i18n="infra.dns_action_merge">Add missing</span>
+{{else if eq .Action "update"}}<span class="badge badge-failed" data-i18n="infra.dns_action_differs">Differs</span>
+{{else if eq .Action "noop"}}<span class="badge badge-success" data-i18n="infra.dns_action_noop">Up to date</span>
+{{else}}<span class="badge badge-draft" data-i18n="infra.dns_action_skip">Skipped</span>{{if not .Note}} <div class="text-muted">{{.Reason}}</div>{{end}}{{end}}{{end}}

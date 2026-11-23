@@ -26,6 +26,7 @@
                 <span data-i18n="cmp.sched_list">List</span>:
                 <a href="/recipients/{{.Job.RecipientListID}}">{{.Job.ListName}}</a>
                 &middot; {{.Recipients}} <span data-i18n="cmp.sched_recipients">recipients</span>
+                {{if .Job.Segment}}<br><span data-i18n="cmp.segment">Segment</span>: <span data-segment="{{.Job.Segment}}"></span>{{end}}
             </div>
         </div>
         <div class="actions-bar">

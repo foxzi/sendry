@@ -3,10 +3,13 @@ package db
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/mattn/go-sqlite3"
@@ -21,9 +24,54 @@ const driverName = "sqlite3_sendry"
 func init() {
 	sql.Register(driverName, &sqlite3.SQLiteDriver{
 		ConnectHook: func(conn *sqlite3.SQLiteConn) error {
-			return conn.RegisterFunc("ulower", strings.ToLower, true)
+			if err := conn.RegisterFunc("ulower", strings.ToLower, true); err != nil {
+				return err
+			}
+			if err := conn.RegisterFunc("seg_var", SegmentVariable, true); err != nil {
+				return err
+			}
+			return conn.RegisterFunc("seg_num", SegmentNumber, true)
 		},
 	})
+}
+
+// SegmentVariable is seg_var(variables, key): the value of a recipient
+// variable as the recipient card shows it, "" when it is not set. A string is
+// itself; a number keeps its digits ("10.00", a long id) and true stays
+// "true", where json_extract would give 10.0, a float and 1.
+func SegmentVariable(variables, key string) string {
+	dec := json.NewDecoder(strings.NewReader(variables))
+	dec.UseNumber()
+	var obj map[string]any
+	if err := dec.Decode(&obj); err != nil {
+		return ""
+	}
+	switch v := obj[key].(type) {
+	case nil:
+		return ""
+	case string:
+		return v
+	default:
+		var buf strings.Builder
+		enc := json.NewEncoder(&buf)
+		enc.SetEscapeHTML(false)
+		if err := enc.Encode(v); err != nil {
+			return ""
+		}
+		return strings.TrimSuffix(buf.String(), "\n")
+	}
+}
+
+// SegmentNumber is seg_num(text): the text as a number for "greater/less
+// than", NULL when it is not one, so that "n/a" is neither greater nor less
+// than anything. A decimal comma is accepted, as in the condition itself.
+func SegmentNumber(s string) any {
+	s = strings.Replace(strings.TrimSpace(s), ",", ".", 1)
+	n, err := strconv.ParseFloat(s, 64)
+	if err != nil || math.IsNaN(n) || math.IsInf(n, 0) {
+		return nil
+	}
+	return n
 }
 
 type DB struct {
@@ -98,6 +146,9 @@ func (db *DB) Migrate() error {
 		"ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'",
 		"ALTER TABLE users ADD COLUMN password_hash TEXT",
 		"UPDATE users SET role = 'admin' WHERE id = (SELECT id FROM users ORDER BY created_at ASC LIMIT 1)",
+		// A recipient without a status (written around the column default) is
+		// active: the counts, the filters and the jobs compare status = 'active'
+		"UPDATE recipients SET status = 'active' WHERE status IS NULL OR status = ''",
 		"ALTER TABLE templates ADD COLUMN use_blocks INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE template_block_refs ADD COLUMN gap_height INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE template_block_refs ADD COLUMN gap_color TEXT NOT NULL DEFAULT ''",
@@ -138,6 +189,8 @@ func (db *DB) Migrate() error {
 		"ALTER TABLE templates ADD COLUMN preheader TEXT NOT NULL DEFAULT ''",
 		"ALTER TABLE template_versions ADD COLUMN preheader TEXT NOT NULL DEFAULT ''",
 		"ALTER TABLE job_variant_snapshots ADD COLUMN template_preheader TEXT NOT NULL DEFAULT ''",
+		// Conditions the recipient list of a launch was narrowed with (JSON)
+		"ALTER TABLE send_jobs ADD COLUMN segment TEXT NOT NULL DEFAULT ''",
 	}
 	for _, m := range alterMigrations {
 		db.Exec(m) // Ignore errors (column may already exist)
@@ -151,6 +204,9 @@ func (db *DB) Migrate() error {
 		"DROP INDEX IF EXISTS idx_unsubscribes_created",
 		"CREATE INDEX IF NOT EXISTS idx_email_events_job_stats ON email_events(job_id, type, is_machine)",
 		"CREATE INDEX IF NOT EXISTS idx_email_events_dedup ON email_events(source_type, source_id, type, created_at)",
+		// the recipient card: one address in all lists and the messages sent to it
+		"CREATE INDEX IF NOT EXISTS idx_recipients_email ON recipients(lower(email))",
+		"CREATE INDEX IF NOT EXISTS idx_send_job_items_recipient ON send_job_items(recipient_id)",
 	}
 	for _, m := range indexMigrations {
 		if _, err := db.Exec(m); err != nil {

@@ -14,7 +14,7 @@
         <h1 data-i18n="err.server_title">Something went wrong</h1>
         <p data-i18n="err.server_text">The panel could not complete the action. Try again later; if it repeats, tell the administrator.</p>
         {{end}}
-        {{if .Message}}<p class="text-muted">{{.Status}}: {{.Message}}</p>{{end}}
+        {{if .Message}}<p class="text-muted">{{.Status}}: <span{{if .MessageKey}} data-i18n="{{.MessageKey}}"{{end}}>{{.Message}}</span></p>{{end}}
         <p>
             <button type="button" class="btn" onclick="history.back()" data-i18n="err.back">&larr; Back</button>
             <a href="/" class="btn btn-primary" data-i18n="err.home">Go to overview</a>

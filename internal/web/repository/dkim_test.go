@@ -2,6 +2,7 @@ package repository
 
 import (
 	"testing"
+	"time"
 
 	"github.com/foxzi/sendry/internal/web/models"
 )
@@ -392,5 +393,57 @@ func TestDKIMRepository_ListWithDeploymentCount(t *testing.T) {
 
 	if foundKey1.DeploymentCount != 2 {
 		t.Errorf("List() DeploymentCount = %d, want 2", foundKey1.DeploymentCount)
+	}
+}
+
+func TestDKIMRepository_ListNewestFirst(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewDKIMRepository(db)
+
+	base := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	created := map[string]time.Time{
+		"mid.com":   base.Add(time.Hour),
+		"old.com":   base,
+		"new.com":   base.Add(2 * time.Hour),
+		"tie-a.com": base.Add(30 * time.Minute),
+		"tie-b.com": base.Add(30 * time.Minute),
+	}
+	ids := map[string]string{}
+	for name, ts := range created {
+		key := &models.DKIMKey{Domain: name, Selector: "mail", PrivateKey: "k", DNSRecord: "v=DKIM1"}
+		if err := repo.Create(key); err != nil {
+			t.Fatalf("Create() error = %v", err)
+		}
+		if _, err := db.Exec("UPDATE dkim_keys SET created_at = ? WHERE id = ?", ts, key.ID); err != nil {
+			t.Fatalf("set created_at: %v", err)
+		}
+		ids[name] = key.ID
+	}
+
+	list, err := repo.ListNewestFirst()
+	if err != nil {
+		t.Fatalf("ListNewestFirst() error = %v", err)
+	}
+	tieFirst, tieSecond := "tie-a.com", "tie-b.com"
+	if ids[tieFirst] < ids[tieSecond] {
+		tieFirst, tieSecond = tieSecond, tieFirst // larger id comes first
+	}
+	want := []string{"new.com", "mid.com", tieFirst, tieSecond, "old.com"}
+	if len(list) != len(want) {
+		t.Fatalf("ListNewestFirst() returned %d keys, want %d", len(list), len(want))
+	}
+	for i, w := range want {
+		if list[i].Domain != w {
+			t.Errorf("ListNewestFirst()[%d] = %s, want %s", i, list[i].Domain, w)
+		}
+	}
+
+	// List (used by form selects) keeps ordering by domain.
+	list, err = repo.List()
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if list[0].Domain != "mid.com" || list[4].Domain != "tie-b.com" {
+		t.Errorf("List() should stay ordered by domain, got %s ... %s", list[0].Domain, list[4].Domain)
 	}
 }

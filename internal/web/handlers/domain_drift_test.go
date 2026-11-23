@@ -9,6 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/foxzi/sendry/internal/web/config"
 	"github.com/foxzi/sendry/internal/web/db"
@@ -306,4 +307,66 @@ func TestDomainsImport(t *testing.T) {
 	if w := importDomain("nope.example"); w.Code != http.StatusNotFound {
 		t.Errorf("missing domain: %d", w.Code)
 	}
+}
+
+// assertOrder fails unless the names appear in the page in the given order.
+func assertOrder(t *testing.T, body string, names ...string) {
+	t.Helper()
+	prev := -1
+	for _, n := range names {
+		i := strings.Index(body, n)
+		if i < 0 {
+			t.Fatalf("page does not contain %q", n)
+		}
+		if i < prev {
+			t.Errorf("%q is listed before an earlier entry, want order %v", n, names)
+		}
+		prev = i
+	}
+}
+
+func TestCentralListsNewestFirst(t *testing.T) {
+	h, database, _ := newDriftTestHandlers(t)
+	base := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	domains := repository.NewDomainRepository(database.DB)
+	keys := repository.NewDKIMRepository(database.DB)
+	// Creation order is alphabetical, so newest first is reverse alphabetical.
+	for i, name := range []string{"alpha.example", "mike.example", "zulu.example"} {
+		d := &models.Domain{Domain: name, Mode: "production"}
+		if err := domains.Create(d); err != nil {
+			t.Fatal(err)
+		}
+		k := &models.DKIMKey{Domain: name, Selector: "mail", PrivateKey: "k", DNSRecord: "v=DKIM1"}
+		if err := keys.Create(k); err != nil {
+			t.Fatal(err)
+		}
+		ts := base.Add(time.Duration(i) * time.Hour)
+		if _, err := database.DB.Exec("UPDATE domains SET created_at = ? WHERE id = ?", ts, d.ID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := database.DB.Exec("UPDATE dkim_keys SET created_at = ? WHERE id = ?", ts, k.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := []string{"zulu.example", "mike.example", "alpha.example"}
+
+	w := httptest.NewRecorder()
+	h.CentralDomainsList(w, httptest.NewRequest(http.MethodGet, "/domains", nil))
+	assertOrder(t, w.Body.String(), want...)
+
+	w = httptest.NewRecorder()
+	h.CentralDKIMList(w, httptest.NewRequest(http.MethodGet, "/dkim", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("DKIM list status %d", w.Code)
+	}
+	assertOrder(t, w.Body.String(), want...)
+
+	req := httptest.NewRequest(http.MethodGet, "/servers/mta-1/dkim", nil)
+	req.SetPathValue("server", "mta-1")
+	w = httptest.NewRecorder()
+	h.DKIMList(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("server DKIM list status %d", w.Code)
+	}
+	assertOrder(t, w.Body.String(), want...)
 }
