@@ -247,8 +247,6 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("POST /dkim", h.CentralDKIMCreate)
 	protected.HandleFunc("GET /dkim/{id}", h.CentralDKIMView)
 	protected.HandleFunc("DELETE /dkim/{id}", h.CentralDKIMDelete)
-	protected.HandleFunc("POST /dkim/{id}/deploy", h.CentralDKIMDeploy)
-	protected.HandleFunc("DELETE /dkim/{id}/deployments/{server}", h.CentralDKIMDeploymentDelete)
 
 	// Central Domain Management
 	protected.HandleFunc("GET /domains", h.CentralDomainsList)

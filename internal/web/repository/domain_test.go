@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -473,5 +474,82 @@ func TestDomainRepository_List_NewestFirst(t *testing.T) {
 	list, err = repo.List(models.DomainFilter{NewestFirst: true, Limit: 1})
 	if err != nil || len(list) != 1 || list[0].Domain != "new.com" {
 		t.Errorf("List() with limit = %v, %v", list, err)
+	}
+}
+
+func TestDomainRepository_ListByDKIMKey(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewDomainRepository(db)
+
+	// The key is made for one domain name and linked to another: the lookup
+	// goes by the link, not by the name.
+	key := &models.DKIMKey{Domain: "key-domain.com", Selector: "sendry", PrivateKey: "k", DNSRecord: "r"}
+	if err := NewDKIMRepository(db).Create(key); err != nil {
+		t.Fatalf("Create() key error = %v", err)
+	}
+
+	linked := &models.Domain{Domain: "other-name.com", Mode: "production", DKIMEnabled: true, DKIMKeyID: key.ID}
+	sameName := &models.Domain{Domain: "key-domain.com", Mode: "production"}
+	for _, d := range []*models.Domain{linked, sameName} {
+		if err := repo.Create(d); err != nil {
+			t.Fatalf("Create() error = %v", err)
+		}
+	}
+
+	got, err := repo.ListByDKIMKey(key.ID)
+	if err != nil {
+		t.Fatalf("ListByDKIMKey() error = %v", err)
+	}
+	if len(got) != 1 || got[0].ID != linked.ID || got[0].Domain != "other-name.com" {
+		t.Errorf("ListByDKIMKey() = %+v, want only other-name.com", got)
+	}
+}
+
+func TestDomainRepository_ListByDKIMKey_NoneAndSorted(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewDomainRepository(db)
+
+	keys := NewDKIMRepository(db)
+	key := &models.DKIMKey{Domain: "example.com", Selector: "sendry", PrivateKey: "k", DNSRecord: "r"}
+	otherKey := &models.DKIMKey{Domain: "example.com", Selector: "second", PrivateKey: "k", DNSRecord: "r"}
+	for _, k := range []*models.DKIMKey{key, otherKey} {
+		if err := keys.Create(k); err != nil {
+			t.Fatalf("Create() key error = %v", err)
+		}
+	}
+
+	// A key no domain uses, and an unknown key: an empty list, not an error.
+	for _, id := range []string{key.ID, "no-such-key"} {
+		got, err := repo.ListByDKIMKey(id)
+		if err != nil || len(got) != 0 {
+			t.Errorf("ListByDKIMKey(%q) = %+v, %v, want empty", id, got, err)
+		}
+	}
+
+	for _, d := range []*models.Domain{
+		{Domain: "zeta.com", Mode: "production", DKIMEnabled: true, DKIMKeyID: key.ID},
+		{Domain: "alpha.com", Mode: "sandbox", DKIMEnabled: true, DKIMKeyID: key.ID},
+		// Linked but DKIM switched off: still a domain of this key.
+		{Domain: "middle.com", Mode: "production", DKIMKeyID: key.ID},
+		{Domain: "foreign.com", Mode: "production", DKIMEnabled: true, DKIMKeyID: otherKey.ID},
+	} {
+		if err := repo.Create(d); err != nil {
+			t.Fatalf("Create() error = %v", err)
+		}
+	}
+
+	got, err := repo.ListByDKIMKey(key.ID)
+	if err != nil {
+		t.Fatalf("ListByDKIMKey() error = %v", err)
+	}
+	var names []string
+	for _, d := range got {
+		if d.ID == "" {
+			t.Errorf("domain %q has no ID", d.Domain)
+		}
+		names = append(names, d.Domain)
+	}
+	if want := "alpha.com,middle.com,zeta.com"; strings.Join(names, ",") != want {
+		t.Errorf("ListByDKIMKey() = %v, want %s", names, want)
 	}
 }

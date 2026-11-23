@@ -129,6 +129,26 @@ func (r *DomainRepository) GetByDomain(domainName string) (*models.Domain, error
 	return domain, nil
 }
 
+// ListByDKIMKey returns the domains that sign with the given DKIM key. Only
+// ID and Domain are filled.
+func (r *DomainRepository) ListByDKIMKey(keyID string) ([]models.Domain, error) {
+	rows, err := r.db.Query("SELECT id, domain FROM domains WHERE dkim_key_id = ? ORDER BY domain", keyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var domains []models.Domain
+	for rows.Next() {
+		var d models.Domain
+		if err := rows.Scan(&d.ID, &d.Domain); err != nil {
+			return nil, err
+		}
+		domains = append(domains, d)
+	}
+	return domains, rows.Err()
+}
+
 // List returns all domains with deployment counts
 func (r *DomainRepository) List(filter models.DomainFilter) ([]models.DomainListItem, error) {
 	query := `

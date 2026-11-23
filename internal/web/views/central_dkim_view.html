@@ -59,94 +59,22 @@
 
 <div class="card">
     <div class="card-header">
-        <h3 data-i18n="infra.server_deployments">Server Deployments</h3>
+        <h3 data-i18n="infra.dkim_deployment">Deployment</h3>
     </div>
     <div class="card-body">
-        <div class="table-scroll">
-        <table class="table">
-            <thead>
-                <tr>
-                    <th data-i18n="common.server">Server</th>
-                    <th data-i18n="monitoring.servers.env">Environment</th>
-                    <th data-i18n="status">Status</th>
-                    <th data-i18n="infra.deployed_at">Deployed At</th>
-                    <th data-i18n="actions">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {{range .Servers}}
-                {{$deployment := index $.DeployedMap .Name}}
-                <tr>
-                    <td>{{.Name}}</td>
-                    <td>{{.Env}}</td>
-                    <td>
-                        {{if $deployment.ServerName}}
-                            {{if eq $deployment.Status "deployed"}}
-                            <span class="badge badge-running" data-i18n="infra.deployed">Deployed</span>
-                            {{else if eq $deployment.Status "failed"}}
-                            <span class="badge badge-failed" data-i18n="infra.failed">Failed</span>
-                            {{end}}
-                        {{else}}
-                        <span class="badge badge-draft" data-i18n="infra.not_deployed">Not deployed</span>
-                        {{end}}
-                    </td>
-                    <td>
-                        {{if $deployment.ServerName}}
-                        {{$deployment.DeployedAt.Format "2006-01-02 15:04"}}
-                        {{else}}
-                        -
-                        {{end}}
-                    </td>
-                    <td>
-                        {{if $deployment.ServerName}}
-                        <form method="POST" action="/dkim/{{$.Key.ID}}/deployments/{{.Name}}" style="display:inline;">
-                            <input type="hidden" name="_method" value="DELETE">
-                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm(I18n.t('infra.remove_deployment_from_name', {name: '{{.Name}}'}))" data-i18n="infra.remove">Remove</button>
-                        </form>
-                        {{else}}
-                        <form method="POST" action="/dkim/{{$.Key.ID}}/deploy" style="display:inline;">
-                            <input type="hidden" name="servers" value="{{.Name}}">
-                            <button type="submit" class="btn btn-sm btn-primary" data-i18n="infra.deploy">Deploy</button>
-                        </form>
-                        {{end}}
-                    </td>
-                </tr>
-                {{if and $deployment.ServerName $deployment.Error}}
-                <tr>
-                    <td colspan="5" class="text-danger"><span data-i18n="common.error">Error</span>: {{$deployment.Error}}</td>
-                </tr>
-                {{end}}
-                {{end}}
-            </tbody>
-        </table>
-        </div>
-    </div>
-</div>
-
-<div class="card">
-    <div class="card-header">
-        <h3 data-i18n="infra.deploy_to_multiple_servers">Deploy to Multiple Servers</h3>
-    </div>
-    <div class="card-body">
-        <form method="POST" action="/dkim/{{.Key.ID}}/deploy">
-            <div class="form-group">
-                <label data-i18n="infra.select_servers_to_deploy_this_dkim_key">Select servers to deploy this DKIM key:</label>
-                {{range .Servers}}
-                {{$deployment := index $.DeployedMap .Name}}
-                {{if not $deployment.ServerName}}
-                <div class="checkbox">
-                    <label>
-                        <input type="checkbox" name="servers" value="{{.Name}}">
-                        {{.Name}} ({{.Env}})
-                    </label>
-                </div>
-                {{end}}
-                {{end}}
-            </div>
-            <div class="form-actions">
-                <button type="submit" class="btn btn-primary" data-i18n="infra.deploy_to_selected">Deploy to Selected</button>
-            </div>
-        </form>
+        <p>
+            <span data-i18n="infra.dkim_deployed_with_domain">The key is uploaded to a server when a domain that uses it is deployed there.</span>
+            {{if .LinkedDomains}}
+                <span data-i18n="infra.dkim_deploy_domain">The domain card shows the state on each server:</span>
+                {{range $i, $d := .LinkedDomains}}{{if $i}}, {{end}}<a href="/domains/{{$d.ID}}">{{$d.Domain}}</a>{{end}}
+            {{else if .PanelDomain}}
+                <span data-i18n="infra.dkim_link_in_domain">Select this key in the domain settings, then deploy the domain:</span>
+                <a href="/domains/{{.PanelDomain.ID}}">{{.PanelDomain.Domain}}</a>
+            {{else}}
+                <span data-i18n="infra.dkim_no_panel_domain">The panel has no such domain yet:</span>
+                <a href="/domains/new" data-i18n="infra.add_domain">Add domain</a>
+            {{end}}
+        </p>
     </div>
 </div>
 {{end}}

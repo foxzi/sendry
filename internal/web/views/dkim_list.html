@@ -19,7 +19,6 @@
                     <th data-i18n="common.domain">Domain</th>
                     <th data-i18n="infra.selector">Selector</th>
                     <th data-i18n="infra.dns_name">DNS Name</th>
-                    <th><span data-i18n="infra.status_on">Status on</span> {{.ServerName}}</th>
                     <th data-i18n="common.created">Created</th>
                     <th data-i18n="actions">Actions</th>
                 </tr>
@@ -30,13 +29,6 @@
                     <td>{{.Domain}}</td>
                     <td>{{.Selector}}</td>
                     <td><code>{{.DNSName}}</code></td>
-                    <td>
-                        {{if .IsDeployed}}
-                        <span class="badge badge-success" data-i18n="infra.deployed">Deployed</span>
-                        {{else}}
-                        <span class="badge badge-draft" data-i18n="infra.not_deployed">Not deployed</span>
-                        {{end}}
-                    </td>
                     <td>{{.CreatedAt.Format "2006-01-02"}}</td>
                     <td>
                         <a href="/dkim/{{.ID}}" class="btn btn-sm btn-secondary" data-i18n="view">View</a>
