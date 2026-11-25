@@ -142,7 +142,10 @@ func (s *Server) setupRoutes() http.Handler {
 	protected := http.NewServeMux()
 
 	// Dashboard
-	protected.HandleFunc("GET /", h.Dashboard)
+	protected.HandleFunc("GET /{$}", h.Dashboard)
+	// Any other unmatched GET: a trailing slash is redirected to the same
+	// page without it, everything else is 404 (not the dashboard).
+	protected.HandleFunc("GET /", h.NotFound)
 
 	// Templates
 	protected.HandleFunc("GET /templates", h.TemplateList)

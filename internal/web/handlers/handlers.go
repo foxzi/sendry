@@ -156,6 +156,30 @@ func (h *Handlers) Dashboard(w http.ResponseWriter, r *http.Request) {
 	h.render(w, "dashboard", data)
 }
 
+// NotFound answers a GET no route matched. A link with a trailing slash
+// (/recipients/{id}/) is redirected to the page without it; anything else
+// gets the 404 page instead of silently showing the dashboard.
+func (h *Handlers) NotFound(w http.ResponseWriter, r *http.Request) {
+	p := r.URL.Path
+	if len(p) > 1 && strings.HasSuffix(p, "/") {
+		trimmed := strings.TrimRight(p, "/")
+		// "//host" would be an open redirect to another site.
+		if strings.HasPrefix(trimmed, "/") && !strings.HasPrefix(trimmed, "//") {
+			target := trimmed
+			if r.URL.RawQuery != "" {
+				target += "?" + r.URL.RawQuery
+			}
+			http.Redirect(w, r, target, http.StatusMovedPermanently)
+			return
+		}
+	}
+	if !wantsHTMLPage(r) {
+		http.NotFound(w, r)
+		return
+	}
+	h.errorPage(w, r, http.StatusNotFound, "", "")
+}
+
 // Helper to render templates
 func (h *Handlers) render(w http.ResponseWriter, name string, data any) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
