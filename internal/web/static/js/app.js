@@ -240,6 +240,84 @@
         });
     }
 
+    // Deleting a recipient list asks in a dialog instead of confirm(). A list
+    // campaigns were sent to cannot be deleted: the dialog says so and links
+    // those campaigns, instead of an error page after the confirm. The forms
+    // are form[data-list-delete] (inside partial-reload regions, so the
+    // listener is on the document); the server refuses such a delete anyway.
+    function initListDeleteDialog() {
+        var dialog, form;
+
+        function build() {
+            dialog = document.createElement('dialog');
+            dialog.className = 'confirm-dialog';
+            dialog.setAttribute('role', 'alertdialog');
+            dialog.setAttribute('aria-labelledby', 'list-delete-title');
+            dialog.setAttribute('aria-describedby', 'list-delete-text');
+            dialog.innerHTML =
+                '<h2 id="list-delete-title"></h2>' +
+                '<p id="list-delete-text"></p>' +
+                '<ul class="confirm-dialog-refs"></ul>' +
+                '<p class="confirm-dialog-note"></p>' +
+                '<div class="confirm-dialog-foot">' +
+                    '<button type="button" class="btn btn-secondary" data-close></button>' +
+                    '<button type="button" class="btn btn-danger" data-confirm-delete></button>' +
+                '</div>';
+            document.body.appendChild(dialog);
+            dialog.addEventListener('click', function(e) {
+                // a click on the backdrop lands on the dialog itself
+                if (e.target === dialog || e.target.closest('[data-close]')) dialog.close();
+                if (e.target.closest('[data-confirm-delete]') && form) {
+                    dialog.close();
+                    form.submit(); // submit() does not fire the submit event again
+                }
+            });
+        }
+
+        function open(f) {
+            if (!dialog) build();
+            form = f;
+            var name = f.getAttribute('data-list-name') || '';
+            var count = parseInt(f.getAttribute('data-list-count'), 10) || 0;
+            var usedBy = f.querySelector('template[data-used-by]');
+            var refs = dialog.querySelector('.confirm-dialog-refs');
+            var note = dialog.querySelector('.confirm-dialog-note');
+            var close = dialog.querySelector('[data-close]');
+            var del = dialog.querySelector('[data-confirm-delete]');
+            refs.replaceChildren();
+
+            if (usedBy) {
+                dialog.querySelector('h2').textContent = I18n.t('cmp.ld_blocked_title', {name: name});
+                dialog.querySelector('#list-delete-text').textContent = I18n.t('cmp.ld_blocked_text');
+                refs.appendChild(usedBy.content.cloneNode(true));
+                note.textContent = I18n.t('cmp.ld_blocked_note');
+                close.textContent = I18n.t('cmp.ld_ok');
+                close.className = 'btn btn-primary'; // the only answer
+                refs.hidden = note.hidden = false;
+                del.hidden = true;
+            } else {
+                dialog.querySelector('h2').textContent = I18n.t('cmp.ld_title', {name: name});
+                dialog.querySelector('#list-delete-text').textContent = count > 0
+                    ? I18n.t('cmp.ld_text', {count: count.toLocaleString(document.documentElement.lang || undefined)})
+                    : I18n.t('cmp.ld_text_empty');
+                close.textContent = I18n.t('cancel');
+                close.className = 'btn btn-secondary';
+                del.textContent = I18n.t('cmp.delete_list');
+                refs.hidden = note.hidden = true;
+                del.hidden = false;
+            }
+            dialog.showModal();
+            close.focus(); // the safe answer is the default one
+        }
+
+        document.addEventListener('submit', function(e) {
+            var f = e.target.closest('form[data-list-delete]');
+            if (!f) return;
+            e.preventDefault();
+            open(f);
+        });
+    }
+
     // Success flash messages auto-hide. Errors, warnings and blocks marked
     // alert-persistent (e.g. a new API key shown once) stay.
     function initFlashMessages() {
@@ -361,6 +439,7 @@
         initAutoFilters();
         initPartials();
         initConfirmDialogs();
+        initListDeleteDialog();
         initFlashMessages();
         initTips();
     }

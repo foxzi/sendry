@@ -148,3 +148,26 @@ func TestRecipientRepository_ImportCSVLarge(t *testing.T) {
 		t.Errorf("empty name should keep the old one: %q %v", name, err)
 	}
 }
+
+func TestRecipientRepository_CampaignsUsingLists(t *testing.T) {
+	db := setupTestDB(t)
+	mustExec(t, db, `INSERT INTO recipient_lists (id, name, source_type) VALUES ('l1', 'used', 'manual'), ('l2', 'free', 'manual')`)
+	mustExec(t, db, `INSERT INTO campaigns (id, name, from_email) VALUES ('c1', 'Beta', 'a@x.org'), ('c2', 'Alpha', 'a@x.org')`)
+	// two jobs of one campaign give it once
+	mustExec(t, db, `INSERT INTO send_jobs (id, campaign_id, recipient_list_id) VALUES ('j1', 'c1', 'l1'), ('j2', 'c1', 'l1'), ('j3', 'c2', 'l1')`)
+	repo := NewRecipientRepository(db)
+
+	used, err := repo.CampaignsUsingLists([]string{"l1", "l2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := used["l1"]; len(got) != 2 || got[0].Name != "Alpha" || got[1].ID != "c1" {
+		t.Errorf("l1: %+v", got)
+	}
+	if got := used["l2"]; len(got) != 0 {
+		t.Errorf("l2 must be free: %+v", got)
+	}
+	if err := repo.DeleteList("l1"); err != ErrInUse {
+		t.Errorf("deleting a used list: %v", err)
+	}
+}

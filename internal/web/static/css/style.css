@@ -4171,3 +4171,73 @@ label.cf-list:has(input:focus-visible) {
         top: 0.3rem;
     }
 }
+
+/* Alert dialog for a destructive action (static/js/app.js: list delete) */
+.confirm-dialog {
+    margin: auto; /* the global reset drops the centring a dialog has by default */
+    width: min(28rem, calc(100vw - 2rem));
+    max-height: calc(100vh - 2rem);
+    padding: 1.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-card);
+    color: var(--text);
+    box-shadow: 0 24px 60px rgba(17, 24, 39, 0.28);
+    overflow-y: auto;
+}
+
+.confirm-dialog::backdrop {
+    background: rgba(17, 24, 39, 0.5);
+}
+
+.confirm-dialog h2 {
+    margin: 0 0 0.5rem;
+    font-size: 1.125rem;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.confirm-dialog p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.9375rem;
+    line-height: 1.5;
+}
+
+.confirm-dialog-refs {
+    max-height: 12rem;
+    overflow-y: auto;
+    margin: 0.75rem 0;
+    padding: 0.5rem 0.75rem;
+    list-style: none;
+    border-left: 3px solid var(--warning);
+    background: var(--warning-soft);
+    border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+.confirm-dialog-refs li + li {
+    margin-top: 0.25rem;
+}
+
+.confirm-dialog-refs a {
+    overflow-wrap: anywhere;
+}
+
+.confirm-dialog-refs[hidden],
+.confirm-dialog-note[hidden],
+.confirm-dialog-foot [hidden] {
+    display: none;
+}
+
+.confirm-dialog-foot {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 1.5rem;
+}
+
+.confirm-dialog .btn:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}

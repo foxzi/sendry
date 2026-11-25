@@ -12,6 +12,16 @@ type RecipientList struct {
 	ActiveCount int       `json:"active_count"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+
+	// UsedBy is filled by the pages with a delete button: the campaigns sent
+	// to the list, which keep it from being deleted.
+	UsedBy []CampaignRef `json:"-"`
+}
+
+// CampaignRef names a campaign for a link to it.
+type CampaignRef struct {
+	ID   string
+	Name string
 }
 
 // Recipient represents a single email recipient

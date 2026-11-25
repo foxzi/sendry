@@ -130,6 +130,38 @@ func (r *RecipientRepository) DeleteList(id string) error {
 	return inUse(err)
 }
 
+// CampaignsUsingLists returns, for each of the given lists, the campaigns
+// that were sent to it. Such a list cannot be deleted: its send jobs keep the
+// statistics and point at it.
+func (r *RecipientRepository) CampaignsUsingLists(ids []string) (map[string][]models.CampaignRef, error) {
+	out := map[string][]models.CampaignRef{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	rows, err := r.db.Query(`
+		SELECT DISTINCT j.recipient_list_id, c.id, c.name
+		FROM send_jobs j JOIN campaigns c ON c.id = j.campaign_id
+		WHERE j.recipient_list_id IN (?`+strings.Repeat(",?", len(ids)-1)+`)
+		ORDER BY c.name`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var listID string
+		var c models.CampaignRef
+		if err := rows.Scan(&listID, &c.ID, &c.Name); err != nil {
+			return nil, err
+		}
+		out[listID] = append(out[listID], c)
+	}
+	return out, rows.Err()
+}
+
 // UpdateListCounts updates the total and active counts for a list
 func (r *RecipientRepository) UpdateListCounts(listID string) error {
 	_, err := r.db.Exec(`
@@ -157,10 +189,6 @@ func NormalizeEmail(email string) string {
 	}, strings.TrimSpace(email))
 }
 
-// AddRecipient adds a single recipient to a list. An address already in the
-// list (in any case) gets its name, variables and tags updated; its status is
-// kept. An empty field keeps what is stored: an import of a file without
-// those columns must not erase what was set on the address card.
 // upsertRecipientSQL adds a recipient or, for an address already in the
 // list, fills in the name, variables and tags given (empty keeps the old).
 const upsertRecipientSQL = `
@@ -171,6 +199,10 @@ const upsertRecipientSQL = `
 			variables = CASE WHEN excluded.variables = '' THEN variables ELSE excluded.variables END,
 			tags = CASE WHEN excluded.tags = '' THEN tags ELSE excluded.tags END`
 
+// AddRecipient adds a single recipient to a list. An address already in the
+// list (in any case) gets its name, variables and tags updated; its status is
+// kept. An empty field keeps what is stored: an import of a file without
+// those columns must not erase what was set on the address card.
 func (r *RecipientRepository) AddRecipient(recipient *models.Recipient) error {
 	recipient.ID = uuid.New().String()
 	recipient.Email = NormalizeEmail(recipient.Email)
