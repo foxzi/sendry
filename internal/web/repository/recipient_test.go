@@ -1,8 +1,10 @@
 package repository
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/foxzi/sendry/internal/web/models"
 )
@@ -102,5 +104,47 @@ func TestRecipientRepository_UpsertAndCounts(t *testing.T) {
 	db.QueryRow(`SELECT total_count FROM recipient_lists WHERE id='l1'`).Scan(&total)
 	if total != 2 {
 		t.Errorf("total_count = %d", total)
+	}
+}
+
+// A file of tens of thousands of rows must import well within the 30s
+// request timeout; rows past a batch boundary and duplicates must be kept right.
+func TestRecipientRepository_ImportCSVLarge(t *testing.T) {
+	db := setupTestDB(t)
+	mustExec(t, db, `INSERT INTO recipient_lists (id, name, source_type) VALUES ('l1', 'list', 'manual')`)
+	repo := NewRecipientRepository(db)
+
+	const n = 15000
+	var b strings.Builder
+	b.WriteString("email,name\n")
+	for i := 0; i < n; i++ {
+		fmt.Fprintf(&b, "user%d@example.org,User %d\n", i, i)
+	}
+	// the same addresses again in another case, and an empty email
+	b.WriteString("USER0@example.org,Renamed\nUser14999@Example.org,\n,nobody\n")
+
+	start := time.Now()
+	res, err := repo.ImportCSV("l1", strings.NewReader(b.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("imported %d rows in %s", res.Total, time.Since(start))
+
+	if res.Total != n+3 || res.Imported != n+2 || res.Skipped != 1 || len(res.Errors) != 0 {
+		t.Fatalf("result: total=%d imported=%d skipped=%d errors=%v", res.Total, res.Imported, res.Skipped, res.Errors)
+	}
+	var total, active int
+	if err := db.QueryRow(`SELECT total_count, active_count FROM recipient_lists WHERE id = 'l1'`).Scan(&total, &active); err != nil {
+		t.Fatal(err)
+	}
+	if total != n || active != n {
+		t.Errorf("list counts: total=%d active=%d, want %d", total, active, n)
+	}
+	var name string
+	if err := db.QueryRow(`SELECT name FROM recipients WHERE email = 'user0@example.org'`).Scan(&name); err != nil || name != "Renamed" {
+		t.Errorf("duplicate row should update the name: %q %v", name, err)
+	}
+	if err := db.QueryRow(`SELECT name FROM recipients WHERE email = 'user14999@example.org'`).Scan(&name); err != nil || name != "User 14999" {
+		t.Errorf("empty name should keep the old one: %q %v", name, err)
 	}
 }
