@@ -327,13 +327,31 @@ function toggleDomains(btn, extraCount) {
     justify-content: center;
     z-index: 1000;
     backdrop-filter: blur(4px);
+    padding: 1rem;
+    box-sizing: border-box;
 }
+/* The window never exceeds the viewport: header and buttons stay visible,
+   only the form body scrolls. */
 .modal-content {
     background: #ffffff;
     border-radius: 8px;
     width: 100%;
     max-width: 500px;
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+.modal-content > form {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+.modal-header,
+.modal-footer {
+    flex-shrink: 0;
 }
 [data-theme="dark"] .modal-content {
     background: #1e1e2e;
@@ -352,6 +370,15 @@ function toggleDomains(btn, extraCount) {
 .modal-body {
     padding: 1.5rem;
     background: inherit;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+}
+@media (max-width: 480px) {
+    .form-row {
+        flex-direction: column;
+        gap: 0;
+    }
 }
 .modal-footer {
     padding: 1rem 1.5rem;
