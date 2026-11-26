@@ -254,7 +254,10 @@
             dialog.setAttribute('role', 'alertdialog');
             dialog.setAttribute('aria-labelledby', 'list-delete-title');
             dialog.setAttribute('aria-describedby', 'list-delete-text');
+            // the padding is on the inner box: a click on the dialog element
+            // itself is then only a click on the backdrop
             dialog.innerHTML =
+                '<div class="confirm-dialog-box">' +
                 '<h2 id="list-delete-title"></h2>' +
                 '<p id="list-delete-text"></p>' +
                 '<ul class="confirm-dialog-refs"></ul>' +
@@ -262,6 +265,7 @@
                 '<div class="confirm-dialog-foot">' +
                     '<button type="button" class="btn btn-secondary" data-close></button>' +
                     '<button type="button" class="btn btn-danger" data-confirm-delete></button>' +
+                '</div>' +
                 '</div>';
             document.body.appendChild(dialog);
             dialog.addEventListener('click', function(e) {
@@ -269,7 +273,12 @@
                 if (e.target === dialog || e.target.closest('[data-close]')) dialog.close();
                 if (e.target.closest('[data-confirm-delete]') && form) {
                     dialog.close();
-                    form.submit(); // submit() does not fire the submit event again
+                    // a partial reload (Back after filtering) may have swapped
+                    // the table: submit the same list's form that is there now
+                    var f = form.isConnected ? form : document.querySelector(
+                        'form[data-list-delete][action="' + CSS.escape(form.getAttribute('action')) + '"]');
+                    if (f) f.submit(); // submit() does not fire the submit event again
+                    else location.reload();
                 }
             });
         }

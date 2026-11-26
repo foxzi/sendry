@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/foxzi/sendry/internal/web/auth"
@@ -161,23 +162,35 @@ func (h *Handlers) Dashboard(w http.ResponseWriter, r *http.Request) {
 // gets the 404 page instead of silently showing the dashboard.
 func (h *Handlers) NotFound(w http.ResponseWriter, r *http.Request) {
 	p := r.URL.Path
-	if len(p) > 1 && strings.HasSuffix(p, "/") {
-		trimmed := strings.TrimRight(p, "/")
-		// "//host" would be an open redirect to another site.
-		if strings.HasPrefix(trimmed, "/") && !strings.HasPrefix(trimmed, "//") {
-			target := trimmed
-			if r.URL.RawQuery != "" {
-				target += "?" + r.URL.RawQuery
-			}
-			http.Redirect(w, r, target, http.StatusMovedPermanently)
-			return
-		}
+	if len(p) > 1 && strings.HasSuffix(p, "/") && safeRedirectPath(p) {
+		// url.URL encodes back what the path decoded from: %3F, %23, %20
+		// stay escaped instead of turning into a query or a fragment.
+		target := (&url.URL{Path: strings.TrimRight(p, "/"), RawQuery: r.URL.RawQuery}).String()
+		http.Redirect(w, r, target, http.StatusMovedPermanently)
+		return
 	}
 	if !wantsHTMLPage(r) {
 		http.NotFound(w, r)
 		return
 	}
 	h.errorPage(w, r, http.StatusNotFound, "", "")
+}
+
+// safeRedirectPath reports whether a trailing-slash path can be redirected
+// to itself without the slash and stay on this site. Browsers read "//host",
+// "/\host" and a path with a tab or newline in it ("/<tab>/host") as a link to
+// another host, so such paths get 404 instead.
+func safeRedirectPath(p string) bool {
+	trimmed := strings.TrimRight(p, "/")
+	if !strings.HasPrefix(trimmed, "/") || strings.HasPrefix(trimmed, "//") {
+		return false
+	}
+	for _, c := range trimmed {
+		if c == '\\' || c < 0x20 || c == 0x7f {
+			return false
+		}
+	}
+	return true
 }
 
 // Helper to render templates

@@ -1,7 +1,9 @@
 package repository
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -169,5 +171,41 @@ func TestRecipientRepository_CampaignsUsingLists(t *testing.T) {
 	}
 	if err := repo.DeleteList("l1"); err != ErrInUse {
 		t.Errorf("deleting a used list: %v", err)
+	}
+}
+
+// failingReader returns its data, then an error instead of EOF: an upload
+// that broke off.
+type failingReader struct{ r io.Reader }
+
+func (f *failingReader) Read(p []byte) (int, error) {
+	n, err := f.r.Read(p)
+	if err == io.EOF {
+		return n, errors.New("connection reset")
+	}
+	return n, err
+}
+
+// An import that fails after a batch was saved must stop (not loop on the
+// same read error) and leave the list counts matching the rows saved.
+func TestRecipientRepository_ImportCSVFailsMidway(t *testing.T) {
+	db := setupTestDB(t)
+	mustExec(t, db, `INSERT INTO recipient_lists (id, name, source_type) VALUES ('l1', 'list', 'manual')`)
+	repo := NewRecipientRepository(db)
+
+	var b strings.Builder
+	b.WriteString("email\n")
+	for i := 0; i < 1500; i++ {
+		fmt.Fprintf(&b, "u%d@example.org\n", i)
+	}
+	if _, err := repo.ImportCSV("l1", &failingReader{strings.NewReader(b.String())}); err == nil {
+		t.Fatal("a broken upload must fail the import")
+	}
+	var rows, total int
+	if err := db.QueryRow(`SELECT (SELECT COUNT(*) FROM recipients), total_count FROM recipient_lists WHERE id = 'l1'`).Scan(&rows, &total); err != nil {
+		t.Fatal(err)
+	}
+	if rows != importBatchSize || total != rows {
+		t.Errorf("rows=%d total_count=%d, want both %d", rows, total, importBatchSize)
 	}
 }

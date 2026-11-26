@@ -4177,13 +4177,17 @@ label.cf-list:has(input:focus-visible) {
     margin: auto; /* the global reset drops the centring a dialog has by default */
     width: min(28rem, calc(100vw - 2rem));
     max-height: calc(100vh - 2rem);
-    padding: 1.5rem;
+    padding: 0;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--bg-card);
     color: var(--text);
     box-shadow: 0 24px 60px rgba(17, 24, 39, 0.28);
     overflow-y: auto;
+}
+
+.confirm-dialog-box {
+    padding: 1.5rem;
 }
 
 .confirm-dialog::backdrop {

@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -357,6 +358,10 @@ func (r *RecipientRepository) ImportCSV(listID string, reader io.Reader) (*model
 		return nil, fmt.Errorf("email column not found in CSV")
 	}
 
+	// Batches committed before a failure stay in the list, so the counts are
+	// updated on every way out, not only after a full import.
+	defer r.UpdateListCounts(listID)
+
 	var tx *sql.Tx
 	var stmt *sql.Stmt
 	inBatch := 0
@@ -383,6 +388,12 @@ func (r *RecipientRepository) ImportCSV(listID string, reader io.Reader) (*model
 			break
 		}
 		if err != nil {
+			// a malformed row is reported and skipped; any other error is
+			// the upload itself failing and would repeat on every Read
+			var pe *csv.ParseError
+			if !errors.As(err, &pe) {
+				return nil, fmt.Errorf("failed to read CSV: %w", err)
+			}
 			result.Errors = append(result.Errors, fmt.Sprintf("row %d: %v", result.Total+1, err))
 			result.Total++
 			continue
@@ -436,9 +447,6 @@ func (r *RecipientRepository) ImportCSV(listID string, reader io.Reader) (*model
 	if err := commit(); err != nil {
 		return nil, fmt.Errorf("failed to save imported rows: %w", err)
 	}
-
-	// Update counts after import
-	r.UpdateListCounts(listID)
 
 	return result, nil
 }
