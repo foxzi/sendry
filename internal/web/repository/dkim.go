@@ -161,9 +161,3 @@ func (r *DKIMRepository) GetDeployments(keyID string) ([]models.DKIMDeployment, 
 	}
 	return deployments, rows.Err()
 }
-
-// DeleteDeployment removes a deployment record
-func (r *DKIMRepository) DeleteDeployment(keyID, serverName string) error {
-	_, err := r.db.Exec("DELETE FROM dkim_deployments WHERE dkim_key_id = ? AND server_name = ?", keyID, serverName)
-	return err
-}

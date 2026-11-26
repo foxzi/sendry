@@ -272,19 +272,6 @@ func TestDKIMRepository_Deployments(t *testing.T) {
 	if deployments[0].Error != "connection error" {
 		t.Errorf("GetDeployments() Error = %v, want 'connection error'", deployments[0].Error)
 	}
-
-	// Delete deployment
-	if err := repo.DeleteDeployment(key.ID, "server1"); err != nil {
-		t.Fatalf("DeleteDeployment() error = %v", err)
-	}
-
-	deployments, err = repo.GetDeployments(key.ID)
-	if err != nil {
-		t.Fatalf("GetDeployments() error = %v", err)
-	}
-	if len(deployments) != 0 {
-		t.Errorf("GetDeployments() returned %d deployments after delete, want 0", len(deployments))
-	}
 }
 
 func TestDKIMRepository_DeploymentsCascadeDelete(t *testing.T) {
