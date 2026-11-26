@@ -143,7 +143,8 @@
         <h2 data-i18n="cmp.danger_zone">Danger Zone</h2>
     </div>
     <div class="card-body">
-        <form method="post" action="/recipients/{{.List.ID}}" onsubmit="return confirm(I18n.t('cmp.confirm_delete_list'))">
+        <form method="post" action="/recipients/{{.List.ID}}" data-list-delete data-list-name="{{.List.Name}}" data-list-count="{{.List.TotalCount}}">
+            {{if .List.UsedBy}}<template data-used-by>{{range .List.UsedBy}}<li><a href="/campaigns/{{.ID}}">{{.Name}}</a></li>{{end}}</template>{{end}}
             <input type="hidden" name="_method" value="DELETE">
             <button type="submit" class="btn btn-danger" data-i18n="cmp.delete_list">Delete List</button>
             <span class="text-muted" style="margin-left: 1rem" data-i18n="cmp.delete_list_hint">This will permanently delete the list and all its recipients</span>

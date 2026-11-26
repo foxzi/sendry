@@ -142,7 +142,10 @@ func (s *Server) setupRoutes() http.Handler {
 	protected := http.NewServeMux()
 
 	// Dashboard
-	protected.HandleFunc("GET /", h.Dashboard)
+	protected.HandleFunc("GET /{$}", h.Dashboard)
+	// Any other unmatched GET: a trailing slash is redirected to the same
+	// page without it, everything else is 404 (not the dashboard).
+	protected.HandleFunc("GET /", h.NotFound)
 
 	// Templates
 	protected.HandleFunc("GET /templates", h.TemplateList)
@@ -153,9 +156,7 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("POST /builder/render-preview", h.BuilderRenderPreview)
 	protected.HandleFunc("GET /templates/import", h.TemplateImportPage)
 	protected.HandleFunc("POST /templates/import", h.TemplateImport)
-	protected.HandleFunc("POST /templates", h.TemplateCreate)
 	protected.HandleFunc("GET /templates/{id}", h.TemplateView)
-	protected.HandleFunc("PUT /templates/{id}", h.TemplateUpdate)
 	protected.HandleFunc("DELETE /templates/{id}", h.TemplateDelete)
 	protected.HandleFunc("GET /templates/{id}/versions", h.TemplateVersions)
 	protected.HandleFunc("GET /templates/{id}/diff", h.TemplateDiff)
@@ -314,7 +315,6 @@ func (s *Server) setupRoutes() http.Handler {
 	protected.HandleFunc("GET /settings/audit", adminOnly(http.HandlerFunc(h.AuditLog)).ServeHTTP)
 	protected.HandleFunc("GET /settings/api-keys", adminOnly(http.HandlerFunc(h.APIKeysList)).ServeHTTP)
 	protected.HandleFunc("POST /settings/api-keys", adminOnly(http.HandlerFunc(h.APIKeyCreate)).ServeHTTP)
-	protected.HandleFunc("GET /settings/api-keys/{id}", adminOnly(http.HandlerFunc(h.APIKeyGet)).ServeHTTP)
 	protected.HandleFunc("POST /settings/api-keys/{id}/edit", adminOnly(http.HandlerFunc(h.APIKeyEdit)).ServeHTTP)
 	protected.HandleFunc("POST /settings/api-keys/{id}/toggle", adminOnly(http.HandlerFunc(h.APIKeyToggle)).ServeHTTP)
 	protected.HandleFunc("DELETE /settings/api-keys/{id}", adminOnly(http.HandlerFunc(h.APIKeyDelete)).ServeHTTP)

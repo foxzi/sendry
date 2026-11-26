@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -130,6 +131,38 @@ func (r *RecipientRepository) DeleteList(id string) error {
 	return inUse(err)
 }
 
+// CampaignsUsingLists returns, for each of the given lists, the campaigns
+// that were sent to it. Such a list cannot be deleted: its send jobs keep the
+// statistics and point at it.
+func (r *RecipientRepository) CampaignsUsingLists(ids []string) (map[string][]models.CampaignRef, error) {
+	out := map[string][]models.CampaignRef{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	rows, err := r.db.Query(`
+		SELECT DISTINCT j.recipient_list_id, c.id, c.name
+		FROM send_jobs j JOIN campaigns c ON c.id = j.campaign_id
+		WHERE j.recipient_list_id IN (?`+strings.Repeat(",?", len(ids)-1)+`)
+		ORDER BY c.name`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var listID string
+		var c models.CampaignRef
+		if err := rows.Scan(&listID, &c.ID, &c.Name); err != nil {
+			return nil, err
+		}
+		out[listID] = append(out[listID], c)
+	}
+	return out, rows.Err()
+}
+
 // UpdateListCounts updates the total and active counts for a list
 func (r *RecipientRepository) UpdateListCounts(listID string) error {
 	_, err := r.db.Exec(`
@@ -157,6 +190,16 @@ func NormalizeEmail(email string) string {
 	}, strings.TrimSpace(email))
 }
 
+// upsertRecipientSQL adds a recipient or, for an address already in the
+// list, fills in the name, variables and tags given (empty keeps the old).
+const upsertRecipientSQL = `
+		INSERT INTO recipients (id, list_id, email, name, variables, tags, status, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(list_id, email) DO UPDATE SET
+			name = CASE WHEN excluded.name = '' THEN name ELSE excluded.name END,
+			variables = CASE WHEN excluded.variables = '' THEN variables ELSE excluded.variables END,
+			tags = CASE WHEN excluded.tags = '' THEN tags ELSE excluded.tags END`
+
 // AddRecipient adds a single recipient to a list. An address already in the
 // list (in any case) gets its name, variables and tags updated; its status is
 // kept. An empty field keeps what is stored: an import of a file without
@@ -169,13 +212,7 @@ func (r *RecipientRepository) AddRecipient(recipient *models.Recipient) error {
 		recipient.Status = "active"
 	}
 
-	_, err := r.db.Exec(`
-		INSERT INTO recipients (id, list_id, email, name, variables, tags, status, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(list_id, email) DO UPDATE SET
-			name = CASE WHEN excluded.name = '' THEN name ELSE excluded.name END,
-			variables = CASE WHEN excluded.variables = '' THEN variables ELSE excluded.variables END,
-			tags = CASE WHEN excluded.tags = '' THEN tags ELSE excluded.tags END`,
+	_, err := r.db.Exec(upsertRecipientSQL,
 		recipient.ID, recipient.ListID, recipient.Email, recipient.Name, recipient.Variables, recipient.Tags, recipient.Status, recipient.CreatedAt,
 	)
 	if err != nil {
@@ -285,7 +322,14 @@ func (r *RecipientRepository) DeleteRecipient(id string, listID string) error {
 	return r.UpdateListCounts(listID)
 }
 
-// ImportCSV imports recipients from CSV data
+// importBatchSize is how many rows one import transaction writes. One
+// transaction per row meant a disk sync per row; one for the whole file would
+// hold the database write lock for the whole import.
+const importBatchSize = 1000
+
+// ImportCSV imports recipients from CSV data. Rows are written in batches of
+// importBatchSize per transaction and the list counts are updated once at
+// the end, so a file of tens of thousands of rows takes seconds.
 func (r *RecipientRepository) ImportCSV(listID string, reader io.Reader) (*models.RecipientImportResult, error) {
 	result := &models.RecipientImportResult{}
 
@@ -314,6 +358,29 @@ func (r *RecipientRepository) ImportCSV(listID string, reader io.Reader) (*model
 		return nil, fmt.Errorf("email column not found in CSV")
 	}
 
+	// Batches committed before a failure stay in the list, so the counts are
+	// updated on every way out, not only after a full import.
+	defer r.UpdateListCounts(listID)
+
+	var tx *sql.Tx
+	var stmt *sql.Stmt
+	inBatch := 0
+	commit := func() error {
+		if tx == nil {
+			return nil
+		}
+		stmt.Close()
+		err := tx.Commit()
+		tx, stmt, inBatch = nil, nil, 0
+		return err
+	}
+	defer func() {
+		if tx != nil {
+			stmt.Close()
+			tx.Rollback()
+		}
+	}()
+
 	// Process rows
 	for {
 		record, err := csvReader.Read()
@@ -321,6 +388,12 @@ func (r *RecipientRepository) ImportCSV(listID string, reader io.Reader) (*model
 			break
 		}
 		if err != nil {
+			// a malformed row is reported and skipped; any other error is
+			// the upload itself failing and would repeat on every Read
+			var pe *csv.ParseError
+			if !errors.As(err, &pe) {
+				return nil, fmt.Errorf("failed to read CSV: %w", err)
+			}
 			result.Errors = append(result.Errors, fmt.Sprintf("row %d: %v", result.Total+1, err))
 			result.Total++
 			continue
@@ -334,7 +407,7 @@ func (r *RecipientRepository) ImportCSV(listID string, reader io.Reader) (*model
 			continue
 		}
 
-		email := strings.TrimSpace(record[emailIdx])
+		email := NormalizeEmail(record[emailIdx])
 		if email == "" {
 			result.Skipped++
 			continue
@@ -345,24 +418,35 @@ func (r *RecipientRepository) ImportCSV(listID string, reader io.Reader) (*model
 			name = strings.TrimSpace(record[nameIdx])
 		}
 
-		recipient := &models.Recipient{
-			ListID: listID,
-			Email:  email,
-			Name:   name,
-			Status: "active",
+		if tx == nil {
+			if tx, err = r.db.Begin(); err != nil {
+				return nil, fmt.Errorf("failed to start import: %w", err)
+			}
+			if stmt, err = tx.Prepare(upsertRecipientSQL); err != nil {
+				tx.Rollback()
+				tx = nil
+				return nil, fmt.Errorf("failed to start import: %w", err)
+			}
 		}
 
-		if err := r.AddRecipient(recipient); err != nil {
+		// A failed statement does not abort an SQLite transaction: the row
+		// is reported and the batch goes on.
+		if _, err := stmt.Exec(uuid.New().String(), listID, email, name, "", "", "active", time.Now()); err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("row %d (%s): %v", result.Total, email, err))
 			result.Skipped++
 			continue
 		}
-
 		result.Imported++
-	}
 
-	// Update counts after import
-	r.UpdateListCounts(listID)
+		if inBatch++; inBatch >= importBatchSize {
+			if err := commit(); err != nil {
+				return nil, fmt.Errorf("failed to save imported rows: %w", err)
+			}
+		}
+	}
+	if err := commit(); err != nil {
+		return nil, fmt.Errorf("failed to save imported rows: %w", err)
+	}
 
 	return result, nil
 }

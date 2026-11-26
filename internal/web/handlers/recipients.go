@@ -42,6 +42,7 @@ func (h *Handlers) RecipientListList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.fillListUsage(lists)
 	totalPages := (total + limit - 1) / limit
 
 	// The same query also finds addresses in all lists, on the first page only
@@ -72,6 +73,24 @@ func (h *Handlers) RecipientListList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.render(w, "recipients", data)
+}
+
+// fillListUsage sets UsedBy on the lists, so the delete button can explain
+// up front why a list cannot be deleted instead of failing after a confirm.
+func (h *Handlers) fillListUsage(lists []models.RecipientList) {
+	ids := make([]string, len(lists))
+	for i := range lists {
+		ids[i] = lists[i].ID
+	}
+	used, err := h.recipients.CampaignsUsingLists(ids)
+	if err != nil {
+		// the delete itself is still refused by the database
+		h.logger.Error("failed to load campaigns using lists", "error", err)
+		return
+	}
+	for i := range lists {
+		lists[i].UsedBy = used[lists[i].ID]
+	}
 }
 
 func (h *Handlers) RecipientListNew(w http.ResponseWriter, r *http.Request) {
@@ -150,6 +169,9 @@ func (h *Handlers) RecipientListView(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tags, _ := h.recipients.GetTags(id)
+	one := []models.RecipientList{*list}
+	h.fillListUsage(one)
+	list.UsedBy = one[0].UsedBy
 
 	totalPages := (total + limit - 1) / limit
 

@@ -67,52 +67,6 @@ func (h *Handlers) TemplateList(w http.ResponseWriter, r *http.Request) {
 	h.render(w, "templates", data)
 }
 
-func (h *Handlers) TemplateCreate(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		h.error(w, r, http.StatusBadRequest, "Invalid form data")
-		return
-	}
-
-	t := &models.Template{
-		Name:        r.FormValue("name"),
-		Description: r.FormValue("description"),
-		Subject:     r.FormValue("subject"),
-		Preheader:   r.FormValue("preheader"),
-		HTML:        r.FormValue("html"),
-		Text:        r.FormValue("text"),
-		Variables:   r.FormValue("variables"),
-		Folder:      r.FormValue("folder"),
-	}
-
-	// Validate required fields
-	if t.Name == "" || t.Subject == "" {
-		h.error(w, r, http.StatusBadRequest, "Name and subject are required")
-		return
-	}
-
-	blockRefs := parseBlockRefs(r.FormValue("block_refs"))
-	if len(blockRefs) > 0 {
-		t.UseBlocks = true
-	}
-
-	user := h.getUserFromContext(r)
-	if err := h.templates.Create(t, user["Email"].(string)); err != nil {
-		h.logger.Error("failed to create template", "error", err)
-		h.error(w, r, http.StatusInternalServerError, "Failed to create template")
-		return
-	}
-
-	if len(blockRefs) > 0 {
-		if err := h.templates.SetBlockRefs(t.ID, blockRefs); err != nil {
-			h.logger.Error("failed to save block refs", "template_id", t.ID, "error", err)
-		}
-	}
-
-	h.settings.LogAction(r, middleware.GetUserID(r), user["Email"].(string),
-		"create", "template", t.ID, `{"name":"`+t.Name+`"}`)
-	http.Redirect(w, r, "/templates/"+t.ID, http.StatusSeeOther)
-}
-
 func parseBlockRefs(raw string) []models.TemplateBlockRef {
 	if raw == "" {
 		return nil
@@ -206,58 +160,6 @@ func (h *Handlers) TemplateView(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.render(w, "template_view", data)
-}
-
-func (h *Handlers) TemplateUpdate(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-
-	if err := r.ParseForm(); err != nil {
-		h.error(w, r, http.StatusBadRequest, "Invalid form data")
-		return
-	}
-
-	t, err := h.templates.GetByID(id)
-	if err != nil || t == nil {
-		h.error(w, r, http.StatusNotFound, "Template not found")
-		return
-	}
-
-	t.Name = r.FormValue("name")
-	t.Description = r.FormValue("description")
-	t.Subject = r.FormValue("subject")
-	t.Preheader = r.FormValue("preheader")
-	t.HTML = r.FormValue("html")
-	t.Text = r.FormValue("text")
-	t.Variables = r.FormValue("variables")
-	t.Folder = r.FormValue("folder")
-
-	rawRefs := strings.TrimSpace(r.FormValue("block_refs"))
-	blockRefs := parseBlockRefs(rawRefs)
-	if rawRefs != "" && rawRefs != "null" {
-		t.UseBlocks = len(blockRefs) > 0
-	}
-
-	changeNote := r.FormValue("change_note")
-	if changeNote == "" {
-		changeNote = "Updated template"
-	}
-
-	user := h.getUserFromContext(r)
-	if err := h.templates.Update(t, changeNote, user["Email"].(string)); err != nil {
-		h.logger.Error("failed to update template", "error", err)
-		h.error(w, r, http.StatusInternalServerError, "Failed to update template")
-		return
-	}
-
-	if rawRefs != "" {
-		if err := h.templates.SetBlockRefs(t.ID, blockRefs); err != nil {
-			h.logger.Error("failed to update block refs", "template_id", t.ID, "error", err)
-		}
-	}
-
-	h.settings.LogAction(r, middleware.GetUserID(r), user["Email"].(string),
-		"update", "template", id, `{"name":"`+t.Name+`"}`)
-	http.Redirect(w, r, "/templates/"+id, http.StatusSeeOther)
 }
 
 func (h *Handlers) TemplateDelete(w http.ResponseWriter, r *http.Request) {

@@ -221,29 +221,6 @@ func (h *Handlers) APIKeyEdit(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/settings/api-keys", http.StatusSeeOther)
 }
 
-// APIKeyGet returns a single API key for editing
-func (h *Handlers) APIKeyGet(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	if id == "" {
-		h.apiError(w, http.StatusBadRequest, "API key ID is required", "MISSING_ID")
-		return
-	}
-
-	apiKey, err := h.apiKeys.GetByID(id)
-	if err != nil {
-		h.logger.Error("failed to get API key", "id", id, "error", err)
-		h.apiError(w, http.StatusInternalServerError, "Failed to get API key", "INTERNAL_ERROR")
-		return
-	}
-
-	if apiKey == nil {
-		h.apiError(w, http.StatusNotFound, "API key not found", "NOT_FOUND")
-		return
-	}
-
-	h.apiJSON(w, http.StatusOK, apiKey)
-}
-
 // apiKeyPermissionsFromForm reads the permission checkboxes. A key without
 // any permission, or with an unknown one, is rejected with 400.
 func (h *Handlers) apiKeyPermissionsFromForm(w http.ResponseWriter, r *http.Request) ([]string, bool) {

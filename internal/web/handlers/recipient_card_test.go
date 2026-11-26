@@ -361,7 +361,7 @@ func TestRecipientListList_FindsAddresses(t *testing.T) {
 }
 
 // A list row offers import, edit and delete as labelled icon buttons; delete
-// posts to the list itself and asks for confirmation.
+// posts to the list itself and opens the delete dialog (data-list-delete).
 func TestRecipientListList_RowIconActions(t *testing.T) {
 	h, _ := newCampaignTestHandlers(t, "")
 	rec := httptest.NewRecorder()
@@ -373,12 +373,41 @@ func TestRecipientListList_RowIconActions(t *testing.T) {
 	for _, want := range []string{
 		`<a href="/recipients/l1/import" class="btn-icon-sm" title="Import" data-i18n-title="cmp.import" aria-label="Import" data-i18n-aria="cmp.import">`,
 		`<a href="/recipients/l1/edit" class="btn-icon-sm" title="Edit" data-i18n-title="edit" aria-label="Edit" data-i18n-aria="edit">`,
-		`<form method="post" action="/recipients/l1" onsubmit="return confirm(I18n.t('cmp.confirm_delete_list'))">`,
+		`<form method="post" action="/recipients/l1" data-list-delete data-list-name="`,
 		`<input type="hidden" name="_method" value="DELETE">`,
 		`class="btn-icon-sm btn-icon-danger" title="Delete List" data-i18n-title="cmp.delete_list" aria-label="Delete List" data-i18n-aria="cmp.delete_list"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("list row: no %s", want)
+		}
+	}
+	if strings.Contains(body, "data-used-by") {
+		t.Error("a list no campaign was sent to must not be marked as used")
+	}
+}
+
+// A list a campaign was sent to carries links to those campaigns, so the
+// delete dialog explains why it cannot be deleted instead of an error page.
+func TestRecipientListList_DeleteBlockedByCampaign(t *testing.T) {
+	h, d := newCampaignTestHandlers(t, "")
+	if _, err := d.Exec(`INSERT INTO campaigns (id, name, from_email) VALUES ('cu', 'Spring <sale>', 'a@x.org')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Exec(`INSERT INTO send_jobs (id, campaign_id, recipient_list_id) VALUES ('ju', 'cu', 'l1')`); err != nil {
+		t.Fatal(err)
+	}
+	for _, target := range []string{"/recipients", "/recipients/l1"} {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		if target == "/recipients" {
+			h.RecipientListList(rec, req)
+		} else {
+			req.SetPathValue("id", "l1")
+			h.RecipientListView(rec, req)
+		}
+		want := `<template data-used-by><li><a href="/campaigns/cu">Spring &lt;sale&gt;</a></li></template>`
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("%s: no %s", target, want)
 		}
 	}
 }

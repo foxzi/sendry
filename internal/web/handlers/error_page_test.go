@@ -60,3 +60,42 @@ func TestErrorPage(t *testing.T) {
 		t.Errorf("forbidden: %d %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestNotFoundRoute(t *testing.T) {
+	h, _, cleanup := newDomainViewTestHandlers(t)
+	defer cleanup()
+
+	get := func(target string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		req.Header.Set("Sec-Fetch-Mode", "navigate")
+		rec := httptest.NewRecorder()
+		h.NotFound(rec, req)
+		return rec
+	}
+
+	// A copied link with a trailing slash opens the page it points to.
+	rec := get("/recipients/07c24b78/?tab=history")
+	if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != "/recipients/07c24b78?tab=history" {
+		t.Fatalf("trailing slash: %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+
+	// Paths a browser reads as another host must not be redirected.
+	for _, p := range []string{"//evil.example/", "/%5Cevil.example/", "/%5C%5Cevil.example/", "/%09/evil.example/", "/a%0A/"} {
+		if rec := get(p); rec.Code != http.StatusNotFound {
+			t.Errorf("%s: got %d %q", p, rec.Code, rec.Header().Get("Location"))
+		}
+	}
+
+	// An escaped ? or # stays part of the path.
+	if rec := get("/a%3Fb/"); rec.Header().Get("Location") != "/a%3Fb" {
+		t.Errorf("escaped ?: %q", rec.Header().Get("Location"))
+	}
+	if rec := get("/a%23b/"); rec.Header().Get("Location") != "/a%23b" {
+		t.Errorf("escaped #: %q", rec.Header().Get("Location"))
+	}
+
+	// An unknown page is 404, not the dashboard.
+	if rec := get("/no-such-page"); rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "err.not_found_title") {
+		t.Errorf("unknown page: %d", rec.Code)
+	}
+}
